@@ -1,0 +1,10 @@
+.worktrees/
+.worktree/
+
+# Dependencies
+node_modules/
+
+# Pi runtime artifacts
+.pi-lens/
+.pi/
+.rpiv/
