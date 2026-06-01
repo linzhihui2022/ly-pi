@@ -32,7 +32,7 @@ const mockCtx = {
   cwd: "/home/user/project",
   model: { id: "gpt-4" },
   sessionManager: { getEntries: vi.fn(() => []) },
-  getContextUsage: vi.fn(() => ({ percent: 42 })),
+  getContextUsage: vi.fn(() => ({ percent: 42, contextWindow: 128000 })),
   ui: {
     setFooter: vi.fn((factory: any) => {
       return factory(mockTui, mockTheme, mockFooterData);
@@ -79,35 +79,160 @@ describe("formatTokens", () => {
 });
 
 describe("contextColored", () => {
-  it("returns dim '--' for null", async () => {
+  it("returns dim '--' for null percent", async () => {
     const { contextColored } = await loadModule();
     const theme = { fg: vi.fn((_c: string, text: string) => text) };
-    expect(contextColored(theme, null)).toBe("--");
+    expect(contextColored(theme, null, 128000)).toBe("--");
     expect(theme.fg).toHaveBeenCalledWith("dim", "--");
   });
 
-  it("returns dim for <= 70%", async () => {
+  it("treats contextWindow 0 as small window", async () => {
     const { contextColored } = await loadModule();
     const theme = { fg: vi.fn((_c: string, text: string) => text) };
-    expect(contextColored(theme, 0)).toBe("0%");
-    expect(contextColored(theme, 70)).toBe("70%");
-    expect(theme.fg).toHaveBeenCalledWith("dim", "70%");
+    expect(contextColored(theme, 50, 0)).toContain("50%");
+    expect(theme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("50%"));
   });
 
-  it("returns warning for 71-90%", async () => {
-    const { contextColored } = await loadModule();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
-    expect(contextColored(theme, 71)).toBe("71%");
-    expect(contextColored(theme, 90)).toBe("90%");
-    expect(theme.fg).toHaveBeenCalledWith("warning", "90%");
+  describe("small context window (≤ 500k)", () => {
+    it("returns accent for 0-70%", async () => {
+      const { contextColored } = await loadModule();
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      expect(contextColored(theme, 0, 128000)).toContain("0%");
+      expect(contextColored(theme, 70, 128000)).toContain("70%");
+      expect(theme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("70%"));
+    });
+
+    it("returns warning for 71-90%", async () => {
+      const { contextColored } = await loadModule();
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      expect(contextColored(theme, 71, 128000)).toContain("71%");
+      expect(contextColored(theme, 90, 128000)).toContain("90%");
+      expect(theme.fg).toHaveBeenCalledWith("warning", expect.stringContaining("90%"));
+    });
+
+    it("returns error for > 90%", async () => {
+      const { contextColored } = await loadModule();
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      expect(contextColored(theme, 91, 128000)).toContain("91%");
+      expect(contextColored(theme, 100, 128000)).toContain("100%");
+      expect(theme.fg).toHaveBeenCalledWith("error", expect.stringContaining("100%"));
+    });
   });
 
-  it("returns error for > 90%", async () => {
-    const { contextColored } = await loadModule();
+  describe("large context window (> 500k)", () => {
+    it("returns accent for 0-20%", async () => {
+      const { contextColored } = await loadModule();
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      expect(contextColored(theme, 0, 600000)).toContain("0%");
+      expect(contextColored(theme, 20, 600000)).toContain("20%");
+      expect(theme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("20%"));
+    });
+
+    it("returns warning for 21-50%", async () => {
+      const { contextColored } = await loadModule();
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      expect(contextColored(theme, 21, 600000)).toContain("21%");
+      expect(contextColored(theme, 50, 600000)).toContain("50%");
+      expect(theme.fg).toHaveBeenCalledWith("warning", expect.stringContaining("50%"));
+    });
+
+    it("returns error for > 50%", async () => {
+      const { contextColored } = await loadModule();
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      expect(contextColored(theme, 51, 600000)).toContain("51%");
+      expect(theme.fg).toHaveBeenCalledWith("error", expect.stringContaining("51%"));
+    });
+  });
+});
+
+describe("aggregateSessionUsage", () => {
+  it("returns zeros for empty entries", async () => {
+    const { aggregateSessionUsage } = await loadModule();
+    expect(aggregateSessionUsage([])).toEqual({
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: 0,
+    });
+  });
+
+  it("ignores non-assistant messages", async () => {
+    const { aggregateSessionUsage } = await loadModule();
+    const entries = [
+      { type: "other" },
+      { type: "message", message: { role: "user", usage: { input: 100, output: 50, cacheRead: 10, cacheWrite: 5, cost: { total: 0.01 } } } },
+    ];
+    expect(aggregateSessionUsage(entries as any)).toEqual({
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: 0,
+    });
+  });
+
+  it("sums assistant message usage and converts cost to CNY", async () => {
+    const { aggregateSessionUsage } = await loadModule();
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "assistant",
+          usage: { input: 1500, output: 800, cacheRead: 100, cacheWrite: 50, cost: { total: 0.005 } },
+        },
+      },
+      {
+        type: "message",
+        message: {
+          role: "assistant",
+          usage: { input: 2500, output: 1200, cacheRead: 200, cacheWrite: 100, cost: { total: 0.007 } },
+        },
+      },
+    ];
+    expect(aggregateSessionUsage(entries as any)).toEqual({
+      input: 4000,
+      output: 2000,
+      cacheRead: 300,
+      cacheWrite: 150,
+      cost: 0.084, // (0.005 + 0.007) * 7
+    });
+  });
+});
+
+describe("buildStatusLine", () => {
+  it("builds a line with all parts when branch is present", async () => {
+    const { buildStatusLine } = await loadModule();
     const theme = { fg: vi.fn((_c: string, text: string) => text) };
-    expect(contextColored(theme, 91)).toBe("91%");
-    expect(contextColored(theme, 100)).toBe("100%");
-    expect(theme.fg).toHaveBeenCalledWith("error", "100%");
+    const line = buildStatusLine(theme as any, 200, {
+      project: "my-project",
+      modelName: "gpt-4",
+      branch: "main",
+      ctxColored: "42%",
+      usage: { input: 1000, output: 500, cacheRead: 100, cacheWrite: 0, cost: 0.35 },
+    });
+    expect(line).toContain("my-project");
+    expect(line).toContain("gpt-4");
+    expect(line).toContain("main");
+    expect(line).toContain("42%");
+    expect(line).toContain("1.0k");
+    expect(line).toContain("500");
+    expect(line).toContain("100");
+    expect(line).toContain("0.35");
+  });
+
+  it("omits branch when null", async () => {
+    const { buildStatusLine } = await loadModule();
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const line = buildStatusLine(theme as any, 200, {
+      project: "x",
+      modelName: "y",
+      branch: null,
+      ctxColored: "--",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
+    });
+    expect(line).not.toContain("main");
+    expect(line).toContain("x");
   });
 });
 
@@ -189,7 +314,7 @@ describe("my-hud extension", () => {
     expect(mockCtx.ui.setFooter).toHaveBeenCalled();
   });
 
-  it("footer render returns two lines", async () => {
+  it("footer render returns one line", async () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
 
@@ -199,9 +324,10 @@ describe("my-hud extension", () => {
     const component = mockCtx.ui.setFooter.mock.results[0].value;
     const lines = component.render(120);
 
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("project");
-    expect(lines[1]).toContain("/home/user/project");
+    expect(lines[0]).toContain("gpt-4");
+    expect(lines[0]).toContain("main");
   });
 
   it("render aggregates tokens from assistant messages", async () => {
@@ -250,36 +376,9 @@ describe("my-hud extension", () => {
     const component = ctx.ui.setFooter.mock.results[0].value;
     const lines = component.render(120);
 
-    expect(lines[0]).toContain("↑4.0k");
-    expect(lines[0]).toContain("↓2.0k");
-    expect(lines[0]).toContain("$0.012");
-  });
-
-  it("render uses singular provider when count is 1", async () => {
-    const mod = await loadModule();
-    mod.default(mockPi as any);
-
-    const footerDataOneProvider = {
-      ...mockFooterData,
-      getAvailableProviderCount: vi.fn(() => 1),
-    };
-
-    const ctx = {
-      ...mockCtx,
-      ui: {
-        setFooter: vi.fn((factory: any) => {
-          return factory(mockTui, mockTheme, footerDataOneProvider);
-        }),
-      },
-    };
-
-    const sessionStartHandler = registeredEvents.get("session_start")!;
-    sessionStartHandler({}, ctx);
-
-    const component = ctx.ui.setFooter.mock.results[0].value;
-    const lines = component.render(120);
-    expect(lines[1]).toContain("1 provider");
-    expect(lines[1]).not.toContain("providers");
+    expect(lines[0]).toContain("4.0k");
+    expect(lines[0]).toContain("2.0k");
+    expect(lines[0]).toContain("0.08");
   });
 
   it("render omits branch when getGitBranch returns null", async () => {
@@ -306,7 +405,7 @@ describe("my-hud extension", () => {
     const component = ctx.ui.setFooter.mock.results[0].value;
     const lines = component.render(120);
     expect(lines[0]).toContain("gpt-4");
-    expect(lines[0]).not.toContain("(null)");
+    expect(lines[0]).not.toContain("null");
   });
 
   it("render shows 'no-model' when ctx.model is undefined", async () => {
@@ -372,5 +471,28 @@ describe("my-hud extension", () => {
 
     const component = mockCtx.ui.setFooter.mock.results[0].value;
     expect(() => component.invalidate()).not.toThrow();
+  });
+
+  it("render returns error line when an exception is thrown", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const ctx = {
+      ...mockCtx,
+      sessionManager: {
+        getEntries: vi.fn(() => {
+          throw new Error("boom");
+        }),
+      },
+    };
+
+    const sessionStartHandler = registeredEvents.get("session_start")!;
+    sessionStartHandler({}, ctx);
+
+    const component = ctx.ui.setFooter.mock.results[0].value;
+    const lines = component.render(120);
+
+    expect(lines[0]).toContain("[my-hud error]");
+    expect(lines[0]).toContain("boom");
   });
 });
