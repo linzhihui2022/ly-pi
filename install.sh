@@ -26,12 +26,20 @@ fi
 # Create fresh destination directory
 mkdir -p "$EXT_DEST"
 
-# Copy all extensions (directories and .json files), excluding node_modules
+# Copy all extensions, excluding node_modules at any depth
 echo "    copying from $EXT_SRC"
-for item in "$EXT_SRC"/*; do
-    [[ "$(basename "$item")" == "node_modules" ]] && continue
-    cp -r "$item" "$EXT_DEST"/
-done
+if command -v rsync &>/dev/null; then
+    rsync -a --exclude='node_modules' "$EXT_SRC"/ "$EXT_DEST"/
+else
+    # Fallback for systems without rsync: use find + cp
+    cd "$EXT_SRC"
+    find . -type d -name node_modules -prune -o -type f -print | \
+        while IFS= read -r file; do
+            mkdir -p "$EXT_DEST/$(dirname "$file")"
+            cp "$file" "$EXT_DEST/$file"
+        done
+    cd - >/dev/null
+fi
 
 echo "==> Installed extensions:"
 ls -1 "$EXT_DEST"
