@@ -28,6 +28,7 @@ const mockFooterData = {
 };
 
 const mockCtx = {
+  hasUI: true,
   cwd: "/home/user/project",
   model: { id: "gpt-4" },
   sessionManager: { getEntries: vi.fn(() => []) },
@@ -37,6 +38,7 @@ const mockCtx = {
       return factory(mockTui, mockTheme, mockFooterData);
     }),
     setWidget: vi.fn(),
+    getTheme: vi.fn(() => mockTheme),
   },
 };
 
@@ -188,6 +190,27 @@ describe("aggregateSessionUsage", () => {
     });
   });
 
+  it("ignores entries with undefined message", async () => {
+    const { aggregateSessionUsage } = await loadModule();
+    const entries = [
+      { type: "message", message: undefined },
+      {
+        type: "message",
+        message: {
+          role: "assistant",
+          usage: { input: 100, output: 50, cacheRead: 10, cacheWrite: 5, cost: { total: 0.01 } },
+        },
+      },
+    ];
+    expect(aggregateSessionUsage(entries as any)).toEqual({
+      input: 100,
+      output: 50,
+      cacheRead: 10,
+      cacheWrite: 5,
+      cost: 0.07,
+    });
+  });
+
   it("sums assistant message usage and converts cost to CNY", async () => {
     const { aggregateSessionUsage } = await loadModule();
     const entries = [
@@ -297,6 +320,42 @@ describe("getLastUserMessage", () => {
     const entries = [
       { type: "other" },
       { type: "tool_call", message: { role: "user", content: "test" } },
+    ];
+    expect(getLastUserMessage(entries as any)).toBeNull();
+  });
+
+  it("returns null when user message content is an empty array", async () => {
+    const { getLastUserMessage } = await loadModule();
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: [],
+        },
+      },
+    ];
+    expect(getLastUserMessage(entries as any)).toBeNull();
+  });
+
+  it("skips user messages with null content", async () => {
+    const { getLastUserMessage } = await loadModule();
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: null,
+        },
+      },
+    ];
+    expect(getLastUserMessage(entries as any)).toBeNull();
+  });
+
+  it("skips entries with undefined message", async () => {
+    const { getLastUserMessage } = await loadModule();
+    const entries = [
+      { type: "message", message: undefined },
     ];
     expect(getLastUserMessage(entries as any)).toBeNull();
   });
@@ -460,6 +519,96 @@ describe("Bar", () => {
     // tui is never captured because update() was not called
     expect(() => bar.requestRender()).not.toThrow();
   });
+
+  it("setUICtx does not reset tui when ctx is unchanged", async () => {
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const uiCtx = { setWidget } as any;
+
+    bar.setUICtx(uiCtx);
+    bar.setUICtx(uiCtx);
+    // setWidget should only be called once per update()
+    bar.update();
+    expect(setWidget).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispose no-ops when uiCtx is not set", async () => {
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    expect(() => bar.dispose()).not.toThrow();
+  });
+
+  it("update no-ops when uiCtx is not set", async () => {
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    expect(() => bar.update()).not.toThrow();
+  });
+
+  it("renderWidget returns empty array when ctx is not set", async () => {
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+
+    bar.setUICtx({ setWidget } as any);
+    // ctx is not set
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory(mockTui, theme);
+    const lines = component.render(100);
+
+    expect(lines).toEqual([]);
+  });
+
+  it("renderWidget handles undefined context usage", async () => {
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const ctx = {
+      cwd: "/x",
+      model: { id: "m" },
+      sessionManager: { getEntries: () => [] },
+      getContextUsage: () => undefined,
+    };
+
+    bar.setUICtx({ setWidget } as any);
+    bar.setContext(ctx as any);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory(mockTui, theme);
+    const lines = component.render(100);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("--");
+  });
+
+  it("renderWidget uses 'no-model' when model is undefined", async () => {
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const ctx = {
+      cwd: "/x",
+      model: undefined,
+      sessionManager: { getEntries: () => [] },
+      getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
+    };
+
+    bar.setUICtx({ setWidget } as any);
+    bar.setContext(ctx as any);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory(mockTui, theme);
+    const lines = component.render(100);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("no-model");
+  });
 });
 
 describe("working", () => {
@@ -497,11 +646,10 @@ describe("my-hud extension", () => {
     expect(typeof mod.default).toBe("function");
   });
 
-  it("registers turn_start and turn_end handlers", async () => {
+  it("registers turn_start handler", async () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
     expect(registeredEvents.has("turn_start")).toBe(true);
-    expect(registeredEvents.has("turn_end")).toBe(true);
   });
 
   it("registers model_select handler", async () => {
@@ -516,16 +664,7 @@ describe("my-hud extension", () => {
     expect(registeredEvents.has("session_start")).toBe(true);
   });
 
-  it("turn_end handler no-ops when nothing is set", async () => {
-    const mod = await loadModule();
-    mod.default(mockPi as any);
-
-    const turnEndHandler = registeredEvents.get("turn_end")!;
-    expect(() => turnEndHandler()).not.toThrow();
-    expect(mockTui.requestRender).not.toHaveBeenCalled();
-  });
-
-  it("session_start skips widget when hasUI is false", async () => {
+  it("session_start skips widget and footer when hasUI is false", async () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
 
@@ -534,23 +673,7 @@ describe("my-hud extension", () => {
     sessionStartHandler({}, ctxNoUI);
 
     expect(ctxNoUI.ui.setWidget).not.toHaveBeenCalled();
-    expect(ctxNoUI.ui.setFooter).toHaveBeenCalled();
-  });
-
-  it("turn_end handler triggers requestRender when currentTui is set", async () => {
-    const mod = await loadModule();
-    mod.default(mockPi as any);
-
-    const turnEndHandler = registeredEvents.get("turn_end")!;
-    turnEndHandler();
-    expect(mockTui.requestRender).not.toHaveBeenCalled();
-
-    const sessionStartHandler = registeredEvents.get("session_start")!;
-    sessionStartHandler({}, { ...mockCtx, hasUI: true });
-
-    mockTui.requestRender.mockClear();
-    turnEndHandler();
-    expect(mockTui.requestRender).toHaveBeenCalled();
+    expect(ctxNoUI.ui.setFooter).not.toHaveBeenCalled();
   });
 
   it("model_select handler no-ops when currentTui is null", async () => {
@@ -580,7 +703,7 @@ describe("my-hud extension", () => {
     mod.default(mockPi as any);
 
     const sessionStartHandler = registeredEvents.get("session_start")!;
-    sessionStartHandler({}, mockCtx);
+    sessionStartHandler({}, { ...mockCtx, hasUI: true });
 
     expect(mockCtx.ui.setFooter).toHaveBeenCalled();
   });
@@ -591,6 +714,7 @@ describe("my-hud extension", () => {
 
     const ctx = {
       ...mockCtx,
+      hasUI: true,
       sessionManager: {
         getEntries: vi.fn(() => [
           { type: "message", message: { role: "user", content: "hello world" } },
@@ -627,6 +751,7 @@ describe("my-hud extension", () => {
 
     const ctx = {
       ...mockCtx,
+      hasUI: true,
       sessionManager: {
         getEntries: vi.fn(() => [
           {
@@ -665,10 +790,11 @@ describe("my-hud extension", () => {
     component.dispose();
 
     expect(unsubBranch).toHaveBeenCalled();
-    // After dispose, turn_end handler should no-op for currentTui
-    const turnEndHandler = registeredEvents.get("turn_end")!;
+    // After dispose, requestRender should no-op for currentTui
     mockTui.requestRender.mockClear();
-    turnEndHandler();
+    // model_select handler still exists and can be called safely
+    const modelSelectHandler = registeredEvents.get("model_select")!;
+    modelSelectHandler();
     expect(mockTui.requestRender).not.toHaveBeenCalled();
   });
 
@@ -689,6 +815,7 @@ describe("my-hud extension", () => {
 
     const ctx = {
       ...mockCtx,
+      hasUI: true,
       sessionManager: {
         getEntries: vi.fn(() => {
           throw new Error("boom");
@@ -706,13 +833,28 @@ describe("my-hud extension", () => {
     expect(lines[0]).toContain("boom");
   });
 
-  it("turn_start handler sets working message and triggers render", async () => {
+  it("turn_start handler sets working message with theme and triggers render", async () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
 
     const turnStartHandler = registeredEvents.get("turn_start")!;
     const setWorkingMessage = vi.fn();
-    const ctx = { ui: { setWorkingMessage } };
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const ctx = { ui: { setWorkingMessage, getTheme: vi.fn(() => theme) } };
+
+    turnStartHandler({}, ctx);
+
+    expect(ctx.ui.getTheme).toHaveBeenCalledWith("catppuccin-mocha");
+    expect(setWorkingMessage).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it("turn_start handler falls back to plain message when theme is undefined", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const turnStartHandler = registeredEvents.get("turn_start")!;
+    const setWorkingMessage = vi.fn();
+    const ctx = { ui: { setWorkingMessage, getTheme: vi.fn(() => undefined) } };
 
     turnStartHandler({}, ctx);
 
@@ -728,7 +870,8 @@ describe("my-hud extension", () => {
 
     const turnStartHandler = registeredEvents.get("turn_start")!;
     mockTui.requestRender.mockClear();
-    turnStartHandler({}, { ui: { setWorkingMessage: vi.fn() } });
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    turnStartHandler({}, { ui: { setWorkingMessage: vi.fn(), getTheme: vi.fn(() => theme) } });
 
     expect(mockTui.requestRender).toHaveBeenCalled();
   });
@@ -739,7 +882,8 @@ describe("my-hud extension", () => {
 
     const turnStartHandler = registeredEvents.get("turn_start")!;
     const setWorkingMessage = vi.fn(() => { throw new Error("ui fail"); });
-    const ctx = { ui: { setWorkingMessage } };
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const ctx = { ui: { setWorkingMessage, getTheme: vi.fn(() => theme) } };
 
     expect(() => turnStartHandler({}, ctx)).toThrow("ui fail");
   });

@@ -5,7 +5,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { icon } from "./icons";
-import { ModelName, formatTokens, shortModelName } from "./format";
+import { formatTokens, shortModelName } from "./format";
 import type { StatusLineData } from "./types";
 
 export function buildStatusLine(
@@ -17,7 +17,7 @@ export function buildStatusLine(
   const project = rawProject.length > 10 ? rawProject.slice(0, 8) + ".." : rawProject;
   const parts: string[] = [
     theme.fg("mdCode", `${icon("project")}${project}`),
-    theme.fg("mdHeading", `${icon("model")}${shortModelName(modelName.trim() as ModelName)}`),
+    theme.fg("mdHeading", `${icon("model")}${shortModelName(modelName.trim())}`),
   ];
 
   if (branch) {

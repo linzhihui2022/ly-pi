@@ -39,22 +39,24 @@ export default function myHud(pi: ExtensionAPI): void {
     if (currentTui) currentTui.requestRender();
     bar?.requestRender();
   }
-
-  pi.on("turn_start", (_, ctx) => {
-    ctx.ui.setWorkingMessage(pickRandomMessage());
+  pi.on("turn_start", (_event, ctx) => {
+    const theme = ctx.ui.getTheme("catppuccin-mocha");
+    const message = theme?.fg("accent", pickRandomMessage()) ?? pickRandomMessage();
+    ctx.ui.setWorkingMessage(message);
     requestRender();
   });
-  pi.on("turn_end", requestRender);
+
   pi.on("model_select", requestRender);
 
   // ── Install HUD on session start ──
   pi.on("session_start", (_event, ctx: ExtensionContext) => {
-    if (ctx.hasUI) {
-      bar ??= new Bar();
-      bar.setUICtx(ctx.ui);
-      bar.setContext(ctx);
-      bar.update();
+    if (!ctx.hasUI) {
+      return;
     }
+    bar ??= new Bar();
+    bar.setUICtx(ctx.ui);
+    bar.setContext(ctx);
+    bar.update();
 
     ctx.ui.setFooter((tui, theme, footerData) => {
       currentTui = tui;
@@ -79,7 +81,12 @@ export default function myHud(pi: ExtensionAPI): void {
             const entries = ctx.sessionManager.getEntries();
             const message = getLastUserMessage(entries);
             if (message) {
-              return [truncateToWidth(theme.fg("dim", `${icon("terminal")}${message}`), width)];
+              return [
+                truncateToWidth(
+                  theme.fg("dim", `${icon("terminal")}${message}`),
+                  width,
+                ),
+              ];
             }
             return [];
           } catch (err) {

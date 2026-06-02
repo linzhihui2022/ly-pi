@@ -46,7 +46,6 @@ const SHORT_NAMES: Record<string, string> = {
   "deepseek-v4-flash": "ds-fls",
   "deepseek-v4-pro": "ds-pro",
 };
-
 export function shortModelName(modelName: string): string {
   return SHORT_NAMES[modelName] ?? modelName;
 }
