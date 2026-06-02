@@ -1,8 +1,9 @@
 /**
- * Session-level token / cost aggregation.
+ * Session-level token / cost aggregation and message helpers.
  */
 
-import type { SessionEntry, TokenUsage } from "./types";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { TokenUsage } from "./types";
 
 const USD_TO_CNY = 7;
 
@@ -36,4 +37,42 @@ export function aggregateSessionUsage(entries: SessionEntry[]): TokenUsage {
       },
       { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
     );
+}
+
+/**
+ * Extract the text of the most recent user message from session entries.
+ * Returns `null` if no user message is found.
+ */
+export function getLastUserMessage(entries: SessionEntry[]): string | null {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (entry.type !== "message" || entry.message?.role !== "user") {
+      continue;
+    }
+
+    const content = entry.message.content;
+    if (content == null) continue;
+
+    if (typeof content === "string") {
+      const trimmed = content.trim();
+      if (trimmed) return trimmed;
+      continue;
+    }
+
+    // Array of content parts (text / image / etc.)
+    if (Array.isArray(content) && content.length > 0) {
+      return content
+        .map((part) => {
+          if (typeof part === "string") return part;
+          if (part && typeof part === "object" && "text" in part) {
+            return part.text as string;
+          }
+          return "[MEDIA]";
+        })
+        .join(" ")
+        .trim();
+    }
+  }
+
+  return null;
 }

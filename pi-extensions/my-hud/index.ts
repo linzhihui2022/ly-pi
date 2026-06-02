@@ -1,9 +1,8 @@
 /**
- * my-hud — always-on single-line HUD statusline for pi agent.
+ * my-hud — always-on HUD for pi agent.
  *
- * Replaces pi's built-in footer with a custom Component showing project,
- * model, git branch, context%, token/cost breakdown, and provider count.
- * Installed automatically on session_start.
+ * - aboveEditor widget: project, model, git branch, context%, tokens, cost
+ * - footer: last user message
  *
  * Modeled after:
  *   - examples/extensions/custom-footer.ts (setFooter pattern)
@@ -14,78 +13,69 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { basename } from "node:path";
+import { truncateToWidth } from "@earendil-works/pi-tui";
+import { getLastUserMessage } from "./session";
+import { Bar } from "./bar";
 import { icon } from "./icons";
-import { formatTokens, contextColored } from "./format";
-import { aggregateSessionUsage } from "./session";
-import { buildStatusLine } from "./render";
-import type { SessionEntry } from "./types";
 
 // Re-export pure helpers for consumers / tests
 export { icon } from "./icons";
-export { formatTokens, contextColored } from "./format";
-export { aggregateSessionUsage } from "./session";
+export { formatTokens, contextColored, shortModelName } from "./format";
+export { aggregateSessionUsage, getLastUserMessage } from "./session";
 export { buildStatusLine } from "./render";
-export type { TokenUsage, SessionEntry, StatusLineData } from "./types";
+export { Bar } from "./bar";
+export type { TokenUsage, StatusLineData } from "./types";
 
 // ── Extension ──
 
 export default function myHud(pi: ExtensionAPI): void {
   let currentTui: { requestRender(): void } | null = null;
+  let bar: Bar | undefined;
 
-  // Auto-refresh on turn end and model switch
-  pi.on("turn_end", () => {
+  // Refresh both footer and widget on lifecycle events
+  function requestRender(): void {
     if (currentTui) currentTui.requestRender();
-  });
+    bar?.requestRender();
+  }
 
-  pi.on("model_select", () => {
-    if (currentTui) currentTui.requestRender();
-  });
+  pi.on("turn_end", requestRender);
+  pi.on("model_select", requestRender);
 
   // ── Install HUD on session start ──
-
   pi.on("session_start", (_event, ctx: ExtensionContext) => {
+    if (ctx.hasUI) {
+      bar ??= new Bar();
+      bar.setUICtx(ctx.ui);
+      bar.setContext(ctx);
+      bar.update();
+    }
+
     ctx.ui.setFooter((tui, theme, footerData) => {
       currentTui = tui;
-      const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
+      bar?.setBranch(footerData.getGitBranch() ?? null);
+
+      const unsubBranch = footerData.onBranchChange(() => {
+        bar?.setBranch(footerData.getGitBranch() ?? null);
+        tui.requestRender();
+      });
 
       return {
         dispose() {
           unsubBranch();
           currentTui = null;
+          bar?.dispose();
         },
 
         invalidate() {},
 
         render(width: number): string[] {
           try {
-            // ── Aggregated usage ──
-            const entries = ctx.sessionManager.getEntries() as SessionEntry[];
-            const usage = aggregateSessionUsage(entries);
-
-            // ── Context usage ──
-            const cu = ctx.getContextUsage();
-            const ctxColored = contextColored(
-              theme,
-              cu?.percent ?? null,
-              cu?.contextWindow ?? null,
-            );
-
-            // ── Other metadata ──
-            const modelName = ctx.model?.id ?? "no-model";
-            const branch = footerData.getGitBranch();
-            const project = basename(ctx.cwd);
-
-            // ── Build status line ──
-            const line = buildStatusLine(theme, width, {
-              project,
-              modelName,
-              branch,
-              ctxColored,
-              usage,
-            });
-
-            return [line];
+            const entries = ctx.sessionManager.getEntries();
+            const message = getLastUserMessage(entries);
+            if (message) {
+              return [truncateToWidth(theme.fg("dim", `${icon("terminal")}${message}`), width)];
+            }
+            return [];
           } catch (err) {
             return [`[my-hud error] ${String(err)}`];
           }

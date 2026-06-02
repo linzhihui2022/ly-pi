@@ -10,19 +10,6 @@ export interface TokenUsage {
   cost: number;
 }
 
-export interface SessionEntry {
-  type: string;
-  message?: {
-    role: string;
-    usage: {
-      input: number;
-      output: number;
-      cacheRead: number;
-      cacheWrite: number;
-      cost: { total: number };
-    };
-  };
-}
 
 export interface StatusLineData {
   project: string;

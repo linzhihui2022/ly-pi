@@ -5,7 +5,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { icon } from "./icons";
-import { formatTokens } from "./format";
+import { ModelName, formatTokens, shortModelName } from "./format";
 import type { StatusLineData } from "./types";
 
 export function buildStatusLine(
@@ -13,11 +13,11 @@ export function buildStatusLine(
   width: number,
   data: StatusLineData,
 ): string {
-  const { project, modelName, branch, ctxColored, usage } = data;
-
+  const { project:rawProject, modelName, branch, ctxColored, usage } = data;
+  const project = rawProject.length > 10 ? rawProject.slice(0, 8) + ".." : rawProject;
   const parts: string[] = [
     theme.fg("mdCode", `${icon("project")}${project}`),
-    theme.fg("mdHeading", `${icon("model")}${modelName.trim()}`),
+    theme.fg("mdHeading", `${icon("model")}${shortModelName(modelName.trim() as ModelName)}`),
   ];
 
   if (branch) {

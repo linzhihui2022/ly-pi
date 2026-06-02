@@ -37,3 +37,16 @@ export function contextColored(
   if (pct > 70) return theme.fg("warning", `${icon("context_75")}${display}`);
   return theme.fg("accent", `${icon("context_0")}${display}`);
 }
+
+// ── Model name shortening ──
+
+const SHORT_NAMES: Record<string, string> = {
+  "kimi-k2-thinking": "k-tkg",
+  "kimi-for-coding": "k-cdg",
+  "deepseek-v4-flash": "ds-fls",
+  "deepseek-v4-pro": "ds-pro",
+};
+
+export function shortModelName(modelName: string): string {
+  return SHORT_NAMES[modelName] ?? modelName;
+}
