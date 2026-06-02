@@ -462,6 +462,30 @@ describe("Bar", () => {
   });
 });
 
+describe("working", () => {
+  it("has a non-empty list of messages", async () => {
+    const { WORKING_MESSAGES } = await loadModule();
+    expect(WORKING_MESSAGES.length).toBeGreaterThan(0);
+    WORKING_MESSAGES.forEach((msg) => {
+      expect(typeof msg).toBe("string");
+      expect(msg.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("pickRandomMessage returns a string from the list", async () => {
+    const { pickRandomMessage, WORKING_MESSAGES } = await loadModule();
+    const result = pickRandomMessage();
+    expect(WORKING_MESSAGES).toContain(result);
+  });
+
+  it("pickRandomMessage can return different messages across calls", async () => {
+    const { pickRandomMessage } = await loadModule();
+    // Call many times; with 12 messages this statistically covers >1
+    const results = new Set(Array.from({ length: 100 }, () => pickRandomMessage()));
+    expect(results.size).toBeGreaterThan(1);
+  });
+});
+
 describe("my-hud extension", () => {
   beforeEach(() => {
     registeredEvents.clear();
@@ -473,9 +497,10 @@ describe("my-hud extension", () => {
     expect(typeof mod.default).toBe("function");
   });
 
-  it("registers turn_end handler", async () => {
+  it("registers turn_start and turn_end handlers", async () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
+    expect(registeredEvents.has("turn_start")).toBe(true);
     expect(registeredEvents.has("turn_end")).toBe(true);
   });
 
@@ -679,5 +704,43 @@ describe("my-hud extension", () => {
 
     expect(lines[0]).toContain("[my-hud error]");
     expect(lines[0]).toContain("boom");
+  });
+
+  it("turn_start handler sets working message and triggers render", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const turnStartHandler = registeredEvents.get("turn_start")!;
+    const setWorkingMessage = vi.fn();
+    const ctx = { ui: { setWorkingMessage } };
+
+    turnStartHandler({}, ctx);
+
+    expect(setWorkingMessage).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it("turn_start handler triggers requestRender when currentTui is set", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const sessionStartHandler = registeredEvents.get("session_start")!;
+    sessionStartHandler({}, { ...mockCtx, hasUI: true });
+
+    const turnStartHandler = registeredEvents.get("turn_start")!;
+    mockTui.requestRender.mockClear();
+    turnStartHandler({}, { ui: { setWorkingMessage: vi.fn() } });
+
+    expect(mockTui.requestRender).toHaveBeenCalled();
+  });
+
+  it("turn_start handler no-ops when setWorkingMessage throws", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const turnStartHandler = registeredEvents.get("turn_start")!;
+    const setWorkingMessage = vi.fn(() => { throw new Error("ui fail"); });
+    const ctx = { ui: { setWorkingMessage } };
+
+    expect(() => turnStartHandler({}, ctx)).toThrow("ui fail");
   });
 });

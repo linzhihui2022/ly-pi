@@ -17,12 +17,14 @@ import { truncateToWidth } from "@earendil-works/pi-tui";
 import { getLastUserMessage } from "./session";
 import { Bar } from "./bar";
 import { icon } from "./icons";
+import { pickRandomMessage } from "./working";
 
 // Re-export pure helpers for consumers / tests
 export { icon } from "./icons";
 export { formatTokens, contextColored, shortModelName } from "./format";
 export { aggregateSessionUsage, getLastUserMessage } from "./session";
 export { buildStatusLine } from "./render";
+export { pickRandomMessage, WORKING_MESSAGES } from "./working";
 export { Bar } from "./bar";
 export type { TokenUsage, StatusLineData } from "./types";
 
@@ -38,6 +40,10 @@ export default function myHud(pi: ExtensionAPI): void {
     bar?.requestRender();
   }
 
+  pi.on("turn_start", (_, ctx) => {
+    ctx.ui.setWorkingMessage(pickRandomMessage());
+    requestRender();
+  });
   pi.on("turn_end", requestRender);
   pi.on("model_select", requestRender);
 
