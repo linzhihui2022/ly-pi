@@ -78,16 +78,16 @@ The goal is to migrate **all** Superpowers skills as-is. Each skill retains its 
 | `writing-plans` | ✅ Migrated | Paths updated to `.lychee/artifacts/plans/`; removed `superpowers:` prefix from skill references; removed `using-git-worktrees` context note (Pi does not support worktrees); neutralized branding. |
 | `executing-plans` | ✅ Migrated | Removed `superpowers:` prefixes from skill references; replaced `TodoWrite` with `todo` tool; removed `using-git-worktrees` reference (Pi does not support worktrees); neutralized branding. |
 | `verification-before-completion` | ✅ Migrated | Pure documentation skill; no platform-specific content. |
-| `requesting-code-review` | ⏳ Pending | Migrate as-is. |
-| `receiving-code-review` | ⏳ Pending | Migrate as-is. |
+| `requesting-code-review` | ✅ Migrated | Replaced `Task tool` with `Agent` tool; updated plan path to `.lychee/artifacts/plans/`. |
+| `receiving-code-review` | ✅ Migrated | Migrated as-is. Replaced `CLAUDE.md` with `AGENTS.md`. |
 | `dispatching-parallel-agents` | ✅ Migrated | Replaced `Task()` with Pi `Agent` + `background: true`. |
 | `subagent-driven-development` | ✅ Migrated | Migrated as-is. Replaced `TodoWrite` with `todo`, `Task tool` with `Agent` tool, removed `using-git-worktrees` reference, updated paths to `.lychee/artifacts/`. |
 | `using-git-worktrees` | 🚫 Skip | Pi does not support git worktrees. Remove all references. |
-| `systematic-debugging` | ⏳ Pending | Migrate as-is. |
-| `test-driven-development` | ⏳ Pending | Migrate as-is. |
+| `systematic-debugging` | 🚫 Skip | Pi already has equivalent debugging capabilities built-in. |
+| `test-driven-development` | ✅ Migrated | Pure documentation skill; no platform-specific content. Migrated as-is with no changes. |
 | `finishing-a-development-branch` | ✅ Migrated | Already present in `pi-skills/`. |
 | `using-superpowers` | 🚫 Skip | Platform-specific to Superpowers; do not migrate. |
-| `writing-skills` | ⏳ Pending | Migrate as-is. |
+| `writing-skills` | ✅ Migrated | Replaced `superpowers:` prefix; updated `CLAUDE.md` references to Pi equivalents (`AGENTS.md`, `.rpiv/guidance/`); updated personal skill paths; neutralized branding; renamed `examples/CLAUDE_MD_TESTING.md` to `AGENTS_MD_TESTING.md`. |
 
 **When a migrated skill references another Superpowers skill:**
 
@@ -457,13 +457,17 @@ grep -ri "github.com/obra" pi-skills/YOUR-SKILL/ || echo "OK: no obra refs"
 # Check for wrong tool casing in docs
 grep -ri "\bBash\b" pi-skills/YOUR-SKILL/*.md || echo "OK: no Bash refs"
 grep -ri "\bWrite\b" pi-skills/YOUR-SKILL/*.md || echo "OK: no Write refs"
+
+# Check for legacy project guidance file references
+grep -ri "CLAUDE.md" pi-skills/YOUR-SKILL/ || echo "OK: no CLAUDE.md refs"
+grep -ri "~/.claude/skills" pi-skills/YOUR-SKILL/ || echo "OK: no ~/.claude/skills refs"
 ```
 
 ---
 
 ## 9. Common Pitfalls
 
-### 8.1 Path in Comments vs Code
+### 9.1 Path in Comments vs Code
 
 Comments often contain example paths. `sed` catches string matches, but verify manually:
 
@@ -476,7 +480,7 @@ sed -i '' 's/\.superpowers/.lychee/g' **/*
 # → "Store files under <project>/.lychee/brainstorm/"
 ```
 
-### 8.2 Git Ignore
+### 9.2 Git Ignore
 
 If the source mentions `.gitignore`, ensure the recommended pattern is updated:
 
@@ -488,11 +492,11 @@ If the source mentions `.gitignore`, ensure the recommended pattern is updated:
 .lychee/
 ```
 
-### 8.3 Script Shebangs
+### 9.3 Script Shebangs
 
 No changes needed for standard `#!/usr/bin/env bash` or `#!/usr/bin/env node` shebangs. Pi runs in the same shell environment as Claude Code.
 
-### 8.4 Node.js / Python Dependencies
+### 9.4 Node.js / Python Dependencies
 
 If the skill includes scripts with `package.json` or `requirements.txt`:
 
@@ -500,7 +504,7 @@ If the skill includes scripts with `package.json` or `requirements.txt`:
 - Update any docs that mention "Claude Code's Node version" to Pi's runtime
 - Pi uses Bun where available; `npm` and `npx` still work
 
-### 8.5 Subagent Prompts
+### 9.5 Subagent Prompts
 
 If the skill dispatches subagents with hardcoded prompts mentioning "Claude":
 
@@ -518,7 +522,28 @@ Or better, make it generic:
 You are a coding assistant subagent...
 ```
 
-### 8.6 Superpowers Skill Namespace Prefix
+### 9.6 Project Guidance File References (`CLAUDE.md`)
+
+Superpowers/Claude Code uses `CLAUDE.md` as the project-level guidance file. In Pi, the equivalent is `AGENTS.md` (global, under `~/.pi/agent/`) or `.rpiv/guidance/` (project-level shadow tree).
+
+When migrating skills that reference `CLAUDE.md`:
+
+| From | To |
+|---|---|
+| `put in CLAUDE.md` | `put in AGENTS.md or .rpiv/guidance/` |
+| `examples/CLAUDE_MD_TESTING.md` | `examples/AGENTS_MD_TESTING.md` |
+| `No mention of skills in CLAUDE.md` | `No mention of skills in AGENTS.md` |
+
+**Personal skills paths** also differ:
+
+| From | To |
+|---|---|
+| `~/.claude/skills/` | `~/.pi/agent/skills/` |
+| `~/.agents/skills/` | `~/.pi/agent/skills/` |
+
+**Pitfall:** `sed` may produce duplicate paths if both `~/.claude/skills` and `~/.agents/skills/` were present in the source. Verify the result does not read `~/.pi/agent/skills for Pi, ~/.pi/agent/skills/ for Pi`.
+
+### 9.7 Superpowers Skill Namespace Prefix
 
 Some Superpowers skills reference other skills using a colon prefix:
 
@@ -550,7 +575,6 @@ Invoke `subagent-driven-development`
 - [ ] `SKILL.md` frontmatter is valid YAML with `name` and `description`
 - [ ] No `.superpowers/` references remain
 - [ ] No `docs/superpowers/` references remain
-
 - [ ] No `CODEX_CI`, `MSYSTEM`, or `Codex` specific logic remains
 - [ ] No `Claude Code` specific instructions remain
 - [ ] No `Gemini CLI` specific instructions remain
@@ -575,7 +599,7 @@ Invoke `subagent-driven-development`
 每次执行迁移时，**必须同步更新本 skill 本身，skill源文件地址 /Users/lychee/Documents/configure/pi-skills/migrate-superpower**：
 
 1. **更新 mapping 列表**
-   - 修改 `skill-mapping.md` 中的迁移状态表
+   - 修改本文件 §3 中的迁移状态表
    - 将刚迁移的 skill 状态从 `⏳ Pending` 改为 `✅ Migrated`
    - 补充迁移备注（遇到的特殊问题、手动处理的内容）
 

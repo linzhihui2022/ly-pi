@@ -24,8 +24,8 @@ Tracks the migration status of every skill in the Superpowers ecosystem.
 | 2 | `writing-plans` | ✅ Migrated | Paths updated to `.lychee/artifacts/plans/`; removed `superpowers:` prefix; neutralized branding. |
 | 3 | `executing-plans` | ✅ Migrated | Removed `superpowers:` prefixes; replaced `TodoWrite` with `todo`; neutralized branding. |
 | 4 | `verification-before-completion` | ✅ Migrated | Pure documentation skill; no platform-specific content. Deployed via `./install.sh`. |
-| 5 | `requesting-code-review` | ⏳ Pending | Migrate as `pi-skills/requesting-code-review/`. |
-| 6 | `receiving-code-review` | ⏳ Pending | Migrate as `pi-skills/receiving-code-review/`. |
+| 5 | `requesting-code-review` | ✅ Migrated | Replaced `Task tool` with `Agent` tool; updated plan path to `.lychee/artifacts/plans/`. |
+| 6 | `receiving-code-review` | ✅ Migrated | Migrated as-is. Replaced `CLAUDE.md` with `AGENTS.md`. |
 | 7 | `dispatching-parallel-agents` | ✅ Migrated | Replaced `Task()` syntax with Pi `Agent` tool + `background: true`. No platform-specific content. |
 | 8 | `subagent-driven-development` | ✅ Migrated | Replaced `TodoWrite` with `todo`, `Task tool` with `Agent` tool, removed `using-git-worktrees` reference, updated paths to `.lychee/artifacts/`. |
 | 9 | `using-git-worktrees` | 🚫 Skip | Pi does not support git worktrees. Remove all references. |
