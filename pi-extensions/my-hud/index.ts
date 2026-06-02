@@ -82,9 +82,10 @@ export default function myHud(pi: ExtensionAPI): void {
             const entries = ctx.sessionManager.getEntries();
             const message = getLastUserMessage(entries);
             if (message) {
+              const firstLine = message.split("\n")[0];
               return [
                 truncateToWidth(
-                  theme.fg("dim", `${icon("terminal")}${message}`),
+                  theme.fg("dim", `${icon("terminal")}${firstLine}`),
                   width,
                 ),
               ];

@@ -842,6 +842,31 @@ describe("my-hud extension", () => {
     expect(lines[0]).toContain("hello world");
   });
 
+  it("footer render truncates multi-line message to first line only", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const ctx = {
+      ...mockCtx,
+      hasUI: true,
+      sessionManager: {
+        getEntries: vi.fn(() => [
+          { type: "message", message: { role: "user", content: "first line\nsecond line\nthird" } },
+        ]),
+      },
+    };
+
+    const sessionStartHandler = registeredEvents.get("session_start")!;
+    sessionStartHandler({}, ctx);
+
+    const component = ctx.ui.setFooter.mock.results[0].value;
+    const lines = component.render(120);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("first line");
+    expect(lines[0]).not.toContain("second line");
+  });
+
   it("footer render returns empty array when no user message", async () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
