@@ -1,6 +1,6 @@
 ---
 name: migrate-superpower
-description: "Migrate skills, extensions, or tools from Claude Code / Superpowers ecosystem to Pi. Provides exhaustive replacement rules, path mappings, and platform-specific cleanup."
+description: "Migrate skills, extensions, or tools from Claude Code / Superpowers ecosystem to Pi. Provides exhaustive replacement rules, path mappings, and platform-specific cleanup. Local source path: /Users/lychee/Documents/superpowers/skills"
 ---
 
 # Migrate from Claude Code / Superpowers to Pi
@@ -9,7 +9,7 @@ A comprehensive migration guide for adapting skills, scripts, documentation, and
 
 ## When to Use This Skill
 
-- You are porting a skill from `superpowers/skills/` to `pi-skills/`
+- You are porting a skill from `/Users/lychee/Documents/superpowers/skills` to `pi-skills/`
 - You are adapting a script or tool that was written for Claude Code
 - You are migrating docs, templates, or specs from the Superpowers format to Pi
 
@@ -75,26 +75,28 @@ The goal is to migrate **all** Superpowers skills as-is. Each skill retains its 
 | Superpowers Skill | Migration Status | Notes |
 |---|---|---|
 | `brainstorming` | ✅ Migrated | Already ported. Paths updated to `.lychee/`. |
-| `writing-plans` | ⏳ Pending | Migrate as `writing-plans`. Do NOT rename to `plan`. |
-| `executing-plans` | ⏳ Pending | Migrate as `executing-plans`. Do NOT rename to `implement`. |
-| `verification-before-completion` | ⏳ Pending | Migrate as-is. |
+| `writing-plans` | ✅ Migrated | Paths updated to `.lychee/artifacts/plans/`; removed `superpowers:` prefix from skill references; removed `using-git-worktrees` context note (Pi does not support worktrees); neutralized branding. |
+| `executing-plans` | ✅ Migrated | Removed `superpowers:` prefixes from skill references; replaced `TodoWrite` with `todo` tool; removed `using-git-worktrees` reference (Pi does not support worktrees); neutralized branding. |
+| `verification-before-completion` | ✅ Migrated | Pure documentation skill; no platform-specific content. |
 | `requesting-code-review` | ⏳ Pending | Migrate as-is. |
 | `receiving-code-review` | ⏳ Pending | Migrate as-is. |
-| `dispatching-parallel-agents` | ⏳ Pending | Migrate as-is. |
-| `subagent-driven-development` | ⏳ Pending | Migrate as-is. |
+| `dispatching-parallel-agents` | ✅ Migrated | Replaced `Task()` with Pi `Agent` + `background: true`. |
+| `subagent-driven-development` | ✅ Migrated | Migrated as-is. Replaced `TodoWrite` with `todo`, `Task tool` with `Agent` tool, removed `using-git-worktrees` reference, updated paths to `.lychee/artifacts/`. |
 | `using-git-worktrees` | 🚫 Skip | Pi does not support git worktrees. Remove all references. |
 | `systematic-debugging` | ⏳ Pending | Migrate as-is. |
 | `test-driven-development` | ⏳ Pending | Migrate as-is. |
-| `finishing-a-development-branch` | ⏳ Pending | Migrate as-is. |
+| `finishing-a-development-branch` | ✅ Migrated | Already present in `pi-skills/`. |
 | `using-superpowers` | 🚫 Skip | Platform-specific to Superpowers; do not migrate. |
 | `writing-skills` | ⏳ Pending | Migrate as-is. |
 
 **When a migrated skill references another Superpowers skill:**
+
 - Keep the original name in prose, flowcharts, and prompts
 - Update only the **file paths** (e.g., `skills/writing-plans/SKILL.md` → `pi-skills/writing-plans/SKILL.md`)
 - Do NOT change "invoke `writing-plans`" to "invoke `plan`"
 
 **Cross-skill references in prompts:**
+
 ```
 # Before (Superpowers)
 Invoke the writing-plans skill.
@@ -137,9 +139,30 @@ Pi has a rich subagent ecosystem. When migrating agent dispatch patterns:
 | `Subagent` tool | `Agent` tool with `subagent_type` parameter |
 | Manual process backgrounding | `Agent` with `run_in_background: true` |
 
-Pi subagent types include: `general-purpose`, `Explore`, `Plan`, `codebase-analyzer`, `codebase-locator`, `codebase-pattern-finder`, `integration-scanner`, `peer-comparator`, `precedent-locator`, `scope-tracer`, `slice-verifier`, `artifact-code-reviewer`, `artifact-coverage-reviewer`, `artifacts-analyzer`, `artifacts-locator`, `diff-auditor`, `claim-verifier`, `web-search-researcher`.
+Pi subagent types and their purposes:
 
-**Reference:** See Pi docs at `docs/skills.md` for full subagent type descriptions.
+| Subagent Type | Purpose | When to Use |
+|---|---|---|
+| `general-purpose` | General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. | Default fallback when no specialized type fits. |
+| `Explore` | Fast read-only search agent for locating code. | Finding files by pattern, grepping for symbols or keywords, answering "where is X defined / which files reference Y." |
+| `Plan` | Software architect agent for designing implementation plans. | Designing implementation strategy, identifying critical files, considering architectural trade-offs. |
+| `codebase-analyzer` | Analyzes codebase implementation details. | Tracing one component end-to-end, understanding HOW code works, data flow analysis. |
+| `codebase-locator` | Locates files, directories, and components. | "Super grep/find/ls" — when you would otherwise reach for grep/find/ls more than once. |
+| `codebase-pattern-finder` | Finds similar implementations and existing patterns. | Looking for concrete code examples, usage patterns, or templates to model after. |
+| `integration-scanner` | Finds what connects to a given component. | Mapping inbound references, outbound dependencies, config registrations, event subscriptions (reverse-reference counterpart to `codebase-locator`). |
+| `peer-comparator` | Pairwise peer-invariant comparator. | When a new entity parallels an existing sibling (aggregate, service, handler, reducer, repository) and must be checked against the peer's public surface. |
+| `precedent-locator` | Finds similar past changes in git history. | Mining commits, blast radius, follow-up fixes, and lessons from related `.rpiv/artifacts/` docs. |
+| `scope-tracer` | Traces the scope of a research investigation. | Sweeping anchor terms across the codebase, reading key files for depth, returning a Discovery Summary + dense numbered questions. |
+| `slice-verifier` | Per-slice adversarial verifier for incremental plan generation. | Auditing a just-generated slice against shared contracts, locked prior slices, and recorded constraints before it is locked. |
+| `artifact-code-reviewer` | Independent post-finalization code reviewer. | Walking each slice code fence against code quality, codebase fit, and actionability dimensions after a plan/design is finalized. |
+| `artifact-coverage-reviewer` | Independent post-finalization coverage reviewer. | Walking every `## Verification Notes` and `## Precedents & Lessons` entry to verify each lands somewhere actionable. |
+| `artifacts-analyzer` | Deep dive on research topics from `.rpiv/artifacts/` docs. | Extracting high-value insights from artifact documents, filtering noise, validating relevance. |
+| `artifacts-locator` | Finds relevant documents in `.rpiv/artifacts/`. | Discovering prior research, designs, plans, or reviews relevant to the current task. |
+| `diff-auditor` | Row-only patch auditor. | Walking a patch against a caller-supplied surface-list, emitting one row per matching pattern. |
+| `claim-verifier` | Adversarial finding verifier. | Grounding each supplied claim against actual repository state (Verified / Weakened / Falsified). |
+| `web-search-researcher` | Expert web research specialist. | Finding information not well-covered in training data, modern documentation, or discoverable only on the web. |
+
+**Selection rule:** Prefer the most specific subagent type over `general-purpose`. If the task is "find files" → `codebase-locator`; if it's "understand how X works" → `codebase-analyzer`; if it's "review a finalized plan" → `artifact-code-reviewer`.
 
 ### Context-Mode (Pi-Specific)
 
@@ -163,6 +186,7 @@ These tools exist in Pi but have no direct equivalent in Claude Code. When migra
 **Claude Code:** No structured questioning tool; the agent asks questions inline as free-form text.
 
 **Pi:** Use the `ask_user_question` tool for structured, interactive questioning. Benefits over free-form:
+
 - Enforced single-select / multi-select semantics
 - Side-by-side preview support (ASCII mockups, code snippets)
 - Automatic "Type something." escape hatch (except when `multiSelect: true` or `preview` is present)
@@ -171,6 +195,7 @@ These tools exist in Pi but have no direct equivalent in Claude Code. When migra
 **Migration rule:** If the source skill instructs "ask the user one question at a time" or "present multiple choice options," update to use `ask_user_question`.
 
 **Key Pi behaviors to document in the skill:**
+
 - `multiSelect: true` suppresses the "Type something." row
 - Any option with a non-empty `preview` also suppresses "Type something." (side-by-side layout)
 - Questions must end with `?`
@@ -178,6 +203,7 @@ These tools exist in Pi but have no direct equivalent in Claude Code. When migra
 - Recommended option should be first with "(Recommended)" suffix
 
 **Example migration:**
+
 ```
 # Before (Claude Code style)
 Ask the user: "Which approach do you prefer? A, B, or C?"
@@ -195,6 +221,7 @@ Use ask_user_question with a single question containing 2-4 options.
 **Migration rule:** If the source skill contains a multi-step checklist (e.g., brainstorming's 9-step process), add instructions to create `todo` tasks for each step.
 
 **Key Pi behaviors:**
+
 - Status: `pending` → `in_progress` → `completed`
 - `activeForm` — present-continuous label shown while `in_progress` (e.g., "writing tests")
 - `blockedBy` — task dependencies using task IDs
@@ -203,6 +230,7 @@ Use ask_user_question with a single question containing 2-4 options.
 - Skip `todo` for single trivial tasks and purely conversational requests
 
 **Example migration:**
+
 ```
 # Before (Claude Code style)
 ## Checklist
@@ -227,9 +255,10 @@ Mark in_progress before beginning work, completed when done.
 **Migration rule:** If the source skill dispatches "subagents" or "parallel workers," replace with Pi's `Agent` tool and select an appropriate `subagent_type`.
 
 **Pi-specific parameters:**
+
 | Parameter | Description |
 |---|---|
-| `subagent_type` | Required. Choose from: `general-purpose`, `Explore`, `Plan`, `codebase-analyzer`, `codebase-locator`, `codebase-pattern-finder`, `integration-scanner`, `peer-comparator`, `precedent-locator`, `scope-tracer`, `slice-verifier`, `artifact-code-reviewer`, `artifact-coverage-reviewer`, `artifacts-analyzer`, `artifacts-locator`, `diff-auditor`, `claim-verifier`, `web-search-researcher` |
+| `subagent_type` | Required. See the selection table in §4 Agent / Subagent for guidance. Options: `general-purpose`, `Explore`, `Plan`, `codebase-analyzer`, `codebase-locator`, `codebase-pattern-finder`, `integration-scanner`, `peer-comparator`, `precedent-locator`, `scope-tracer`, `slice-verifier`, `artifact-code-reviewer`, `artifact-coverage-reviewer`, `artifacts-analyzer`, `artifacts-locator`, `diff-auditor`, `claim-verifier`, `web-search-researcher` |
 | `description` | 3–5 word summary shown in UI |
 | `prompt` | Full, self-contained instruction |
 | `run_in_background` | Boolean. Launch agent in background and continue |
@@ -240,10 +269,12 @@ Mark in_progress before beginning work, completed when done.
 | `max_turns` | Limit agentic turns |
 
 **Post-dispatch tools:**
+
 - `get_subagent_result(agent_id)` — check status and retrieve results
 - `steer_subagent(agent_id, message)` — send mid-run steering message
 
 **Migration of background processes:**
+
 ```
 # Before (Claude Code)
 Bash tool with run_in_background: true
@@ -251,6 +282,30 @@ Bash tool with run_in_background: true
 # After (Pi)
 Agent tool with run_in_background: true, or bash tool with background: true
 ```
+
+### Task Syntax (Claude Code Specific)
+
+Claude Code supports a `Task()` shorthand for dispatching parallel agents:
+
+```typescript
+// Claude Code — REMOVE or replace
+Task("Fix abort test failures")
+Task("Fix batch test failures")
+```
+
+Pi has no `Task()` shorthand. Use the `Agent` tool with `background: true`:
+
+```xml
+<!-- Pi — correct replacement -->
+<Agent
+  subagent_type="general-purpose"
+  description="Fix abort tests"
+  prompt="..."
+  background="true"
+/>
+```
+
+**Migration rule:** When the source skill shows `Task("...")` examples, replace with full `Agent` tool XML and add `background: true`.
 
 **Reference:** See Pi docs at `docs/skills.md` for subagent type selection guidance.
 
@@ -287,6 +342,7 @@ OWNER_PID="$(ps -o ppid= -p "$PPID" 2>/dev/null | tr -d ' ')"
 ```
 
 **Keep only generic logic:**
+
 - Standard Unix: `nohup` + `disown` for backgrounding
 - Explicit `--foreground` flag for environments that reap detached processes
 - Explicit `--background` flag to force background mode
@@ -344,6 +400,7 @@ In HTML frame templates or visual companions:
 Keep skill names **exactly as they are in the source**. Do NOT rename `writing-plans` to `plan`, `executing-plans` to `implement`, etc.
 
 Only update **file paths** within the skill:
+
 ```
 # Before
 Invoke the writing-plans skill.
@@ -367,6 +424,7 @@ docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md
 ```
 
 Also update any inline paths in:
+
 - Skill checklists
 - Prompt templates
 - Example commands
@@ -437,6 +495,7 @@ No changes needed for standard `#!/usr/bin/env bash` or `#!/usr/bin/env node` sh
 ### 8.4 Node.js / Python Dependencies
 
 If the skill includes scripts with `package.json` or `requirements.txt`:
+
 - No platform migration needed for the code itself
 - Update any docs that mention "Claude Code's Node version" to Pi's runtime
 - Pi uses Bun where available; `npm` and `npx` still work
@@ -454,9 +513,34 @@ You are a Pi subagent...
 ```
 
 Or better, make it generic:
+
 ```
 You are a coding assistant subagent...
 ```
+
+### 8.6 Superpowers Skill Namespace Prefix
+
+Some Superpowers skills reference other skills using a colon prefix:
+
+```
+# Before
+Use superpowers:finishing-a-development-branch
+Invoke superpowers:subagent-driven-development
+```
+
+In Pi, skills have no namespace prefix. Remove `superpowers:` entirely:
+
+```
+# After
+Use `finishing-a-development-branch`
+Invoke `subagent-driven-development`
+```
+
+**Checklist:**
+
+- Search for `superpowers:` in prose, prompts, and checklists
+- Remove the prefix but keep the original skill name
+- Do NOT replace with a Pi-equivalent name (e.g., keep `writing-plans`, do not change to `plan`)
 
 ---
 
@@ -486,7 +570,29 @@ You are a coding assistant subagent...
 
 ---
 
-## 11. After Migration
+## 11. 迁移维护义务（Meta Rule）
+
+每次执行迁移时，**必须同步更新本 skill 本身**：
+
+1. **更新 mapping 列表**
+   - 修改 `skill-mapping.md` 中的迁移状态表
+   - 将刚迁移的 skill 状态从 `⏳ Pending` 改为 `✅ Migrated`
+   - 补充迁移备注（遇到的特殊问题、手动处理的内容）
+
+2. **将新发现写入本 skill**
+   - 如果迁移过程中发现了新的平台差异、工具行为变化或边界情况
+   - 将发现补充到 `SKILL.md` 的对应章节（或新增 Common Pitfalls 条目）
+   - 确保后续迁移能从本次经验中受益
+
+3. **更新目录**
+   - 确认 `/Users/lychee/Documents/configure/pi-skills/migrate-superpower/` 下的文件已反映最新认知
+   - 运行 `./install.sh` 部署更新后的 skill
+
+**原则：** 迁移不是一次性搬运，而是持续完善迁移知识库的过程。每次迁移都应让 `migrate-superpower` 变得更准确、更完整。
+
+---
+
+## 12. After Migration
 
 1. Run `./install.sh` to deploy
 2. Restart or `/reload` Pi to pick up the new skill

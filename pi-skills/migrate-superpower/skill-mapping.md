@@ -21,17 +21,17 @@ Tracks the migration status of every skill in the Superpowers ecosystem.
 | # | Superpowers Skill | Status | Notes |
 |---|-------------------|--------|-------|
 | 1 | `brainstorming` | ✅ Migrated | Paths updated to `.lychee/`. `plan` skill name kept as `writing-plans` in source (pending #2). |
-| 2 | `writing-plans` | ⏳ Pending | Migrate as `pi-skills/writing-plans/`. Keep name. Do NOT rename to `plan`. |
-| 3 | `executing-plans` | ⏳ Pending | Migrate as `pi-skills/executing-plans/`. Keep name. Do NOT rename to `implement`. |
-| 4 | `verification-before-completion` | ⏳ Pending | Migrate as `pi-skills/verification-before-completion/`. |
+| 2 | `writing-plans` | ✅ Migrated | Paths updated to `.lychee/artifacts/plans/`; removed `superpowers:` prefix; neutralized branding. |
+| 3 | `executing-plans` | ✅ Migrated | Removed `superpowers:` prefixes; replaced `TodoWrite` with `todo`; neutralized branding. |
+| 4 | `verification-before-completion` | ✅ Migrated | Pure documentation skill; no platform-specific content. Deployed via `./install.sh`. |
 | 5 | `requesting-code-review` | ⏳ Pending | Migrate as `pi-skills/requesting-code-review/`. |
 | 6 | `receiving-code-review` | ⏳ Pending | Migrate as `pi-skills/receiving-code-review/`. |
-| 7 | `dispatching-parallel-agents` | ⏳ Pending | Migrate as `pi-skills/dispatching-parallel-agents/`. |
-| 8 | `subagent-driven-development` | ⏳ Pending | Migrate as `pi-skills/subagent-driven-development/`. |
+| 7 | `dispatching-parallel-agents` | ✅ Migrated | Replaced `Task()` syntax with Pi `Agent` tool + `background: true`. No platform-specific content. |
+| 8 | `subagent-driven-development` | ✅ Migrated | Replaced `TodoWrite` with `todo`, `Task tool` with `Agent` tool, removed `using-git-worktrees` reference, updated paths to `.lychee/artifacts/`. |
 | 9 | `using-git-worktrees` | 🚫 Skip | Pi does not support git worktrees. Remove all references. |
 | 10 | `systematic-debugging` | ⏳ Pending | Migrate as `pi-skills/systematic-debugging/`. |
 | 11 | `test-driven-development` | ⏳ Pending | Migrate as `pi-skills/test-driven-development/`. |
-| 12 | `finishing-a-development-branch` | ⏳ Pending | Migrate as `pi-skills/finishing-a-development-branch/`. |
+| 12 | `finishing-a-development-branch` | ✅ Migrated | Already present in `pi-skills/`. |
 | 13 | `writing-skills` | ⏳ Pending | Migrate as `pi-skills/writing-skills/`. |
 | — | `using-superpowers` | 🚫 Skip | Entirely about the Superpowers platform itself. Not applicable to Pi. |
 
