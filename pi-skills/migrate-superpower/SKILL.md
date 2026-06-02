@@ -572,7 +572,7 @@ Invoke `subagent-driven-development`
 
 ## 11. 迁移维护义务（Meta Rule）
 
-每次执行迁移时，**必须同步更新本 skill 本身**：
+每次执行迁移时，**必须同步更新本 skill 本身，skill源文件地址 /Users/lychee/Documents/configure/pi-skills/migrate-superpower**：
 
 1. **更新 mapping 列表**
    - 修改 `skill-mapping.md` 中的迁移状态表
