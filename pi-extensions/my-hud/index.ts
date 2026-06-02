@@ -47,6 +47,7 @@ export default function myHud(pi: ExtensionAPI): void {
   });
 
   pi.on("model_select", requestRender);
+  pi.on("turn_end", requestRender);
 
   // ── Install HUD on session start ──
   pi.on("session_start", (_event, ctx: ExtensionContext) => {
