@@ -40,6 +40,14 @@ export function aggregateSessionUsage(entries: SessionEntry[]): TokenUsage {
 }
 
 /**
+ * Strip skill XML blocks from a message, returning only the user's actual input.
+ */
+function stripSkillTags(text: string): string {
+  // Matches <skill ...>...</skill> including newlines within the block
+  return text.replace(/<skill[^>]*>[\s\S]*?<\/skill>/g, "").trim();
+}
+
+/**
  * Extract the text of the most recent user message from session entries.
  * Returns `null` if no user message is found.
  */
@@ -54,14 +62,14 @@ export function getLastUserMessage(entries: SessionEntry[]): string | null {
     if (content == null) continue;
 
     if (typeof content === "string") {
-      const trimmed = content.trim();
+      const trimmed = stripSkillTags(content);
       if (trimmed) return trimmed;
       continue;
     }
 
     // Array of content parts (text / image / etc.)
     if (Array.isArray(content) && content.length > 0) {
-      return content
+      const text = content
         .map((part) => {
           if (typeof part === "string") return part;
           if (part && typeof part === "object" && "text" in part) {
@@ -71,6 +79,8 @@ export function getLastUserMessage(entries: SessionEntry[]): string | null {
         })
         .join(" ")
         .trim();
+      const stripped = stripSkillTags(text);
+      if (stripped) return stripped;
     }
   }
 

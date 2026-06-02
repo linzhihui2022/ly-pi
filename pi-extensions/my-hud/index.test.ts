@@ -359,6 +359,116 @@ describe("getLastUserMessage", () => {
     ];
     expect(getLastUserMessage(entries as any)).toBeNull();
   });
+
+  it("strips skill XML tags from string content", async () => {
+    const { getLastUserMessage } = await loadModule();
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: '<skill name="test">skill body</skill>\nactual message',
+        },
+      },
+    ];
+    expect(getLastUserMessage(entries as any)).toBe("actual message");
+  });
+
+  it("strips multiline skill XML tags", async () => {
+    const { getLastUserMessage } = await loadModule();
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: '<skill name="x" location="/path">\n  <rule>abc</rule>\n</skill>\nuser text',
+        },
+      },
+    ];
+    expect(getLastUserMessage(entries as any)).toBe("user text");
+  });
+
+  it("returns null when only skill tags are present", async () => {
+    const { getLastUserMessage } = await loadModule();
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: '<skill name="x">body</skill>',
+        },
+      },
+    ];
+    expect(getLastUserMessage(entries as any)).toBeNull();
+  });
+
+  it("strips skill XML tags from array content parts", async () => {
+    const { getLastUserMessage } = await loadModule();
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: [
+            { type: "text", text: '<skill name="x">body</skill>\n' },
+            { type: "text", text: "hello" },
+          ],
+        },
+      },
+    ];
+    expect(getLastUserMessage(entries as any)).toBe("hello");
+  });
+
+  it("handles array with raw string parts and skill tags", async () => {
+    const { getLastUserMessage } = await loadModule();
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: [
+            '<skill name="x">body</skill>',
+            " raw string",
+          ],
+        },
+      },
+    ];
+    expect(getLastUserMessage(entries as any)).toBe("raw string");
+  });
+
+  it("handles array with [MEDIA] and skill tags", async () => {
+    const { getLastUserMessage } = await loadModule();
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: [
+            { type: "image", url: "http://x" },
+            { type: "text", text: '<skill name="x">body</skill>' },
+            { type: "text", text: "after media" },
+          ],
+        },
+      },
+    ];
+    expect(getLastUserMessage(entries as any)).toBe("[MEDIA]  after media");
+  });
+
+  it("returns null when array only contains skill tags", async () => {
+    const { getLastUserMessage } = await loadModule();
+    const entries = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: [
+            { type: "text", text: '<skill name="x">body</skill>' },
+          ],
+        },
+      },
+    ];
+    expect(getLastUserMessage(entries as any)).toBeNull();
+  });
 });
 
 describe("buildStatusLine", () => {
@@ -886,5 +996,43 @@ describe("my-hud extension", () => {
     const ctx = { ui: { setWorkingMessage, getTheme: vi.fn(() => theme) } };
 
     expect(() => turnStartHandler({}, ctx)).toThrow("ui fail");
+  });
+
+  it("turn_end handler triggers requestRender when currentTui is set", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const sessionStartHandler = registeredEvents.get("session_start")!;
+    sessionStartHandler({}, { ...mockCtx, hasUI: true });
+
+    const turnEndHandler = registeredEvents.get("turn_end")!;
+    mockTui.requestRender.mockClear();
+    turnEndHandler();
+
+    expect(mockTui.requestRender).toHaveBeenCalled();
+  });
+
+  it("footer handles undefined git branch via nullish coalescing", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    mockFooterData.getGitBranch.mockReturnValue(undefined);
+
+    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const ctx = {
+      ...mockCtx,
+      hasUI: true,
+      sessionManager: {
+        getEntries: vi.fn(() => [
+          { type: "message", message: { role: "user", content: "test" } },
+        ]),
+      },
+    };
+    sessionStartHandler({}, ctx);
+
+    const component = ctx.ui.setFooter.mock.results[0].value;
+    expect(() => component.render(120)).not.toThrow();
+
+    mockFooterData.getGitBranch.mockReturnValue("main");
   });
 });
