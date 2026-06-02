@@ -84,9 +84,24 @@ THEME_SRC="$SCRIPT_DIR/pi-themes"
 THEME_DEST="$HOME/.pi/agent/themes"
 if [[ -d "$THEME_SRC" ]]; then
 	echo ""
-	echo "    copying themes from $THEME_SRC"
+	echo "==> Installing pi themes to $THEME_DEST"
 	mkdir -p "$THEME_DEST"
 	cp -r "$THEME_SRC"/* "$THEME_DEST"/
+fi
+
+# ── Agents ──
+
+AGENT_SRC="$SCRIPT_DIR/pi-agents"
+AGENT_DEST="$HOME/.pi/agent/agents"
+
+if [[ -d "$AGENT_SRC" ]]; then
+	echo ""
+	echo "==> Installing pi agents to $AGENT_DEST"
+	mkdir -p "$AGENT_DEST"
+	rm -rf "$AGENT_DEST"/*.md
+	cp -r "$AGENT_SRC"/*.md "$AGENT_DEST"/
+	echo "==> Installed agents:"
+	ls -1 "$AGENT_DEST"
 fi
 
 echo ""

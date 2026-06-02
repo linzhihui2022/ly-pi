@@ -12,6 +12,7 @@ Personal shell, terminal, and coding agent configuration — managed as a git re
 | `AGENTS.md` | auto-discovered by pi | Configure-repo development guide (loaded by pi alongside `MY-AGENTS.md`) |
 | `pi-extensions/` | `./install.sh` → `~/.pi/agent/extensions/` | Pi custom extensions (transitional, being replaced by pi-infra) |
 | `pi-skills/` | `./install.sh` → `~/.pi/agent/skills/` | Custom skills (superpowers migration) |
+| `pi-agents/` | `./install.sh` → `~/.pi/agent/agents/` | Custom subagent definitions |
 | `pi-themes/` | `./install.sh` → `~/.pi/agent/themes/` | Custom themes |
 | `install.sh` | — | Deploy extensions, skills, and themes to pi agent |
 | `.lychee/specs/` | — | Design specs |
