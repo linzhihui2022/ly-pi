@@ -15,6 +15,7 @@ const icons = {
   output: "\uf063 ",
   cacheRead: "\uf1b2 ",
   cost: "\uf157",
+  cacheRate: "\uf080 ",
   terminal:"\uf120  "
 } as const;
 
