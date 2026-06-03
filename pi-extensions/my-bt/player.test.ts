@@ -1,6 +1,13 @@
-import { describe, it, expect } from "vitest";
-import { listCategories, pickSoundFile, resolveSoundPath } from "./player";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { exec } from "node:child_process";
+import { listCategories, pickSoundFile, resolveSoundPath, playCategory } from "./player";
 import type { BtConfig } from "./types";
+
+vi.mock("node:child_process", () => ({
+  exec: vi.fn((cmd: string, cb: (err: Error | null) => void) => {
+    cb(null);
+  }),
+}));
 
 const mockConfig: BtConfig = {
   soundDir: "/fake/sounds",
@@ -36,6 +43,38 @@ const mockConfig: BtConfig = {
     agent_end: "completed",
   },
 };
+
+beforeEach(() => {
+  vi.mocked(exec).mockClear();
+});
+
+describe("playCategory", () => {
+  it("plays a sound from the category", () => {
+    playCategory(mockConfig, "startup");
+    expect(exec).toHaveBeenCalledOnce();
+    expect(exec).toHaveBeenCalledWith(
+      expect.stringContaining("startup.mp3"),
+      expect.any(Function),
+    );
+  });
+
+  it("does nothing for unknown category", () => {
+    playCategory(mockConfig, "nonexistent");
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it("logs error when play fails", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(exec).mockImplementationOnce((cmd, cb) => {
+      cb(new Error("play failed"));
+    });
+    playCategory(mockConfig, "startup");
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("play failed"),
+    );
+    consoleSpy.mockRestore();
+  });
+});
 
 describe("listCategories", () => {
   it("returns all category names and descriptions", () => {

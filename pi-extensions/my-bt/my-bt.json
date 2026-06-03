@@ -1,4 +1,5 @@
 {
+  "enabled": true,
   "soundDir": "sounds",
   "categories": {
     "startup": {

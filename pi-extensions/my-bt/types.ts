@@ -4,6 +4,7 @@ export interface BtCategory {
 }
 
 export interface BtConfig {
+  enabled: boolean;
   soundDir: string;
   categories: Record<string, BtCategory>;
   eventMap: Record<string, string>;
