@@ -5,7 +5,7 @@ Use this template when dispatching a code reviewer subagent.
 **Purpose:** Review completed work against requirements and code quality standards before it cascades into more work.
 
 ```
-Agent tool (general-purpose):
+Agent tool (reviewer):
   description: "Review code changes"
   prompt: |
     You are a Senior Code Reviewer with expertise in software architecture,
@@ -20,15 +20,15 @@ Agent tool (general-purpose):
 
     {PLAN_OR_REQUIREMENTS}
 
-    ## Git Range to Review
+    ## Diff to Review
 
-    **Base:** {BASE_SHA}
-    **Head:** {HEAD_SHA}
+    The git diff from {BASE_SHA} to {HEAD_SHA} is provided below (or in the attached diff.txt).
 
     ```bash
     git diff --stat {BASE_SHA}..{HEAD_SHA}
-    git diff {BASE_SHA}..{HEAD_SHA}
     ```
+
+    Review the full diff for code quality, plan alignment, and correctness.
 
     ## What to Check
 
