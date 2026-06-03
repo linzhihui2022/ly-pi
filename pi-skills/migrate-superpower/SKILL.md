@@ -155,45 +155,92 @@ Pi tool names are **lowercase**. Update documentation and comments:
 
 ### Background Execution
 
-| Claude Code | Pi |
-|---|---|
-| `run_in_background: true` | `background: true` |
-| `run_in_background` | `background` |
+| Claude Code | Pi (tintinweb legacy) | Pi (pi-subagents) |
+|---|---|---|
+| `run_in_background: true` | `background: true` | `async: true` |
 
 ### Agent / Subagent
 
-Pi has a rich subagent ecosystem. When migrating agent dispatch patterns:
+`pi-subagents` provides a `subagent()` function for dispatching agents. When migrating agent dispatch patterns:
 
-| Claude Code Pattern | Pi Equivalent |
+| Claude Code Pattern | pi-subagents Equivalent |
 |---|---|
-| Generic subagent | Use specific type: `Explore`, `Plan`, `codebase-analyzer`, `codebase-pattern-finder`, etc. |
-| `Subagent` tool | `Agent` tool with `subagent_type` parameter |
-| Manual process backgrounding | `Agent` with `run_in_background: true` |
+| Generic subagent | Use specific built-in agent: `worker`, `reviewer`, `scout`, `planner`, etc. |
+| `Subagent` tool | `subagent({ agent: "...", task: "..." })` |
+| Manual process backgrounding | `subagent({ agent: "...", task: "...", async: true })` |
 
-Pi subagent types and their purposes:
+**Built-in agent types and their purposes:**
 
-| Subagent Type | Purpose | When to Use |
+| Agent | Purpose | When to Use |
 |---|---|---|
-| `general-purpose` | General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. | Default fallback when no specialized type fits. |
-| `Explore` | Fast read-only search agent for locating code. | Finding files by pattern, grepping for symbols or keywords, answering "where is X defined / which files reference Y." |
-| `Plan` | Software architect agent for designing implementation plans. | Designing implementation strategy, identifying critical files, considering architectural trade-offs. |
-| `codebase-analyzer` | Analyzes codebase implementation details. | Tracing one component end-to-end, understanding HOW code works, data flow analysis. |
-| `codebase-locator` | Locates files, directories, and components. | "Super grep/find/ls" — when you would otherwise reach for grep/find/ls more than once. |
-| `codebase-pattern-finder` | Finds similar implementations and existing patterns. | Looking for concrete code examples, usage patterns, or templates to model after. |
-| `integration-scanner` | Finds what connects to a given component. | Mapping inbound references, outbound dependencies, config registrations, event subscriptions (reverse-reference counterpart to `codebase-locator`). |
-| `peer-comparator` | Pairwise peer-invariant comparator. | When a new entity parallels an existing sibling (aggregate, service, handler, reducer, repository) and must be checked against the peer's public surface. |
-| `precedent-locator` | Finds similar past changes in git history. | Mining commits, blast radius, follow-up fixes, and lessons from related `.rpiv/artifacts/` docs. |
-| `scope-tracer` | Traces the scope of a research investigation. | Sweeping anchor terms across the codebase, reading key files for depth, returning a Discovery Summary + dense numbered questions. |
-| `slice-verifier` | Per-slice adversarial verifier for incremental plan generation. | Auditing a just-generated slice against shared contracts, locked prior slices, and recorded constraints before it is locked. |
-| `artifact-code-reviewer` | Independent post-finalization code reviewer. | Walking each slice code fence against code quality, codebase fit, and actionability dimensions after a plan/design is finalized. |
-| `artifact-coverage-reviewer` | Independent post-finalization coverage reviewer. | Walking every `## Verification Notes` and `## Precedents & Lessons` entry to verify each lands somewhere actionable. |
-| `artifacts-analyzer` | Deep dive on research topics from `.rpiv/artifacts/` docs. | Extracting high-value insights from artifact documents, filtering noise, validating relevance. |
-| `artifacts-locator` | Finds relevant documents in `.rpiv/artifacts/`. | Discovering prior research, designs, plans, or reviews relevant to the current task. |
-| `diff-auditor` | Row-only patch auditor. | Walking a patch against a caller-supplied surface-list, emitting one row per matching pattern. |
-| `claim-verifier` | Adversarial finding verifier. | Grounding each supplied claim against actual repository state (Verified / Weakened / Falsified). |
-| `web-search-researcher` | Expert web research specialist. | Finding information not well-covered in training data, modern documentation, or discoverable only on the web. |
+| `worker` | General implementation agent with edit/write/bash tools. | Default for implementation tasks, fixes, and multi-step code work. |
+| `reviewer` | Independent code/spec reviewer. | Reviewing implementations, plans, or diffs for quality and compliance. |
+| `scout` | Fast read-only reconnaissance agent. | Gathering diffs, listing files, finding code — no edits. |
+| `planner` | Design and architecture agent. | Creating implementation plans, identifying critical files, considering trade-offs. |
+| `researcher` | Web research specialist. | Finding information not well-covered in training data (requires `pi-web-access`). |
+| `delegate` | Lightweight general-purpose agent. | Simple tasks that don't need the full capability of `worker`. |
+| `oracle` | Deep reasoning agent. | Complex analysis requiring broad context and reasoning. |
+| `context-builder` | Context preparation agent. | Summarizing and packaging context for other agents. |
 
-**Selection rule:** Prefer the most specific subagent type over `general-purpose`. If the task is "find files" → `codebase-locator`; if it's "understand how X works" → `codebase-analyzer`; if it's "review a finalized plan" → `artifact-code-reviewer`.
+**Selection rule:** Prefer the most specific agent for the job. Implementation → `worker`; review → `reviewer`; reconnaissance → `scout`; planning → `planner`.
+
+**Dispatch syntax:**
+
+```typescript
+// Single agent
+subagent({ agent: "worker", task: "Fix the failing tests in src/foo.test.ts" })
+
+// Parallel agents (tasks array)
+subagent({
+  tasks: [
+    { agent: "worker", task: "Fix abort tests", context: "fresh" },
+    { agent: "worker", task: "Fix batch tests", context: "fresh" },
+    { agent: "worker", task: "Fix race tests", context: "fresh" }
+  ]
+})
+
+// Sequential chain
+subagent({
+  chain: [
+    { agent: "scout", task: "Get git diff from BASE to HEAD", output: "diff.txt" },
+    { agent: "reviewer", task: "Review the diff in diff.txt", reads: "diff.txt" }
+  ]
+})
+
+// Background / async
+subagent({ agent: "worker", task: "...", async: true })
+// Later: check status
+subagent({ action: "status", id: "..." })
+```
+
+**Key parameters:**
+
+| Parameter | Description |
+|---|---|
+| `agent` | Required. Built-in agent name or custom agent file name. |
+| `task` | Required. Full, self-contained instruction. |
+| `async` | Boolean. Launch agent in background and continue. |
+| `context` | `"fresh"` (clean session), `"fork"` (inherit parent context). Default varies by agent. |
+| `output` | File path to write agent output to. |
+| `reads` | File path for agent to read as input. |
+| `tasks` | Array for parallel dispatch. Mutually exclusive with `chain`. |
+| `chain` | Array for sequential dispatch. Each step's output can feed the next. |
+
+**Post-dispatch actions:**
+
+```typescript
+// Check status
+subagent({ action: "status", id: "<agent-id>" })
+
+// Interrupt
+subagent({ action: "interrupt", id: "<agent-id>" })
+
+// Resume with message
+subagent({ action: "resume", id: "<agent-id>", message: "..." })
+
+// List all active agents
+subagent({ action: "list" })
+```
 
 ### Context-Mode (Pi-Specific)
 
@@ -281,37 +328,54 @@ Mark in_progress before beginning work, completed when done.
 
 **Claude Code:** Subagent support is limited; may use generic background processes or simple tool calls.
 
-**Pi:** Rich `Agent` tool with typed subagents.
+**Pi (tintinweb legacy):** Rich `Agent` tool with typed subagents via `subagent_type`.
 
-**Migration rule:** If the source skill dispatches "subagents" or "parallel workers," replace with Pi's `Agent` tool and select an appropriate `subagent_type`.
+**Pi (pi-subagents):** `subagent()` function with built-in agents.
 
-**Pi-specific parameters:**
+**Migration rule:** If the source skill dispatches "subagents" or "parallel workers," replace with `pi-subagents` `subagent()` syntax.
+
+**From tintinweb:**
+
+```xml
+<!-- Old tintinweb syntax — REMOVE -->
+<Agent
+  subagent_type="general-purpose"
+  description="Fix abort tests"
+  prompt="..."
+  background="true"
+/>
+```
+
+**To pi-subagents:**
+
+```typescript
+// Single agent
+subagent({ agent: "worker", task: "Fix the failing tests..." })
+
+// Parallel agents
+subagent({
+  tasks: [
+    { agent: "worker", task: "Fix abort tests...", context: "fresh" },
+    { agent: "worker", task: "Fix batch tests...", context: "fresh" }
+  ]
+})
+```
+
+**Key parameters:**
 
 | Parameter | Description |
 |---|---|
-| `subagent_type` | Required. See the selection table in §4 Agent / Subagent for guidance. Options: `general-purpose`, `Explore`, `Plan`, `codebase-analyzer`, `codebase-locator`, `codebase-pattern-finder`, `integration-scanner`, `peer-comparator`, `precedent-locator`, `scope-tracer`, `slice-verifier`, `artifact-code-reviewer`, `artifact-coverage-reviewer`, `artifacts-analyzer`, `artifacts-locator`, `diff-auditor`, `claim-verifier`, `web-search-researcher` |
-| `description` | 3–5 word summary shown in UI |
-| `prompt` | Full, self-contained instruction |
-| `run_in_background` | Boolean. Launch agent in background and continue |
-| `isolation: "worktree"` | ~~Run in isolated git worktree~~ — **Pi does not support worktrees. Do not use.** |
-| `inherit_context` | Fork parent conversation into agent |
-| `model` | Override model, e.g. `"haiku"`, `"sonnet"` |
-| `thinking` | Thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` |
-| `max_turns` | Limit agentic turns |
+| `agent` | Required. Built-in name (`worker`, `reviewer`, `scout`, `planner`, etc.) or custom agent file. |
+| `task` | Required. Full, self-contained instruction. |
+| `async` | Boolean. Background execution (returns immediately). |
+| `context` | `"fresh"` for clean session, `"fork"` to inherit parent. |
 
-**Post-dispatch tools:**
+**Post-dispatch:**
 
-- `get_subagent_result(agent_id)` — check status and retrieve results
-- `steer_subagent(agent_id, message)` — send mid-run steering message
-
-**Migration of background processes:**
-
-```
-# Before (Claude Code)
-Bash tool with run_in_background: true
-
-# After (Pi)
-Agent tool with run_in_background: true, or bash tool with background: true
+```typescript
+subagent({ action: "status", id: "<agent-id>" })
+subagent({ action: "interrupt", id: "<agent-id>" })
+subagent({ action: "resume", id: "<agent-id>", message: "..." })
 ```
 
 ### Task Syntax (Claude Code Specific)
@@ -324,19 +388,21 @@ Task("Fix abort test failures")
 Task("Fix batch test failures")
 ```
 
-Pi has no `Task()` shorthand. Use the `Agent` tool with `background: true`:
+`pi-subagents` has no `Task()` shorthand. Use `subagent({ tasks: [...] })`:
 
-```xml
-<!-- Pi — correct replacement -->
-<Agent
-  subagent_type="general-purpose"
-  description="Fix abort tests"
-  prompt="..."
-  background="true"
-/>
+```typescript
+// Pi-subagents — correct replacement
+subagent({
+  tasks: [
+    { agent: "worker", task: "Fix abort test failures...", context: "fresh" },
+    { agent: "worker", task: "Fix batch test failures...", context: "fresh" }
+  ]
+})
 ```
 
-**Migration rule:** When the source skill shows `Task("...")` examples, replace with full `Agent` tool XML and add `background: true`.
+**Migration rule:** When the source skill shows `Task("...")` examples, replace with `subagent({ tasks: [...] })`.
+
+**Reference:** See Pi docs at `docs/skills.md` for agent selection guidance.
 
 **Reference:** See Pi docs at `docs/skills.md` for subagent type selection guidance.
 
@@ -492,6 +558,12 @@ grep -ri "\bWrite\b" pi-skills/YOUR-SKILL/*.md || echo "OK: no Write refs"
 # Check for legacy project guidance file references
 grep -ri "CLAUDE.md" pi-skills/YOUR-SKILL/ || echo "OK: no CLAUDE.md refs"
 grep -ri "~/.claude/skills" pi-skills/YOUR-SKILL/ || echo "OK: no ~/.claude/skills refs"
+
+# Check for old tintinweb agent syntax
+grep -ri "subagent_type" pi-skills/YOUR-SKILL/ || echo "OK: no subagent_type refs"
+grep -ri "run_in_background" pi-skills/YOUR-SKILL/ || echo "OK: no run_in_background refs"
+grep -ri "get_subagent_result" pi-skills/YOUR-SKILL/ || echo "OK: no get_subagent_result refs"
+grep -ri "steer_subagent" pi-skills/YOUR-SKILL/ || echo "OK: no steer_subagent refs"
 ```
 
 ---
@@ -619,6 +691,11 @@ Invoke `subagent-driven-development`
 - [ ] `ask_user_question` is used for structured questioning (not free-form)
 - [ ] `todo` is used for multi-step workflow tracking (not Markdown checklists)
 - [ ] `Agent` tool uses appropriate `subagent_type` (not generic "subagent")
+- [ ] `subagent()` uses correct `agent` name (not `subagent_type`)
+- [ ] Parallel dispatch uses `tasks` array (not multiple `Agent` calls)
+- [ ] Background execution uses `async: true` (not `run_in_background`)
+- [ ] Sequential workflows use `chain` array where appropriate
+- [ ] No `get_subagent_result` or `steer_subagent` references remain
 - [ ] All verification commands pass
 - [ ] `./install.sh` runs without errors
 - [ ] Pi reloads and recognizes the new skill
