@@ -4,15 +4,7 @@
 
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-
-export interface GitStatus {
-  ahead: number;
-  behind: number;
-  staged: number;
-  stashed: number;
-  conflicted: number;
-  isClean: boolean;
-}
+import type { GitStatus } from "./types";
 
 const execAsync = promisify(exec);
 
