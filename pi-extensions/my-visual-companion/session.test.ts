@@ -120,4 +120,97 @@ describe("SessionManager", () => {
     // Should not throw
     manager.updateScreen("nonexistent", "layout", "<h1>Hi</h1>");
   });
+
+  it("waitForConfirm resolves when confirm event is appended", async () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    const promise = manager.waitForConfirm(session.id, 5000);
+    manager.appendEvent(session.id, { type: "confirm", text: "yes", timestamp: 1 });
+
+    const result = await promise;
+    expect(result.type).toBe("confirm");
+    expect(result.text).toBe("yes");
+  });
+
+  it("waitForConfirm rejects on timeout", async () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    const promise = manager.waitForConfirm(session.id, 1000);
+    vi.advanceTimersByTime(1500);
+
+    await expect(promise).rejects.toThrow("Timeout waiting for confirm");
+  });
+
+  it("waitForConfirm returns immediately if confirm already exists", async () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    manager.appendEvent(session.id, { type: "confirm", text: "already", timestamp: 1 });
+    const result = await manager.waitForConfirm(session.id, 5000);
+
+    expect(result.type).toBe("confirm");
+    expect(result.text).toBe("already");
+  });
+
+  it("destroy rejects pending waitForConfirm", async () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    const promise = manager.waitForConfirm(session.id, 5000);
+    manager.destroy(session.id);
+
+    await expect(promise).rejects.toThrow("Session destroyed");
+  });
+
+  it("waitForConfirm rejects duplicate wait", async () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    manager.waitForConfirm(session.id, 5000);
+    const second = manager.waitForConfirm(session.id, 5000);
+
+    await expect(second).rejects.toThrow("Already waiting for confirm");
+  });
+
+  it("waitForConfirm rejects for unknown session", async () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    await expect(manager.waitForConfirm("bad-id", 5000)).rejects.toThrow("Session not found");
+  });
+
+  it("getAll returns all sessions", () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const s1 = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const s2 = manager.create(8081, "http://localhost:8081", mockServer, mockWss);
+
+    const all = manager.getAll();
+    expect(all).toHaveLength(2);
+    expect(all.map((s) => s.id)).toContain(s1.id);
+    expect(all.map((s) => s.id)).toContain(s2.id);
+  });
+
+  it("destroy silently ignores already destroyed session", () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    manager.destroy(session.id);
+    // Should not throw
+    manager.destroy(session.id);
+    expect(manager.get(session.id)).toBeUndefined();
+  });
 });

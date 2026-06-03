@@ -15,10 +15,11 @@ describe("createTools", () => {
     await manager.destroyAll();
   });
 
-  it("has all 4 tools", () => {
+  it("has all 5 tools", () => {
     const names = tools.map((t) => t.name);
     expect(names).toContain("visual_companion_start");
     expect(names).toContain("visual_companion_show");
+    expect(names).toContain("visual_companion_wait");
     expect(names).toContain("visual_companion_read_events");
     expect(names).toContain("visual_companion_stop");
   });
@@ -39,7 +40,7 @@ describe("createTools", () => {
     const sessionId = (startResult.details as any).sessionId;
 
     const result = await showTool.execute("tc-2", { session_id: sessionId, name: "layout", html: "<h1>Hi</h1>" }, undefined, undefined, {} as any);
-    expect(result.details).toEqual({ success: true });
+    expect(result.details).toEqual({ success: true, url: expect.any(String) });
   });
 
   it("show tool returns error for bad session", async () => {
@@ -76,6 +77,27 @@ describe("createTools", () => {
   it("read_events tool returns error for bad session", async () => {
     const readTool = tools.find((t) => t.name === "visual_companion_read_events")!;
     const result = await readTool.execute("tc-3", { session_id: "bad" }, undefined, undefined, {} as any);
+    expect((result.details as any).error).toContain("Session not found");
+  });
+
+  it("wait tool returns confirmed event", async () => {
+    const startTool = tools.find((t) => t.name === "visual_companion_start")!;
+    const waitTool = tools.find((t) => t.name === "visual_companion_wait")!;
+
+    const startResult = await startTool.execute("tc-1", {}, undefined, undefined, {} as any);
+    const sessionId = (startResult.details as any).sessionId;
+
+    manager.appendEvent(sessionId, { type: "confirm", text: "choice-a", timestamp: 1 });
+
+    const result = await waitTool.execute("tc-5", { session_id: sessionId, timeout_ms: 5000 }, undefined, undefined, {} as any);
+    expect((result.details as any).confirmed).toBe(true);
+    expect((result.details as any).event.text).toBe("choice-a");
+    expect(result.content[0].text).toContain("Confirmed: choice-a");
+  });
+
+  it("wait tool returns error for bad session", async () => {
+    const waitTool = tools.find((t) => t.name === "visual_companion_wait")!;
+    const result = await waitTool.execute("tc-5", { session_id: "bad", timeout_ms: 5000 }, undefined, undefined, {} as any);
     expect((result.details as any).error).toContain("Session not found");
   });
 

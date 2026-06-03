@@ -20,7 +20,7 @@ function loadConfig(): VisualCompanionConfig {
 export default function myVisualCompanion(pi: ExtensionAPI): void {
   const config = loadConfig();
   const idleTimeoutMs = (config.idleTimeoutMinutes || 30) * 60 * 1000;
-  const manager = new SessionManager({ idleTimeoutMs });
+  const manager = new SessionManager({ idleTimeoutMs, focusApp: config.focusApp });
   const tools = createTools(manager, {
     host: config.defaultHost || "127.0.0.1",
     urlHost: config.defaultUrlHost || "localhost",
@@ -54,6 +54,20 @@ export default function myVisualCompanion(pi: ExtensionAPI): void {
       const html = parts.slice(2).join(" ");
       const tool = tools.find((t) => t.name === "visual_companion_show")!;
       const result = await tool.execute("cmd-show", { session_id: sessionId, name, html }, undefined, undefined, ctx);
+      ctx.ui.notify(result.content.map((c) => c.text).join("\n"), result.details?.error ? "error" : "info");
+    },
+  });
+
+  pi.registerCommand("vc-wait", {
+    description: "Wait for user confirmation in Visual Companion (args: session_id)",
+    handler: async (args, ctx: ExtensionContext) => {
+      const sessionId = args?.trim() || "";
+      if (!sessionId) {
+        ctx.ui.notify("Usage: /vc-wait <session_id>", "warning");
+        return;
+      }
+      const tool = tools.find((t) => t.name === "visual_companion_wait")!;
+      const result = await tool.execute("cmd-wait", { session_id: sessionId, timeout_ms: 300000 }, undefined, undefined, ctx);
       ctx.ui.notify(result.content.map((c) => c.text).join("\n"), result.details?.error ? "error" : "info");
     },
   });

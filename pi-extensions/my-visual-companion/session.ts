@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import type { Server } from "node:http";
 import type { WebSocketServer } from "ws";
 import type { Session, Screen, CompanionEvent } from "./types";
@@ -8,14 +9,21 @@ function generateId(): string {
 
 export interface SessionManagerOptions {
   idleTimeoutMs: number;
+  focusApp?: string;
 }
 
 export class SessionManager {
   private sessions = new Map<string, Session>();
   private idleTimeoutMs: number;
+  private focusApp: string;
+  private waitResolvers = new Map<
+    string,
+    { resolve: (event: CompanionEvent) => void; reject: (err: Error) => void }
+  >();
 
   constructor(options: SessionManagerOptions) {
     this.idleTimeoutMs = options.idleTimeoutMs;
+    this.focusApp = options.focusApp ?? "Terminal";
   }
 
   create(port: number, url: string, server: Server, wss: WebSocketServer): Session {
@@ -56,6 +64,15 @@ export class SessionManager {
     session.events.push(event);
     session.lastActivity = Date.now();
     this.resetIdleTimer(id);
+
+    if (event.type === "confirm") {
+      const resolver = this.waitResolvers.get(id);
+      if (resolver) {
+        resolver.resolve(event);
+        this.waitResolvers.delete(id);
+      }
+      this.focusApplication();
+    }
   }
 
   resetIdleTimer(id: string): void {
@@ -70,6 +87,12 @@ export class SessionManager {
   }
 
   destroy(id: string): void {
+    const resolver = this.waitResolvers.get(id);
+    if (resolver) {
+      resolver.reject(new Error("Session destroyed"));
+      this.waitResolvers.delete(id);
+    }
+
     const session = this.sessions.get(id);
     if (!session) return;
     if (session.idleTimer) {
@@ -82,6 +105,54 @@ export class SessionManager {
     session.events = [];
     session.screens.clear();
     this.sessions.delete(id);
+  }
+
+  waitForConfirm(id: string, timeoutMs: number): Promise<CompanionEvent> {
+    return new Promise((resolve, reject) => {
+      const session = this.sessions.get(id);
+      if (!session) {
+        reject(new Error("Session not found"));
+        return;
+      }
+
+      if (this.waitResolvers.has(id)) {
+        reject(new Error("Already waiting for confirm"));
+        return;
+      }
+
+      const existing = session.events.find((e) => e.type === "confirm");
+      if (existing) {
+        resolve(existing);
+        return;
+      }
+
+      const timeoutId = setTimeout(() => {
+        this.waitResolvers.delete(id);
+        reject(new Error("Timeout waiting for confirm"));
+      }, timeoutMs);
+
+      this.waitResolvers.set(id, {
+        resolve: (event) => {
+          clearTimeout(timeoutId);
+          resolve(event);
+        },
+        reject: (err) => {
+          clearTimeout(timeoutId);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  private focusApplication(): void {
+    try {
+      execSync(
+        `osascript -e 'tell application "${this.focusApp}" to activate'`,
+        { timeout: 5000 }
+      );
+    } catch {
+      // Silently ignore focus errors
+    }
   }
 
   destroyAll(): void {

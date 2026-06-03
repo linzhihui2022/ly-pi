@@ -40,22 +40,24 @@ describe("my-visual-companion extension", () => {
     expect(mockPi.on).toHaveBeenCalledWith("session_shutdown", expect.any(Function));
   });
 
-  it("registers 4 slash commands", async () => {
+  it("registers 5 slash commands", async () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
     expect(registeredCommands.has("vc-start")).toBe(true);
     expect(registeredCommands.has("vc-show")).toBe(true);
+    expect(registeredCommands.has("vc-wait")).toBe(true);
     expect(registeredCommands.has("vc-events")).toBe(true);
     expect(registeredCommands.has("vc-stop")).toBe(true);
   });
 
-  it("registers 4 LLM tools", async () => {
+  it("registers 5 LLM tools", async () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
-    expect(registeredTools.length).toBe(4);
+    expect(registeredTools.length).toBe(5);
     const names = registeredTools.map((t) => t.name);
     expect(names).toContain("visual_companion_start");
     expect(names).toContain("visual_companion_show");
+    expect(names).toContain("visual_companion_wait");
     expect(names).toContain("visual_companion_read_events");
     expect(names).toContain("visual_companion_stop");
   });

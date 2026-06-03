@@ -32,10 +32,34 @@ export function createTools(manager: SessionManager, options: { host: string; ur
       }),
       async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
         try {
-          await api.show(params.session_id, params.name, params.html);
+          const { url } = await api.show(params.session_id, params.name, params.html);
           return {
-            content: [{ type: "text" as const, text: `Screen "${params.name}" shown.` }],
-            details: { success: true },
+            content: [{ type: "text" as const, text: `Screen "${params.name}" shown. Open or refresh: ${url}` }],
+            details: { success: true, url },
+          };
+        } catch (err: any) {
+          return {
+            content: [{ type: "text" as const, text: `Error: ${err.message}` }],
+            details: { error: err.message },
+          };
+        }
+      },
+    }),
+
+    defineTool({
+      name: "visual_companion_wait",
+      label: "Wait for Confirm",
+      description: "Wait for user to confirm a selection in the Visual Companion browser. Blocks until confirmed or timeout. Only returns on confirm events (click alone does not resolve).",
+      parameters: Type.Object({
+        session_id: Type.String({ description: "Session ID from visual_companion_start" }),
+        timeout_ms: Type.Number({ default: 300000, description: "Timeout in milliseconds" }),
+      }),
+      async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+        try {
+          const event = await api.wait(params.session_id, params.timeout_ms);
+          return {
+            content: [{ type: "text" as const, text: `Confirmed: ${event.text || event.choice || ""}` }],
+            details: { confirmed: true, event },
           };
         } catch (err: any) {
           return {

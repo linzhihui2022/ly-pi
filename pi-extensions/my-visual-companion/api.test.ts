@@ -35,6 +35,15 @@ describe("createVisualCompanionAPI", () => {
     await expect(api.show("bad-id", "layout", "<h1>Test</h1>")).rejects.toThrow("Session not found");
   });
 
+  it("wait returns confirm event", async () => {
+    const { sessionId } = await api.start();
+    manager.appendEvent(sessionId, { type: "confirm", text: "ok", timestamp: 1 });
+
+    const event = await api.wait(sessionId, 5000);
+    expect(event.type).toBe("confirm");
+    expect(event.text).toBe("ok");
+  });
+
   it("events returns event list", async () => {
     const { sessionId } = await api.start();
     manager.appendEvent(sessionId, { type: "click", text: "hi", timestamp: 1 });

@@ -18,10 +18,15 @@ export function createVisualCompanionAPI(manager: SessionManager, options: APIOp
       };
     },
 
-    async show(sessionId: string, name: string, html: string): Promise<void> {
+    async show(sessionId: string, name: string, html: string): Promise<{ url: string }> {
       const session = manager.get(sessionId);
       if (!session) throw new Error("Session not found");
       manager.updateScreen(sessionId, name, html);
+      return { url: session.url };
+    },
+
+    async wait(sessionId: string, timeoutMs: number): Promise<CompanionEvent> {
+      return manager.waitForConfirm(sessionId, timeoutMs);
     },
 
     async events(sessionId: string): Promise<CompanionEvent[]> {
