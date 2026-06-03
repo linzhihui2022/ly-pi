@@ -66,7 +66,7 @@ This determines which menu to show:
 
 | State | Menu |
 |-------|------|
-| Named branch | Standard 4 options |
+| Named branch | Standard 5 options |
 | Detached HEAD | Reduced 3 options (no merge) |
 
 ---
@@ -86,20 +86,22 @@ Or ask: "This branch split from main - is that correct?"
 
 **Use `ask_user_question` for structured option presentation.**
 
-**Named branch — present exactly these 4 options:**
+**Named branch — present exactly these 5 options:**
 
 ```
 ask_user_question:
   question: "Implementation complete. What would you like to do?"
   options:
-    - label: "Merge back to <base-branch> locally"
-      description: "Checkout base branch, pull, merge feature branch, verify tests, then delete branch."
-    - label: "Push and create a Pull Request"
-      description: "Push branch to origin and open a PR with summary and test plan."
-    - label: "Keep the branch as-is (I'll handle it later)"
-      description: "Leave branch untouched."
-    - label: "Discard this work"
-      description: "Permanently delete the branch and all its commits. Requires confirmation."
+    - label: "Batch commit, push, and create PR"
+      description: "Split changes into logical commits, push to remote, then open a Pull Request."
+    - label: "Batch commit and push"
+      description: "Split changes into logical commits, push to remote. No PR."
+    - label: "Batch commit only"
+      description: "Split changes into logical commits, keep local. No push, no PR."
+    - label: "Do nothing"
+      description: "Leave the working tree untouched — no commit, push, or PR."
+    - label: "Rollback uncommitted changes"
+      description: "Discard all uncommitted changes in the working tree. Requires confirmation."
 ```
 
 **Detached HEAD — present exactly these 3 options:**
@@ -122,31 +124,13 @@ ask_user_question:
 
 ### Step 5: Execute Choice
 
-#### Option 1: Merge Locally
+#### Option 1: Batch commit, push, and create PR
+
+Analyze the working tree, group changes logically (e.g. by feature, file type, or directory), `git add` and `git commit -m "..."` in batches to produce multiple focused commits. Then push the branch and open a Pull Request via `gh pr create`.
 
 ```bash
-# Merge first — verify success before removing anything
-git checkout <base-branch>
-git pull
-git merge <feature-branch>
-
-# Verify tests on merged result
-<test command>
-```
-
-Only after merge succeeds: delete branch:
-
-```bash
-git branch -d <feature-branch>
-```
-
-#### Option 2: Push and Create PR
-
-```bash
-# Push branch
+# Example: batch commit, push, and create PR
 git push -u origin <feature-branch>
-
-# Create PR
 gh pr create --title "<title>" --body "$(cat <<'EOF'
 ## Summary
 <2-3 bullets of what changed>
@@ -157,39 +141,52 @@ EOF
 )"
 ```
 
-#### Option 3: Keep As-Is
+#### Option 2: Batch commit and push
 
-Report: "Keeping branch <name>. No cleanup performed."
+Analyze the working tree, group changes logically into multiple commits. Push the branch to remote, but do **not** create a PR.
 
-#### Option 4: Discard
+```bash
+git push -u origin <feature-branch>
+```
+
+Report: "Batched commits pushed to remote branch <name>. No PR created."
+
+#### Option 3: Batch commit only
+
+Analyze the working tree, group changes logically into multiple commits. Keep everything local — no push, no PR.
+
+Report: "Batched commits created on local branch <name>. No push, no PR."
+
+#### Option 4: Do nothing
+
+Report: "Keeping branch <name> as-is. No action taken."
+
+#### Option 5: Rollback uncommitted changes
 
 **Confirm first using `ask_user_question`:**
 
 ```
 ask_user_question:
-  question: "This will permanently delete branch <name> and all its commits. Type 'discard' to confirm."
+  question: "This will discard all uncommitted changes in the working tree. Type 'rollback' to confirm."
   options:
-    - label: "discard"
-      description: "Permanently delete the branch. This cannot be undone."
+    - label: "rollback"
+      description: "Permanently discard uncommitted changes. This cannot be undone."
     - label: "cancel"
-      description: "Keep the branch and abort discard."
+      description: "Keep uncommitted changes and abort rollback."
 ```
 
 Wait for exact confirmation. If confirmed:
 
 ```bash
-git branch -D <feature-branch>
+git checkout -- .
+git clean -fd
 ```
 
 ---
 
 ### Step 6: Clean Up
 
-**Only runs for Options 1 and 4.** Options 2 and 3 always preserve the branch.
-
-For Option 1: branch already deleted during merge step.
-
-For Option 4: branch already force-deleted during confirmation step.
+**No cleanup needed.** Options 1–4 preserve the branch. Option 5 only discards uncommitted changes; the branch itself remains intact.
 
 No additional cleanup needed in Pi (no worktrees to manage).
 
@@ -199,10 +196,11 @@ No additional cleanup needed in Pi (no worktrees to manage).
 
 | Option | Merge | Push | Keep Branch | Delete Branch |
 |--------|-------|------|-------------|---------------|
-| 1. Merge locally | yes | - | - | yes |
-| 2. Create PR | - | yes | yes | - |
-| 3. Keep as-is | - | - | yes | - |
-| 4. Discard | - | - | - | yes (force) |
+| 1. Batch commit, push, PR | - | yes | yes | - |
+| 2. Batch commit, push | - | yes | yes | - |
+| 3. Batch commit only | - | - | yes | - |
+| 4. Do nothing | - | - | yes | - |
+| 5. Rollback changes | - | - | yes | - |
 
 ## Common Mistakes
 
@@ -212,30 +210,25 @@ No additional cleanup needed in Pi (no worktrees to manage).
 
 **Open-ended questions**
 - **Problem:** "What should I do next?" is ambiguous
-- **Fix:** Present exactly 4 structured options (or 3 for detached HEAD) via `ask_user_question`
+- **Fix:** Present exactly 5 structured options (or 3 for detached HEAD) via `ask_user_question`
 
-**Cleaning up branch for Option 2**
-- **Problem:** Delete branch user needs for PR iteration
-- **Fix:** Only delete branch for Options 1 and 4
+**Single giant commit instead of batch commits**
+- **Problem:** One commit mixes unrelated changes, making review and rollback harder
+- **Fix:** Group changes logically (feature, file type, or directory) into multiple focused commits
 
-**Deleting branch before confirming merge success**
-- **Problem:** Branch gone but merge failed
-- **Fix:** Merge first, verify tests, then delete branch
-
-**No confirmation for discard**
-- **Problem:** Accidentally delete work
-- **Fix:** Require typed "discard" confirmation via `ask_user_question`
+**No confirmation for rollback**
+- **Problem:** Accidentally discard uncommitted work
+- **Fix:** Require typed "rollback" confirmation via `ask_user_question`
 
 ## Red Flags
 
 **Never:**
 - Proceed with failing tests
-- Merge without verifying tests on result
 - Delete work without confirmation
 - Force-push without explicit request
 
 **Always:**
 - Verify tests before offering options
 - Detect environment before presenting menu
-- Present exactly 4 options (or 3 for detached HEAD)
-- Get typed confirmation for Option 4
+- Present exactly 5 options (or 3 for detached HEAD)
+- Get typed confirmation for Option 5
