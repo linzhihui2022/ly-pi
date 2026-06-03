@@ -31,7 +31,24 @@ HEAD_SHA=$(git rev-parse HEAD)
 
 **2. Dispatch code reviewer subagent:**
 
-Use `Agent` tool with `general-purpose` type, fill template at `code-reviewer.md`
+Use `subagent()` with a `chain` to first gather the diff, then review it:
+
+```typescript
+subagent({
+  chain: [
+    {
+      agent: "scout",
+      task: `Get the git diff from ${BASE_SHA} to ${HEAD_SHA} and write it to diff.txt`,
+      output: "diff.txt"
+    },
+    {
+      agent: "reviewer",
+      task: `Review the code diff in diff.txt.\n\nDescription: ${DESCRIPTION}\n\nPlan/Requirements: ${PLAN_OR_REQUIREMENTS}`,
+      reads: "diff.txt"
+    }
+  ]
+})
+```
 
 **Placeholders:**
 - `{DESCRIPTION}` - Brief summary of what you built
@@ -55,11 +72,23 @@ You: Let me request code review before proceeding.
 BASE_SHA=$(git log --oneline | grep "Task 1" | head -1 | awk '{print $1}')
 HEAD_SHA=$(git rev-parse HEAD)
 
-[Dispatch code reviewer subagent]
-  DESCRIPTION: Added verifyIndex() and repairIndex() with 4 issue types
-  PLAN_OR_REQUIREMENTS: Task 2 from .lychee/artifacts/plans/deployment-plan.md
-  BASE_SHA: a7981ec
-  HEAD_SHA: 3df7661
+[Dispatch code reviewer chain]
+```typescript
+subagent({
+  chain: [
+    {
+      agent: "scout",
+      task: "Get the git diff from a7981ec to 3df7661 and write it to diff.txt",
+      output: "diff.txt"
+    },
+    {
+      agent: "reviewer",
+      task: "Review the code diff in diff.txt.\n\nDescription: Added verifyIndex() and repairIndex() with 4 issue types\n\nPlan/Requirements: Task 2 from .lychee/artifacts/plans/deployment-plan.md",
+      reads: "diff.txt"
+    }
+  ]
+})
+```
 
 [Subagent returns]:
   Strengths: Clean architecture, real tests
