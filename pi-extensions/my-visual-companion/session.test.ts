@@ -102,4 +102,22 @@ describe("SessionManager", () => {
       expect(manager.get(s.id)).toBeUndefined();
     }
   });
+
+  it("resetIdleTimer silently ignores unknown session", () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    // Should not throw
+    manager.resetIdleTimer("nonexistent");
+  });
+
+  it("appendEvent silently ignores unknown session", () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    // Should not throw
+    manager.appendEvent("nonexistent", { type: "click", text: "hi", timestamp: 1 });
+  });
+
+  it("updateScreen silently ignores unknown session", () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    // Should not throw
+    manager.updateScreen("nonexistent", "layout", "<h1>Hi</h1>");
+  });
 });

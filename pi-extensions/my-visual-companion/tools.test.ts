@@ -61,6 +61,24 @@ describe("createTools", () => {
     expect((result.details as any).events).toHaveLength(1);
   });
 
+  it("read_events tool returns empty when no events", async () => {
+    const startTool = tools.find((t) => t.name === "visual_companion_start")!;
+    const readTool = tools.find((t) => t.name === "visual_companion_read_events")!;
+
+    const startResult = await startTool.execute("tc-1", {}, undefined, undefined, {} as any);
+    const sessionId = (startResult.details as any).sessionId;
+
+    const result = await readTool.execute("tc-3", { session_id: sessionId }, undefined, undefined, {} as any);
+    expect(result.content[0].text).toBe("No events yet.");
+    expect((result.details as any).events).toHaveLength(0);
+  });
+
+  it("read_events tool returns error for bad session", async () => {
+    const readTool = tools.find((t) => t.name === "visual_companion_read_events")!;
+    const result = await readTool.execute("tc-3", { session_id: "bad" }, undefined, undefined, {} as any);
+    expect((result.details as any).error).toContain("Session not found");
+  });
+
   it("stop tool destroys session", async () => {
     const startTool = tools.find((t) => t.name === "visual_companion_start")!;
     const stopTool = tools.find((t) => t.name === "visual_companion_stop")!;

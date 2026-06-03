@@ -82,6 +82,41 @@ describe("createCompanionServer", () => {
     await manager.destroy(session.id);
   });
 
+  it("serves helper.js route", async () => {
+    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+
+    const res = await fetch(`${session.url}/helper.js`);
+    const text = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(text).toContain("WS_URL");
+
+    await manager.destroy(session.id);
+  });
+
+  it("returns 404 for unknown methods", async () => {
+    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+
+    const res = await fetch(session.url, { method: "POST" });
+    expect(res.status).toBe(404);
+
+    await manager.destroy(session.id);
+  });
+
+  it("injects helper script even without </body>", async () => {
+    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+
+    manager.updateScreen(session.id, "nobody", "<h1>No Body</h1>");
+
+    const res = await fetch(session.url);
+    const text = await res.text();
+
+    expect(text).toContain("No Body");
+    expect(text).toContain("helper.js");
+
+    await manager.destroy(session.id);
+  });
+
   it("broadcasts reload via WebSocket when screen updates", async () => {
     const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
 
@@ -127,5 +162,30 @@ describe("createCompanionServer", () => {
 
     ws.close();
     await manager.destroy(session.id);
+  });
+
+  it("ignores malformed WebSocket messages", async () => {
+    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+
+    const ws = new WebSocket(`ws://localhost:${session.port}`);
+
+    await new Promise<void>((resolve, reject) => {
+      ws.on("open", resolve);
+      ws.on("error", reject);
+      setTimeout(() => reject(new Error("WS timeout")), 2000);
+    });
+
+    ws.send("not valid json");
+
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(session.events).toHaveLength(0);
+
+    ws.close();
+    await manager.destroy(session.id);
+  });
+
+  it("rejects findAvailablePort for invalid host", async () => {
+    await expect(findAvailablePort(55000, "invalid.host.name.that.does.not.exist")).rejects.toThrow();
   });
 });
