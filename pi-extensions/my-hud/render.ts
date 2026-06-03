@@ -5,7 +5,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { icon } from "./icons";
-import { formatTokens, shortModelName } from "./format";
+import { formatTokens, shortModelName, formatCacheRate } from "./format";
 import type { StatusLineData } from "./types";
 
 export function buildStatusLine(
@@ -30,6 +30,7 @@ export function buildStatusLine(
     theme.fg("thinkingLow", `${icon("output")}${formatTokens(usage.output)}`),
     theme.fg("thinkingMedium", `${icon("cacheRead")}${formatTokens(usage.cacheRead)}`),
     theme.fg("toolDiffRemoved", `${icon("cost")}${usage.cost.toFixed(2)}`),
+    theme.fg("accent", `${icon("cacheRate")}${formatCacheRate(usage.input, usage.cacheRead)}`),
   );
 
   return truncateToWidth(parts.join(" "), width);

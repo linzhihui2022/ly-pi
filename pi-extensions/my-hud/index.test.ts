@@ -518,6 +518,7 @@ describe("buildStatusLine", () => {
     expect(line).toContain("500");
     expect(line).toContain("100");
     expect(line).toContain("0.35");
+    expect(line).toContain("9%"); // cacheRead=100 / (100+1000) ≈ 9%
   });
 
   it("omits branch when null", async () => {
