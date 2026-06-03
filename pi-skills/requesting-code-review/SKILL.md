@@ -1,6 +1,6 @@
 ---
 name: requesting-code-review
-description: Use when completing tasks, implementing major features, or before merging to verify work meets requirements
+description: Use when completing tasks, implementing major features, before merging to verify work meets requirements, or when user sends a GitHub PR link / pull request URL to request code review
 ---
 
 # Requesting Code Review
