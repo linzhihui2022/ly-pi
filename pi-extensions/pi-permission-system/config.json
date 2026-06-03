@@ -18,7 +18,8 @@
       "git branch --show-current": "allow",
       "git merge-base HEAD main": "allow",
       "git merge-base HEAD master": "allow",
-      "gh pr comment *": "ask"
+      "gh pr comment *": "ask",
+      "gh pr view *": "allow"
     },
     "tool:": {
       "todo": "allow",
