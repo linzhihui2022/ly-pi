@@ -16,6 +16,17 @@ EXT_DEST="$HOME/.pi/agent/extensions"
 
 echo "==> Installing pi extensions to $EXT_DEST"
 
+# Validate source directory
+if [[ ! -d "$EXT_SRC" ]]; then
+    echo "ERROR: source directory does not exist: $EXT_SRC"
+    exit 1
+fi
+
+if [[ -z "$(ls -A "$EXT_SRC" 2>/dev/null)" ]]; then
+    echo "ERROR: source directory is empty: $EXT_SRC"
+    exit 1
+fi
+
 # Remove existing symlink or directory
 if [[ -L "$EXT_DEST" ]]; then
 	echo "    removing existing symlink: $EXT_DEST"
@@ -30,16 +41,25 @@ mkdir -p "$EXT_DEST"
 
 # Copy all extensions, excluding node_modules at any depth
 echo "    copying from $EXT_SRC"
+copy_ok=0
 if command -v rsync &>/dev/null; then
-    rsync -a --exclude='node_modules' "$EXT_SRC"/ "$EXT_DEST"/
-else
-    cd "$EXT_SRC"
-    find . -type d -name node_modules -prune -o -type f -print | \
-        while IFS= read -r file; do
-            mkdir -p "$EXT_DEST/$(dirname "$file")"
-            cp "$file" "$EXT_DEST/$file"
-        done
-    cd - >/dev/null
+    if rsync -a --exclude='node_modules' "$EXT_SRC"/ "$EXT_DEST"/; then
+        copy_ok=1
+    else
+        echo "    WARNING: rsync failed, falling back to cp"
+    fi
+fi
+
+if [[ $copy_ok -eq 0 ]]; then
+    # Fallback: cp -R then prune node_modules
+    cp -R "$EXT_SRC"/* "$EXT_DEST"/ 2>/dev/null || true
+    find "$EXT_DEST" -type d -name node_modules -exec rm -rf {} + 2>/dev/null || true
+fi
+
+# Verify copy succeeded
+if [[ -z "$(ls -A "$EXT_DEST" 2>/dev/null)" ]]; then
+    echo "ERROR: copy failed — destination directory is empty: $EXT_DEST"
+    exit 1
 fi
 
 # Apply item-level filtering
