@@ -24,6 +24,7 @@ If you invoke this skill **without specifying a target skill**, the default acti
 **Process:**
 
 1. Read `pi-skills/migrate-superpower/skill-sha.json` — it lists every ✅ Migrated skill and its recorded SHA.
+   > **Not all migrated skills are tracked.** See §3 Skill Name Mappings for which skills are excluded and why.
 2. For each skill in that file, fetch the latest SHA from upstream:
    ```bash
    # Run inside the local superpowers repo at /Users/lychee/Documents/superpowers
@@ -118,7 +119,8 @@ The goal is to migrate **all** Superpowers skills as-is. Each skill retains its 
 | `test-driven-development` | ✅ Migrated | Pure documentation skill; no platform-specific content. Migrated as-is with no changes. |
 | `finishing-a-development-branch` | ✅ Migrated | Already present in `pi-skills/`. |
 | `using-superpowers` | 🚫 Skip | Platform-specific to Superpowers; do not migrate. |
-| `writing-skills` | ✅ Migrated | Replaced `superpowers:` prefix; updated `CLAUDE.md` references to Pi equivalents (`AGENTS.md`, `.rpiv/guidance/`); updated personal skill paths; neutralized branding; renamed `examples/CLAUDE_MD_TESTING.md` to `AGENTS_MD_TESTING.md`. |
+| `writing-skills` | ✅ Migrated (no SHA) | Replaced `superpowers:` prefix; updated `CLAUDE.md` references to Pi equivalents (`AGENTS.md`, `.rpiv/guidance/`); updated personal skill paths; neutralized branding; renamed `examples/CLAUDE_MD_TESTING.md` to `AGENTS_MD_TESTING.md`. **Not tracked — see §3.1.** |
+| `test-driven-development` | ✅ Migrated (no SHA) | Pure documentation skill; no platform-specific content. Migrated as-is with no changes. **Not tracked — see §3.1.** |
 
 **When a migrated skill references another Superpowers skill:**
 
@@ -135,6 +137,17 @@ Invoke the writing-plans skill.
 # After (Pi — name stays the same)
 Invoke the `writing-plans` skill.
 ```
+
+### 3.1. When a Migrated Skill Does NOT Need SHA Tracking
+
+Not every `✅ Migrated` skill needs an entry in `skill-sha.json`. Exclude from tracking when either condition is true:
+
+| Condition | 说明 | 示例 |
+|---|---|---|
+| **Pure documentation, zero platform-specific content** | 迁移时未做任何替换/修改，直接原样复制。上游更新只是通用最佳实践的改进，不涉及任何需要"重新应用 Pi 迁移规则"的平台适配工作。追踪 SHA 没有实际价值。 | `test-driven-development` |
+| **Migrated content has diverged from upstream purpose** | 迁移后已深度本地化为 Pi 生态指南，大量引用 Pi 特有工具（`ask_user_question`、`todo`、`Agent` 工具、CSO 策略等）和 Pi 路径。上游更新的是 Superpowers 版本，与本地 Pi 版本内容目标已不兼容。即使上游有大更新，也无法直接合并。 | `writing-skills` |
+
+**Rule of thumb:** 如果一个技能在上游更新后，重新迁移时不需要（或无法）重新应用任何 Pi 迁移规则，就不需要追踪 SHA。
 
 ---
 
@@ -764,6 +777,7 @@ Invoke `subagent-driven-development`
      ```
    - 用途：追踪 superpowers 源端是否有更新。若远端 sha 与本地记录不一致，说明源 skill 有变动，需评估是否重新迁移。
    - 只有状态为 `✅ Migrated` 的 skill 才需要记录 sha；`⏳ Pending` 和 `🚫 Skip` 的不记录。
+   - 状态为 `✅ Migrated (no SHA)` 的技能见 §3.1，已明确排除追踪。
 
 4. **更新目录**
    - 确认 `/Users/lychee/Documents/configure/pi-skills/migrate-superpower/` 下的文件已反映最新认知
