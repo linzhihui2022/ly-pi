@@ -26,59 +26,25 @@ A question *about* a UI topic is not automatically a visual question. "What kind
 
 ## How It Works
 
-The server watches a directory for HTML files and serves the newest one to the browser. You write HTML content to `screen_dir`, the user sees it in their browser and can click to select options. Selections are recorded to `state_dir/events` that you read on your next turn.
+The Visual Companion is a Pi extension that provides four tools. You call `visual_companion_start` to open a browser session, then push HTML screens with `visual_companion_show`. The user sees the content in their browser and can click to select options. You read their interactions with `visual_companion_read_events`.
 
-**Content fragments vs full documents:** If your HTML file starts with `<!DOCTYPE` or `<html`, the server serves it as-is (just injects the helper script). Otherwise, the server automatically wraps your content in the frame template — adding the header, CSS theme, selection indicator, and all interactive infrastructure. **Write content fragments by default.** Only write full documents when you need complete control over the page.
+**Content fragments vs full documents:** If your HTML starts with `<!DOCTYPE` or `<html`, it is served as-is. Otherwise, the server automatically wraps your content in the frame template — adding the header, CSS theme, selection indicator, and all interactive infrastructure. **Write content fragments by default.** Only write full documents when you need complete control over the page.
 
 ## Starting a Session
 
-```bash
-# Start server with persistence (mockups saved to project)
-scripts/start-server.sh --project-dir /path/to/project
+Call `visual_companion_start` to start a browser session.
 
-# Returns: {"type":"server-started","port":52341,"url":"http://localhost:52341",
-#           "screen_dir":"/path/to/project/.lychee/brainstorm/12345-1706000000/content",
-#           "state_dir":"/path/to/project/.lychee/brainstorm/12345-1706000000/state"}
-```
+Returns: `{sessionId, port, url}` — save the `sessionId` for subsequent calls.
 
-Save `screen_dir` and `state_dir` from the response. Tell user to open the URL.
-
-**Finding connection info:** The server writes its startup JSON to `$STATE_DIR/server-info`. If you launched the server in the background and didn't capture stdout, read that file to get the URL and port. When using `--project-dir`, check `<project>/.lychee/brainstorm/` for the session directory.
-
-**Note:** Pass the project root as `--project-dir` so mockups persist in `.lychee/brainstorm/` and survive server restarts. Without it, files go to `/tmp` and get cleaned up. Remind the user to add `.lychee/` to `.gitignore` if it's not already there.
-
-**Launching the server:**
-
-```bash
-# Default mode works — the script backgrounds the server itself
-scripts/start-server.sh --project-dir /path/to/project
-```
-
-For environments that reap detached processes, use `--foreground` and set `background: true` on the `bash` tool call so the server survives across conversation turns:
-
-```bash
-scripts/start-server.sh --project-dir /path/to/project --foreground
-```
-
-If the URL is unreachable from your browser (common in remote/containerized setups), bind a non-loopback host:
-
-```bash
-scripts/start-server.sh \
-  --project-dir /path/to/project \
-  --host 0.0.0.0 \
-  --url-host localhost
-```
-
-Use `--url-host` to control what hostname is printed in the returned URL JSON.
+Tell the user to open the URL.
 
 ## The Loop
 
-1. **Check server is alive**, then **write HTML** to a new file in `screen_dir`:
-   - Before each write, check that `$STATE_DIR/server-info` exists. If it doesn't (or `$STATE_DIR/server-stopped` exists), the server has shut down — restart it with `start-server.sh` before continuing. The server auto-exits after 30 minutes of inactivity.
-   - Use semantic filenames: `platform.html`, `visual-style.html`, `layout.html`
-   - **Never reuse filenames** — each screen gets a fresh file
-   - Use `write` tool — **never use cat/heredoc** (dumps noise into terminal)
-   - Server automatically serves the newest file
+1. **Check the session is active**, then **push HTML** with `visual_companion_show`:
+   - Parameters: `session_id` (from start), `name` (semantic screen name), `html` (content)
+   - Use semantic names: `platform`, `visual-style`, `layout`
+   - **Never reuse screen names** within a session — each screen gets a fresh name
+   - The server automatically serves the newest screen
 
 2. **Tell user what to expect and end your turn:**
    - Remind them of the URL (every step, not just first)
@@ -86,24 +52,24 @@ Use `--url-host` to control what hostname is printed in the returned URL JSON.
    - Ask them to respond in the terminal: "Take a look and let me know what you think. Click to select an option if you'd like."
 
 3. **On your next turn** — after the user responds in the terminal:
-   - Read `$STATE_DIR/events` if it exists — this contains the user's browser interactions (clicks, selections, confirms) as JSON lines
+   - Call `visual_companion_read_events` with the `session_id`
    - **Look for `type: "confirm"` events first** — these represent the user's final decision after clicking the confirm button
    - If no `confirm` event exists, fall back to the last `click` event as the tentative selection
    - Merge with the user's terminal text to get the full picture
-   - The terminal message is the primary feedback; `state_dir/events` provides structured interaction data
+   - The terminal message is the primary feedback; events provide structured interaction data
 
-4. **Iterate or advance** — if feedback changes current screen, write a new file (e.g., `layout-v2.html`). Only move to the next question when the current step is validated.
+4. **Iterate or advance** — if feedback changes current screen, push a new screen with a new name (e.g., `layout-v2`). Only move to the next question when the current step is validated.
 
 5. **Unload when returning to terminal** — when the next step doesn't need the browser (e.g., a clarifying question, a tradeoff discussion), push a waiting screen to clear the stale content:
 
    ```html
-   <!-- filename: waiting.html (or waiting-2.html, etc.) -->
+   <!-- name: waiting (or waiting-2, etc.) -->
    <div style="display:flex;align-items:center;justify-content:center;min-height:60vh">
      <p class="subtitle">Continuing in terminal...</p>
    </div>
    ```
 
-   This prevents the user from staring at a resolved choice while the conversation has moved on. When the next visual question comes up, push a new content file as usual.
+   This prevents the user from staring at a resolved choice while the conversation has moved on. When the next visual question comes up, push a new content screen as usual.
 
 6. Repeat until done.
 
@@ -227,21 +193,21 @@ The frame template provides these CSS classes for your content:
 
 ## Browser Events Format
 
-When the user interacts with the browser, events are recorded to `$STATE_DIR/events` (one JSON object per line). The file is cleared automatically when you push a new screen.
+When the user interacts with the browser, events are returned by `visual_companion_read_events` as an array of objects.
 
 **Click events** — recorded when the user clicks an option:
-```jsonl
+```json
 {"type":"click","choice":"a","text":"Option A - Simple Layout","timestamp":1706000101}
 {"type":"click","choice":"c","text":"Option C - Complex Grid","timestamp":1706000108}
 ```
 
 **Confirm events** — recorded when the user clicks the **确认** button to finalize their selection:
-```jsonl
+```json
 {"type":"confirm","choice":"b","text":"Option B - Hybrid","count":1,"timestamp":1706000120}
 ```
 
 For multi-select mode, `choice` is an array and `count` reflects the number of selections:
-```jsonl
+```json
 {"type":"confirm","choice":["a","c"],"text":"Option A, Option C","count":2,"timestamp":1706000125}
 ```
 
@@ -250,33 +216,25 @@ For multi-select mode, `choice` is an array and `count` reflects the number of s
 - **Fall back to `click` events** — if no confirm exists, the last `click` event is typically the tentative selection.
 - The full `click` stream can reveal hesitation or exploration patterns worth asking about.
 
-If `$STATE_DIR/events` doesn't exist, the user didn't interact with the browser — use only their terminal text.
+If no events are returned, the user didn't interact with the browser — use only their terminal text.
 
 ## Design Tips
 
 - **Scale fidelity to the question** — wireframes for layout, polish for polish questions
 - **Explain the question on each page** — "Which layout feels more professional?" not just "Pick one"
-- **Iterate before advancing** — if feedback changes current screen, write a new version
+- **Iterate before advancing** — if feedback changes current screen, push a new version
 - **2-4 options max** per screen
 - **Use real content when it matters** — for a photography portfolio, use actual images (Unsplash). Placeholder content obscures design issues.
 - **Keep mockups simple** — focus on layout and structure, not pixel-perfect design
 
-## File Naming
+## Screen Naming
 
-- Use semantic names: `platform.html`, `visual-style.html`, `layout.html`
-- Never reuse filenames — each screen must be a new file
-- For iterations: append version suffix like `layout-v2.html`, `layout-v3.html`
-- Server serves newest file by modification time
+- Use semantic names: `platform`, `visual-style`, `layout`
+- Never reuse names within a session — each screen must have a unique name
+- For iterations: append version suffix like `layout-v2`, `layout-v3`
 
 ## Cleaning Up
 
-```bash
-scripts/stop-server.sh $SESSION_DIR
-```
+Call `visual_companion_stop` with the `session_id` when the session is complete.
 
-If the session used `--project-dir`, mockup files persist in `.lychee/brainstorm/` for later reference. Only `/tmp` sessions get deleted on stop.
-
-## Reference
-
-- Frame template (CSS reference): `scripts/frame-template.html`
-- Helper script (client-side): `scripts/helper.js`
+Sessions auto-expire after 30 minutes of inactivity, but explicit cleanup is recommended.
