@@ -1,5 +1,5 @@
 /**
- * aboveEditor widget bar — displays session stats (project, model, tokens, cost).
+ * aboveEditor widget bar — displays session stats (project, model, tokens, cost, git status).
  */
 
 import type {
@@ -12,14 +12,20 @@ import { basename } from "node:path";
 import { aggregateSessionUsage } from "./session";
 import { contextColored } from "./format";
 import { buildStatusLine } from "./render";
+import { getGitStatus } from "./git";
+import type { GitStatus } from "./types";
 
 const WIDGET_KEY = "my-hud-bar";
+const GIT_STATUS_CACHE_TTL = 5000;
 
 export class Bar {
   private uiCtx: ExtensionUIContext | undefined;
   private ctx: ExtensionContext | undefined;
   private tui: TUI | undefined;
   private branch: string | null = null;
+  private gitStatus: GitStatus | null = null;
+  private gitStatusCacheTime = 0;
+  private gitStatusRefreshPending = false;
 
   setBranch(branch: string | null): void {
     this.branch = branch;
@@ -59,8 +65,37 @@ export class Bar {
     this.tui?.requestRender();
   }
 
+  /** Invalidate git status cache so next render triggers a fresh fetch. */
+  invalidateGitStatus(): void {
+    this.gitStatusCacheTime = 0;
+  }
+
+  private ensureGitStatus(): void {
+    const now = Date.now();
+    if (now - this.gitStatusCacheTime <= GIT_STATUS_CACHE_TTL) return;
+    if (this.gitStatusRefreshPending) return;
+    if (!this.ctx) return;
+
+    this.gitStatusRefreshPending = true;
+    getGitStatus(this.ctx.cwd)
+      .then((status) => {
+        this.gitStatus = status;
+        this.gitStatusCacheTime = Date.now();
+        this.requestRender();
+      })
+      .catch(() => {
+        this.gitStatus = null;
+        this.gitStatusCacheTime = Date.now();
+      })
+      .finally(() => {
+        this.gitStatusRefreshPending = false;
+      });
+  }
+
   private renderWidget(theme: Theme, width: number): string[] {
     if (!this.ctx) return [];
+
+    this.ensureGitStatus();
 
     const entries = this.ctx.sessionManager.getEntries();
     const usage = aggregateSessionUsage(entries);
@@ -81,6 +116,7 @@ export class Bar {
       branch: this.branch,
       ctxColored,
       usage,
+      gitStatus: this.gitStatus,
     });
     return [line];
   }
@@ -93,5 +129,8 @@ export class Bar {
     this.uiCtx = undefined;
     this.ctx = undefined;
     this.branch = null;
+    this.gitStatus = null;
+    this.gitStatusCacheTime = 0;
+    this.gitStatusRefreshPending = false;
   }
 }

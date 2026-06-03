@@ -821,6 +821,98 @@ describe("Bar", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("no-model");
   });
+
+  it("triggers async git status refresh on first render", async () => {
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const requestRender = vi.fn();
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const ctx = {
+      cwd: "/x",
+      model: { id: "m" },
+      sessionManager: { getEntries: () => [] },
+      getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
+    };
+
+    bar.setUICtx({ setWidget } as any);
+    bar.setContext(ctx as any);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory({ requestRender }, theme);
+
+    // First render triggers async refresh
+    component.render(100);
+    expect(requestRender).not.toHaveBeenCalled();
+
+    // Wait for async refresh
+    await new Promise((r) => setTimeout(r, 50));
+    expect(requestRender).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses cached git status on subsequent renders within TTL", async () => {
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const requestRender = vi.fn();
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const ctx = {
+      cwd: "/x",
+      model: { id: "m" },
+      sessionManager: { getEntries: () => [] },
+      getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
+    };
+
+    bar.setUICtx({ setWidget } as any);
+    bar.setContext(ctx as any);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory({ requestRender }, theme);
+
+    // First render triggers async fetch
+    component.render(100);
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Second render within TTL should not trigger another fetch
+    requestRender.mockClear();
+    component.render(100);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(requestRender).not.toHaveBeenCalled();
+  });
+
+  it("invalidateGitStatus clears cache and triggers refresh on next render", async () => {
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const requestRender = vi.fn();
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const ctx = {
+      cwd: "/x",
+      model: { id: "m" },
+      sessionManager: { getEntries: () => [] },
+      getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
+    };
+
+    bar.setUICtx({ setWidget } as any);
+    bar.setContext(ctx as any);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory({ requestRender }, theme);
+
+    // First render
+    component.render(100);
+    await new Promise((r) => setTimeout(r, 50));
+    requestRender.mockClear();
+
+    // Invalidate and render again
+    bar.invalidateGitStatus();
+    component.render(100);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(requestRender).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("working", () => {
