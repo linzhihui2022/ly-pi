@@ -1,0 +1,7 @@
+{
+  "name": "pi-subagent-monitor",
+  "version": "1.0.0",
+  "description": "Monitor and collect subagent call statistics for pi-subagents",
+  "main": "index.ts",
+  "dependencies": {}
+}

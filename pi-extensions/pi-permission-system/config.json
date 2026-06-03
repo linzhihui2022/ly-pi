@@ -17,7 +17,8 @@
       "git status *": "allow",
       "git branch --show-current": "allow",
       "git merge-base HEAD main": "allow",
-      "git merge-base HEAD master": "allow"
+      "git merge-base HEAD master": "allow",
+      "gh pr comment *": "ask"
     },
     "tool:": {
       "todo": "allow",
@@ -25,7 +26,8 @@
       "visual_companion_read_events": "allow",
       "visual_companion_stop": "allow",
       "visual_companion_start": "allow",
-      "visual_companion_show": "allow"
+      "visual_companion_show": "allow",
+      "ctx_execute": "allow"
     },
     "external_directory": "ask"
   }
