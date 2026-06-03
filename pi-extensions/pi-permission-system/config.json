@@ -21,7 +21,11 @@
     },
     "tool:": {
       "todo": "allow",
-      "ask_user_question": "allow"
+      "ask_user_question": "allow",
+      "visual_companion_read_events": "allow",
+      "visual_companion_stop": "allow",
+      "visual_companion_start": "allow",
+      "visual_companion_show": "allow"
     },
     "external_directory": "ask"
   }
