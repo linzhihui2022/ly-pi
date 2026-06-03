@@ -43,11 +43,15 @@ export default function myHud(pi: ExtensionAPI): void {
     const theme = ctx.ui.getTheme("catppuccin-mocha");
     const message = theme?.fg("accent", pickRandomMessage()) ?? pickRandomMessage();
     ctx.ui.setWorkingMessage(message);
+    bar?.invalidateGitStatus();
     requestRender();
   });
 
   pi.on("model_select", requestRender);
-  pi.on("turn_end", requestRender);
+  pi.on("turn_end", () => {
+    bar?.invalidateGitStatus();
+    requestRender();
+  });
 
   // ── Install HUD on session start ──
   pi.on("session_start", (_event, ctx: ExtensionContext) => {
@@ -65,6 +69,7 @@ export default function myHud(pi: ExtensionAPI): void {
 
       const unsubBranch = footerData.onBranchChange(() => {
         bar?.setBranch(footerData.getGitBranch() ?? null);
+        bar?.invalidateGitStatus();
         tui.requestRender();
       });
 
