@@ -65,43 +65,43 @@ Each agent gets:
 
 ### 3. Dispatch in Parallel
 
-Use the `Agent` tool with `background: true` to dispatch multiple agents concurrently:
+Use `subagent()` with a `tasks` array to dispatch multiple agents concurrently:
 
-```xml
-<!-- Agent 1: Fix abort tests -->
-<Agent
-  subagent_type="general-purpose"
-  description="Fix abort test failures"
-  prompt="Fix the 3 failing tests in src/agents/agent-tool-abort.test.ts..."
-  background="true"
-/>
-
-<!-- Agent 2: Fix batch tests -->
-<Agent
-  subagent_type="general-purpose"
-  description="Fix batch test failures"
-  prompt="Fix the 2 failing tests in src/agents/batch-completion-behavior.test.ts..."
-  background="true"
-/>
-
-<!-- Agent 3: Fix race condition tests -->
-<Agent
-  subagent_type="general-purpose"
-  description="Fix race condition failures"
-  prompt="Fix the failing test in src/agents/tool-approval-race-conditions.test.ts..."
-  background="true"
-/>
+```typescript
+subagent({
+  tasks: [
+    {
+      agent: "worker",
+      task: "Fix the 3 failing tests in src/agents/agent-tool-abort.test.ts...",
+      context: "fresh"
+    },
+    {
+      agent: "worker",
+      task: "Fix the 2 failing tests in src/agents/batch-completion-behavior.test.ts...",
+      context: "fresh"
+    },
+    {
+      agent: "worker",
+      task: "Fix the failing test in src/agents/tool-approval-race-conditions.test.ts...",
+      context: "fresh"
+    }
+  ]
+})
 ```
 
-All three agents run concurrently. You continue with coordination work while they investigate.
+All three agents run concurrently with isolated (`fresh`) context. You continue with coordination work while they investigate.
+
+**Why `context: "fresh"`?** Parallel workers with `fork` (the default for `worker`) would inherit the full parent session, wasting tokens. `fresh` starts each worker with a clean context — you provide exactly what they need in the `task` string.
 
 ### 4. Review and Integrate
 
-When agents return:
-- Read each summary
+When the parallel dispatch returns:
+- Read each agent's result (returned as aggregated output with separators)
 - Verify fixes don't conflict
 - Run full test suite
 - Integrate all changes
+
+**Note:** `pi-subagents` returns aggregated parallel results with separators, not individual agent results to poll. No need to call `get_subagent_result` for each agent.
 
 ## Agent Prompt Structure
 
@@ -164,10 +164,14 @@ Return: Summary of what you found and what you fixed.
 **Decision:** Independent domains - abort logic separate from batch completion separate from race conditions
 
 **Dispatch:**
-```
-Agent 1 → Fix agent-tool-abort.test.ts
-Agent 2 → Fix batch-completion-behavior.test.ts
-Agent 3 → Fix tool-approval-race-conditions.test.ts
+```typescript
+subagent({
+  tasks: [
+    { agent: "worker", task: "Fix agent-tool-abort.test.ts...", context: "fresh" },
+    { agent: "worker", task: "Fix batch-completion-behavior.test.ts...", context: "fresh" },
+    { agent: "worker", task: "Fix tool-approval-race-conditions.test.ts...", context: "fresh" }
+  ]
+})
 ```
 
 **Results:**
