@@ -6,14 +6,14 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { icon } from "./icons";
 import { formatTokens, shortModelName, formatCacheRate } from "./format";
-import type { StatusLineData } from "./types";
+import type { StatusLineData, GitStatus } from "./types";
 
 export function buildStatusLine(
   theme: Theme,
   width: number,
   data: StatusLineData,
 ): string {
-  const { project:rawProject, modelName, branch, ctxColored, usage } = data;
+  const { project: rawProject, modelName, branch, ctxColored, usage, gitStatus } = data;
   const project = rawProject.length > 10 ? rawProject.slice(0, 8) + ".." : rawProject;
   const parts: string[] = [
     theme.fg("mdCode", `${icon("project")}${project}`),
@@ -22,6 +22,10 @@ export function buildStatusLine(
 
   if (branch) {
     parts.push(theme.fg("customMessageLabel", `${icon("branch")}${branch}`));
+    const gitStatusStr = formatGitStatus(theme, gitStatus);
+    if (gitStatusStr) {
+      parts.push(gitStatusStr);
+    }
   }
 
   parts.push(
@@ -34,4 +38,33 @@ export function buildStatusLine(
   );
 
   return truncateToWidth(parts.join(" "), width);
+}
+
+/**
+ * Format GitStatus into a colored string matching starship git_status style.
+ * Returns empty string if status is null or clean.
+ */
+export function formatGitStatus(theme: Theme, status: GitStatus | null | undefined): string {
+  if (!status || status.isClean) return "";
+
+  const parts: string[] = [];
+
+  if (status.staged > 0) {
+    parts.push(theme.fg("accent", `++${status.staged}|`));
+  }
+  if (status.stashed > 0) {
+    parts.push(theme.fg("warning", `*${status.stashed}|`));
+  }
+  if (status.conflicted > 0) {
+    parts.push(theme.fg("error", `!!${status.conflicted}|`));
+  }
+  if (status.ahead > 0 && status.behind > 0) {
+    parts.push(theme.fg("warning", `⇕⇡${status.ahead}⇣${status.behind}`));
+  } else if (status.ahead > 0) {
+    parts.push(theme.fg("accent", `⇡${status.ahead}`));
+  } else if (status.behind > 0) {
+    parts.push(theme.fg("warning", `⇣${status.behind}`));
+  }
+
+  return parts.join("");
 }

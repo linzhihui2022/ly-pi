@@ -23,7 +23,7 @@ import { pickRandomMessage } from "./working";
 export { icon } from "./icons";
 export { formatTokens, contextColored, shortModelName, formatCacheRate } from "./format";
 export { aggregateSessionUsage, getLastUserMessage } from "./session";
-export { buildStatusLine } from "./render";
+export { buildStatusLine, formatGitStatus } from "./render";
 export { pickRandomMessage, WORKING_MESSAGES } from "./working";
 export { Bar } from "./bar";
 export type { TokenUsage, StatusLineData } from "./types";
