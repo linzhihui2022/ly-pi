@@ -21,7 +21,7 @@ import { pickRandomMessage } from "./working";
 
 // Re-export pure helpers for consumers / tests
 export { icon } from "./icons";
-export { formatTokens, contextColored, shortModelName } from "./format";
+export { formatTokens, contextColored, shortModelName, formatCacheRate } from "./format";
 export { aggregateSessionUsage, getLastUserMessage } from "./session";
 export { buildStatusLine } from "./render";
 export { pickRandomMessage, WORKING_MESSAGES } from "./working";

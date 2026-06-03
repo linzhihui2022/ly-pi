@@ -163,6 +163,34 @@ describe("contextColored", () => {
   });
 });
 
+describe("formatCacheRate", () => {
+  it("returns 0% when both values are zero", async () => {
+    const { formatCacheRate } = await loadModule();
+    expect(formatCacheRate(0, 0)).toBe("0%");
+  });
+
+  it("returns 0% when cacheRead is zero but input is non-zero", async () => {
+    const { formatCacheRate } = await loadModule();
+    expect(formatCacheRate(100, 0)).toBe("0%");
+  });
+
+  it("returns 50% when cacheRead equals input", async () => {
+    const { formatCacheRate } = await loadModule();
+    expect(formatCacheRate(100, 100)).toBe("50%");
+  });
+
+  it("returns 80% when cacheRead is 4x input", async () => {
+    const { formatCacheRate } = await loadModule();
+    expect(formatCacheRate(100, 400)).toBe("80%");
+  });
+
+  it("rounds to nearest integer", async () => {
+    const { formatCacheRate } = await loadModule();
+    expect(formatCacheRate(3, 1)).toBe("25%");
+    expect(formatCacheRate(2, 1)).toBe("33%");
+  });
+});
+
 describe("aggregateSessionUsage", () => {
   it("returns zeros for empty entries", async () => {
     const { aggregateSessionUsage } = await loadModule();

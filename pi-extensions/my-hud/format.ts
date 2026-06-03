@@ -49,3 +49,13 @@ const SHORT_NAMES: Record<string, string> = {
 export function shortModelName(modelName: string): string {
   return SHORT_NAMES[modelName] ?? modelName;
 }
+
+/**
+ * Format cache hit rate as a percentage.
+ * cacheRead / (cacheRead + input), rounded to nearest integer.
+ */
+export function formatCacheRate(input: number, cacheRead: number): string {
+  const total = cacheRead + input;
+  if (total === 0) return "0%";
+  return `${Math.round((cacheRead / total) * 100)}%`;
+}
