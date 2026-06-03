@@ -702,6 +702,44 @@ Invoke `subagent-driven-development`
 
 ---
 
+## 10.5. 已迁移技能的本地自定义记录
+
+以下技能在迁移后经过了**本地自定义修改**，与上游 Superpowers 版本存在显著差异。若将来需要重新迁移（上游有更新），必须在重新迁移后**重新应用**这些本地改动。
+
+### `finishing-a-development-branch`
+
+**上游 SHA:** `f2cbfbefebbfef77321e4c9abc9e949826bea9d7`
+
+**本地修改摘要（相对于上游）：**
+
+| 改动 | 上游行为 | 本地行为 |
+|---|---|---|
+| **选项数量** | 4 个选项 | 5 个选项 |
+| **Option 1** | `Merge back to <base-branch> locally` — 本地合并后删除分支 | **移除该选项** |
+| **新增 Option 1** | — | `Batch commit, push, and create PR` — 分批 commit、推送、创建 PR |
+| **新增 Option 2** | — | `Batch commit and push` — 分批 commit、推送（不创建 PR） |
+| **新增 Option 3** | — | `Batch commit only` — 仅分批 commit（本地） |
+| **Option 4** | `Keep the branch as-is` | `Do nothing` — 语义相同，名称更明确 |
+| **Option 5** | `Discard this work` — 删除整个分支 (`git branch -D`) | `Rollback uncommitted changes` — 仅丢弃未提交改动 (`git checkout -- .` + `git clean -fd`)，**保留分支** |
+| **确认词** | 输入 `discard` 确认删除 | 输入 `rollback` 确认回滚 |
+| **Clean Up** | Option 1 和 4 执行清理 | **无需清理** — Option 5 不删除分支 |
+| **Quick Reference** | 4 行选项表 | 5 行选项表，所有选项重新命名 |
+| **Common Mistakes** | "Deleting branch before confirming merge success" | 改为 "Single giant commit instead of batch commits" |
+| **Red Flags** | 包含 "Merge without verifying tests on result" | 移除（已无 merge 操作） |
+
+**重新迁移时的操作步骤：**
+
+1. 从上游重新迁移 `finishing-a-development-branch`
+2. 对比上游版本与本地版本，重新应用上述改动
+3. 特别注意：
+   - 删除 "Merge Locally" 选项及其所有引用
+   - 将 "Discard" 改为 "Rollback uncommitted changes"（不删除分支）
+   - 确保 Quick Reference 表格和 Common Mistakes 与本地一致
+4. 更新 `skill-sha.json` 中的 SHA
+5. 运行 `./install.sh` 部署
+
+---
+
 ## 11. 迁移维护义务（Meta Rule）
 
 每次执行迁移时，**必须同步更新本 skill 本身，skill 源文件地址 /Users/lychee/Documents/configure/pi-skills/migrate-superpower**：

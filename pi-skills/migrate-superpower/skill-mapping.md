@@ -31,7 +31,7 @@ Tracks the migration status of every skill in the Superpowers ecosystem.
 | 9 | `using-git-worktrees` | 🚫 Skip | Pi does not support git worktrees. Remove all references. |
 | 10 | `systematic-debugging` | 🚫 Skip | Pi already has equivalent debugging capabilities built-in. |
 | 11 | `test-driven-development` | ✅ Migrated | Pure documentation skill; no platform-specific content. Migrated as-is with no changes. |
-| 12 | `finishing-a-development-branch` | ✅ Migrated | Already present in `pi-skills/`. |
+| 12 | `finishing-a-development-branch` | ✅ Migrated | **Heavy customization** — diverged significantly from upstream: removed "Merge Locally" option; restructured to 5 options with batch-commit focus; Option 5 changed from "Discard branch" to "Rollback uncommitted changes" (`git checkout -- .` + `git clean -fd`, branch preserved); all options renamed to English; Quick Reference and Common Mistakes updated accordingly. |
 | 13 | `writing-skills` | ✅ Migrated | Replaced `superpowers:` prefix; updated `CLAUDE.md` references to Pi equivalents (`AGENTS.md`, `.rpiv/guidance/`); updated personal skill paths; neutralized branding; renamed `examples/CLAUDE_MD_TESTING.md` to `AGENTS_MD_TESTING.md`. |
 | — | `using-superpowers` | 🚫 Skip | Entirely about the Superpowers platform itself. Not applicable to Pi. |
 
