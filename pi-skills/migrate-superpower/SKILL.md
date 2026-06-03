@@ -68,6 +68,8 @@ description: "One-line description of what this skill does."
 
 ## 3. Skill Name Mappings
 
+> 📋 完整迁移状态追踪表见 [`skill-mapping.md`](skill-mapping.md)。
+
 **Rule: Keep the original Superpowers skill name. Do NOT map it to a Pi equivalent.**
 
 The goal is to migrate **all** Superpowers skills as-is. Each skill retains its original name and workflow. If a Pi skill with the same function already exists, the Superpowers version still gets migrated as a separate skill.
@@ -596,7 +598,7 @@ Invoke `subagent-driven-development`
 
 ## 11. 迁移维护义务（Meta Rule）
 
-每次执行迁移时，**必须同步更新本 skill 本身，skill源文件地址 /Users/lychee/Documents/configure/pi-skills/migrate-superpower**：
+每次执行迁移时，**必须同步更新本 skill 本身，skill 源文件地址 /Users/lychee/Documents/configure/pi-skills/migrate-superpower**：
 
 1. **更新 mapping 列表**
    - 修改本文件 §3 中的迁移状态表
@@ -608,7 +610,18 @@ Invoke `subagent-driven-development`
    - 将发现补充到 `SKILL.md` 的对应章节（或新增 Common Pitfalls 条目）
    - 确保后续迁移能从本次经验中受益
 
-3. **更新目录**
+3. **更新 skill-sha.json**
+   - 远端仓库：`git@github.com:obra/superpowers.git`
+   - 文件位置：`pi-skills/migrate-superpower/skill-sha.json`
+   - 记录的是**整个 skill 目录**的最新 commit sha（不是单个 `SKILL.md`）
+   - 获取命令（在 superpowers 仓库根目录执行）：
+     ```bash
+     git log -1 --format="%H" -- "skills/<skill-name>/"
+     ```
+   - 用途：追踪 superpowers 源端是否有更新。若远端 sha 与本地记录不一致，说明源 skill 有变动，需评估是否重新迁移。
+   - 只有状态为 `✅ Migrated` 的 skill 才需要记录 sha；`⏳ Pending` 和 `🚫 Skip` 的不记录。
+
+4. **更新目录**
    - 确认 `/Users/lychee/Documents/configure/pi-skills/migrate-superpower/` 下的文件已反映最新认知
    - 运行 `./install.sh` 部署更新后的 skill
 

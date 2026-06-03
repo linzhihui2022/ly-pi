@@ -20,7 +20,7 @@ Tracks the migration status of every skill in the Superpowers ecosystem.
 
 | # | Superpowers Skill | Status | Notes |
 |---|-------------------|--------|-------|
-| 1 | `brainstorming` | ✅ Migrated | Paths updated to `.lychee/`. `plan` skill name kept as `writing-plans` in source (pending #2). |
+| 1 | `brainstorming` | ✅ Migrated | Paths updated to `.lychee/`. `plan` skill name kept as `writing-plans` in source. |
 | 2 | `writing-plans` | ✅ Migrated | Paths updated to `.lychee/artifacts/plans/`; removed `superpowers:` prefix; neutralized branding. |
 | 3 | `executing-plans` | ✅ Migrated | Removed `superpowers:` prefixes; replaced `TodoWrite` with `todo`; neutralized branding. |
 | 4 | `verification-before-completion` | ✅ Migrated | Pure documentation skill; no platform-specific content. Deployed via `./install.sh`. |
@@ -29,10 +29,10 @@ Tracks the migration status of every skill in the Superpowers ecosystem.
 | 7 | `dispatching-parallel-agents` | ✅ Migrated | Replaced `Task()` syntax with Pi `Agent` tool + `background: true`. No platform-specific content. |
 | 8 | `subagent-driven-development` | ✅ Migrated | Replaced `TodoWrite` with `todo`, `Task tool` with `Agent` tool, removed `using-git-worktrees` reference, updated paths to `.lychee/artifacts/`. |
 | 9 | `using-git-worktrees` | 🚫 Skip | Pi does not support git worktrees. Remove all references. |
-| 10 | `systematic-debugging` | ⏳ Pending | Migrate as `pi-skills/systematic-debugging/`. |
-| 11 | `test-driven-development` | ⏳ Pending | Migrate as `pi-skills/test-driven-development/`. |
+| 10 | `systematic-debugging` | 🚫 Skip | Pi already has equivalent debugging capabilities built-in. |
+| 11 | `test-driven-development` | ✅ Migrated | Pure documentation skill; no platform-specific content. Migrated as-is with no changes. |
 | 12 | `finishing-a-development-branch` | ✅ Migrated | Already present in `pi-skills/`. |
-| 13 | `writing-skills` | ⏳ Pending | Migrate as `pi-skills/writing-skills/`. |
+| 13 | `writing-skills` | ✅ Migrated | Replaced `superpowers:` prefix; updated `CLAUDE.md` references to Pi equivalents (`AGENTS.md`, `.rpiv/guidance/`); updated personal skill paths; neutralized branding; renamed `examples/CLAUDE_MD_TESTING.md` to `AGENTS_MD_TESTING.md`. |
 | — | `using-superpowers` | 🚫 Skip | Entirely about the Superpowers platform itself. Not applicable to Pi. |
 
 ---
