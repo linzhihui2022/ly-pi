@@ -10,7 +10,14 @@
     "bash": {
       "*": "ask",
       "rm -rf *": "deny",
-      "sudo *": "ask"
+      "sudo *": "ask",
+      "git diff": "allow",
+      "git diff *": "allow",
+      "git status": "allow",
+      "git status *": "allow",
+      "git branch --show-current": "allow",
+      "git merge-base HEAD main": "allow",
+      "git merge-base HEAD master": "allow"
     },
     "tool:": {
       "todo": "allow",
