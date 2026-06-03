@@ -3,7 +3,7 @@
 Use this template when dispatching an implementer subagent.
 
 ```
-Agent tool (subagent_type: general-purpose):
+Agent tool (subagent: worker):
   description: "Implement Task N: [task name]"
   prompt: |
     You are implementing Task N: [task name]

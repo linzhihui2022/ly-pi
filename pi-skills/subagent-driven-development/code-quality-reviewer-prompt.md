@@ -7,7 +7,7 @@ Use this template when dispatching a code quality reviewer subagent.
 **Only dispatch after spec compliance review passes.**
 
 ```
-Agent tool (subagent_type: general-purpose):
+Agent tool (subagent: reviewer):
   Use template at requesting-code-review/code-reviewer.md
 
   DESCRIPTION: [task summary, from implementer's report]
