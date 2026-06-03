@@ -15,6 +15,35 @@ A comprehensive migration guide for adapting skills, scripts, documentation, and
 
 ---
 
+## 0. Default Behavior — Check for Updates
+
+If you invoke this skill **without specifying a target skill**, the default action is to check whether any already-migrated skills have updates in the upstream repository.
+
+**Upstream:** `git@github.com:obra/superpowers.git`
+
+**Process:**
+
+1. Read `pi-skills/migrate-superpower/skill-sha.json` — it lists every ✅ Migrated skill and its recorded SHA.
+2. For each skill in that file, fetch the latest SHA from upstream:
+   ```bash
+   # Run inside the local superpowers repo at /Users/lychee/Documents/superpowers
+   git fetch origin main
+   git log origin/main -1 --format="%H" -- "skills/<skill-name>/"
+   ```
+3. Compare upstream SHA with the local record.
+4. Report the result:
+   - **Up to date** — no action needed.
+   - **Out of date** — upstream has changed. Prompt the user to decide:
+     - Re-migrate the skill (overwrite with upstream version, then re-apply Pi migration rules)
+     - Skip / ignore this update
+     - Review the diff first (`git diff <local-sha>..<upstream-sha> -- skills/<skill-name>/`)
+
+If **all skills are up to date**, report that and stop. No further action needed.
+
+> 💡 This check prevents drift. Superpowers skills are actively maintained; running this check periodically ensures the Pi versions do not fall behind.
+
+---
+
 ## 1. Directory & File Structure
 
 ### Skill Location
