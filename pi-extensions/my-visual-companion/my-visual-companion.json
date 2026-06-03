@@ -1,0 +1,6 @@
+{
+  "focusApp": "WezTerm",
+  "defaultHost": "127.0.0.1",
+  "defaultUrlHost": "localhost",
+  "idleTimeoutMinutes": 30
+}
