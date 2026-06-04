@@ -589,6 +589,7 @@ describe("myWebtool", () => {
   it("webtool-usage handler notifies on success", async () => {
     const { Tavily } = await import("./backends/tavily");
     const mockNotify = vi.fn();
+    const mockSetStatus = vi.fn();
     vi.mocked(Tavily).mockImplementation(function () {
       return {
         name: "tavily",
@@ -613,8 +614,10 @@ describe("myWebtool", () => {
       (call) => call[0] === "webtool-usage"
     );
     const handler = cmd[1].handler;
-    await handler("", { ui: { notify: mockNotify } } as any);
+    await handler("", { ui: { notify: mockNotify, setStatus: mockSetStatus } } as any);
 
+    expect(mockSetStatus).toHaveBeenCalledWith("my-webtool", "Checking Tavily usage...");
+    expect(mockSetStatus).toHaveBeenLastCalledWith("my-webtool", "");
     expect(mockNotify).toHaveBeenCalledWith(
       "Tavily: key 10/100 used (90 remaining); plan 5/200 used (195 remaining)",
       "info"
@@ -624,6 +627,7 @@ describe("myWebtool", () => {
   it("webtool-usage handler notifies on error", async () => {
     const { Tavily } = await import("./backends/tavily");
     const mockNotify = vi.fn();
+    const mockSetStatus = vi.fn();
     vi.mocked(Tavily).mockImplementation(function () {
       return {
         name: "tavily",
@@ -646,8 +650,10 @@ describe("myWebtool", () => {
       (call) => call[0] === "webtool-usage"
     );
     const handler = cmd[1].handler;
-    await handler("", { ui: { notify: mockNotify } } as any);
+    await handler("", { ui: { notify: mockNotify, setStatus: mockSetStatus } } as any);
 
+    expect(mockSetStatus).toHaveBeenCalledWith("my-webtool", "Checking Tavily usage...");
+    expect(mockSetStatus).toHaveBeenLastCalledWith("my-webtool", "");
     expect(mockNotify).toHaveBeenCalledWith(
       "Usage check failed: API key missing",
       "error"

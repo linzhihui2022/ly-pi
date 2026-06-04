@@ -260,7 +260,9 @@ export default function myWebtool(pi: ExtensionAPI): void {
   pi.registerCommand("webtool-usage", {
     description: "Show Tavily usage statistics",
     handler: async (_args, ctx) => {
+      ctx.ui.setStatus("my-webtool", "Checking Tavily usage...");
       const usage = await tavily.usage();
+      ctx.ui.setStatus("my-webtool", "");
       if (!usage.ok) {
         ctx.ui.notify(`Usage check failed: ${usage.error}`, "error");
         return;
