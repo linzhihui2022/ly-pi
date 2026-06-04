@@ -6,9 +6,10 @@ import {
   formatFetchHeader,
   renderSearchResultsPreview,
   renderFetchedContentPreview,
+  formatUsageNotify,
 } from "./render";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import type { SearchResult } from "./types";
+import type { SearchResult, UsageResponse } from "./types";
 
 const mockTheme: Theme = {
   fg: (_color: string, text: string) => text,
@@ -125,5 +126,32 @@ describe("renderFetchedContentPreview", () => {
     expect(text).toContain("line 0");
     expect(text).toContain("... (use read tool to see full content)");
     expect(text).not.toContain("line 15");
+  });
+});
+
+describe("formatUsageNotify", () => {
+  it("formats usage as a concise string", () => {
+    const response: UsageResponse = {
+      ok: true,
+      key: { usage: 45, limit: 100, remaining: 55 },
+      plan: { usage: 30, limit: 200, remaining: 170 },
+      features: {},
+    };
+    const text = formatUsageNotify(response, "Tavily");
+    expect(text).toBe(
+      "Tavily: key 45/100 used (55 remaining); plan 30/200 used (170 remaining)"
+    );
+  });
+
+  it("handles zero usage", () => {
+    const response: UsageResponse = {
+      ok: true,
+      key: { usage: 0, limit: 100, remaining: 100 },
+      plan: { usage: 0, limit: 200, remaining: 200 },
+      features: {},
+    };
+    const text = formatUsageNotify(response, "Tavily");
+    expect(text).toContain("key 0/100 used (100 remaining)");
+    expect(text).toContain("plan 0/200 used (200 remaining)");
   });
 });

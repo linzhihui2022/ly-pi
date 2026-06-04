@@ -1,5 +1,5 @@
 import { FETCH_PREVIEW_LINE_LIMIT } from "./helper";
-import { SearchResult } from "./types";
+import { SearchResult, UsageResponse } from "./types";
 import {
   TruncationResult,
   formatSize,
@@ -86,4 +86,13 @@ export function renderFetchedContentPreview(content: string, theme: Theme): stri
 		text += `\n  ${theme.fg("muted", "... (use read tool to see full content)")}`;
 	}
 	return text;
+}
+
+export function formatUsageNotify(
+  response: UsageResponse,
+  label: string
+): string {
+  const key = response.key;
+  const plan = response.plan;
+  return `${label}: key ${key.usage}/${key.limit} used (${key.remaining} remaining); plan ${plan.usage}/${plan.limit} used (${plan.remaining} remaining)`;
 }
