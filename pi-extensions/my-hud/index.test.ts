@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { getGitStatus } from "./git";
 
 vi.mock("@earendil-works/pi-tui", () => ({
   truncateToWidth: (text: string, _width: number) => text,
@@ -620,6 +621,23 @@ describe("buildStatusLine", () => {
     });
     expect(line).toContain("very-lon..");
   });
+
+  it("appends git status when branch is present and status is not clean", async () => {
+    const { buildStatusLine } = await loadModule();
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const line = buildStatusLine(theme as any, 200, {
+      project: "my-project",
+      modelName: "gpt-4",
+      branch: "main",
+      ctxColored: "42%",
+      usage: { input: 1000, output: 500, cacheRead: 100, cacheWrite: 0, cost: 0.35 },
+      gitStatus: { ahead: 2, behind: 0, staged: 3, stashed: 1, conflicted: 0, isClean: false },
+    });
+    expect(line).toContain("main");
+    expect(line).toContain("⇡2");
+    expect(line).toContain("++3|");
+    expect(line).toContain("*1|");
+  });
 });
 
 describe("Bar", () => {
@@ -911,6 +929,66 @@ describe("Bar", () => {
     bar.invalidateGitStatus();
     component.render(100);
     await new Promise((r) => setTimeout(r, 50));
+    expect(requestRender).toHaveBeenCalledTimes(1);
+  });
+
+  it("handles git status fetch failure gracefully", async () => {
+    vi.mocked(getGitStatus).mockRejectedValueOnce(new Error("git failed"));
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const requestRender = vi.fn();
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const ctx = {
+      cwd: "/x",
+      model: { id: "m" },
+      sessionManager: { getEntries: () => [] },
+      getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
+    };
+
+    bar.setUICtx({ setWidget } as any);
+    bar.setContext(ctx as any);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory({ requestRender }, theme);
+
+    // Should not throw even when getGitStatus rejects
+    expect(() => component.render(100)).not.toThrow();
+    await new Promise((r) => setTimeout(r, 50));
+  });
+
+  it("does not trigger duplicate fetches while one is pending", async () => {
+    vi.mocked(getGitStatus).mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve({
+      ahead: 1, behind: 0, staged: 0, stashed: 0, conflicted: 0, isClean: false,
+    }), 100)));
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const requestRender = vi.fn();
+    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const ctx = {
+      cwd: "/x",
+      model: { id: "m" },
+      sessionManager: { getEntries: () => [] },
+      getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
+    };
+
+    bar.setUICtx({ setWidget } as any);
+    bar.setContext(ctx as any);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory({ requestRender }, theme);
+
+    // First render starts async fetch
+    component.render(100);
+    // Second render while pending should not start another fetch
+    component.render(100);
+    expect(requestRender).not.toHaveBeenCalled();
+
+    await new Promise((r) => setTimeout(r, 150));
+    // Only one requestRender after the single fetch completes
     expect(requestRender).toHaveBeenCalledTimes(1);
   });
 });

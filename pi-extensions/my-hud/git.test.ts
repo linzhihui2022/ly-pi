@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { parseGitStatus } from "./git";
+import { describe, it, expect, vi } from "vitest";
+import { parseGitStatus, getGitStatus } from "./git";
+
+
 
 describe("parseGitStatus", () => {
   it("returns clean for repo with no changes", () => {
@@ -106,5 +108,21 @@ describe("parseGitStatus", () => {
     ].join("\n");
     const status = parseGitStatus(output, "");
     expect(status.staged).toBe(1);
+  });
+
+  it("ignores malformed branch.ab lines", () => {
+    const status = parseGitStatus(
+      "# branch.oid abc\n# branch.head main\n# branch.ab malformed\n",
+      ""
+    );
+    expect(status.ahead).toBe(0);
+    expect(status.behind).toBe(0);
+  });
+});
+
+describe("getGitStatus", () => {
+  it("returns null when git command fails", async () => {
+    const result = await getGitStatus("/tmp/nonexistent-repo-99999");
+    expect(result).toBeNull();
   });
 });

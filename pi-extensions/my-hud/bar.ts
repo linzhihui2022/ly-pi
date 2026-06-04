@@ -74,7 +74,6 @@ export class Bar {
     const now = Date.now();
     if (now - this.gitStatusCacheTime <= GIT_STATUS_CACHE_TTL) return;
     if (this.gitStatusRefreshPending) return;
-    if (!this.ctx) return;
 
     this.gitStatusRefreshPending = true;
     getGitStatus(this.ctx.cwd)
