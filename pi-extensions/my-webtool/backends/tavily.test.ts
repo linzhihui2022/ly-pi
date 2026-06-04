@@ -69,6 +69,15 @@ describe("Tavily.check", () => {
     process.env.TAVILY_SEARCH_API = originalEnv;
   });
 
+  it("returns generic error on non-Error throw from usage", async () => {
+    const tavily = new Tavily();
+    vi.mocked(fetch).mockRejectedValueOnce("string error");
+
+    const result = await tavily.check();
+    expect(result.enabled).toBe(false);
+    expect(result.message).toBe("unknown error");
+  });
+
   it("returns disabled on HTTP failure", async () => {
     const tavily = new Tavily();
     vi.mocked(fetch).mockResolvedValueOnce({
@@ -167,6 +176,21 @@ describe("Tavily.search", () => {
     expect(result.error).toContain("Invalid JSON");
   });
 
+  it("returns generic error on non-Error throw", async () => {
+    const tavily = new Tavily();
+    (tavily as any).enabled = true;
+    
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => { throw "string error"; },
+      text: async () => "",
+    } as Response);
+
+    const result = await tavily.search("test", 5);
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("Unknown error");
+  });
+
   it("returns empty results when Tavily returns no results", async () => {
     const tavily = new Tavily();
     (tavily as any).enabled = true;
@@ -174,6 +198,42 @@ describe("Tavily.search", () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ results: [] }),
+      text: async () => "",
+    } as Response);
+
+    const result = await tavily.search("test", 5);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.results).toHaveLength(0);
+    }
+  });
+
+  it("normalizes results with missing fields", async () => {
+    const tavily = new Tavily();
+    (tavily as any).enabled = true;
+    
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [{}],
+      }),
+      text: async () => "",
+    } as Response);
+
+    const result = await tavily.search("test", 5);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.results[0]).toEqual({ title: "", url: "", snippet: "" });
+    }
+  });
+
+  it("handles missing results field", async () => {
+    const tavily = new Tavily();
+    (tavily as any).enabled = true;
+    
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({}),
       text: async () => "",
     } as Response);
 
@@ -200,6 +260,19 @@ describe("Tavily.fetch", () => {
     expect(result.error).toContain("not enabled");
   });
 
+  it("returns error when API key is missing", async () => {
+    const originalEnv = process.env.TAVILY_SEARCH_API;
+    delete process.env.TAVILY_SEARCH_API;
+    const tavily = new Tavily();
+    (tavily as any).enabled = true;
+
+    const result = await tavily.fetch("https://example.com", false);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("TAVILY_SEARCH_API");
+
+    process.env.TAVILY_SEARCH_API = originalEnv;
+  });
+
   it("fetches raw HTML when raw=true", async () => {
     const tavily = new Tavily();
     (tavily as any).enabled = true;
@@ -214,6 +287,23 @@ describe("Tavily.fetch", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.response.text).toBe("<html>Hello</html>");
+      expect(result.response.contentType).toBe("text/html");
+    }
+  });
+
+  it("fetches raw HTML with default content-type when header is missing", async () => {
+    const tavily = new Tavily();
+    (tavily as any).enabled = true;
+    
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      text: async () => "<html>Hello</html>",
+      headers: new Headers(),
+    } as Response);
+
+    const result = await tavily.fetch("https://example.com", true);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
       expect(result.response.contentType).toBe("text/html");
     }
   });
@@ -242,6 +332,17 @@ describe("Tavily.fetch", () => {
     const result = await tavily.fetch("https://example.com", true);
     expect(result.ok).toBe(false);
     expect(result.error).toContain("Network error");
+  });
+
+  it("returns generic error on raw fetch non-Error throw", async () => {
+    const tavily = new Tavily();
+    (tavily as any).enabled = true;
+    
+    vi.mocked(fetch).mockRejectedValueOnce("string error");
+
+    const result = await tavily.fetch("https://example.com", true);
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("Unknown error");
   });
 
   it("uses Tavily extract when raw=false", async () => {
@@ -296,6 +397,24 @@ describe("Tavily.fetch", () => {
     expect(result.error).toContain("blocked");
   });
 
+  it("returns error with defaults on extract failure with missing fields", async () => {
+    const tavily = new Tavily();
+    (tavily as any).enabled = true;
+    
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        failed_results: [{}],
+      }),
+      text: async () => "",
+    } as Response);
+
+    const result = await tavily.fetch("https://example.com", false);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("https://example.com");
+    expect(result.error).toContain("unknown error");
+  });
+
   it("returns error when no content returned", async () => {
     const tavily = new Tavily();
     (tavily as any).enabled = true;
@@ -305,6 +424,21 @@ describe("Tavily.fetch", () => {
       json: async () => ({
         results: [],
       }),
+      text: async () => "",
+    } as Response);
+
+    const result = await tavily.fetch("https://example.com", false);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("no content");
+  });
+
+  it("returns error when results field is missing", async () => {
+    const tavily = new Tavily();
+    (tavily as any).enabled = true;
+    
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({}),
       text: async () => "",
     } as Response);
 
