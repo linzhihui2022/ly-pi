@@ -589,7 +589,7 @@ describe("myWebtool", () => {
   it("webtool-usage handler notifies on success", async () => {
     const { Tavily } = await import("./backends/tavily");
     const mockNotify = vi.fn();
-    const mockSetStatus = vi.fn();
+    const mockSetWidget = vi.fn();
     vi.mocked(Tavily).mockImplementation(function () {
       return {
         name: "tavily",
@@ -614,10 +614,10 @@ describe("myWebtool", () => {
       (call) => call[0] === "webtool-usage"
     );
     const handler = cmd[1].handler;
-    await handler("", { ui: { notify: mockNotify, setStatus: mockSetStatus } } as any);
+    await handler("", { ui: { notify: mockNotify, setWidget: mockSetWidget } } as any);
 
-    expect(mockSetStatus).toHaveBeenCalledWith("my-webtool", "Checking Tavily usage...");
-    expect(mockSetStatus).toHaveBeenLastCalledWith("my-webtool", "");
+    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", ["Checking Tavily usage..."]);
+    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", ["Tavily: key 10/100 used (90 remaining); plan 5/200 used (195 remaining)"]);
     expect(mockNotify).toHaveBeenCalledWith(
       "Tavily: key 10/100 used (90 remaining); plan 5/200 used (195 remaining)",
       "info"
@@ -627,7 +627,7 @@ describe("myWebtool", () => {
   it("webtool-usage handler notifies on error", async () => {
     const { Tavily } = await import("./backends/tavily");
     const mockNotify = vi.fn();
-    const mockSetStatus = vi.fn();
+    const mockSetWidget = vi.fn();
     vi.mocked(Tavily).mockImplementation(function () {
       return {
         name: "tavily",
@@ -650,10 +650,10 @@ describe("myWebtool", () => {
       (call) => call[0] === "webtool-usage"
     );
     const handler = cmd[1].handler;
-    await handler("", { ui: { notify: mockNotify, setStatus: mockSetStatus } } as any);
+    await handler("", { ui: { notify: mockNotify, setWidget: mockSetWidget } } as any);
 
-    expect(mockSetStatus).toHaveBeenCalledWith("my-webtool", "Checking Tavily usage...");
-    expect(mockSetStatus).toHaveBeenLastCalledWith("my-webtool", "");
+    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", ["Checking Tavily usage..."]);
+    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", ["Usage check failed: API key missing"]);
     expect(mockNotify).toHaveBeenCalledWith(
       "Usage check failed: API key missing",
       "error"
