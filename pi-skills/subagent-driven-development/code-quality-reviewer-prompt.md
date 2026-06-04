@@ -6,14 +6,22 @@ Use this template when dispatching a code quality reviewer subagent.
 
 **Only dispatch after spec compliance review passes.**
 
-```
-Agent tool (subagent: reviewer):
-  Use template at requesting-code-review/code-reviewer.md
+```typescript
+subagent({
+  agent: "reviewer",
+  task: `Review the code diff from ${BASE_SHA} to ${HEAD_SHA}.
 
-  DESCRIPTION: [task summary, from implementer's report]
-  PLAN_OR_REQUIREMENTS: Task N from [plan-file]
-  BASE_SHA: [commit before task]
-  HEAD_SHA: [current commit]
+Description: [task summary, from implementer's report]
+
+Plan/Requirements: Task N from [plan-file]
+
+In addition to standard code quality concerns, also check:
+- Does each file have one clear responsibility with a well-defined interface?
+- Are units decomposed so they can be understood and tested independently?
+- Is the implementation following the file structure from the plan?
+- Did this implementation create new files that are already large, or significantly grow existing files? (Don't flag pre-existing file sizes — focus on what this change contributed.)
+`
+})
 ```
 
 **In addition to standard code quality concerns, the reviewer should check:**

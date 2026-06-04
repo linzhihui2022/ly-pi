@@ -125,6 +125,45 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 - `./spec-reviewer-prompt.md` - Dispatch spec compliance reviewer subagent
 - `./code-quality-reviewer-prompt.md` - Dispatch code quality reviewer subagent
 
+## Dispatch Syntax
+
+Use `subagent()` from `pi-subagents` to dispatch each role. Read the prompt template,
+fill in placeholders, and pass the complete prompt as the `task`:
+
+```typescript
+// Implementer
+subagent({
+  agent: "worker",
+  task: `You are implementing Task N: ...`,
+  context: "fresh"
+})
+
+// Spec compliance reviewer
+subagent({
+  agent: "reviewer",
+  task: `You are reviewing whether an implementation matches its specification...`
+})
+
+// Code quality reviewer (chain with scout to get diff first)
+subagent({
+  chain: [
+    {
+      agent: "scout",
+      task: `Get the git diff from ${BASE_SHA} to ${HEAD_SHA} and write it to diff.txt`,
+      output: "diff.txt"
+    },
+    {
+      agent: "reviewer",
+      task: `Review the code diff in diff.txt. Description: ...`,
+      reads: "diff.txt"
+    }
+  ]
+})
+```
+
+**Always use `context: "fresh"`** for the implementer so it starts with a clean session.
+Reviewers can use default context since they only read code.
+
 ## Example Workflow
 
 ```
@@ -137,7 +176,7 @@ You: I'm using Subagent-Driven Development to execute this plan.
 Task 1: Hook installation script
 
 [Get Task 1 text and context (already extracted)]
-[Dispatch implementation subagent with full task text + context]
+[Dispatch implementer via subagent({ agent: "worker", task: ..., context: "fresh" })]
 
 Implementer: "Before I begin - should the hook be installed at user or system level?"
 
@@ -150,10 +189,10 @@ Implementer: "Got it. Implementing now..."
   - Self-review: Found I missed --force flag, added it
   - Committed
 
-[Dispatch spec compliance reviewer]
+[Dispatch spec reviewer via subagent({ agent: "reviewer", task: ... })]
 Spec reviewer: ✅ Spec compliant - all requirements met, nothing extra
 
-[Get git SHAs, dispatch code quality reviewer]
+[Get git SHAs, dispatch code quality reviewer via subagent chain with scout]
 Code reviewer: Strengths: Good test coverage, clean. Issues: None. Approved.
 
 [Mark Task 1 complete]
@@ -161,7 +200,7 @@ Code reviewer: Strengths: Good test coverage, clean. Issues: None. Approved.
 Task 2: Recovery modes
 
 [Get Task 2 text and context (already extracted)]
-[Dispatch implementation subagent with full task text + context]
+[Dispatch implementer via subagent({ agent: "worker", task: ..., context: "fresh" })]
 
 Implementer: [No questions, proceeds]
 Implementer:
@@ -195,7 +234,7 @@ Code reviewer: ✅ Approved
 ...
 
 [After all tasks]
-[Dispatch final code-reviewer]
+[Dispatch final code reviewer via subagent({ agent: "reviewer", task: ... })]
 Final reviewer: All requirements met, ready to merge
 
 Done!

@@ -6,13 +6,12 @@ Use this template when dispatching a spec document reviewer subagent.
 
 **Dispatch after:** Spec document is written to `.lychee/artifacts/designs/`
 
-```
-Agent tool (subagent: reviewer):
-  description: "Review spec document"
-  prompt: |
-    You are a spec document reviewer. Verify this spec is complete and ready for planning.
+```typescript
+subagent({
+  agent: "reviewer",
+  task: `You are a spec document reviewer. Verify this spec is complete and ready for planning.
 
-    **Spec to review:** [SPEC_FILE_PATH]
+**Spec to review:** [SPEC_FILE_PATH]
 
     ## What to Check
 
