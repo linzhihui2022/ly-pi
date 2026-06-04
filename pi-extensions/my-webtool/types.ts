@@ -66,3 +66,16 @@ export interface FetchProvider {
     signal?: AbortSignal
   ): Promise<FetchResponse>;
 }
+
+export interface UsageResponse {
+  ok: true;
+  key: { usage: number; limit: number; remaining: number };
+  plan: { usage: number; limit: number; remaining: number };
+  features: Record<string, { usage: number; limit: number }>;
+}
+
+export interface UsageProvider {
+  readonly name: string;
+  readonly label: string;
+  usage(): Promise<UsageResponse | { ok: false; error: string }>;
+}
