@@ -19,7 +19,17 @@
       "git merge-base HEAD main": "allow",
       "git merge-base HEAD master": "allow",
       "gh pr comment *": "ask",
-      "gh pr view *": "allow"
+      "gh pr view *": "allow",
+      "env": "deny",
+      "env |*": "deny",
+      "env|*": "deny",
+      "printenv": "deny",
+      "printenv *": "deny",
+      "set |*": "deny",
+      "set|*": "deny",
+      "export -p": "deny",
+      "export -p |*": "deny",
+      "export -p|*": "deny"
     },
     "tool:": {
       "todo": "allow",
