@@ -1,4 +1,0 @@
-{
-  "enabled": true,
-  "logFile": "~/.pi/agent/subagent-monitor-log.jsonl"
-}
