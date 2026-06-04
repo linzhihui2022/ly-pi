@@ -1,0 +1,30 @@
+{
+  "subagents": {
+    "agentOverrides": {
+      "worker": {
+        "model": "kimi-for-coding"
+      },
+      "reviewer": {
+        "model": "kimi-for-coding"
+      },
+      "scout": {
+        "model": "deepseek/deepseek-v4-flash"
+      },
+      "planner": {
+        "model": "kimi-k2-thinking"
+      },
+      "oracle": {
+        "model": "kimi-k2-thinking"
+      },
+      "context-builder": {
+        "model": "kimi-k2-thinking"
+      },
+      "researcher": {
+        "model": "kimi-k2-thinking"
+      },
+      "delegate": {
+        "model": "deepseek/deepseek-v4-flash"
+      }
+    }
+  }
+}
