@@ -18,6 +18,7 @@ import {
   formatFetchHeader,
   formatSearchResultsBody,
   formatTruncationFooter,
+  formatUsageNotify,
   renderFetchedContentPreview,
   renderSearchResultsPreview,
 } from "./render";
@@ -30,13 +31,15 @@ export default function myWebtool(pi: ExtensionAPI): void {
   loadConfig();
   const tavily = new Tavily();
   const providerStatus = {
-    tavily: { enabled: false, message: "" },
+    tavily: { enabled: false, message: "", checking: true },
   };
-  pi.on("session_start", async () => {
-    const check = await tavily.check();
-    providerStatus.tavily.enabled = check.enabled;
-    providerStatus.tavily.message = check.message;
-  });
+  tavily
+    .check()
+    .then((check) => {
+      providerStatus.tavily.enabled = check.enabled;
+      providerStatus.tavily.message = check.message;
+      providerStatus.tavily.checking = false;
+    })
   pi.registerTool({
     name: "web_search",
     label: "Web Search",
@@ -177,7 +180,9 @@ export default function myWebtool(pi: ExtensionAPI): void {
           content: [
             {
               type: "text",
-              text: `Tavily is not enabled: ${providerStatus.tavily.message || "unknown reason"}`,
+              text: `Tavily is not enabled: ${
+                providerStatus.tavily.message || "unknown reason"
+              }`,
             },
           ],
           details: { url: params.url, error: "Tavily is not enabled" },
@@ -249,6 +254,19 @@ export default function myWebtool(pi: ExtensionAPI): void {
         }
       }
       return new Text(text, 0, 0);
+    },
+  });
+
+  pi.registerCommand("webtool-usage", {
+    description: "Show Tavily usage statistics",
+    handler: async (_args, ctx) => {
+      const usage = await tavily.usage();
+      if (!usage.ok) {
+        ctx.ui.notify(`Usage check failed: ${usage.error}`, "error");
+        return;
+      }
+      const text = formatUsageNotify(usage, tavily.label);
+      ctx.ui.notify(text, "info");
     },
   });
 }

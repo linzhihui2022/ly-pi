@@ -15,9 +15,11 @@ vi.mock("./backends/tavily", () => ({
 
 const mockRegisterTool = vi.fn();
 const mockOn = vi.fn();
+const mockRegisterCommand = vi.fn();
 const mockPi: ExtensionAPI = {
   registerTool: mockRegisterTool,
   on: mockOn,
+  registerCommand: mockRegisterCommand,
 } as unknown as ExtensionAPI;
 
 beforeEach(() => {
@@ -34,10 +36,23 @@ describe("myWebtool", () => {
     expect(toolNames).toContain("web_fetch");
   });
 
-  it("registers session_start handler", async () => {
+  it("calls tavily.check on load", async () => {
+    const { Tavily } = await import("./backends/tavily");
+    const mockCheck = vi.fn().mockResolvedValue({ enabled: true, message: "ok" });
+    vi.mocked(Tavily).mockImplementation(function () {
+      return {
+        name: "tavily",
+        label: "Tavily",
+        check: mockCheck,
+        search: vi.fn(),
+        fetch: vi.fn(),
+      } as any;
+    });
+
     const mod = await import("./index");
     mod.default(mockPi);
-    expect(mockOn).toHaveBeenCalledWith("session_start", expect.any(Function));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(mockCheck).toHaveBeenCalled();
   });
 
   it("web_search has correct metadata", async () => {
@@ -375,11 +390,7 @@ describe("myWebtool", () => {
 
     const mod = await import("./index");
     mod.default(mockPi);
-
-    const sessionStartHandler = mockOn.mock.calls.find(
-      (call) => call[0] === "session_start"
-    )[1];
-    await sessionStartHandler();
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webSearch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_search"
@@ -413,11 +424,7 @@ describe("myWebtool", () => {
 
     const mod = await import("./index");
     mod.default(mockPi);
-
-    const sessionStartHandler = mockOn.mock.calls.find(
-      (call) => call[0] === "session_start"
-    )[1];
-    await sessionStartHandler();
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webSearch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_search"
@@ -441,11 +448,7 @@ describe("myWebtool", () => {
 
     const mod = await import("./index");
     mod.default(mockPi);
-
-    const sessionStartHandler = mockOn.mock.calls.find(
-      (call) => call[0] === "session_start"
-    )[1];
-    await sessionStartHandler();
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webSearch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_search"
@@ -472,11 +475,7 @@ describe("myWebtool", () => {
 
     const mod = await import("./index");
     mod.default(mockPi);
-
-    const sessionStartHandler = mockOn.mock.calls.find(
-      (call) => call[0] === "session_start"
-    )[1];
-    await sessionStartHandler();
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webFetch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_fetch"
@@ -509,11 +508,7 @@ describe("myWebtool", () => {
 
     const mod = await import("./index");
     mod.default(mockPi);
-
-    const sessionStartHandler = mockOn.mock.calls.find(
-      (call) => call[0] === "session_start"
-    )[1];
-    await sessionStartHandler();
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webFetch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_fetch"
@@ -540,11 +535,7 @@ describe("myWebtool", () => {
 
     const mod = await import("./index");
     mod.default(mockPi);
-
-    const sessionStartHandler = mockOn.mock.calls.find(
-      (call) => call[0] === "session_start"
-    )[1];
-    await sessionStartHandler();
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webFetch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_fetch"
@@ -572,11 +563,7 @@ describe("myWebtool", () => {
 
     const mod = await import("./index");
     mod.default(mockPi);
-
-    const sessionStartHandler = mockOn.mock.calls.find(
-      (call) => call[0] === "session_start"
-    )[1];
-    await sessionStartHandler();
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webFetch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_fetch"
