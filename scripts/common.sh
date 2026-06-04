@@ -88,6 +88,7 @@ Category aliases:
   skill, skills
   theme, themes
   agent, agents
+  mcp
 
 Per-category filters (comma-separated glob patterns):
   --include-ext PATTERNS    whitelist extensions
@@ -107,6 +108,7 @@ normalize_category() {
         skill|skills) echo "skills" ;;
         theme|themes) echo "themes" ;;
         agent|agents) echo "agents" ;;
+        mcp) echo "mcp" ;;
         *) echo "$1" ;;
     esac
 }
