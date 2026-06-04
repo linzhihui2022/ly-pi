@@ -10,6 +10,8 @@ describe("parseGitStatus", () => {
       ahead: 0,
       behind: 0,
       staged: 0,
+      unstaged: 0,
+      untracked: 0,
       stashed: 0,
       conflicted: 0,
       isClean: true,
@@ -84,11 +86,13 @@ describe("parseGitStatus", () => {
     const output = [
       "# branch.oid abc",
       "# branch.head main",
-      '1 ?. N... 100644 100644 100644 abc def path1',
+      "? path1",
+      "? path2",
     ].join("\n");
     const status = parseGitStatus(output, "");
+    expect(status.untracked).toBe(2);
     expect(status.staged).toBe(0);
-    expect(status.isClean).toBe(true);
+    expect(status.isClean).toBe(false);
   });
 
   it("counts stashes", () => {
@@ -117,6 +121,31 @@ describe("parseGitStatus", () => {
     );
     expect(status.ahead).toBe(0);
     expect(status.behind).toBe(0);
+  });
+
+  it("counts unstaged modifications", () => {
+    const output = [
+      "# branch.oid abc",
+      "# branch.head main",
+      '1 .M N... 100644 100644 100644 abc def path1',
+      '1 .D N... 100644 100644 100644 abc def path2',
+    ].join("\n");
+    const status = parseGitStatus(output, "");
+    expect(status.unstaged).toBe(2);
+    expect(status.staged).toBe(0);
+    expect(status.isClean).toBe(false);
+  });
+
+  it("counts both staged and unstaged on same file", () => {
+    const output = [
+      "# branch.oid abc",
+      "# branch.head main",
+      '1 MM N... 100644 100644 100644 abc def path1',
+    ].join("\n");
+    const status = parseGitStatus(output, "");
+    expect(status.staged).toBe(1);
+    expect(status.unstaged).toBe(1);
+    expect(status.isClean).toBe(false);
   });
 });
 

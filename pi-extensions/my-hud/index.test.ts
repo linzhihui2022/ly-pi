@@ -523,49 +523,61 @@ describe("formatGitStatus", () => {
 
   it("returns empty for clean status", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 0, staged: 0, stashed: 0, conflicted: 0, isClean: true };
+    const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: true };
     expect(formatGitStatus(mockTheme as any, status)).toBe("");
   });
 
   it("formats ahead only", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 2, behind: 0, staged: 0, stashed: 0, conflicted: 0, isClean: false };
+    const status = { ahead: 2, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
     expect(formatGitStatus(mockTheme as any, status)).toBe("⇡2");
   });
 
   it("formats behind only", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 3, staged: 0, stashed: 0, conflicted: 0, isClean: false };
+    const status = { ahead: 0, behind: 3, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
     expect(formatGitStatus(mockTheme as any, status)).toContain("⇣3");
   });
 
   it("formats diverged", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 3, behind: 2, staged: 0, stashed: 0, conflicted: 0, isClean: false };
+    const status = { ahead: 3, behind: 2, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
     expect(formatGitStatus(mockTheme as any, status)).toContain("⇕⇡3⇣2");
   });
 
   it("formats staged", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 0, staged: 3, stashed: 0, conflicted: 0, isClean: false };
+    const status = { ahead: 0, behind: 0, staged: 3, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
     expect(formatGitStatus(mockTheme as any, status)).toContain("++3|");
   });
 
   it("formats stashed", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 0, staged: 0, stashed: 1, conflicted: 0, isClean: false };
+    const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 1, conflicted: 0, isClean: false };
     expect(formatGitStatus(mockTheme as any, status)).toContain("*1|");
   });
 
   it("formats conflicted", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 0, staged: 0, stashed: 0, conflicted: 2, isClean: false };
+    const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 2, isClean: false };
     expect(formatGitStatus(mockTheme as any, status)).toContain("!!2|");
+  });
+
+  it("formats unstaged", async () => {
+    const { formatGitStatus } = await loadModule();
+    const status = { ahead: 0, behind: 0, staged: 0, unstaged: 3, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
+    expect(formatGitStatus(mockTheme as any, status)).toContain("~3|");
+  });
+
+  it("formats untracked", async () => {
+    const { formatGitStatus } = await loadModule();
+    const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 2, stashed: 0, conflicted: 0, isClean: false };
+    expect(formatGitStatus(mockTheme as any, status)).toContain("?2|");
   });
 
   it("combines multiple statuses", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 1, behind: 0, staged: 2, stashed: 1, conflicted: 0, isClean: false };
+    const status = { ahead: 1, behind: 0, staged: 2, unstaged: 0, untracked: 0, stashed: 1, conflicted: 0, isClean: false };
     const result = formatGitStatus(mockTheme as any, status);
     expect(result).toContain("++2|");
     expect(result).toContain("*1|");

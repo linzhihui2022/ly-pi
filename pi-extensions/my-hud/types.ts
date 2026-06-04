@@ -15,6 +15,8 @@ export interface GitStatus {
   ahead: number;
   behind: number;
   staged: number;
+  unstaged: number;
+  untracked: number;
   stashed: number;
   conflicted: number;
   isClean: boolean;

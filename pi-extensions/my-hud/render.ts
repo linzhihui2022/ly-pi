@@ -50,13 +50,19 @@ export function formatGitStatus(theme: Theme, status: GitStatus | null | undefin
   const parts: string[] = [];
 
   if (status.staged > 0) {
-    parts.push(theme.fg("accent", `++${status.staged}|`));
+    parts.push(theme.fg("accent", `++${status.staged}`) + "|");
+  }
+  if (status.unstaged > 0) {
+    parts.push(theme.fg("warning", `~${status.unstaged}`) + "|");
+  }
+  if (status.untracked > 0) {
+    parts.push(theme.fg("dim", `?${status.untracked}`) + "|");
   }
   if (status.stashed > 0) {
-    parts.push(theme.fg("warning", `*${status.stashed}|`));
+    parts.push(theme.fg("warning", `*${status.stashed}`) + "|");
   }
   if (status.conflicted > 0) {
-    parts.push(theme.fg("error", `!!${status.conflicted}|`));
+    parts.push(theme.fg("error", `!!${status.conflicted}`) + "|");
   }
   if (status.ahead > 0 && status.behind > 0) {
     parts.push(theme.fg("warning", `⇕⇡${status.ahead}⇣${status.behind}`));

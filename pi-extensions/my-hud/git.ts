@@ -33,6 +33,8 @@ export function parseGitStatus(statusOutput: string, stashOutput: string): GitSt
   let ahead = 0;
   let behind = 0;
   let staged = 0;
+  let unstaged = 0;
+  let untracked = 0;
   let conflicted = 0;
 
   for (const line of lines) {
@@ -53,11 +55,18 @@ export function parseGitStatus(statusOutput: string, stashOutput: string): GitSt
       } else if (x !== "." && x !== "?" && x !== "!") {
         staged++;
       }
+
+      if (y !== "." && y !== "?" && y !== "!" && y !== "U") {
+        unstaged++;
+      }
+    } else if (line.startsWith("? ")) {
+      untracked++;
     }
   }
 
   const stashed = stashOutput.trim() ? stashOutput.trim().split("\n").length : 0;
-  const isClean = ahead === 0 && behind === 0 && staged === 0 && stashed === 0 && conflicted === 0;
+  const isClean =
+    ahead === 0 && behind === 0 && staged === 0 && unstaged === 0 && untracked === 0 && stashed === 0 && conflicted === 0;
 
-  return { ahead, behind, staged, stashed, conflicted, isClean };
+  return { ahead, behind, staged, unstaged, untracked, stashed, conflicted, isClean };
 }
