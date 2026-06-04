@@ -27,7 +27,7 @@ Tracks the migration status of every skill in the Superpowers ecosystem.
 | 5 | `requesting-code-review` | ✅ Migrated | Replaced `Task tool` with `subagent({ chain: [scout, reviewer] })`; updated plan path to `.lychee/artifacts/plans/`. |
 | 6 | `receiving-code-review` | ✅ Migrated | Migrated as-is. Replaced `CLAUDE.md` with `AGENTS.md`. |
 | 7 | `dispatching-parallel-agents` | ✅ Migrated | Replaced `Task()` syntax with `subagent({ tasks: [...] })` using `worker` agents. No platform-specific content. |
-| 8 | `subagent-driven-development` | ✅ Migrated | Replaced `TodoWrite` with `todo`, `Task tool` with `Agent` tool, removed `using-git-worktrees` reference, updated paths to `.lychee/artifacts/`. |
+| 8 | `subagent-driven-development` | ✅ Migrated | Replaced `TodoWrite` with `todo`, `Task tool` with `subagent()` function, updated prompt templates to `subagent({ agent: "worker"|"reviewer", task: ... })` syntax, removed `using-git-worktrees` reference, updated paths to `.lychee/artifacts/`. |
 | 9 | `using-git-worktrees` | 🚫 Skip | Pi does not support git worktrees. Remove all references. |
 | 10 | `systematic-debugging` | 🚫 Skip | Pi already has equivalent debugging capabilities built-in. |
 | 11 | `test-driven-development` | ✅ Migrated | Pure documentation skill; no platform-specific content. Migrated as-is with no changes. |
