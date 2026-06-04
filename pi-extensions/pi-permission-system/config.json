@@ -12,6 +12,7 @@
       "rm -rf *": "deny",
       "sudo *": "ask",
       "git diff": "allow",
+      "git add *": "allow",
       "git diff *": "allow",
       "git status": "allow",
       "git status *": "allow",
