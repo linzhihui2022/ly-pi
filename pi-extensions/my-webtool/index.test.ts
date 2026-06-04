@@ -574,4 +574,83 @@ describe("myWebtool", () => {
     expect(result.details.truncation).toBeDefined();
     expect(result.details.fullOutputPath).toBeDefined();
   });
+
+  it("registers /webtool-usage command", async () => {
+    const mod = await import("./index");
+    mod.default(mockPi);
+
+    const cmd = mockRegisterCommand.mock.calls.find(
+      (call) => call[0] === "webtool-usage"
+    );
+    expect(cmd).toBeDefined();
+    expect(cmd[1].description).toBe("Show Tavily usage statistics");
+  });
+
+  it("webtool-usage handler notifies on success", async () => {
+    const { Tavily } = await import("./backends/tavily");
+    const mockNotify = vi.fn();
+    vi.mocked(Tavily).mockImplementation(function () {
+      return {
+        name: "tavily",
+        label: "Tavily",
+        check: vi.fn().mockResolvedValue({ enabled: true, message: "ok" }),
+        search: vi.fn(),
+        fetch: vi.fn(),
+        usage: vi.fn().mockResolvedValue({
+          ok: true,
+          key: { usage: 10, limit: 100, remaining: 90 },
+          plan: { usage: 5, limit: 200, remaining: 195 },
+          features: {},
+        }),
+      } as any;
+    });
+
+    const mod = await import("./index");
+    mod.default(mockPi);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const cmd = mockRegisterCommand.mock.calls.find(
+      (call) => call[0] === "webtool-usage"
+    );
+    const handler = cmd[1].handler;
+    await handler("", { ui: { notify: mockNotify } } as any);
+
+    expect(mockNotify).toHaveBeenCalledWith(
+      "Tavily: key 10/100 used (90 remaining); plan 5/200 used (195 remaining)",
+      "info"
+    );
+  });
+
+  it("webtool-usage handler notifies on error", async () => {
+    const { Tavily } = await import("./backends/tavily");
+    const mockNotify = vi.fn();
+    vi.mocked(Tavily).mockImplementation(function () {
+      return {
+        name: "tavily",
+        label: "Tavily",
+        check: vi.fn().mockResolvedValue({ enabled: true, message: "ok" }),
+        search: vi.fn(),
+        fetch: vi.fn(),
+        usage: vi.fn().mockResolvedValue({
+          ok: false,
+          error: "API key missing",
+        }),
+      } as any;
+    });
+
+    const mod = await import("./index");
+    mod.default(mockPi);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const cmd = mockRegisterCommand.mock.calls.find(
+      (call) => call[0] === "webtool-usage"
+    );
+    const handler = cmd[1].handler;
+    await handler("", { ui: { notify: mockNotify } } as any);
+
+    expect(mockNotify).toHaveBeenCalledWith(
+      "Usage check failed: API key missing",
+      "error"
+    );
+  });
 });
