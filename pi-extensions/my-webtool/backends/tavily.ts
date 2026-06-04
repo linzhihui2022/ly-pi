@@ -4,6 +4,7 @@ import {
   SearchProvider,
   SearchResponse,
   SearchResult,
+  UsageResponse,
 } from "../types";
 
 const TAVILY_BASE_URL = "https://api.tavily.com";
@@ -63,47 +64,86 @@ export class Tavily implements SearchProvider, FetchProvider {
   readonly label = "Tavily";
   private tavilyApiKey: string;
   private enabled: boolean = false;
+  private checking: boolean = false;
 
   constructor() {
     this.tavilyApiKey = process.env.TAVILY_SEARCH_API || "";
   }
 
   async check(): Promise<{ enabled: boolean; message: string }> {
+    this.checking = true;
+    const usage = await this.usage();
+    if (!usage.ok) {
+      this.enabled = false;
+      this.checking = false;
+      return { enabled: false, message: usage.error };
+    }
     try {
-      const usage = await this.usage();
       if (usage.key.limit - usage.key.usage < 10) {
         this.enabled = false;
+        this.checking = false;
         return { enabled: false, message: "key limit is almost reached" };
       }
-      if (usage.account.plan_limit - usage.account.plan_usage < 10) {
+      if (usage.plan.limit - usage.plan.usage < 10) {
         this.enabled = false;
+        this.checking = false;
         return { enabled: false, message: "plan limit is almost reached" };
       }
       this.enabled = true;
+      this.checking = false;
       return { enabled: true, message: "ok" };
     } catch (error) {
       this.enabled = false;
+      this.checking = false;
       return { enabled: false, message: error instanceof Error ? error.message : "unknown error" };
     }
   }
 
-  private async usage() {
+  async usage(): Promise<UsageResponse | { ok: false; error: string }> {
     if (!this.tavilyApiKey) {
-      throw new Error("TAVILY_SEARCH_API is not set");
+      return { ok: false, error: "TAVILY_SEARCH_API is not set" };
     }
-    const res = await fetch(`${TAVILY_BASE_URL}/usage`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.tavilyApiKey}`,
-      },
-    });
-    if (!res.ok) {
-      throw new Error(
-        `${this.label} Usage API error (${res.status}): ${await res.text()}`
-      );
+    try {
+      const res = await fetch(`${TAVILY_BASE_URL}/usage`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.tavilyApiKey}`,
+        },
+      });
+      if (!res.ok) {
+        return {
+          ok: false,
+          error: `${this.label} Usage API error (${res.status}): ${await res.text()}`,
+        };
+      }
+      const data = (await res.json()) as TavilyUsageResponse;
+      return {
+        ok: true,
+        key: {
+          usage: data.key.usage,
+          limit: data.key.limit,
+          remaining: data.key.limit - data.key.usage,
+        },
+        plan: {
+          usage: data.account.plan_usage,
+          limit: data.account.plan_limit,
+          remaining: data.account.plan_limit - data.account.plan_usage,
+        },
+        features: {
+          search: { usage: data.key.search_usage, limit: data.key.limit },
+          extract: { usage: data.key.extract_usage, limit: data.key.limit },
+          crawl: { usage: data.key.crawl_usage, limit: data.key.limit },
+          map: { usage: data.key.map_usage, limit: data.key.limit },
+          research: { usage: data.key.research_usage, limit: data.key.limit },
+        },
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "unknown error",
+      };
     }
-    return (await res.json()) as TavilyUsageResponse;
   }
 
   async search(
