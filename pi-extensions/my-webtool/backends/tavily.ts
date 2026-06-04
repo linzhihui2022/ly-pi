@@ -78,25 +78,19 @@ export class Tavily implements SearchProvider, FetchProvider {
       this.checking = false;
       return { enabled: false, message: usage.error };
     }
-    try {
-      if (usage.key.limit - usage.key.usage < 10) {
-        this.enabled = false;
-        this.checking = false;
-        return { enabled: false, message: "key limit is almost reached" };
-      }
-      if (usage.plan.limit - usage.plan.usage < 10) {
-        this.enabled = false;
-        this.checking = false;
-        return { enabled: false, message: "plan limit is almost reached" };
-      }
-      this.enabled = true;
-      this.checking = false;
-      return { enabled: true, message: "ok" };
-    } catch (error) {
+    if (usage.key.limit - usage.key.usage < 10) {
       this.enabled = false;
       this.checking = false;
-      return { enabled: false, message: error instanceof Error ? error.message : "unknown error" };
+      return { enabled: false, message: "key limit is almost reached" };
     }
+    if (usage.plan.limit - usage.plan.usage < 10) {
+      this.enabled = false;
+      this.checking = false;
+      return { enabled: false, message: "plan limit is almost reached" };
+    }
+    this.enabled = true;
+    this.checking = false;
+    return { enabled: true, message: "ok" };
   }
 
   async usage(): Promise<UsageResponse | { ok: false; error: string }> {

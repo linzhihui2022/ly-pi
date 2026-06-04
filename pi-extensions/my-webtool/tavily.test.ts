@@ -82,4 +82,30 @@ describe("Tavily.usage", () => {
       expect(result.error).toContain("401");
     }
   });
+
+  it("returns error on network failure", async () => {
+    process.env.TAVILY_SEARCH_API = "test-key";
+    const tavily = new Tavily();
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
+
+    const result = await tavily.usage();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe("Network error");
+    }
+  });
+
+  it("returns generic error on non-Error throw", async () => {
+    process.env.TAVILY_SEARCH_API = "test-key";
+    const tavily = new Tavily();
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue("string error"));
+
+    const result = await tavily.usage();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe("unknown error");
+    }
+  });
 });
