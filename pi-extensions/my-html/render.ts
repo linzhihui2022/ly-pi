@@ -103,6 +103,7 @@ body {
 .markdown-body {
   max-width: 900px;
   margin: 0 auto;
+  padding: 1.5rem;
 }
   </style>
 </head>

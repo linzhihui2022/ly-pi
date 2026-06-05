@@ -69,6 +69,20 @@ describe("ensurePreviewServer", () => {
     expect(body).toContain("<h1>Test Content</h1>");
   });
 
+  it("serves HTML files from subdirectories", async () => {
+    const server = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
+
+    // Write a test HTML file in a subdirectory
+    const subDir = join(PREVIEW_DIR, "session-abc");
+    mkdirSync(subDir, { recursive: true });
+    writeFileSync(join(subDir, "entry-123.html"), "<h1>Subdir Content</h1>", "utf-8");
+
+    const res = await fetch(`${server.url}/session-abc/entry-123.html`);
+    const body = await res.text();
+    expect(res.status).toBe(200);
+    expect(body).toContain("<h1>Subdir Content</h1>");
+  });
+
   it("reuses existing server on second call", async () => {
     const server1 = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
     const server2 = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });

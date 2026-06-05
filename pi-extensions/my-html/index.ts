@@ -55,11 +55,11 @@ export default function myHtml(pi: ExtensionAPI): void {
       );
 
       try {
-        mkdirSync(PREVIEW_DIR, { recursive: true });
-
         const sessionId = ctx.sessionManager.getSessionId();
-        const fileName = `${sessionId}${message.entryId}.html`;
-        const filePath = join(PREVIEW_DIR, fileName);
+        const fileName = `${message.entryId}.html`;
+        const sessionDir = join(PREVIEW_DIR, sessionId);
+        mkdirSync(sessionDir, { recursive: true });
+        const filePath = join(sessionDir, fileName);
         writeFileSync(filePath, html, "utf-8");
 
         const server = await ensurePreviewServer({
@@ -68,7 +68,7 @@ export default function myHtml(pi: ExtensionAPI): void {
           port: 3456,
         });
 
-        const fileUrl = `${server.url}/${fileName}`;
+        const fileUrl = `${server.url}/${sessionId}/${fileName}`;
         open(fileUrl).catch(() => {
           // Browser open failures are non-fatal
         });
