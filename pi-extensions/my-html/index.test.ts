@@ -31,10 +31,9 @@ describe("myHtml extension", () => {
     };
   });
 
-  it("registers /html and /copy commands", () => {
+  it("registers /html command", () => {
     myHtml(mockApi);
     expect(registeredCommands.has("html")).toBe(true);
-    expect(registeredCommands.has("copy")).toBe(true);
   });
 
   it("registers session_shutdown handler", () => {
@@ -55,16 +54,5 @@ describe("myHtml extension", () => {
     );
   });
 
-  it("/copy notifies error when no assistant message exists", async () => {
-    myHtml(mockApi);
-    const cmd = registeredCommands.get("copy");
 
-    mockCtx.sessionManager!.getEntries = vi.fn(() => []);
-
-    await cmd.handler("", mockCtx as ExtensionCommandContext);
-    expect(mockCtx.ui!.notify).toHaveBeenCalledWith(
-      "No agent reply to copy.",
-      "warn",
-    );
-  });
 });

@@ -5,8 +5,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import open from "open";
 import { createPreviewServer, stopPreviewServer } from "./server";
-import { renderMarkdownToHtml, buildHtmlDocument, stripMarkdown, extractAssistantText } from "./render";
-import { copyToClipboard } from "./clipboard";
+import { renderMarkdownToHtml, buildHtmlDocument, extractAssistantText } from "./render";
 
 interface AssistantContentBlock {
   type: string;
@@ -65,50 +64,6 @@ export default function myHtml(pi: ExtensionAPI): void {
       } catch (err) {
         ctx.ui.notify(
           `Failed to start preview server: ${(err as Error).message}`,
-          "error",
-        );
-      }
-    },
-  });
-
-  // ── /copy command ──
-  pi.registerCommand("copy", {
-    description: "Copy latest agent reply to clipboard (md / --thinking flags)",
-    handler: async (args: string, ctx: ExtensionCommandContext) => {
-      const entries = ctx.sessionManager.getEntries();
-      const message = findLatestAssistantMessage(entries);
-
-      if (!message || (!message.text && !message.thinking)) {
-        ctx.ui.notify("No agent reply to copy.", "warn");
-        return;
-      }
-
-      const includeMd = args?.includes("md") ?? false;
-      const includeThinking = args?.includes("--thinking") ?? false;
-
-      let output = "";
-
-      if (includeThinking && message.thinking) {
-        output += `[Thinking]:\n${message.thinking}\n\n`;
-      }
-
-      if (includeMd) {
-        output += message.text || "";
-      } else {
-        output += stripMarkdown(message.text || "");
-      }
-
-      if (!output.trim()) {
-        ctx.ui.notify("Nothing to copy.", "warn");
-        return;
-      }
-
-      try {
-        copyToClipboard(output.trim());
-        ctx.ui.notify("Copied to clipboard.", "info");
-      } catch (err) {
-        ctx.ui.notify(
-          `Failed to copy: ${(err as Error).message}`,
           "error",
         );
       }
