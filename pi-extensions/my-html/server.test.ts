@@ -1,6 +1,7 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
-import { findAvailablePort, createPreviewServer, stopPreviewServer } from "./server";
-import type { PreviewServer } from "./types";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { findAvailablePort, ensurePreviewServer, stopPreviewServer, PREVIEW_DIR } from "./server";
 import { createServer } from "node:http";
 
 describe("findAvailablePort", () => {
@@ -31,41 +32,84 @@ describe("findAvailablePort", () => {
   });
 
   it("rejects on non-EADDRINUSE errors", async () => {
-    // Port 80 typically requires root privileges, triggering EACCES
     await expect(findAvailablePort(80, "127.0.0.1")).rejects.toThrow();
   });
 });
 
-describe("createPreviewServer", () => {
-  let server: PreviewServer | null = null;
-
-  afterEach(async () => {
-    if (server) {
-      await stopPreviewServer();
-      server = null;
+describe("ensurePreviewServer", () => {
+  beforeAll(() => {
+    if (!existsSync(PREVIEW_DIR)) {
+      mkdirSync(PREVIEW_DIR, { recursive: true });
     }
   });
 
-  it("serves HTML content on root path", async () => {
-    server = await createPreviewServer("<h1>Test</h1>", { host: "127.0.0.1", urlHost: "127.0.0.1" });
+  afterAll(async () => {
+    await stopPreviewServer();
+  });
+
+  afterEach(async () => {
+    await stopPreviewServer();
+    // Clean up test files
+    if (existsSync(PREVIEW_DIR)) {
+      rmSync(PREVIEW_DIR, { recursive: true, force: true });
+    }
+  });
+
+  it("starts server on default port and serves HTML files", async () => {
+    const server = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
+    expect(server.port).toBeGreaterThanOrEqual(3456);
+
+    // Write a test HTML file
+    const fileName = "test-file.html";
+    writeFileSync(join(PREVIEW_DIR, fileName), "<h1>Test Content</h1>", "utf-8");
+
+    const res = await fetch(`${server.url}/${fileName}`);
+    const body = await res.text();
+    expect(res.status).toBe(200);
+    expect(body).toContain("<h1>Test Content</h1>");
+  });
+
+  it("reuses existing server on second call", async () => {
+    const server1 = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
+    const server2 = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
+    expect(server1.port).toBe(server2.port);
+    expect(server1.server).toBe(server2.server);
+  });
+
+  it("returns 404 for missing HTML files", async () => {
+    const server = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
+
+    const res = await fetch(`${server.url}/missing-file.html`);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for non-HTML paths", async () => {
+    const server = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
+
+    const res = await fetch(`${server.url}/not-html.txt`);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 405 for non-GET methods", async () => {
+    const server = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
+
+    const res = await fetch(server.url, { method: "POST" });
+    expect(res.status).toBe(405);
+  });
+
+  it("serves root page", async () => {
+    const server = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
 
     const res = await fetch(server.url);
     const body = await res.text();
     expect(res.status).toBe(200);
-    expect(body).toContain("<h1>Test</h1>");
-  });
-
-  it("returns 404 for non-root paths", async () => {
-    server = await createPreviewServer("<h1>Test</h1>", { host: "127.0.0.1", urlHost: "127.0.0.1" });
-
-    const res = await fetch(`${server.url}/not-found`);
-    expect(res.status).toBe(404);
+    expect(body).toContain("Pi HTML Preview");
   });
 });
 
 describe("stopPreviewServer", () => {
   it("stops the running server", async () => {
-    const srv = await createPreviewServer("<h1>Test</h1>", { host: "127.0.0.1", urlHost: "127.0.0.1" });
+    const srv = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
     expect(srv.server.listening).toBe(true);
 
     await stopPreviewServer();

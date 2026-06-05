@@ -1,5 +1,11 @@
 import { createServer, type Server } from "node:http";
+import { readFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { PreviewServer } from "./types";
+
+export const PREVIEW_DIR = join(tmpdir(), "pi-html-preview");
+const DEFAULT_PORT = 3456;
 
 let activeServer: PreviewServer | null = null;
 
@@ -36,30 +42,59 @@ export async function findAvailablePort(
   });
 }
 
-export async function createPreviewServer(
-  htmlContent: string,
-  options: { host: string; urlHost: string },
+export async function ensurePreviewServer(
+  options: { host: string; urlHost: string; port?: number },
 ): Promise<PreviewServer> {
-  await stopPreviewServer();
+  if (activeServer) {
+    return activeServer;
+  }
 
-  const startPort = 49152 + Math.floor(Math.random() * 16383);
-  const port = await findAvailablePort(startPort, options.host);
+  const port = await findAvailablePort(options.port ?? DEFAULT_PORT, options.host);
   const url = `http://${options.urlHost}:${port}`;
 
   const server = createServer((req, res) => {
-    if (req.method === "GET" && req.url === "/") {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(htmlContent);
-    } else {
-      res.writeHead(404);
-      res.end("Not found");
+    const urlPath = req.url || "/";
+
+    if (req.method !== "GET") {
+      res.writeHead(405);
+      res.end("Method not allowed");
+      return;
     }
+
+    if (urlPath === "/") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end("<h1>Pi HTML Preview</h1><p>Use /html to generate previews.</p>");
+      return;
+    }
+
+    if (urlPath.endsWith(".html")) {
+      const fileName = urlPath.slice(1);
+      const filePath = join(PREVIEW_DIR, fileName);
+
+      if (!existsSync(filePath)) {
+        res.writeHead(404);
+        res.end("Not found");
+        return;
+      }
+
+      try {
+        const content = readFileSync(filePath, "utf-8");
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(content);
+      } catch {
+        res.writeHead(500);
+        res.end("Internal server error");
+      }
+      return;
+    }
+
+    res.writeHead(404);
+    res.end("Not found");
   });
 
   await new Promise<void>((resolve) => server.listen(port, options.host, resolve));
 
   activeServer = { port, url, server };
-
   return activeServer;
 }
 
