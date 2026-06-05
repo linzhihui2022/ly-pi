@@ -34,9 +34,11 @@ describe("renderMarkdownToHtml", () => {
 });
 
 describe("loadCss", () => {
-  it("returns empty CSS when files are missing", () => {
+  it("returns empty github CSS but catppuccin highlight when files are missing", () => {
     const result = loadCss("/nonexistent/path");
-    expect(result).toEqual({ github: "", highlight: "" });
+    expect(result.github).toBe("");
+    expect(result.highlight).toContain("Catppuccin Mocha");
+    expect(result.highlight).toContain('.hljs-keyword { color: #cba6f7; }');
   });
 });
 
@@ -94,9 +96,17 @@ describe("buildHtmlDocument", () => {
     const doc = buildHtmlDocument("<p>hello</p>", thinking);
     expect(doc).toContain('<span style="color:rgb(203,166,247)">Thinking:</span>');
     expect(doc).toContain('<span style="color:rgb(166,173,200)">部署完成</span>');
-    // catppuccin-mocha dark background
+  });
+
+  it("uses catppuccin-mocha syntax highlighting", () => {
+    const doc = buildHtmlDocument("<p>hello</p>");
     expect(doc).toContain('background: #1e1e2e');
     expect(doc).toContain('color: #cdd6f4');
+    // catppuccin-mocha highlight.js colors
+    expect(doc).toContain('.hljs-keyword { color: #cba6f7; }');
+    expect(doc).toContain('.hljs-string { color: #a6e3a1; }');
+    expect(doc).toContain('.hljs-comment { color: #9399b2; }');
+    expect(doc).toContain('.hljs-number { color: #fab387; }');
   });
 });
 
