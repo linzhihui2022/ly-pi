@@ -30,7 +30,11 @@
       "set|*": "deny",
       "export -p": "deny",
       "export -p |*": "deny",
-      "export -p|*": "deny"
+      "export -p|*": "deny",
+      "sed *": "allow",
+      "awk *": "ask",
+      "pnpm sst *": "deny",
+      "sst *": "deny"
     },
     "tool:": {
       "todo": "allow",
