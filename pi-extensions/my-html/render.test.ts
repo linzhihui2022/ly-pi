@@ -38,7 +38,7 @@ describe("loadCss", () => {
     const result = loadCss("/nonexistent/path");
     expect(result.github).toBe("");
     expect(result.highlight).toContain("Catppuccin Mocha");
-    expect(result.highlight).toContain('.hljs-keyword { color: #cba6f7; }');
+    expect(result.highlight).toContain('.markdown-body .hljs-keyword { color: #cba6f7; }');
   });
 });
 
@@ -102,11 +102,11 @@ describe("buildHtmlDocument", () => {
     const doc = buildHtmlDocument("<p>hello</p>");
     expect(doc).toContain('background: #1e1e2e');
     expect(doc).toContain('color: #cdd6f4');
-    // catppuccin-mocha highlight.js colors
-    expect(doc).toContain('.hljs-keyword { color: #cba6f7; }');
-    expect(doc).toContain('.hljs-string { color: #a6e3a1; }');
-    expect(doc).toContain('.hljs-comment { color: #9399b2; }');
-    expect(doc).toContain('.hljs-number { color: #fab387; }');
+    // catppuccin-mocha highlight.js colors with .markdown-body prefix for specificity
+    expect(doc).toContain('.markdown-body .hljs-keyword { color: #cba6f7; }');
+    expect(doc).toContain('.markdown-body .hljs-string { color: #a6e3a1; }');
+    expect(doc).toContain('.markdown-body .hljs-comment { color: #9399b2; }');
+    expect(doc).toContain('.markdown-body .hljs-number { color: #fab387; }');
   });
 });
 
