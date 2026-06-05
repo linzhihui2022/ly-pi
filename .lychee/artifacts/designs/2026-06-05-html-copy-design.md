@@ -39,8 +39,8 @@ Two slash commands for the pi agent that let the user preview and copy the lates
 1. User executes /html
 2. Read ctx.sessionManager.getEntries()
 3. Find the latest entry with entry.type === "message" && entry.message.role === "assistant"
-4. Extract content text and optional thinking blocks
-5. Convert Markdown → HTML via marked
+4. Extract content text and thinking blocks
+5. Convert Markdown → HTML via marked (thinking rendered as collapsible block)
 6. Inject into HTML template with inline CSS
 7. Stop existing server (if any)
 8. Start new HTTP server on available port
