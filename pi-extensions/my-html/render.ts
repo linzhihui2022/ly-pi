@@ -125,7 +125,10 @@ function escapeHtml(text: string): string {
  * Only supports 38;2;R;G;B (true color) and reset (0 / 39).
  */
 export function ansiToHtml(text: string): string {
-  const ANSI_RE = /\x1b\[([0-9;]*)m/g;
+  // Match both standard ANSI (\x1b[38;2;R;G;Bm) and bare bracket sequences
+  // produced by pi's thinking output ([38;2;R;G;Bm, [39m, [0m).
+  const ANSI_RE = /(?:\x1b)?\[(38;2;\d+;\d+;\d+|39|0)m/g;
+
   let result = "";
   let lastIndex = 0;
   let hasColorSpan = false;
@@ -140,49 +143,24 @@ export function ansiToHtml(text: string): string {
       result += escapeHtml(text.slice(lastIndex, start));
     }
 
-    const codes = params.split(";").map((s) => parseInt(s, 10)).filter((n) => !isNaN(n));
-
-    if (codes.length === 0) {
-      // Treat empty params as reset (equivalent to 0)
+    if (params === "39" || params === "0") {
+      // Reset foreground
       if (hasColorSpan) {
         result += "</span>";
         hasColorSpan = false;
       }
-    } else {
-      let i = 0;
-      while (i < codes.length) {
-        const code = codes[i];
-        if (code === 0) {
-          if (hasColorSpan) {
-            result += "</span>";
-            hasColorSpan = false;
-          }
-          i++;
-        } else if (code === 39) {
-          // Reset foreground
-          if (hasColorSpan) {
-            result += "</span>";
-            hasColorSpan = false;
-          }
-          i++;
-        } else if (code === 38 && codes[i + 1] === 2) {
-          // True color: 38;2;R;G;B
-          const r = codes[i + 2];
-          const g = codes[i + 3];
-          const b = codes[i + 4];
-          if (r !== undefined && g !== undefined && b !== undefined) {
-            // Close previous color span if any (new color overrides old)
-            if (hasColorSpan) {
-              result += "</span>";
-            }
-            result += `<span style="color:rgb(${r},${g},${b})">`;
-            hasColorSpan = true;
-          }
-          i += 5;
-        } else {
-          // Unsupported code, skip
-          i++;
+    } else if (params.startsWith("38;2;")) {
+      const parts = params.split(";");
+      const r = parseInt(parts[2], 10);
+      const g = parseInt(parts[3], 10);
+      const b = parseInt(parts[4], 10);
+      if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+        // Close previous color span if any (new color overrides old)
+        if (hasColorSpan) {
+          result += "</span>";
         }
+        result += `<span style="color:rgb(${r},${g},${b})">`;
+        hasColorSpan = true;
       }
     }
 

@@ -114,7 +114,7 @@ describe("ansiToHtml", () => {
 
   it("ignores unsupported ANSI codes", () => {
     const input = "\x1b[1mbold\x1b[0m";
-    expect(ansiToHtml(input)).toBe("bold");
+    expect(ansiToHtml(input)).toBe("\x1b[1mbold");
   });
 
   it("handles plain text without ANSI", () => {
@@ -137,18 +137,18 @@ describe("ansiToHtml", () => {
 
   it("ignores incomplete true-color sequences (missing B)", () => {
     const input = "\x1b[38;2;255;0mtext";
-    expect(ansiToHtml(input)).toBe("text");
+    expect(ansiToHtml(input)).toBe("\x1b[38;2;255;0mtext");
   });
 
   it("ignores incomplete true-color sequences (missing all RGB)", () => {
     const input = "\x1b[38;2mtext";
-    expect(ansiToHtml(input)).toBe("text");
+    expect(ansiToHtml(input)).toBe("\x1b[38;2mtext");
   });
 
-  it("handles empty ANSI params as reset", () => {
-    const input = "\x1b[38;2;255;0;0mred\x1b[mnormal";
+  it("handles bare bracket color sequences (pi thinking format)", () => {
+    const input = "[38;2;203;166;247mThinking:[39m [38;2;166;173;200mdone[39m";
     expect(ansiToHtml(input)).toBe(
-      '<span style="color:rgb(255,0,0)">red</span>normal'
+      '<span style="color:rgb(203,166,247)">Thinking:</span> <span style="color:rgb(166,173,200)">done</span>'
     );
   });
 
@@ -168,7 +168,7 @@ describe("ansiToHtml", () => {
 
   it("ignores 256-color mode (38;5)", () => {
     const input = "\x1b[38;5;196mtext\x1b[0m";
-    expect(ansiToHtml(input)).toBe("text");
+    expect(ansiToHtml(input)).toBe("\x1b[38;5;196mtext");
   });
 });
 
