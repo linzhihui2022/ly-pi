@@ -9,8 +9,8 @@ const EXT_DIR = __dirname;
 
 export function loadCss(cssDir: string = EXT_DIR): { github: string; highlight: string } {
   try {
-    const githubPath = join(cssDir, "node_modules", "github-markdown-css", "github-markdown-light.css");
-    const hlPath = join(cssDir, "node_modules", "highlight.js", "styles", "github.css");
+    const githubPath = join(cssDir, "node_modules", "github-markdown-css", "github-markdown-dark.css");
+    const hlPath = join(cssDir, "node_modules", "highlight.js", "styles", "github-dark.css");
     return {
       github: readFileSync(githubPath, "utf-8"),
       highlight: readFileSync(hlPath, "utf-8"),
@@ -74,27 +74,30 @@ ${highlight}
 .thinking-block {
   margin-bottom: 1rem;
   padding: 0.75rem 1rem;
-  background: #f6f8fa;
-  border: 1px solid #d0d7de;
+  background: #313244;
+  border: 1px solid #6c7086;
   border-radius: 6px;
+  color: #cdd6f4;
 }
 .thinking-block summary {
   font-weight: 600;
   cursor: pointer;
   user-select: none;
+  color: #cba6f7;
 }
 .thinking-block pre {
   margin-top: 0.75rem;
-  background: #ffffff;
+  background: #181825;
   padding: 0.75rem;
   border-radius: 4px;
   overflow-x: auto;
+  color: #cdd6f4;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   line-height: 1.6;
-  color: #24292f;
-  background: #ffffff;
+  color: #cdd6f4;
+  background: #1e1e2e;
   padding: 2rem 1rem;
 }
 .markdown-body {

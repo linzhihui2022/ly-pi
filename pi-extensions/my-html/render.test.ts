@@ -94,6 +94,9 @@ describe("buildHtmlDocument", () => {
     const doc = buildHtmlDocument("<p>hello</p>", thinking);
     expect(doc).toContain('<span style="color:rgb(203,166,247)">Thinking:</span>');
     expect(doc).toContain('<span style="color:rgb(166,173,200)">部署完成</span>');
+    // catppuccin-mocha dark background
+    expect(doc).toContain('background: #1e1e2e');
+    expect(doc).toContain('color: #cdd6f4');
   });
 });
 
