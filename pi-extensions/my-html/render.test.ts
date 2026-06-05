@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { renderMarkdownToHtml, stripMarkdown, buildHtmlDocument, extractAssistantText, loadCss } from "./render";
+import { renderMarkdownToHtml, stripMarkdown, buildHtmlDocument, extractAssistantText, loadCss, ansiToHtml } from "./render";
 
 describe("renderMarkdownToHtml", () => {
   it("renders heading and paragraph", () => {
@@ -87,6 +87,88 @@ describe("buildHtmlDocument", () => {
   it("omits thinking block when not provided", () => {
     const doc = buildHtmlDocument("<p>hello</p>");
     expect(doc).not.toContain("<details");
+  });
+
+  it("renders ANSI colors in thinking block as HTML spans", () => {
+    const thinking = "\x1b[38;2;203;166;247mThinking:\x1b[39m \x1b[38;2;166;173;200m部署完成\x1b[0m";
+    const doc = buildHtmlDocument("<p>hello</p>", thinking);
+    expect(doc).toContain('<span style="color:rgb(203,166,247)">Thinking:</span>');
+    expect(doc).toContain('<span style="color:rgb(166,173,200)">部署完成</span>');
+  });
+});
+
+describe("ansiToHtml", () => {
+  it("converts true-color ANSI to HTML spans", () => {
+    const input = "\x1b[38;2;255;0;0mred\x1b[39m";
+    expect(ansiToHtml(input)).toBe('<span style="color:rgb(255,0,0)">red</span>');
+  });
+
+  it("handles reset code (0)", () => {
+    const input = "\x1b[38;2;255;0;0mred\x1b[0mnormal";
+    expect(ansiToHtml(input)).toBe('<span style="color:rgb(255,0,0)">red</span>normal');
+  });
+
+  it("escapes HTML in non-ANSI text", () => {
+    expect(ansiToHtml("<script>")).toBe("&lt;script&gt;");
+  });
+
+  it("ignores unsupported ANSI codes", () => {
+    const input = "\x1b[1mbold\x1b[0m";
+    expect(ansiToHtml(input)).toBe("bold");
+  });
+
+  it("handles plain text without ANSI", () => {
+    expect(ansiToHtml("hello world")).toBe("hello world");
+  });
+
+  it("closes remaining spans at end of string", () => {
+    const input = "\x1b[38;2;100;100;100mgray";
+    expect(ansiToHtml(input)).toBe('<span style="color:rgb(100,100,100)">gray</span>');
+  });
+
+  it("handles adjacent color spans", () => {
+    const input = "\x1b[38;2;255;0;0mr\x1b[38;2;0;255;0mg\x1b[38;2;0;0;255mb\x1b[0m";
+    expect(ansiToHtml(input)).toBe(
+      '<span style="color:rgb(255,0,0)">r</span>' +
+      '<span style="color:rgb(0,255,0)">g</span>' +
+      '<span style="color:rgb(0,0,255)">b</span>'
+    );
+  });
+
+  it("ignores incomplete true-color sequences (missing B)", () => {
+    const input = "\x1b[38;2;255;0mtext";
+    expect(ansiToHtml(input)).toBe("text");
+  });
+
+  it("ignores incomplete true-color sequences (missing all RGB)", () => {
+    const input = "\x1b[38;2mtext";
+    expect(ansiToHtml(input)).toBe("text");
+  });
+
+  it("handles empty ANSI params as reset", () => {
+    const input = "\x1b[38;2;255;0;0mred\x1b[mnormal";
+    expect(ansiToHtml(input)).toBe(
+      '<span style="color:rgb(255,0,0)">red</span>normal'
+    );
+  });
+
+  it("handles text ending with reset code", () => {
+    const input = "\x1b[38;2;255;0;0mred\x1b[0m";
+    expect(ansiToHtml(input)).toBe(
+      '<span style="color:rgb(255,0,0)">red</span>'
+    );
+  });
+
+  it("handles color code at end with no trailing text", () => {
+    const input = "\x1b[38;2;100;100;100m";
+    expect(ansiToHtml(input)).toBe(
+      '<span style="color:rgb(100,100,100)"></span>'
+    );
+  });
+
+  it("ignores 256-color mode (38;5)", () => {
+    const input = "\x1b[38;5;196mtext\x1b[0m";
+    expect(ansiToHtml(input)).toBe("text");
   });
 });
 

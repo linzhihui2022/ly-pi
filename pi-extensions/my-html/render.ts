@@ -57,7 +57,7 @@ export function buildHtmlDocument(
   const thinkingBlock = thinkingText
     ? `<details class="thinking-block">
   <summary>🧠 Thinking</summary>
-  <pre><code>${escapeHtml(thinkingText)}</code></pre>
+  <pre><code>${ansiToHtml(thinkingText)}</code></pre>
 </details>
 `
     : "";
@@ -118,6 +118,88 @@ function escapeHtml(text: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/**
+ * Convert ANSI escape sequences (true-color foreground) to HTML spans.
+ * Only supports 38;2;R;G;B (true color) and reset (0 / 39).
+ */
+export function ansiToHtml(text: string): string {
+  const ANSI_RE = /\x1b\[([0-9;]*)m/g;
+  let result = "";
+  let lastIndex = 0;
+  let hasColorSpan = false;
+
+  for (const match of text.matchAll(ANSI_RE)) {
+    const fullMatch = match[0];
+    const params = match[1];
+    const start = match.index!;
+
+    // Append text before this escape sequence (escape it)
+    if (start > lastIndex) {
+      result += escapeHtml(text.slice(lastIndex, start));
+    }
+
+    const codes = params.split(";").map((s) => parseInt(s, 10)).filter((n) => !isNaN(n));
+
+    if (codes.length === 0) {
+      // Treat empty params as reset (equivalent to 0)
+      if (hasColorSpan) {
+        result += "</span>";
+        hasColorSpan = false;
+      }
+    } else {
+      let i = 0;
+      while (i < codes.length) {
+        const code = codes[i];
+        if (code === 0) {
+          if (hasColorSpan) {
+            result += "</span>";
+            hasColorSpan = false;
+          }
+          i++;
+        } else if (code === 39) {
+          // Reset foreground
+          if (hasColorSpan) {
+            result += "</span>";
+            hasColorSpan = false;
+          }
+          i++;
+        } else if (code === 38 && codes[i + 1] === 2) {
+          // True color: 38;2;R;G;B
+          const r = codes[i + 2];
+          const g = codes[i + 3];
+          const b = codes[i + 4];
+          if (r !== undefined && g !== undefined && b !== undefined) {
+            // Close previous color span if any (new color overrides old)
+            if (hasColorSpan) {
+              result += "</span>";
+            }
+            result += `<span style="color:rgb(${r},${g},${b})">`;
+            hasColorSpan = true;
+          }
+          i += 5;
+        } else {
+          // Unsupported code, skip
+          i++;
+        }
+      }
+    }
+
+    lastIndex = start + fullMatch.length;
+  }
+
+  // Append remaining text
+  if (lastIndex < text.length) {
+    result += escapeHtml(text.slice(lastIndex));
+  }
+
+  // Close any remaining span
+  if (hasColorSpan) {
+    result += "</span>";
+  }
+
+  return result;
 }
 
 export function extractAssistantText(
