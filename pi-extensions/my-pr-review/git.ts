@@ -26,9 +26,11 @@ export function isCurrentRepo(
   owner: string,
   repo: string
 ): boolean {
+  const escapedOwner = owner.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedRepo = repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const patterns = [
-    new RegExp(`${owner}/${repo}\\.git`),
-    new RegExp(`${owner}/${repo}(?!\\w)`),
+    new RegExp(`${escapedOwner}/${escapedRepo}\\.git`),
+    new RegExp(`${escapedOwner}/${escapedRepo}(?!\\w)`),
   ];
   return patterns.some((p) => p.test(remotes));
 }

@@ -38,8 +38,12 @@ const EXT_DIR = (() => {
 
 const CONFIG_PATH = join(EXT_DIR, "my-pr-review.json");
 
-// Track active worktrees for cleanup
-const activeWorktrees = new Map<number, string>();
+// Track active worktrees for cleanup: number -> { path, cwd }
+interface WorktreeEntry {
+  path: string;
+  cwd: string;
+}
+const activeWorktrees = new Map<number, WorktreeEntry>();
 
 export default function myPrReview(pi: ExtensionAPI): void {
   let config: ReturnType<typeof loadConfig>;
@@ -145,7 +149,7 @@ export default function myPrReview(pi: ExtensionAPI): void {
             branch: `review/pr-${prInfo.number}`,
             base: `origin/${fullPrInfo.baseRefName}`,
           };
-          activeWorktrees.set(prInfo.number, worktreePath);
+          activeWorktrees.set(prInfo.number, { path: worktreePath, cwd: ctx.cwd });
         } catch (err) {
           return {
             content: [
@@ -365,10 +369,10 @@ export default function myPrReview(pi: ExtensionAPI): void {
     handler: async (args, ctx) => {
       if (args) {
         const num = parseInt(args, 10);
-        const path = activeWorktrees.get(num);
-        if (path) {
+        const entry = activeWorktrees.get(num);
+        if (entry) {
           try {
-            removeWorktree(ctx.cwd, path);
+            removeWorktree(entry.cwd, entry.path);
             activeWorktrees.delete(num);
             ctx.ui.notify(`Removed worktree for PR #${num}`, "info");
           } catch (err) {
@@ -396,9 +400,9 @@ export default function myPrReview(pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", () => {
     if (!config.worktree.cleanupOnSessionEnd) return;
-    for (const [num, path] of activeWorktrees) {
+    for (const [num, entry] of activeWorktrees) {
       try {
-        removeWorktree(process.cwd(), path);
+        removeWorktree(entry.cwd, entry.path);
       } catch {
         // Best effort
       }
