@@ -1,9 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+const mockExec = vi.fn();
+const mockSendUserMessage = vi.fn();
+const mockNotify = vi.fn();
 
 const { mockTransformInput, mockCreateZshOperations } = vi.hoisted(() => ({
-  mockTransformInput: vi.fn(),
-  mockCreateZshOperations: vi.fn(),
+  mockTransformInput: vi.fn((text: string) => {
+    const trimmed = text.trim();
+    if (trimmed.startsWith("$$")) {
+      return { action: "transform", text: "!!" + trimmed.slice(2).trim() };
+    }
+    if (trimmed.startsWith("$")) {
+      return { action: "transform", text: "!" + trimmed.slice(1).trim() };
+    }
+    return { action: "continue" };
+  }),
+  mockCreateZshOperations: vi.fn(() => ({ exec: mockExec })),
 }));
 
 vi.mock("./zsh-proxy", () => ({
@@ -15,15 +27,28 @@ async function loadModule() {
   return import("./index");
 }
 
-function createMockPi(): ExtensionAPI {
-  return {
-    on: vi.fn(),
-  } as unknown as ExtensionAPI;
-}
+const registeredEvents = new Map<string, (...args: any[]) => any>();
 
-describe("index.ts", () => {
+const mockPi = {
+  on: vi.fn((event: string, handler: (...args: any[]) => any) => {
+    registeredEvents.set(event, handler);
+  }),
+  sendUserMessage: mockSendUserMessage,
+};
+
+const mockCtx = {
+  ui: { notify: mockNotify },
+  cwd: "/test",
+};
+
+describe("pi-zsh-proxy extension", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    registeredEvents.clear();
+    mockExec.mockReset();
+    mockSendUserMessage.mockReset();
+    mockNotify.mockReset();
+    mockPi.on.mockClear();
+    vi.resetModules();
   });
 
   it("exports a default function", async () => {
@@ -33,80 +58,164 @@ describe("index.ts", () => {
 
   it("registers input handler", async () => {
     const mod = await loadModule();
-    const pi = createMockPi();
-    mod.default(pi);
-    expect(pi.on).toHaveBeenCalledWith("input", expect.any(Function));
+    mod.default(mockPi as any);
+    expect(mockPi.on).toHaveBeenCalledWith("input", expect.any(Function));
   });
 
-  it("registers user_bash handler", async () => {
+  it("returns handled for $cmd and sends result to LLM", async () => {
     const mod = await loadModule();
-    const pi = createMockPi();
-    mod.default(pi);
-    expect(pi.on).toHaveBeenCalledWith("user_bash", expect.any(Function));
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("input");
+    mockExec.mockResolvedValue({
+      output: "git status output",
+      exitCode: 0,
+      cancelled: false,
+      truncated: false,
+    });
+
+    const result = await handler({ text: "$gst" }, mockCtx);
+
+    expect(mockExec).toHaveBeenCalledWith("gst", "/test");
+    expect(mockSendUserMessage).toHaveBeenCalledWith("$ gst\ngit status output");
+    expect(result).toEqual({ action: "handled" });
   });
 
-  it("input handler delegates to transformInput for $cmd", async () => {
+  it("returns handled for $$cmd and shows result without sending to LLM", async () => {
     const mod = await loadModule();
-    const pi = createMockPi();
-    mod.default(pi);
+    mod.default(mockPi as any);
 
-    const inputHandler = vi.mocked(pi.on).mock.calls.find(
-      ([event]) => event === "input"
-    )?.[1] as (event: { text: string }) => any;
+    const handler = registeredEvents.get("input");
+    mockExec.mockResolvedValue({
+      output: "git status output",
+      exitCode: 0,
+      cancelled: false,
+      truncated: false,
+    });
 
-    mockTransformInput.mockReturnValue({ action: "transform", text: "!gst" });
-    const result = await inputHandler({ text: "$gst" });
+    const result = await handler({ text: "$$gst" }, mockCtx);
 
-    expect(mockTransformInput).toHaveBeenCalledWith("$gst");
-    expect(result).toEqual({ action: "transform", text: "!gst" });
+    expect(mockExec).toHaveBeenCalledWith("gst", "/test");
+    expect(mockSendUserMessage).not.toHaveBeenCalled();
+    expect(mockNotify).toHaveBeenCalledWith("git status output", "info");
+    expect(result).toEqual({ action: "handled" });
   });
 
-  it("input handler returns continue for non-$ text", async () => {
+  it("returns continue for non-$ text", async () => {
     const mod = await loadModule();
-    const pi = createMockPi();
-    mod.default(pi);
+    mod.default(mockPi as any);
 
-    const inputHandler = vi.mocked(pi.on).mock.calls.find(
-      ([event]) => event === "input"
-    )?.[1] as (event: { text: string }) => any;
+    const handler = registeredEvents.get("input");
+    const result = await handler({ text: "hello" }, mockCtx);
 
-    mockTransformInput.mockReturnValue({ action: "continue" });
-    const result = await inputHandler({ text: "hello" });
-
-    expect(mockTransformInput).toHaveBeenCalledWith("hello");
+    expect(mockExec).not.toHaveBeenCalled();
     expect(result).toEqual({ action: "continue" });
   });
 
-  it("input handler transforms $$cmd", async () => {
+  it("warns when $ has no command", async () => {
     const mod = await loadModule();
-    const pi = createMockPi();
-    mod.default(pi);
+    mod.default(mockPi as any);
 
-    const inputHandler = vi.mocked(pi.on).mock.calls.find(
-      ([event]) => event === "input"
-    )?.[1] as (event: { text: string }) => any;
+    const handler = registeredEvents.get("input");
+    const result = await handler({ text: "$" }, mockCtx);
 
-    mockTransformInput.mockReturnValue({ action: "transform", text: "!!gst" });
-    const result = await inputHandler({ text: "$$gst" });
-
-    expect(mockTransformInput).toHaveBeenCalledWith("$$gst");
-    expect(result).toEqual({ action: "transform", text: "!!gst" });
+    expect(mockNotify).toHaveBeenCalledWith("$: no command provided", "warn");
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(result).toEqual({ action: "handled" });
   });
 
-  it("user_bash handler returns operations object", async () => {
+  it("warns when $$ has no command", async () => {
     const mod = await loadModule();
-    const pi = createMockPi();
-    mod.default(pi);
+    mod.default(mockPi as any);
 
-    const userBashHandler = vi.mocked(pi.on).mock.calls.find(
-      ([event]) => event === "user_bash"
-    )?.[1] as () => any;
+    const handler = registeredEvents.get("input");
+    const result = await handler({ text: "$$" }, mockCtx);
 
-    const mockOperations = { exec: vi.fn() };
-    mockCreateZshOperations.mockReturnValue(mockOperations);
-    const result = userBashHandler();
+    expect(mockNotify).toHaveBeenCalledWith("$$: no command provided", "warn");
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(result).toEqual({ action: "handled" });
+  });
 
-    expect(mockCreateZshOperations).toHaveBeenCalled();
-    expect(result).toEqual({ operations: mockOperations });
+  it("notifies error when $ command exits non-zero", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("input");
+    mockExec.mockResolvedValue({
+      output: "error output",
+      exitCode: 1,
+      cancelled: false,
+      truncated: false,
+    });
+
+    const result = await handler({ text: "$badcmd" }, mockCtx);
+
+    expect(mockNotify).toHaveBeenCalledWith("Exit code: 1", "error");
+    expect(mockSendUserMessage).toHaveBeenCalledWith("$ badcmd\nerror output");
+    expect(result).toEqual({ action: "handled" });
+  });
+
+  it("notifies error when $$ command exits non-zero", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("input");
+    mockExec.mockResolvedValue({
+      output: "error output",
+      exitCode: 1,
+      cancelled: false,
+      truncated: false,
+    });
+
+    const result = await handler({ text: "$$badcmd" }, mockCtx);
+
+    expect(mockNotify).toHaveBeenCalledWith("Exit code: 1", "error");
+    expect(mockNotify).toHaveBeenCalledWith("error output", "error");
+    expect(mockSendUserMessage).not.toHaveBeenCalled();
+    expect(result).toEqual({ action: "handled" });
+  });
+
+  it("notifies error when exec throws", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("input");
+    mockExec.mockRejectedValue(new Error("exec failed"));
+
+    const result = await handler({ text: "$cmd" }, mockCtx);
+
+    expect(mockNotify).toHaveBeenCalledWith("Error: exec failed", "error");
+    expect(result).toEqual({ action: "handled" });
+  });
+
+  it("handles empty output", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("input");
+    mockExec.mockResolvedValue({
+      output: "",
+      exitCode: 0,
+      cancelled: false,
+      truncated: false,
+    });
+
+    const result = await handler({ text: "$echo" }, mockCtx);
+
+    expect(mockSendUserMessage).toHaveBeenCalledWith("$ echo\n(no output)");
+    expect(result).toEqual({ action: "handled" });
+  });
+
+  it("handles non-Error thrown value", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("input");
+    mockExec.mockRejectedValue("string error");
+
+    const result = await handler({ text: "$cmd" }, mockCtx);
+
+    expect(mockNotify).toHaveBeenCalledWith("Error: string error", "error");
+    expect(result).toEqual({ action: "handled" });
   });
 });
