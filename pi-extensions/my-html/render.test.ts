@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { renderMarkdownToHtml, stripMarkdown, buildHtmlDocument, extractAssistantText, loadCss, ansiToHtml } from "./render";
+import { renderMarkdownToHtml, stripMarkdown, buildHtmlDocument, extractAssistantText, loadCss, ansiToHtml, wrapCodeBlocks } from "./render";
 
 describe("renderMarkdownToHtml", () => {
   it("renders heading and paragraph", () => {
@@ -176,6 +176,61 @@ describe("buildHtmlDocument", () => {
     expect(doc).toContain("border-left: 4px solid #cba6f7");
     expect(doc).toContain("background: #232436");
     expect(doc).toContain("font-style: italic");
+  });
+
+  it("wraps code blocks in output", () => {
+    const body = '<pre><code class="hljs language-ts">const x = 1;</code></pre>';
+    const doc = buildHtmlDocument(body);
+    expect(doc).toContain('<div class="code-block-wrapper">');
+    expect(doc).toContain('<div class="code-block-header">');
+    expect(doc).toContain("📋 复制");
+  });
+
+  it("includes copy button JavaScript", () => {
+    const doc = buildHtmlDocument("<p>hello</p>");
+    expect(doc).toContain("function copyCode(");
+    expect(doc).toContain("navigator.clipboard.writeText");
+    expect(doc).toContain("✅ 已复制");
+  });
+
+  it("includes code block CSS rules", () => {
+    const doc = buildHtmlDocument("<p>hello</p>");
+    expect(doc).toContain(".code-block-wrapper");
+    expect(doc).toContain("border-radius: 8px");
+    expect(doc).toContain(".code-block-header");
+    expect(doc).toContain(".code-block-header button:hover");
+  });
+});
+
+describe("wrapCodeBlocks", () => {
+  it("wraps code block with language header and copy button", () => {
+    const input = '<pre><code class="hljs language-typescript">const x = 1;</code></pre>';
+    const result = wrapCodeBlocks(input);
+    expect(result).toContain('<div class="code-block-wrapper">');
+    expect(result).toContain('<div class="code-block-header">');
+    expect(result).toContain("<span>typescript</span>");
+    expect(result).toContain("📋 复制");
+    expect(result).toContain('<pre><code class="hljs language-typescript">const x = 1;</code></pre>');
+  });
+
+  it("does not wrap non-code content", () => {
+    const input = '<p>hello</p><pre><code class="hljs language-ts">code</code></pre>';
+    const result = wrapCodeBlocks(input);
+    expect(result).toContain("<p>hello</p>");
+    expect(result).toContain("code-block-wrapper");
+  });
+
+  it("handles multiple code blocks", () => {
+    const input = '<pre><code class="hljs language-ts">a</code></pre><p>text</p><pre><code class="hljs language-py">b</code></pre>';
+    const result = wrapCodeBlocks(input);
+    const matches = result.match(/code-block-wrapper/g);
+    expect(matches).toHaveLength(2);
+  });
+
+  it("handles code block with plaintext language", () => {
+    const input = '<pre><code class="hljs language-plaintext">text</code></pre>';
+    const result = wrapCodeBlocks(input);
+    expect(result).toContain("<span>plaintext</span>");
   });
 });
 
