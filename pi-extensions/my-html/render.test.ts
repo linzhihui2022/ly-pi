@@ -159,6 +159,24 @@ describe("buildHtmlDocument", () => {
     // row hover
     expect(doc).toContain(".markdown-body tr:hover");
   });
+
+  it("includes custom ctp-list CSS rules", () => {
+    const doc = buildHtmlDocument("<p>hello</p>");
+    // unordered list marker
+    expect(doc).toContain(".markdown-body ul");
+    expect(doc).toContain("list-style: none");
+    // ordered list marker color
+    expect(doc).toContain(".markdown-body ol");
+    expect(doc).toContain("color: #cba6f7");
+  });
+
+  it("includes custom ctp-blockquote CSS rules", () => {
+    const doc = buildHtmlDocument("<p>hello</p>");
+    expect(doc).toContain(".markdown-body blockquote");
+    expect(doc).toContain("border-left: 4px solid #cba6f7");
+    expect(doc).toContain("background: #232436");
+    expect(doc).toContain("font-style: italic");
+  });
 });
 
 describe("ansiToHtml", () => {

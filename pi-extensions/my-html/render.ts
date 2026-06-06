@@ -255,6 +255,58 @@ body {
 .markdown-body tr:hover td {
   background: #313244;
 }
+
+/* ═══ Unordered Lists ═══ */
+.markdown-body ul {
+  list-style: none;
+  padding-left: 1.5rem;
+  margin: 0 0 1.25rem;
+}
+.markdown-body ul > li {
+  position: relative;
+  padding: 4px 0;
+}
+.markdown-body ul > li::before {
+  content: "▸";
+  position: absolute;
+  left: -1.25rem;
+  color: #94e2d5;
+  font-weight: 700;
+}
+.markdown-body ul ul > li::before {
+  content: "◦";
+  color: #f9e2af;
+  font-weight: 400;
+}
+
+/* ═══ Ordered Lists ═══ */
+.markdown-body ol {
+  padding-left: 1.5rem;
+  margin: 0 0 1.25rem;
+}
+.markdown-body ol > li {
+  padding: 4px 0;
+  color: #cdd6f4;
+}
+.markdown-body ol > li::marker {
+  color: #cba6f7;
+  font-weight: 700;
+}
+
+/* ═══ Blockquotes ═══ */
+.markdown-body blockquote {
+  border-left: 4px solid #cba6f7;
+  background: #232436;
+  border-radius: 0 6px 6px 0;
+  padding: 0.75rem 1rem;
+  margin: 0 0 1.25rem;
+  color: #bac2de;
+  font-style: italic;
+}
+.markdown-body blockquote p {
+  margin: 0;
+  color: inherit;
+}
   </style>
 </head>
 <body>
