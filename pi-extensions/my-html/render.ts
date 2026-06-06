@@ -216,6 +216,45 @@ body {
   margin: 0 0 1.25rem;
   color: #cdd6f4;
 }
+
+/* ═══ Tables ═══ */
+.markdown-body table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #45475a;
+  width: 100%;
+  margin: 0 0 1.25rem;
+}
+.markdown-body th,
+.markdown-body td {
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 1px solid #313244;
+}
+.markdown-body th {
+  background: #313244;
+  color: #cba6f7;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: left;
+}
+.markdown-body td {
+  background: #1e1e2e;
+  color: #cdd6f4;
+}
+.markdown-body tr:last-child td {
+  border-bottom: none;
+}
+.markdown-body tr:nth-child(even) td {
+  background: #232436;
+}
+.markdown-body tr:hover td {
+  background: #313244;
+}
   </style>
 </head>
 <body>

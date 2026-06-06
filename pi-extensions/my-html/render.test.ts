@@ -144,6 +144,21 @@ describe("buildHtmlDocument", () => {
     expect(doc).toContain(".markdown-body h4");
     expect(doc).toContain("color: #f9e2af");
   });
+
+  it("includes custom ctp-table CSS rules", () => {
+    const doc = buildHtmlDocument("<p>hello</p>");
+    // table outer
+    expect(doc).toContain(".markdown-body table");
+    expect(doc).toContain("border-collapse: separate");
+    expect(doc).toContain("border-spacing: 0");
+    // table header
+    expect(doc).toContain(".markdown-body th");
+    expect(doc).toContain("text-transform: uppercase");
+    // zebra stripe
+    expect(doc).toContain(".markdown-body tr:nth-child(even)");
+    // row hover
+    expect(doc).toContain(".markdown-body tr:hover");
+  });
 });
 
 describe("ansiToHtml", () => {
