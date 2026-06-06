@@ -138,26 +138,30 @@ export function buildHtmlDocument(
 ${github}
 ${highlight}
 .thinking-block {
-  margin-bottom: 1rem;
-  padding: 0.75rem 1rem;
-  background: #313244;
-  border: 1px solid #6c7086;
-  border-radius: 6px;
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1.1rem;
+  background: #232436;
+  border: 1px solid #45475a;
+  border-radius: 8px;
   color: #cdd6f4;
 }
 .thinking-block summary {
   font-weight: 600;
+  font-size: 0.9rem;
   cursor: pointer;
   user-select: none;
   color: #cba6f7;
 }
 .thinking-block pre {
-  margin-top: 0.75rem;
-  background: #181825;
-  padding: 0.75rem;
-  border-radius: 4px;
+  margin-top: 0.85rem;
+  background: #11111b;
+  padding: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid #45475a;
   overflow-x: auto;
-  color: #cdd6f4;
+  color: #bac2de;
+  font-size: 0.83rem;
+  line-height: 1.6;
 }
 
 /* ═══ Page Layout ═══ */
@@ -369,6 +373,40 @@ body {
 }
 .code-block-header button:hover {
   background: #585b70;
+}
+
+/* ═══ Inline Code ═══ */
+.markdown-body code {
+  background: #232436;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: #94e2d5;
+  font-size: 0.85em;
+}
+
+/* ═══ Links ═══ */
+.markdown-body a {
+  color: #89b4fa;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(137, 180, 250, 0.3);
+  transition: border-color 0.15s;
+}
+.markdown-body a:hover {
+  border-bottom-color: #89b4fa;
+}
+
+/* ═══ Horizontal Rules ═══ */
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid #45475a;
+  margin: 1.5rem 0;
+}
+
+/* ═══ Images ═══ */
+.markdown-body img {
+  border-radius: 8px;
+  max-width: 100%;
 }
   </style>
 </head>

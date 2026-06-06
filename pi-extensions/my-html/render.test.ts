@@ -200,6 +200,33 @@ describe("buildHtmlDocument", () => {
     expect(doc).toContain(".code-block-header");
     expect(doc).toContain(".code-block-header button:hover");
   });
+
+  it("includes custom ctp-inline CSS rules", () => {
+    const doc = buildHtmlDocument("<p>hello</p>");
+    // inline code
+    expect(doc).toContain(".markdown-body code");
+    expect(doc).toContain("border: 1px solid #45475a");
+    expect(doc).toContain("background: #232436");
+    // links
+    expect(doc).toContain(".markdown-body a");
+    expect(doc).toContain("border-bottom: 1px solid");
+    expect(doc).toContain(".markdown-body a:hover");
+    // horizontal rules
+    expect(doc).toContain(".markdown-body hr");
+    expect(doc).toContain("border-top: 1px solid #45475a");
+    // images
+    expect(doc).toContain(".markdown-body img");
+    expect(doc).toContain("border-radius: 8px");
+  });
+
+  it("includes updated thinking block CSS", () => {
+    const doc = buildHtmlDocument("<p>hello</p>", "some thinking");
+    expect(doc).toContain("🧠 思考过程");
+    expect(doc).toContain(".thinking-block");
+    expect(doc).toContain("background: #232436");
+    expect(doc).toContain("border: 1px solid #45475a");
+    expect(doc).toContain("border-radius: 8px");
+  });
 });
 
 describe("wrapCodeBlocks", () => {
