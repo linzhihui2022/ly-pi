@@ -247,13 +247,13 @@ body {
   width: 100%;
   margin: 0 0 1.25rem;
 }
-.markdown-body table th,
-.markdown-body table td {
+.markdown-body th,
+.markdown-body td {
   padding: 10px 14px;
   border: none;
   border-bottom: 1px solid #313244;
 }
-.markdown-body table th {
+.markdown-body th {
   background: #313244;
   color: #cba6f7;
   font-weight: 600;
@@ -262,17 +262,17 @@ body {
   letter-spacing: 0.5px;
   text-align: left;
 }
-.markdown-body table td {
+.markdown-body td {
   background: #1e1e2e;
   color: #cdd6f4;
 }
-.markdown-body table tr:last-child td {
+.markdown-body tr:last-child td {
   border-bottom: none;
 }
-.markdown-body table tr:nth-child(even) td {
+.markdown-body tr:nth-child(even) td {
   background: #232436;
 }
-.markdown-body table tr:hover td {
+.markdown-body tr:hover td {
   background: #313244;
 }
 

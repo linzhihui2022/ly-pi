@@ -152,12 +152,12 @@ describe("buildHtmlDocument", () => {
     expect(doc).toContain("border-collapse: separate");
     expect(doc).toContain("border-spacing: 0");
     // table header
-    expect(doc).toContain(".markdown-body table th");
+    expect(doc).toContain(".markdown-body th");
     expect(doc).toContain("text-transform: uppercase");
     // zebra stripe
-    expect(doc).toContain(".markdown-body table tr:nth-child(even)");
+    expect(doc).toContain(".markdown-body tr:nth-child(even)");
     // row hover
-    expect(doc).toContain(".markdown-body table tr:hover");
+    expect(doc).toContain(".markdown-body tr:hover");
   });
 
   it("includes custom ctp-list CSS rules", () => {
