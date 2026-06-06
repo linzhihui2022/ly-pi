@@ -74,7 +74,7 @@ function formatReadSummary(
   rawOutput: string,
   theme: RenderTheme,
 ): string {
-  const summaryLines = compactOutputLines(splitLines(rawOutput), true);
+  const summaryLines = compactOutputLines(splitLines(rawOutput), false);
   const lineCount = countNonEmptyLines(summaryLines);
   if (lineCount === 0) {
     return theme.fg("muted", "↳ (no output)");
@@ -139,9 +139,9 @@ function renderReadCall(
   const limit = getNumericField(args, "limit");
 
   let suffix = "";
-  if (offset !== undefined || limit !== undefined) {
+  if (offset !== undefined || (limit !== undefined && limit > 0)) {
     const from = offset ?? 1;
-    const to = limit !== undefined ? from + limit - 1 : undefined;
+    const to = limit !== undefined && limit > 0 ? from + limit - 1 : undefined;
     suffix = to ? `:${from}-${to}` : `:${from}`;
   }
 
