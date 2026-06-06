@@ -50,6 +50,26 @@ describe("extractTextOutput", () => {
     };
     expect(extractTextOutput(result)).toBe("hello");
   });
+
+  it("skips blocks with non-text type", () => {
+    const result = {
+      content: [
+        { type: "image", data: "..." },
+        { type: "text", text: "hello" },
+      ],
+    };
+    expect(extractTextOutput(result)).toBe("hello");
+  });
+
+  it("skips text blocks with non-string text field", () => {
+    const result = {
+      content: [
+        { type: "text", text: 123 },
+        { type: "text", text: "valid" },
+      ],
+    };
+    expect(extractTextOutput(result)).toBe("valid");
+  });
 });
 
 describe("splitLines", () => {
@@ -184,6 +204,61 @@ describe("normalizeConfig", () => {
     expect(result.thinkingLabelEnabled).toBe(false);
     expect(result.userMessageBoxEnabled).toBe(false);
   });
+
+  it("validates searchOutputMode", () => {
+    const result = normalizeConfig({ searchOutputMode: "preview" });
+    expect(result.searchOutputMode).toBe("preview");
+  });
+
+  it("rejects invalid searchOutputMode", () => {
+    const result = normalizeConfig({ searchOutputMode: "bad" });
+    expect(result.searchOutputMode).toBe(DEFAULT_CONFIG.searchOutputMode);
+  });
+
+  it("validates bashOutputMode", () => {
+    const result = normalizeConfig({ bashOutputMode: "preview" });
+    expect(result.bashOutputMode).toBe("preview");
+  });
+
+  it("rejects invalid bashOutputMode", () => {
+    const result = normalizeConfig({ bashOutputMode: "bad" });
+    expect(result.bashOutputMode).toBe(DEFAULT_CONFIG.bashOutputMode);
+  });
+
+  it("validates mcpOutputMode", () => {
+    const result = normalizeConfig({ mcpOutputMode: "hidden" });
+    expect(result.mcpOutputMode).toBe("hidden");
+  });
+
+  it("rejects invalid mcpOutputMode", () => {
+    const result = normalizeConfig({ mcpOutputMode: "bad" });
+    expect(result.mcpOutputMode).toBe(DEFAULT_CONFIG.mcpOutputMode);
+  });
+
+  it("validates diffViewMode", () => {
+    const result = normalizeConfig({ diffViewMode: "unified" });
+    expect(result.diffViewMode).toBe("unified");
+  });
+
+  it("rejects invalid diffViewMode", () => {
+    const result = normalizeConfig({ diffViewMode: "bad" });
+    expect(result.diffViewMode).toBe(DEFAULT_CONFIG.diffViewMode);
+  });
+
+  it("clamps and rounds diffCollapsedLines", () => {
+    const result = normalizeConfig({ diffCollapsedLines: 3.7 });
+    expect(result.diffCollapsedLines).toBe(3);
+  });
+
+  it("clamps diffCollapsedLines to at least 1", () => {
+    const result = normalizeConfig({ diffCollapsedLines: 0 });
+    expect(result.diffCollapsedLines).toBe(1);
+  });
+
+  it("ignores non-number for previewLines", () => {
+    const result = normalizeConfig({ previewLines: "abc" as unknown as number });
+    expect(result.previewLines).toBe(DEFAULT_CONFIG.previewLines);
+  });
 });
 
 // ============================================================
@@ -303,6 +378,12 @@ describe("read renderResult — edge cases", () => {
 
   it("shows no output for empty result", () => {
     const result = override.renderResult?.(makeToolResult(""), { expanded: false, isPartial: false }, mockTheme, makeRenderContext());
+    expect((result as { content: string }).content).toContain("no output");
+  });
+
+  it("shows no output for empty result in preview mode", () => {
+    const previewOverride = createReadToolOverride(() => ({ ...DEFAULT_CONFIG, readOutputMode: "preview" }));
+    const result = previewOverride.renderResult?.(makeToolResult(""), { expanded: false, isPartial: false }, mockTheme, makeRenderContext());
     expect((result as { content: string }).content).toContain("no output");
   });
 });
