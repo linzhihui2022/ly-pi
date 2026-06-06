@@ -1,0 +1,11 @@
+{
+  "readOutputMode": "summary",
+  "searchOutputMode": "count",
+  "bashOutputMode": "summary",
+  "mcpOutputMode": "summary",
+  "previewLines": 8,
+  "diffViewMode": "auto",
+  "diffCollapsedLines": 24,
+  "thinkingLabelEnabled": true,
+  "userMessageBoxEnabled": true
+}
