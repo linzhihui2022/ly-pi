@@ -241,9 +241,9 @@ body {
 .markdown-body table {
   border-collapse: separate;
   border-spacing: 0;
-  border-radius: 8px;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid #45475a;
+  border: none;
   width: 100%;
   margin: 0 0 1.25rem;
 }
