@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { exec } from "node:child_process";
-import { listCategories, pickSoundFile, resolveSoundPath, playCategory } from "./player";
+import { listCategories, pickSoundFile, resolveSoundPath, playCategory, playOverlay } from "./player";
 import type { BtConfig } from "./types";
 
 vi.mock("node:child_process", () => ({
@@ -10,6 +10,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 const mockConfig: BtConfig = {
+  enabled: true,
   soundDir: "/fake/sounds",
   categories: {
     startup: {
@@ -41,6 +42,11 @@ const mockConfig: BtConfig = {
     session_start: "startup",
     agent_start: "engaging",
     agent_end: "completed",
+  },
+  overlayTextMap: {
+    session_start: { type: "SESSION START", title: "BT-7274 已上线", subtitle: "系统重启" },
+    agent_start: { type: "MISSION", title: "执行任务", subtitle: "铁御控制" },
+    agent_end: { type: "COMPLETE", title: "任务完成" },
   },
 };
 
@@ -112,5 +118,90 @@ describe("resolveSoundPath", () => {
   it("resolves a file relative to soundDir", () => {
     const result = resolveSoundPath(mockConfig, "startup.mp3");
     expect(result).toBe("/fake/sounds/startup.mp3");
+  });
+});
+
+describe("playOverlay", () => {
+  const extDir = "/fake/ext";
+
+  it("spawns osascript with correct arguments for session_start", () => {
+    playOverlay(mockConfig, "session_start", extDir);
+    const lastCall = vi.mocked(exec).mock.calls.at(-1);
+    expect(lastCall).toBeDefined();
+    const cmd = lastCall![0] as string;
+    expect(cmd).toContain("osascript -l JavaScript");
+    expect(cmd).toContain("dist/mac-overlay.js");
+    expect(cmd).toContain("SESSION START");
+    expect(cmd).toContain("BT-7274 已上线");
+    expect(cmd).toContain("系统重启");
+    expect(cmd).toContain("3");
+    expect(cmd).toContain("blue");
+  });
+
+  it("spawns osascript with orange color for agent_start", () => {
+    playOverlay(mockConfig, "agent_start", extDir);
+    const lastCall = vi.mocked(exec).mock.calls.at(-1);
+    const cmd = lastCall![0] as string;
+    expect(cmd).toContain("orange");
+    expect(cmd).toContain("MISSION");
+    expect(cmd).toContain("铁御控制");
+  });
+
+  it("omits subtitle when not configured", () => {
+    playOverlay(mockConfig, "agent_end", extDir);
+    const lastCall = vi.mocked(exec).mock.calls.at(-1);
+    const cmd = lastCall![0] as string;
+    expect(cmd).toContain("COMPLETE");
+    expect(cmd).toContain("任务完成");
+    // subtitle should be empty string ""
+    expect(cmd).toMatch(/"任务完成" "" /);
+  });
+
+  it("no-ops when event has no overlay config", () => {
+    const before = vi.mocked(exec).mock.calls.length;
+    playOverlay(mockConfig, "session_shutdown", extDir);
+    expect(vi.mocked(exec).mock.calls.length).toBe(before);
+  });
+
+  it("cycles through slot 0-4 and wraps", async () => {
+    // Reset module to start with fresh slot counter
+    vi.resetModules();
+    const freshPlayer = await import("./player");
+    const before = vi.mocked(exec).mock.calls.length;
+    for (let i = 0; i < 7; i++) {
+      freshPlayer.playOverlay(mockConfig, "session_start", extDir);
+    }
+    // Slots: 0,1,2,3,4,0,1 → last should be slot 1
+    const lastCall = vi.mocked(exec).mock.calls[before + 6];
+    const cmd = lastCall[0] as string;
+    expect(cmd).toContain('blue" 1');
+  });
+
+  it("no-ops when overlayTextMap is missing", () => {
+    const cfgNoOverlay: BtConfig = {
+      ...mockConfig,
+      overlayTextMap: undefined,
+    };
+    const before = vi.mocked(exec).mock.calls.length;
+    playOverlay(cfgNoOverlay, "session_start", extDir);
+    expect(vi.mocked(exec).mock.calls.length).toBe(before);
+  });
+
+  it("no-ops when event has no overlay config", () => {
+    const before = vi.mocked(exec).mock.calls.length;
+    playOverlay(mockConfig, "tool_call", extDir);
+    expect(vi.mocked(exec).mock.calls.length).toBe(before);
+  });
+
+  it("logs error when osascript fails", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(exec).mockImplementationOnce((_cmd, cb) => {
+      if (typeof cb === "function") cb(new Error("osascript failed"));
+    });
+    playOverlay(mockConfig, "session_start", extDir);
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("osascript failed"),
+    );
+    consoleSpy.mockRestore();
   });
 });
