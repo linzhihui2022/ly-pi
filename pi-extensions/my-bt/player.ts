@@ -1,6 +1,6 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { exec } from "node:child_process";
-import type { BtCategory, BtConfig } from "./types";
+import type { BtCategory, BtConfig, OverlayColor } from "./types";
 
 /**
  * List all available sound categories with their descriptions.
@@ -17,6 +17,52 @@ export function listCategories(config: BtConfig): { name: string; description: s
  * Uses a simple round-robin to avoid repeats.
  */
 const lastPicked: Record<string, number> = {};
+
+// ═══ Overlay notification ═══
+
+/** Slot counter for vertical stacking (0–4, wraps) */
+let overlaySlot = 0;
+const MAX_OVERLAY_SLOTS = 5;
+
+/** Color mapping: event name → overlay accent color */
+const EVENT_COLOR_MAP: Record<string, OverlayColor> = {
+  session_start: "blue",
+  agent_start: "orange",
+  agent_end: "green",
+};
+
+/**
+ * Show overlay notification for a pi event.
+ * Spawns osascript with the compiled JXA script.
+ * No-ops silently when overlayTextMap is missing or event has no config.
+ */
+export function playOverlay(
+  config: BtConfig,
+  eventName: string,
+  extDir: string,
+): void {
+  if (!config.overlayTextMap) return;
+
+  const textConfig = config.overlayTextMap[eventName];
+  if (!textConfig) return;
+
+  const color = EVENT_COLOR_MAP[eventName] ?? "blue";
+  const duration = 3;
+  const slot = overlaySlot % MAX_OVERLAY_SLOTS;
+  overlaySlot++;
+
+  const scriptPath = resolve(extDir, "dist", "mac-overlay.js");
+  exec(
+    `osascript -l JavaScript "${scriptPath}" ` +
+      `"${textConfig.type}" "${textConfig.title}" "${textConfig.subtitle ?? ""}" ` +
+      `${duration} "${color}" ${slot}`,
+    (error) => {
+      if (error) {
+        console.error(`[my-bt] Overlay failed: ${error.message}`);
+      }
+    },
+  );
+}
 
 export function pickSoundFile(config: BtConfig, category: string): string | undefined {
   const cat = config.categories[category];
