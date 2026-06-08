@@ -1,0 +1,9 @@
+{
+  "name": "pi-config",
+  "private": true,
+  "scripts": {
+    "deploy": "bun run deploy:permission && bun run deploy:tool-display",
+    "deploy:permission": "mkdir -p $HOME/.pi/agent/extensions/pi-permission-system && cp pi-permission-system.json $HOME/.pi/agent/extensions/pi-permission-system/config.json",
+    "deploy:tool-display": "mkdir -p $HOME/.pi/agent/extensions/pi-tool-display && cp pi-tool-display.json $HOME/.pi/agent/extensions/pi-tool-display/config.json"
+  }
+}

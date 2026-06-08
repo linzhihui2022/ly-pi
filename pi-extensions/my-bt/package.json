@@ -1,0 +1,13 @@
+{
+  "name": "my-bt",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*'",
+    "test": "vitest run --coverage",
+    "deploy": "mkdir -p $HOME/.pi/agent/extensions/my-bt && cp dist/index.js my-bt.json $HOME/.pi/agent/extensions/my-bt/ && mkdir -p $HOME/.pi/agent/extensions/my-bt/sounds && cp sounds/*.wav $HOME/.pi/agent/extensions/my-bt/sounds/"
+  },
+  "devDependencies": {
+    "vitest": "^4"
+  }
+}

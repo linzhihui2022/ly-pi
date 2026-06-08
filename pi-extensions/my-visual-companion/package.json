@@ -2,6 +2,11 @@
   "name": "my-visual-companion",
   "module": "index.ts",
   "type": "module",
+  "scripts": {
+    "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*'",
+    "test": "vitest run --coverage",
+    "deploy": "mkdir -p $HOME/.pi/agent/extensions/my-visual-companion && cp dist/index.js my-visual-companion.json frame.html $HOME/.pi/agent/extensions/my-visual-companion/"
+  },
   "dependencies": {
     "ws": "^8.18.0"
   },
@@ -9,6 +14,7 @@
     "@earendil-works/pi-ai": "^0.78.0",
     "@earendil-works/pi-coding-agent": "^0.78.0",
     "@types/node": "^25.9.1",
-    "@types/ws": "^8.5.13"
+    "@types/ws": "^8.5.13",
+    "vitest": "^4"
   }
 }

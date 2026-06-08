@@ -2,8 +2,14 @@
   "name": "my-webtool",
   "module": "index.ts",
   "type": "module",
+  "scripts": {
+    "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*'",
+    "test": "vitest run --coverage",
+    "deploy": "mkdir -p $HOME/.pi/agent/extensions/my-webtool && cp dist/index.js my-webtool.json $HOME/.pi/agent/extensions/my-webtool/"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "vitest": "^4"
   },
   "peerDependencies": {
     "typescript": "^5"

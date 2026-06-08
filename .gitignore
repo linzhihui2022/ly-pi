@@ -12,3 +12,9 @@ node_modules/
 # Test coverage
 coverage/
 .env
+
+# Turborepo
+.turbo/
+
+# Build outputs
+pi-extensions/*/dist/

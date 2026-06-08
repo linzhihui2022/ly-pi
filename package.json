@@ -1,5 +1,18 @@
 {
+  "private": true,
+  "packageManager": "bun@1.3.8",
+  "workspaces": [
+    "pi-extensions/*"
+  ],
+  "scripts": {
+    "deploy": "turbo run deploy && bun run deploy:skills && bun run deploy:themes && bun run deploy:settings && bun run deploy:mcp",
+    "deploy:skills": "scripts/install-skill.sh",
+    "deploy:themes": "scripts/install-theme.sh",
+    "deploy:settings": "scripts/install-settings.sh",
+    "deploy:mcp": "scripts/install-mcp.sh"
+  },
   "devDependencies": {
+    "turbo": "^2",
     "@vitest/coverage-v8": "^4.1.7"
   }
 }
