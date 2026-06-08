@@ -60,5 +60,22 @@
     "session_start": "startup",
     "agent_start": "engaging",
     "agent_end": "completed"
+  },
+  "overlayTextMap": {
+    "session_start": {
+      "type": "SESSION START",
+      "title": "BT-7274 已上线",
+      "subtitle": "主要系统重启完成"
+    },
+    "agent_start": {
+      "type": "MISSION",
+      "title": "执行任务中",
+      "subtitle": "将控制转给铁御"
+    },
+    "agent_end": {
+      "type": "COMPLETE",
+      "title": "任务完成",
+      "subtitle": "做得好，铁御"
+    }
   }
 }
