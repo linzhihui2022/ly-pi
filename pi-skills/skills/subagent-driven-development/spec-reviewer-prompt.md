@@ -6,8 +6,9 @@ Use this template when dispatching a spec compliance reviewer subagent.
 
 ```typescript
 subagent({
-  agent: "reviewer",
-  task: `You are reviewing whether an implementation matches its specification.
+  subagent_type: "reviewer",
+  description: "Review spec compliance",
+  prompt: `You are reviewing whether an implementation matches its specification.
 
 ## What Was Requested
 

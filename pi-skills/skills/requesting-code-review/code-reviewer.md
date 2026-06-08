@@ -5,9 +5,9 @@ Use this template when dispatching a code reviewer subagent.
 **Purpose:** Review completed work against requirements and code quality standards before it cascades into more work.
 
 ```
-Agent tool (reviewer):
-  description: "Review code changes"
-  prompt: |
+subagent({ subagent_type: "reviewer",
+  description: "Review code changes",
+  prompt: `
     You are a Senior Code Reviewer with expertise in software architecture,
     design patterns, and best practices. Your job is to review completed work
     against its plan or requirements and identify issues before they cascade.
@@ -165,4 +165,6 @@ Agent tool (reviewer):
 **Ready to merge: With fixes**
 
 **Reasoning:** Core implementation is solid with good architecture and tests. Important issues (help text, date validation) are easily fixed and don't affect core functionality.
+`
+})
 ```

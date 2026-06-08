@@ -4,8 +4,9 @@ Use this template when dispatching an implementer subagent.
 
 ```typescript
 subagent({
-  agent: "worker",
-  task: `You are implementing Task N: [task name]
+  subagent_type: "worker",
+  description: "Implement Task N",
+  prompt: `You are implementing Task N: [task name]
 
 ## Task Description
 

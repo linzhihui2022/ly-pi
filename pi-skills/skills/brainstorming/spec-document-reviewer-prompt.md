@@ -8,8 +8,9 @@ Use this template when dispatching a spec document reviewer subagent.
 
 ```typescript
 subagent({
-  agent: "reviewer",
-  task: `You are a spec document reviewer. Verify this spec is complete and ready for planning.
+  subagent_type: "reviewer",
+  description: "Review spec document",
+  prompt: `You are a spec document reviewer. Verify this spec is complete and ready for planning.
 
 **Spec to review:** [SPEC_FILE_PATH]
 

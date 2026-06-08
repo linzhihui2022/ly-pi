@@ -8,8 +8,9 @@ Use this template when dispatching a code quality reviewer subagent.
 
 ```typescript
 subagent({
-  agent: "reviewer",
-  task: `Review the code diff from ${BASE_SHA} to ${HEAD_SHA}.
+  subagent_type: "reviewer",
+  description: "Review code quality",
+  prompt: `Review the code diff from ${BASE_SHA} to ${HEAD_SHA}.
 
 Description: [task summary, from implementer's report]
 

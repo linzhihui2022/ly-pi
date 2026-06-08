@@ -29,24 +29,38 @@ BASE_SHA=$(git rev-parse HEAD~1)  # or origin/main
 HEAD_SHA=$(git rev-parse HEAD)
 ```
 
-**2. Dispatch code reviewer subagent:**
-
-Use `subagent()` with a `chain` to first gather the diff, then review it:
+**2a. First, gather the diff with a scout subagent:**
 
 ```typescript
 subagent({
-  chain: [
-    {
-      agent: "scout",
-      task: `Get the git diff from ${BASE_SHA} to ${HEAD_SHA} and write it to diff.txt`,
-      output: "diff.txt"
-    },
-    {
-      agent: "reviewer",
-      task: `Review the code diff in diff.txt.\n\nDescription: ${DESCRIPTION}\n\nPlan/Requirements: ${PLAN_OR_REQUIREMENTS}`,
-      reads: "diff.txt"
-    }
-  ]
+  subagent_type: "scout",
+  description: "Gather git diff",
+  prompt: `Get the git diff from ${BASE_SHA} to ${HEAD_SHA} and output the full diff with context.`
+})
+```
+
+**2b. Then, dispatch the reviewer with the diff:**
+
+```typescript
+subagent({
+  subagent_type: "reviewer",
+  description: "Review code changes",
+  prompt: `You are reviewing the following code changes.
+
+## What Was Implemented
+
+${DESCRIPTION}
+
+## Requirements / Plan
+
+${PLAN_OR_REQUIREMENTS}
+
+## Git Diff
+
+[PASTE THE DIFF FROM THE SCOUT OUTPUT HERE]
+
+Review the diff for code quality, plan alignment, and correctness.
+Follow the reviewer output format (Strengths, Issues by severity, Assessment).`
 })
 ```
 
@@ -72,22 +86,16 @@ You: Let me request code review before proceeding.
 BASE_SHA=$(git log --oneline | grep "Task 1" | head -1 | awk '{print $1}')
 HEAD_SHA=$(git rev-parse HEAD)
 
-[Dispatch code reviewer chain]
+[Dispatch scout to gather diff]
 ```typescript
-subagent({
-  chain: [
-    {
-      agent: "scout",
-      task: "Get the git diff from a7981ec to 3df7661 and write it to diff.txt",
-      output: "diff.txt"
-    },
-    {
-      agent: "reviewer",
-      task: "Review the code diff in diff.txt.\n\nDescription: Added verifyIndex() and repairIndex() with 4 issue types\n\nPlan/Requirements: Task 2 from .lychee/artifacts/plans/deployment-plan.md",
-      reads: "diff.txt"
-    }
-  ]
-})
+subagent({ subagent_type: "scout", description: "Gather diff",
+  prompt: "Get the git diff from a7981ec to 3df7661" })
+```
+
+[Dispatch reviewer with the diff]
+```typescript
+subagent({ subagent_type: "reviewer", description: "Review changes",
+  prompt: `Review the following diff.\n\nDescription: Added verifyIndex() and repairIndex() with 4 issue types\n\nPlan: Task 2 from .lychee/artifacts/plans/deployment-plan.md\n\n[PASTE DIFF HERE]` })
 ```
 
 [Subagent returns]:
