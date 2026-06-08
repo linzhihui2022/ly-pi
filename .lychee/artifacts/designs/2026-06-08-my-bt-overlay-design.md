@@ -142,8 +142,15 @@ let overlaySlot = 0;
 
 const MAX_OVERLAY_SLOTS = 5;
 
-export function playOverlay(config: BtConfig, eventName: string): void {
-  const textConfig = config.overlayTextMap?.[eventName];
+export function playOverlay(
+  config: BtConfig,
+  eventName: string,
+  extDir: string,       // resolved extension directory for script path
+): void {
+  // No-op when overlay config is absent entirely
+  if (!config.overlayTextMap) return;
+
+  const textConfig = config.overlayTextMap[eventName];
   if (!textConfig) return;
 
   const color = EVENT_COLOR_MAP[eventName] ?? "blue";
@@ -151,7 +158,7 @@ export function playOverlay(config: BtConfig, eventName: string): void {
   const slot = overlaySlot % MAX_OVERLAY_SLOTS;
   overlaySlot++;
 
-  const scriptPath = resolve(EXT_DIR, "dist", "mac-overlay.js");
+  const scriptPath = resolve(extDir, "dist", "mac-overlay.js");
   exec(
     `osascript -l JavaScript "${scriptPath}" ` +
       `"${textConfig.type}" "${textConfig.title}" "${textConfig.subtitle ?? ""}" ` +
@@ -166,7 +173,7 @@ export function playOverlay(config: BtConfig, eventName: string): void {
 pi.on(eventName as any, () => {
   if (!config.enabled) return;
   playCategory(config, category);
-  playOverlay(config, eventName);        // added
+  playOverlay(config, eventName, EXT_DIR);  // added
 });
 ```
 
