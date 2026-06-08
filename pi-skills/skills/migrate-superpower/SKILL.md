@@ -240,13 +240,6 @@ get_subagent_result({ agent_id: "<agent-id>", wait: true })
 // Steer a running agent
 steer_subagent({ agent_id: "<agent-id>", message: "..." })
 ```
-  ]
-})
-
-// Background / async
-subagent({ agent: "worker", task: "...", async: true })
-// Later: check status
-subagent({ action: "status", id: "..." })
 ```
 
 ### Context-Mode (Pi-Specific)

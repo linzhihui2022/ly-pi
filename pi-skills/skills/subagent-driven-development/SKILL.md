@@ -127,42 +127,35 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 
 ## Dispatch Syntax
 
-Use `subagent()` from `pi-subagents` to dispatch each role. Read the prompt template,
-fill in placeholders, and pass the complete prompt as the `task`:
+Use `subagent()` from `@gotgenes/pi-subagents` to dispatch each role. Read the prompt template,
+fill in placeholders, and pass the complete prompt:
 
 ```typescript
 // Implementer
 subagent({
-  agent: "worker",
-  task: `You are implementing Task N: ...`,
-  context: "fresh"
+  subagent_type: "worker",
+  description: "Implement Task N",
+  prompt: `You are implementing Task N: ...`
 })
 
 // Spec compliance reviewer
 subagent({
-  agent: "reviewer",
-  task: `You are reviewing whether an implementation matches its specification...`
+  subagent_type: "reviewer",
+  description: "Review spec compliance",
+  prompt: `You are reviewing whether an implementation matches its specification...`
 })
 
-// Code quality reviewer (chain with scout to get diff first)
-subagent({
-  chain: [
-    {
-      agent: "scout",
-      task: `Get the git diff from ${BASE_SHA} to ${HEAD_SHA} and write it to diff.txt`,
-      output: "diff.txt"
-    },
-    {
-      agent: "reviewer",
-      task: `Review the code diff in diff.txt. Description: ...`,
-      reads: "diff.txt"
-    }
-  ]
-})
+// Code quality reviewer (two-step: scout gathers diff first, then reviewer)
+// Step 1: scout
+subagent({ subagent_type: "scout", description: "Gather diff",
+  prompt: `Get the git diff from ${BASE_SHA} to ${HEAD_SHA}` })
+// Step 2: reviewer
+subagent({ subagent_type: "reviewer", description: "Review code quality",
+  prompt: `Review the code diff. Description: ...\n\n[PASTE DIFF HERE]` })
 ```
 
-**Always use `context: "fresh"`** for the implementer so it starts with a clean session.
-Reviewers can use default context since they only read code.
+Agents start with a clean session by default — no context inheritance unless
+`inherit_context: true` is specified.
 
 ## Example Workflow
 
@@ -176,7 +169,7 @@ You: I'm using Subagent-Driven Development to execute this plan.
 Task 1: Hook installation script
 
 [Get Task 1 text and context (already extracted)]
-[Dispatch implementer via subagent({ agent: "worker", task: ..., context: "fresh" })]
+[Dispatch implementer via subagent({ subagent_type: "worker", description: "...", prompt: "..." })]
 
 Implementer: "Before I begin - should the hook be installed at user or system level?"
 
@@ -189,10 +182,10 @@ Implementer: "Got it. Implementing now..."
   - Self-review: Found I missed --force flag, added it
   - Committed
 
-[Dispatch spec reviewer via subagent({ agent: "reviewer", task: ... })]
+[Dispatch spec reviewer via subagent({ subagent_type: "reviewer", description: "...", prompt: "..." })]
 Spec reviewer: ✅ Spec compliant - all requirements met, nothing extra
 
-[Get git SHAs, dispatch code quality reviewer via subagent chain with scout]
+[Get git SHAs, dispatch code quality reviewer in two steps: scout first, then reviewer]
 Code reviewer: Strengths: Good test coverage, clean. Issues: None. Approved.
 
 [Mark Task 1 complete]
@@ -200,7 +193,7 @@ Code reviewer: Strengths: Good test coverage, clean. Issues: None. Approved.
 Task 2: Recovery modes
 
 [Get Task 2 text and context (already extracted)]
-[Dispatch implementer via subagent({ agent: "worker", task: ..., context: "fresh" })]
+[Dispatch implementer via subagent({ subagent_type: "worker", description: "...", prompt: "..." })]
 
 Implementer: [No questions, proceeds]
 Implementer:
@@ -234,7 +227,7 @@ Code reviewer: ✅ Approved
 ...
 
 [After all tasks]
-[Dispatch final code reviewer via subagent({ agent: "reviewer", task: ... })]
+[Dispatch final code reviewer via subagent({ subagent_type: "reviewer", description: "...", prompt: "..." })]
 Final reviewer: All requirements met, ready to merge
 
 Done!
