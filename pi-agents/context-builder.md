@@ -1,6 +1,7 @@
 ---
 description: Context preparation agent for summarizing and packaging codebase context for other agents
 tools: read, grep, find, ls
+model: deepseek/deepseek-v4-flash
 prompt_mode: replace
 ---
 

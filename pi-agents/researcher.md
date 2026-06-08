@@ -2,6 +2,7 @@
 description: Web research specialist for finding information beyond training data
 tools: read, grep, find, ls
 extensions: true
+model: deepseek/deepseek-v4-flash
 prompt_mode: replace
 ---
 

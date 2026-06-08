@@ -1,6 +1,7 @@
 ---
 description: Read-only code and spec reviewer. Structured review output.
 tools: read, bash, grep, find, ls
+model: kimi-coding/kimi-for-coding
 prompt_mode: replace
 thinking: medium
 ---

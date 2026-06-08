@@ -7,6 +7,9 @@ type OverlayColor = "blue" | "orange" | "green" | "red";
 
 ObjC.import("Cocoa");
 
+// Initialize AppKit for osascript/JXA context
+$.NSApplicationLoad();
+
 // deno-lint-ignore no-unused-vars
 function run(argv: string[]): void {
   var typeLabel: string = argv[0] || "BT-7274";
@@ -52,7 +55,8 @@ function run(argv: string[]): void {
   var y: number = vf.origin.y + vf.size.height - winH - margin - slot * slotStep;
 
   // ── Window ──
-  $.NSApp.setActivationPolicy(4); // NSApplicationActivationPolicyAccessory
+  // NSApp.setActivationPolicy is unavailable in JXA — skipped;
+  // osascript subprocesses are accessory by default (no Dock icon).
 
   var nonActivating: number = 1 << 7; // NSWindowStyleMaskNonactivatingPanel
   var win: $ = $.NSPanel.alloc.initWithContentRectStyleMaskBackingDefer(
@@ -141,50 +145,14 @@ function run(argv: string[]): void {
   );
   contentView.addSubview(barView);
 
-  // ── Show and animate ──
-
-  // Enforce minimum duration for fade-in + visible time + fade-out
-  var fadeDuration: number = 0.3;
-  if (duration < fadeDuration * 2 + 0.5) {
-    duration = fadeDuration * 2 + 0.5; // minimum ~1.1s
-  }
+  // ── Show ──
 
   win.orderFront(null);
+  win.setAlphaValue(0.95);
 
-  // Fade in
-  $.NSAnimationContext.beginGrouping();
-  $.NSAnimationContext.currentContext.setDuration(fadeDuration);
-  win.animator.setAlphaValue(1.0);
-  $.NSAnimationContext.endGrouping();
-
-  // Helper: registers a custom ObjC class for fade-out and terminate
-  ObjC.registerSubclass({
-    name: "OverlayController",
-    superclass: "NSObject",
-    methods: {
-      "startFadeOut:": {
-        types: ["void", ["id"]],
-        implementation: function(timer) {
-          // Fade out using the window reference captured by closure
-          $.NSAnimationContext.beginGrouping();
-          $.NSAnimationContext.currentContext.setDuration(fadeDuration);
-          win.animator.setAlphaValue(0.0);
-          $.NSAnimationContext.endGrouping();
-          // Terminate after fade-out completes
-          $.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(
-            fadeDuration + 0.1, $.NSApp, "terminate:", null, false
-          );
-        }
-      }
-    }
-  });
-
-  var controller = $.OverlayController.alloc.init;
-
-  // Schedule fade-out after duration - fadeDuration
-  var fadeOutStart: number = duration - fadeDuration;
+  // Schedule termination after duration
   $.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(
-    fadeOutStart, controller, "startFadeOut:", null, false
+    duration, $.NSApp, "terminate:", null, false
   );
 
   $.NSApp.run();

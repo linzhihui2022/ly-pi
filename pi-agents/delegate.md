@@ -1,6 +1,7 @@
 ---
 description: Lightweight general-purpose agent for simple tasks. Inherits parent conventions.
 tools: read, bash, edit, write, grep, find, ls
+model: deepseek/deepseek-v4-flash
 prompt_mode: append
 ---
 

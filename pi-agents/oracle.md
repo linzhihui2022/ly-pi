@@ -1,6 +1,7 @@
 ---
 description: Deep reasoning agent for second opinions, complex analysis, and challenging bugs
 tools: read, bash, grep, find, ls
+model: kimi-coding/kimi-k2-thinking
 prompt_mode: replace
 thinking: high
 ---

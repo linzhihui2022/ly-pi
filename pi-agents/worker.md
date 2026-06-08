@@ -1,6 +1,7 @@
 ---
 description: Implementation agent for writing, editing, and fixing code. Inherits parent conventions.
 tools: read, bash, edit, write, grep, find, ls
+model: kimi-coding/kimi-for-coding
 prompt_mode: append
 ---
 
