@@ -39,7 +39,7 @@ export interface SessionInfo {
 }
 
 export interface VisualCompanionConfig {
-  focusApp: string;
+  focusApp?: string;
   defaultHost: string;
   defaultUrlHost: string;
   idleTimeoutMinutes: number;

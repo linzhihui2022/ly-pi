@@ -2,6 +2,6 @@
   "name": "pi-config",
   "private": true,
   "scripts": {
-    "deploy": "bash scripts/deploy.sh"
+    "deploy": "bun run scripts/deploy.ts"
   }
 }

@@ -5,7 +5,7 @@
   "scripts": {
     "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*'",
     "test": "npx vitest run --coverage",
-    "deploy": "bash scripts/deploy.sh"
+    "deploy": "bun run scripts/deploy.ts"
   },
   "dependencies": {
     "ws": "^8.18.0"
