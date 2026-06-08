@@ -8,6 +8,9 @@
         "turbo": "^2",
       },
     },
+    "pi-config": {
+      "name": "pi-config",
+    },
     "pi-extensions/my-bt": {
       "name": "my-bt",
       "devDependencies": {
@@ -79,9 +82,6 @@
       "peerDependencies": {
         "typescript": "^5",
       },
-    },
-    "pi-extensions/pi-config": {
-      "name": "pi-config",
     },
   },
   "packages": {
@@ -519,7 +519,7 @@
 
     "pathe": ["pathe@2.0.3", "https://registry.npmmirror.com/pathe/-/pathe-2.0.3.tgz", {}, "sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w=="],
 
-    "pi-config": ["pi-config@workspace:pi-extensions/pi-config"],
+    "pi-config": ["pi-config@workspace:pi-config"],
 
     "picocolors": ["picocolors@1.1.1", "https://registry.npmmirror.com/picocolors/-/picocolors-1.1.1.tgz", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
 

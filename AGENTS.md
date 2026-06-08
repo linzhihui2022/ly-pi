@@ -69,7 +69,7 @@ cd pi-extensions/my-hud && vitest run
 
 - JSON 配置文件与扩展目录同级：`pi-extensions/my-xxx.json`
 - 支持热重载（通过 `/reload`）
-- 纯配置扩展统一放在 `pi-extensions/pi-config/`
+- 纯配置扩展统一放在 `pi-config/`
 
 ### 需求文档同步
 
