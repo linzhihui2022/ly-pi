@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 DEST="$HOME/.pi/agent/skills"
+cd skills
 for dir in */; do
     skill=$(basename "$dir")
     [ "$skill" = "scripts" ] && continue
