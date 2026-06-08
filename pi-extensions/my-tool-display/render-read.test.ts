@@ -329,7 +329,7 @@ describe("read renderResult — summary mode", () => {
 
   it("shows expand hint when not expanded", () => {
     const result = override.renderResult?.(makeToolResult("x"), { expanded: false, isPartial: false }, mockTheme, makeRenderContext());
-    expect((result as { content: string }).content).toContain("Ctrl+O");
+    expect((result as { content: string }).content).toContain("(Ctrl+O to expand)");
   });
 });
 

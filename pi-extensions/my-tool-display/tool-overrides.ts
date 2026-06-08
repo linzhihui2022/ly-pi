@@ -116,7 +116,7 @@ function renderReadResult(
     }
 
     let summary = formatReadSummary(rawOutput, theme);
-    summary += `\n${theme.fg("muted", "  • Ctrl+O to expand")}`;
+    summary += ` ${theme.fg("muted", "(Ctrl+O to expand)")}`;
     return new Text(summary, 0, 0);
   }
 
