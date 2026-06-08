@@ -18,3 +18,4 @@ coverage/
 
 # Build outputs
 pi-extensions/*/dist/
+.idea/
