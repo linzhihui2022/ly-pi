@@ -3,7 +3,8 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
-    "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*'",
+    "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*' && bun run build:overlay",
+    "build:overlay": "bun run scripts/build-overlay.ts",
     "test": "npx vitest run --coverage",
     "deploy": "bun run scripts/deploy.ts"
   },
