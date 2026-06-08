@@ -129,12 +129,12 @@ export interface SessionManagerOptions {
 export class SessionManager {
   private sessions = new Map<string, Session>();
   private idleTimeoutMs: number;
-  private focusApp: string;
+  private focusApp?: string;
   private waitResolvers = new Map<string, { resolve: (event: CompanionEvent) => void; reject: (err: Error) => void }>();
 
   constructor(options: SessionManagerOptions) {
     this.idleTimeoutMs = options.idleTimeoutMs;
-    this.focusApp = options.focusApp || "Terminal";
+    this.focusApp = options.focusApp;
   }
   // ... existing methods ...
 
@@ -187,6 +187,7 @@ export class SessionManager {
   }
 
   private focusApplication(): void {
+    if (!this.focusApp) return;
     try {
       execSync(`osascript -e 'tell application "${this.focusApp}" to activate'`, { timeout: 5000 });
     } catch {

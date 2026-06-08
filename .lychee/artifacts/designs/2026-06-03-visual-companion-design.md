@@ -227,11 +227,12 @@ process.on('uncaughtException', (err) => {
 
 ### 自动焦点切回 pi
 
-用户 confirm 后：
+用户 confirm 后（仅 macOS，且配置了 `focusApp` 时）：
 - macOS: `osascript -e 'tell application "<focusApp>" to activate'`
-- Linux: `wmctrl -a <focusApp>` 或 `xdotool search --class <focusApp> windowfocus`
-- 配置项 `visual-companion.json` → `focusApp`
-- 失败时发送系统通知
+- Linux: `wmctrl -a <focusApp>` 或 `xdotool search --class <focusApp> windowfocus`（未实现）
+- 配置项 `my-visual-companion.json` → `focusApp`（可选，无默认值）
+- 未配置 `focusApp` 时不执行任何聚焦行为
+- 聚焦失败时静默忽略
 
 ## Configuration
 
@@ -245,6 +246,8 @@ process.on('uncaughtException', (err) => {
   "idleTimeoutMinutes": 30
 }
 ```
+
+`focusApp` 为可选字段。省略时不执行 confirm 后的聚焦行为。
 
 ## Testing Strategy
 

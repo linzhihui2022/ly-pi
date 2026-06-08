@@ -11,12 +11,11 @@
 痛点：
 - 用户在浏览器确认后，不知道接下来该做什么
 - 必须手动"对话"触发下一轮，流程断裂
-- `focusApp` 配置（`WezTerm`）从未被使用
 
 ## 目标
 
 1. **`visual_companion_wait`** — 阻塞等待用户确认，confirm 事件自动唤醒 agent
-2. **`focusApp` 聚焦** — macOS 上收到 confirm 后自动聚焦终端应用
+2. **`focusApp` 聚焦（可选）** — macOS 上收到 confirm 后，若配置了 `focusApp`，自动聚焦对应终端应用
 
 ## 非目标
 
@@ -55,7 +54,7 @@ visual_companion_wait (工具)
 新增：
 
 - `waitResolvers: Map<string, { resolve, reject }>` — 存储等待 confirm 的 Promise 回调
-- `focusApp: string` — 从配置传入，用于 osascript
+- `focusApp?: string` — 从配置传入，用于 osascript；未配置时不聚焦
 - `waitForConfirm(id, timeoutMs): Promise<CompanionEvent>`
   - 先检查 events 数组是否已有 confirm（竞态防护）
   - 存储 resolve/reject 到 Map
@@ -64,12 +63,13 @@ visual_companion_wait (工具)
   - `type === "confirm"` 时检查并调用 resolver
   - 调用 `focusApplication()`
 - `focusApplication()` 私有方法：
+  - 仅当 `focusApp` 已配置时执行
   - `execSync('osascript -e "tell application ... to activate"', { timeout: 5000 })`
-  - 失败静默忽略
+  - 失败静默忽略；无 fallback 默认值
 
 #### 2. `types.ts`
 
-无需改动。`focusApp` 已在 `VisualCompanionConfig` 中声明。
+`VisualCompanionConfig.focusApp` 为可选字段。
 
 #### 3. `api.ts`
 
@@ -148,6 +148,7 @@ User: 点击确认 → WebSocket msg → appendEvent()
 | Session 不存在 | `waitForConfirm` 立即 reject "Session not found" |
 | 超时（默认 5min） | reject "Timeout waiting for confirm"，清理 resolver |
 | 聚焦失败 | 静默忽略，不影响 confirm 流程 |
+| `focusApp` 未配置 | 跳过聚焦，不影响 confirm 流程 |
 | 重复调用 wait | 第二个 wait 会替换第一个 resolver（第二个生效） |
 | confirm 先于 wait | `waitForConfirm` 检查已有 events，立即返回 |
 
@@ -171,7 +172,7 @@ Agent: /vc-wait xxx
 → [阻塞，等待用户...]
 
 User: [在浏览器点击选项 → 点击"确认"]
-→ [osascript 聚焦 WezTerm]
+→ [若配置了 focusApp，osascript 聚焦对应应用]
 → [agent 自动继续]
 
 Agent: Confirmed: 深色主题

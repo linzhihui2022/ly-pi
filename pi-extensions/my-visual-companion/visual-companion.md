@@ -30,6 +30,19 @@ Returns user events (clicks, confirms) as an array. Call after showing a screen 
 ### visual_companion_stop
 Closes the session and frees resources.
 
+## Configuration
+
+`my-visual-companion.json`:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `focusApp` | No | macOS application name to bring to front after user confirms (e.g. `"WezTerm"`). If omitted, no focus action occurs. |
+| `defaultHost` | No | HTTP bind address (default `127.0.0.1`) |
+| `defaultUrlHost` | No | Hostname shown in URLs (default `localhost`) |
+| `idleTimeoutMinutes` | No | Session idle timeout (default `30`) |
+
+On confirm, when `focusApp` is set, macOS runs `osascript -e 'tell application "<focusApp>" to activate'`. Focus failures are silently ignored. There is no default fallback — unset means no focus behavior.
+
 ## HTML Fragment Guidelines
 
 1. Use semantic filenames — never reuse a screen name within a session

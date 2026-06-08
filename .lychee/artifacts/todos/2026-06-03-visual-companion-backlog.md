@@ -34,35 +34,33 @@ function openBrowser(url: string): void {
 
 ---
 
-## 2. 自动焦点切回 pi 终端
+## 2. 自动焦点切回 pi 终端 ✅ 已实现（macOS）
 
 **设计目标：** 用户在浏览器中点击 confirm 后，自动将窗口焦点切回 pi 所在的终端应用。
 
 **实现位置：**
-- `pi-extensions/my-visual-companion/server.ts` — WebSocket `confirm` 事件处理器中触发
-- `pi-extensions/my-visual-companion/api.ts` — 提供 `focusTerminal()` 方法
+- `pi-extensions/my-visual-companion/session.ts` — `appendEvent()` 收到 confirm 时调用 `focusApplication()`
 
 **平台命令：**
-- macOS: `osascript -e 'tell application "<focusApp>" to activate'`
-- Linux: `wmctrl -a <focusApp>` 或 `xdotool search --class <focusApp> windowfocus`
-- Windows: `powershell -Command "Add-Type ... [user32]::SetForegroundWindow(...)"`（较复杂）
+- macOS: `osascript -e 'tell application "<focusApp>" to activate'` ✅
+- Linux: `wmctrl -a <focusApp>` 或 `xdotool search --class <focusApp> windowfocus`（未实现）
+- Windows: `powershell -Command "Add-Type ... [user32]::SetForegroundWindow(...)"`（未实现）
 
-**配置来源：** `my-visual-companion.json` → `focusApp`（默认 `"WezTerm"`）
+**配置来源：** `my-visual-companion.json` → `focusApp`（可选，无默认值；未配置时不聚焦）
 
-**实现建议：**
+**当前行为：**
 ```typescript
-function focusTerminal(focusApp: string): void {
-  const platform = process.platform;
-  const cmd = platform === "darwin"
-    ? `osascript -e 'tell application "${focusApp}" to activate'`
-    : platform === "linux"
-    ? `wmctrl -a "${focusApp}" || xdotool search --class "${focusApp}" windowfocus`
-    : null;
-  if (cmd) exec(cmd, (err) => { /* silently ignore — fallback to system notification */ });
+private focusApplication(): void {
+  if (!this.focusApp) return;
+  try {
+    execSync(`osascript -e 'tell application "${this.focusApp}" to activate'`, { timeout: 5000 });
+  } catch {
+    // silently ignore
+  }
 }
 ```
 
-**降级策略：** 焦点切换失败时，通过 `ctx.ui.notify()` 发送系统通知提示用户。
+**降级策略：** 聚焦失败时静默忽略，不影响 confirm 流程。
 
 ---
 
@@ -101,6 +99,6 @@ process.on("uncaughtException", () => {
 | 优先级 | 功能 | 原因 |
 |--------|------|------|
 | P1 | 自动打开浏览器 | 直接影响用户体验，每次都要手动开浏览器 |
-| P2 | 焦点切回终端 | 提升交互流畅度，减少用户窗口切换操作 |
+| ~~P2~~ | ~~焦点切回终端~~ | ✅ 已实现（macOS，`focusApp` 可选） |
 | P3 | 多 session 广播隔离 | 当前单用户使用无影响，扩展后才需修复 |
 | P4 | uncaughtException 兜底 | 已有 `session_shutdown` 覆盖正常退出路径 |
