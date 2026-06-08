@@ -47,6 +47,7 @@ const mockConfig: BtConfig = {
     session_start: { type: "SESSION START", title: "BT-7274 已上线", subtitle: "系统重启" },
     agent_start: { type: "MISSION", title: "执行任务", subtitle: "铁御控制" },
     agent_end: { type: "COMPLETE", title: "任务完成" },
+    turn_start: { type: "TURN", title: "新回合" },
   },
 };
 
@@ -155,6 +156,14 @@ describe("playOverlay", () => {
     expect(cmd).toContain("任务完成");
     // subtitle should be empty string ""
     expect(cmd).toMatch(/"任务完成" "" /);
+  });
+
+  it("defaults to blue when event is not in EVENT_COLOR_MAP", () => {
+    // turn_start is in overlayTextMap but not in EVENT_COLOR_MAP
+    playOverlay(mockConfig, "turn_start", extDir);
+    const lastCall = vi.mocked(exec).mock.calls.at(-1);
+    const cmd = lastCall![0] as string;
+    expect(cmd).toContain("blue");
   });
 
   it("no-ops when event has no overlay config", () => {

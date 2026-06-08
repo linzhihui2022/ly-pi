@@ -1,0 +1,23 @@
+diff --git a/pi-extensions/my-bt/types.ts b/pi-extensions/my-bt/types.ts
+index 2411d6e..6bc3908 100644
+--- a/pi-extensions/my-bt/types.ts
++++ b/pi-extensions/my-bt/types.ts
+@@ -3,9 +3,18 @@ export interface BtCategory {
+   files: string[];
+ }
+ 
++export interface OverlayTextConfig {
++  type: string;
++  title: string;
++  subtitle?: string;
++}
++
++export type OverlayColor = "blue" | "orange" | "green" | "red";
++
+ export interface BtConfig {
+   enabled: boolean;
+   soundDir: string;
+   categories: Record<string, BtCategory>;
+   eventMap: Record<string, string>;
++  overlayTextMap?: Record<string, OverlayTextConfig>;
+ }
