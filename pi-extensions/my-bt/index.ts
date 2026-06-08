@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { listCategories, playCategory } from "./player";
+import { listCategories, playCategory, playOverlay } from "./player";
 import type { BtConfig } from "./types";
 
 // Resolve extension directory — prefer __dirname, fall back to CWD-relative
@@ -48,6 +48,7 @@ export default function myBt(pi: ExtensionAPI): void {
     pi.on(eventName as any, () => {
       if (!config.enabled) return;
       playCategory(config, category);
+      playOverlay(config, eventName, EXT_DIR);
     });
   }
 
