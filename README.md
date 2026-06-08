@@ -10,13 +10,11 @@ Personal shell, terminal, and coding agent configuration — managed as a git re
 | `wezterm.lua` | symlink → `~/.wezterm.lua` | WezTerm terminal |
 | `MY-AGENTS.md` | symlink → `~/.pi/agent/AGENTS.md`, `~/.claude/CLAUDE.md` | Global coding agent instructions |
 | `AGENTS.md` | auto-discovered by pi | Configure-repo development guide (loaded by pi alongside `MY-AGENTS.md`) |
-| `pi-extensions/` | `./install.sh` → `~/.pi/agent/extensions/` | Pi custom extensions (transitional, being replaced by pi-infra) |
-| `pi-skills/` | `./install.sh` → `~/.pi/agent/skills/` | Custom skills (superpowers migration) |
-| `pi-agents/` | `./install.sh` → `~/.pi/agent/agents/` | Custom subagent definitions |
+| `pi-extensions/` | `./install.sh` → `~/.pi/agent/extensions/` | Pi custom extensions (Bun workspaces) |
+| `pi-skills/` | `./install.sh` → `~/.pi/agent/skills/` | Custom skills |
 | `pi-themes/` | `./install.sh` → `~/.pi/agent/themes/` | Custom themes |
-| `install.sh` | — | Deploy extensions, skills, and themes to pi agent |
-| `.lychee/specs/` | — | Design specs |
-| `.lychee/plans/` | — | Implementation plans |
+| `turbo.json` | — | Turborepo pipeline (build → test → deploy) |
+| `install.sh` | — | Thin wrapper: `bun run deploy` |
 
 ## Setup
 
@@ -33,10 +31,34 @@ ln -sf "$REPO/wezterm.lua" ~/.wezterm.lua
 ln -sf "$REPO/MY-AGENTS.md" ~/.pi/agent/AGENTS.md
 ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 
-# Pi extensions, skills, themes (copied, not symlinked)
+# Install dependencies
+cd "$REPO" && bun install
+
+# Deploy extensions, skills, themes
 "$REPO/install.sh"
 ```
 
 ## Development
+
+### Build, test, deploy
+
+```bash
+bunx turbo run build              # Incremental build (cached)
+bunx turbo run test               # Incremental test (cached)
+bunx turbo run build test deploy  # Full pipeline
+bun run deploy                    # One-shot deploy (includes skills/themes)
+```
+
+### Quick test a single extension
+
+```bash
+pi -e pi-extensions/my-bt/index.ts
+```
+
+### Run tests for a single extension
+
+```bash
+cd pi-extensions/my-hud && bun test
+```
 
 See `AGENTS.md` for the full development guide.
