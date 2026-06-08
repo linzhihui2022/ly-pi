@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
-import { playCategory } from "./player";
+import { playCategory, playOverlay } from "./player";
 
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
@@ -14,6 +14,7 @@ vi.mock("./player", async (importOriginal) => {
   return {
     ...actual,
     playCategory: vi.fn(),
+    playOverlay: vi.fn(),
   };
 });
 
@@ -63,6 +64,7 @@ describe("my-bt extension", () => {
     vi.mocked(readFileSync).mockClear();
     vi.mocked(writeFileSync).mockClear();
     vi.mocked(playCategory).mockClear();
+    vi.mocked(playOverlay).mockClear();
     vi.resetModules();
   });
 
@@ -278,5 +280,98 @@ describe("my-bt extension", () => {
       expect.stringContaining("Config not found or invalid"),
       "error",
     );
+  });
+
+  // ── Overlay integration tests ──
+
+  it("calls playOverlay on event when overlayTextMap is configured", async () => {
+    const configWithOverlay = {
+      ...DEFAULT_CONFIG,
+      overlayTextMap: {
+        session_start: { type: "START", title: "BT online" },
+        agent_start: { type: "GO", title: "Engaging" },
+        agent_end: { type: "DONE", title: "Complete" },
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("session_start");
+    handler?.();
+    expect(playOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({ overlayTextMap: expect.any(Object) }),
+      "session_start",
+      expect.any(String),
+    );
+  });
+
+  it("does not call playOverlay when disabled", async () => {
+    const configWithOverlay = {
+      ...DEFAULT_CONFIG,
+      enabled: false,
+      overlayTextMap: {
+        session_start: { type: "START", title: "BT online" },
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("session_start");
+    handler?.();
+    expect(playOverlay).not.toHaveBeenCalled();
+  });
+
+  it("does not call playOverlay on /bt manual playback", async () => {
+    const configWithOverlay = {
+      ...DEFAULT_CONFIG,
+      overlayTextMap: {
+        session_start: { type: "START", title: "BT online" },
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const cmd = registeredCommands.get("bt");
+    await cmd.handler("startup", mockCtx as any);
+
+    expect(playCategory).toHaveBeenCalled();
+    expect(playOverlay).not.toHaveBeenCalled();
+  });
+
+  it("does not call playOverlay on /bt all", async () => {
+    vi.useFakeTimers();
+    const configWithOverlay = {
+      ...DEFAULT_CONFIG,
+      overlayTextMap: {
+        startup: { type: "START", title: "BT online" },
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const cmd = registeredCommands.get("bt");
+    await cmd.handler("all", mockCtx as any);
+    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(1500);
+
+    expect(playCategory).toHaveBeenCalled();
+    expect(playOverlay).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+  });
+
+  it("still works when overlayTextMap is absent (no regression)", async () => {
+    // DEFAULT_CONFIG has no overlayTextMap — should work as before
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("session_start");
+    expect(() => handler?.()).not.toThrow();
+    expect(playCategory).toHaveBeenCalled();
   });
 });
