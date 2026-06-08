@@ -1,0 +1,7 @@
+{
+  "name": "mcp",
+  "private": true,
+  "scripts": {
+    "deploy": "mkdir -p $HOME/.pi/agent && cp mcp.json $HOME/.pi/agent/mcp.json"
+  }
+}

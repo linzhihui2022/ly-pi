@@ -1,0 +1,48 @@
+{
+  "subagents": {
+    "agentOverrides": {
+      "worker": {
+        "model": "kimi-coding/kimi-for-coding",
+        "fallbackModels": [
+          "deepseek-v4-pro"
+        ]
+      },
+      "reviewer": {
+        "model": "kimi-coding/kimi-for-coding",
+        "fallbackModels": [
+          "deepseek-v4-pro"
+        ]
+      },
+      "scout": {
+        "model": "deepseek/deepseek-v4-flash"
+      },
+      "planner": {
+        "model": "kimi-coding/kimi-k2-thinking",
+        "fallbackModels": [
+          "deepseek-v4-pro"
+        ]
+      },
+      "oracle": {
+        "model": "kimi-coding/kimi-k2-thinking",
+        "fallbackModels": [
+          "deepseek-v4-pro"
+        ]
+      },
+      "context-builder": {
+        "model": "kimi-coding/kimi-k2-thinking",
+        "fallbackModels": [
+          "deepseek-v4-pro"
+        ]
+      },
+      "researcher": {
+        "model": "kimi-coding/kimi-k2-thinking",
+        "fallbackModels": [
+          "deepseek-v4-pro"
+        ]
+      },
+      "delegate": {
+        "model": "deepseek/deepseek-v4-flash"
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "pi-agents",
+  "private": true,
+  "scripts": {
+    "deploy": "mkdir -p $HOME/.pi/agent/agents && cp -r ./* $HOME/.pi/agent/agents/ 2>/dev/null; true"
+  }
+}
