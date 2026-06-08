@@ -58,7 +58,7 @@ function run(argv: string[]): void {
   var nonActivating: number = 1 << 7; // NSWindowStyleMaskNonactivatingPanel
   var win: $ = $.NSPanel.alloc.initWithContentRectStyleMaskBackingDefer(
     $.NSMakeRect(x, y, winW, winH),
-    0 | nonActivating, // NSWindowStyleMaskBorderless
+    0 | nonActivating, // NSWindowStyleMaskNonactivatingPanel (acts as borderless)
     2, // NSBackingStoreBuffered
     false
   );
@@ -147,15 +147,15 @@ function run(argv: string[]): void {
 
   // Fade in over 0.3s
   var fadeInDuration: number = 0.3;
-  $.NSAnimationContext.beginGrouping;
+  $.NSAnimationContext.beginGrouping();
   $.NSAnimationContext.currentContext.setDuration(fadeInDuration);
   win.animator.setAlphaValue(1.0);
-  $.NSAnimationContext.endGrouping;
+  $.NSAnimationContext.endGrouping();
 
   // Fade out + terminate after duration
   $.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(
     duration, $.NSApp, "terminate:", null, false
   );
 
-  $.NSApp.run;
+  $.NSApp.run();
 }
