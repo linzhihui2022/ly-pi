@@ -2,6 +2,6 @@
   "name": "pi-themes",
   "private": true,
   "scripts": {
-    "deploy": "mkdir -p $HOME/.pi/agent/themes && cp *.json $HOME/.pi/agent/themes/"
+    "deploy": "bash scripts/deploy.sh"
   }
 }

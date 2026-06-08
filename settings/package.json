@@ -2,6 +2,6 @@
   "name": "settings",
   "private": true,
   "scripts": {
-    "deploy": "bash merge-settings.sh"
+    "deploy": "bash scripts/deploy.sh"
   }
 }

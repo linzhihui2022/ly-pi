@@ -5,7 +5,7 @@
   "scripts": {
     "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*'",
     "test": "npx vitest run --coverage",
-    "deploy": "mkdir -p $HOME/.pi/agent/extensions/my-visual-companion && cp dist/index.js my-visual-companion.json frame.html $HOME/.pi/agent/extensions/my-visual-companion/"
+    "deploy": "bash scripts/deploy.sh"
   },
   "dependencies": {
     "ws": "^8.18.0"

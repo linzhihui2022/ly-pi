@@ -2,6 +2,6 @@
   "name": "pi-skills",
   "private": true,
   "scripts": {
-    "deploy": "for dir in */; do skill=$(basename \"$dir\"); rm -rf \"$HOME/.pi/agent/skills/$skill\"; cp -r \"$dir\" \"$HOME/.pi/agent/skills/$skill\"; done"
+    "deploy": "bash scripts/deploy.sh"
   }
 }
