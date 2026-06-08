@@ -170,30 +170,30 @@ Pi tool names are **lowercase**. Update documentation and comments:
 
 | Claude Code | Pi (tintinweb legacy) | Pi (pi-subagents) |
 |---|---|---|
-| `run_in_background: true` | `background: true` | `async: true` |
+| `run_in_background: true` | `background: true` | `run_in_background: true` |
 
 ### Agent / Subagent
 
-`pi-subagents` provides a `subagent()` function for dispatching agents. When migrating agent dispatch patterns:
+`@gotgenes/pi-subagents` provides a `subagent` tool for dispatching agents. When migrating agent dispatch patterns:
 
-| Claude Code Pattern | pi-subagents Equivalent |
+| Claude Code Pattern | gotgenes Equivalent |
 |---|---|
-| Generic subagent | Use specific built-in agent: `worker`, `reviewer`, `scout`, `planner`, etc. |
-| `Subagent` tool | `subagent({ agent: "...", task: "..." })` |
-| Manual process backgrounding | `subagent({ agent: "...", task: "...", async: true })` |
+| Generic subagent | Use specific agent type: `worker`, `reviewer`, `scout`, `planner`, etc. |
+| `Subagent` tool | `subagent({ subagent_type: "...", prompt: "...", description: "..." })` |
+| Manual process backgrounding | `subagent({ ..., run_in_background: true })` |
 
-**Built-in agent types and their purposes:**
+**Custom agent types and their purposes:**
 
 | Agent | Purpose | When to Use |
 |---|---|---|
-| `worker` | General implementation agent with edit/write/bash tools. | Default for implementation tasks, fixes, and multi-step code work. |
-| `reviewer` | Independent code/spec reviewer. | Reviewing implementations, plans, or diffs for quality and compliance. |
-| `scout` | Fast read-only reconnaissance agent. | Gathering diffs, listing files, finding code — no edits. |
-| `planner` | Design and architecture agent. | Creating implementation plans, identifying critical files, considering trade-offs. |
-| `researcher` | Web research specialist. | Finding information not well-covered in training data (requires `pi-web-access`). |
-| `delegate` | Lightweight general-purpose agent. | Simple tasks that don't need the full capability of `worker`. |
-| `oracle` | Deep reasoning agent. | Complex analysis requiring broad context and reasoning. |
-| `context-builder` | Context preparation agent. | Summarizing and packaging context for other agents. |
+| `worker` | Implementation agent with all 7 tools, inherits parent conventions (append mode). | Default for implementation tasks, fixes, and multi-step code work. |
+| `reviewer` | Read-only code/spec reviewer with structured output format, medium thinking. | Reviewing implementations, plans, or diffs for quality and compliance. |
+| `scout` | Fast read-only reconnaissance agent, haiku model. | Gathering diffs, listing files, finding code — minimal cost. |
+| `planner` | Read-only design and architecture planning, high thinking. | Creating implementation plans, identifying critical files. |
+| `oracle` | Read-only deep reasoning agent, high thinking. | Complex analysis, second opinions, challenging bugs. |
+| `delegate` | Lightweight general-purpose agent with all 7 tools, inherits parent conventions. | Simple tasks that don't need full worker capability. |
+| `researcher` | Web research specialist, extensions enabled. | Finding information beyond training data (requires web tools). |
+| `context-builder` | Read-only context preparation. | Summarizing and packaging codebase context for other agents. |
 
 **Selection rule:** Prefer the most specific agent for the job. Implementation → `worker`; review → `reviewer`; reconnaissance → `scout`; planning → `planner`.
 
@@ -201,22 +201,45 @@ Pi tool names are **lowercase**. Update documentation and comments:
 
 ```typescript
 // Single agent
-subagent({ agent: "worker", task: "Fix the failing tests in src/foo.test.ts" })
+subagent({ subagent_type: "worker", description: "Fix tests", prompt: "Fix the failing tests in src/foo.test.ts..." })
 
-// Parallel agents (tasks array)
-subagent({
-  tasks: [
-    { agent: "worker", task: "Fix abort tests", context: "fresh" },
-    { agent: "worker", task: "Fix batch tests", context: "fresh" },
-    { agent: "worker", task: "Fix race tests", context: "fresh" }
-  ]
-})
+// Parallel agents (multiple run_in_background calls)
+subagent({ subagent_type: "worker", description: "Fix abort tests", prompt: "...", run_in_background: true })
+subagent({ subagent_type: "worker", description: "Fix batch tests", prompt: "...", run_in_background: true })
+subagent({ subagent_type: "worker", description: "Fix race tests", prompt: "...", run_in_background: true })
 
-// Sequential chain
-subagent({
-  chain: [
-    { agent: "scout", task: "Get git diff from BASE to HEAD", output: "diff.txt" },
-    { agent: "reviewer", task: "Review the diff in diff.txt", reads: "diff.txt" }
+// Sequential workflow (step-by-step)
+// Step 1: scout gathers diff
+subagent({ subagent_type: "scout", description: "Gather diff", prompt: "Get git diff from BASE to HEAD" })
+// Step 2: reviewer reviews
+subagent({ subagent_type: "reviewer", description: "Review changes", prompt: "Review the diff above..." })
+```
+
+**Key parameters:**
+
+| Parameter | Description |
+|---|---|
+| `subagent_type` | Required. Agent type name (matches the `.md` filename in `pi-agents/`). |
+| `prompt` | Required. Full, self-contained instruction for the agent. |
+| `description` | Required. Short 3-5 word summary shown in UI. |
+| `run_in_background` | Boolean. Launch agent in background and continue. |
+| `model` | Override model for this invocation. |
+| `thinking` | Override thinking level. |
+| `inherit_context` | Fork parent conversation into agent. |
+| `resume` | Agent ID to resume a previous session. |
+
+**Post-dispatch actions:**
+
+```typescript
+// Check status and get results
+get_subagent_result({ agent_id: "<agent-id>" })
+
+// Wait for completion
+get_subagent_result({ agent_id: "<agent-id>", wait: true })
+
+// Steer a running agent
+steer_subagent({ agent_id: "<agent-id>", message: "..." })
+```
   ]
 })
 
@@ -224,35 +247,6 @@ subagent({
 subagent({ agent: "worker", task: "...", async: true })
 // Later: check status
 subagent({ action: "status", id: "..." })
-```
-
-**Key parameters:**
-
-| Parameter | Description |
-|---|---|
-| `agent` | Required. Built-in agent name or custom agent file name. |
-| `task` | Required. Full, self-contained instruction. |
-| `async` | Boolean. Launch agent in background and continue. |
-| `context` | `"fresh"` (clean session), `"fork"` (inherit parent context). Default varies by agent. |
-| `output` | File path to write agent output to. |
-| `reads` | File path for agent to read as input. |
-| `tasks` | Array for parallel dispatch. Mutually exclusive with `chain`. |
-| `chain` | Array for sequential dispatch. Each step's output can feed the next. |
-
-**Post-dispatch actions:**
-
-```typescript
-// Check status
-subagent({ action: "status", id: "<agent-id>" })
-
-// Interrupt
-subagent({ action: "interrupt", id: "<agent-id>" })
-
-// Resume with message
-subagent({ action: "resume", id: "<agent-id>", message: "..." })
-
-// List all active agents
-subagent({ action: "list" })
 ```
 
 ### Context-Mode (Pi-Specific)
@@ -341,83 +335,55 @@ Mark in_progress before beginning work, completed when done.
 
 **Claude Code:** Subagent support is limited; may use generic background processes or simple tool calls.
 
-**Pi (tintinweb legacy):** Rich `Agent` tool with typed subagents via `subagent_type`.
+**Pi (gotgenes subagents):** `subagent()` tool with typed sub-agents via `subagent_type`.
 
-**Pi (pi-subagents):** `subagent()` function with built-in agents.
+**Migration rule:** If the source skill dispatches "subagents" or "parallel workers," replace with gotgenes `subagent()` syntax.
 
-**Migration rule:** If the source skill dispatches "subagents" or "parallel workers," replace with `pi-subagents` `subagent()` syntax.
+**From tintinweb/nicobailon:**
 
-**From tintinweb:**
-
-```xml
-<!-- Old tintinweb syntax — REMOVE -->
-<Agent
-  subagent_type="general-purpose"
-  description="Fix abort tests"
-  prompt="..."
-  background="true"
-/>
+```typescript
+// Old nicobailon syntax — REMOVE
+subagent({ agent: "worker", task: "Fix the failing tests..." })
 ```
 
-**To pi-subagents:**
+**To gotgenes:**
 
 ```typescript
 // Single agent
-subagent({ agent: "worker", task: "Fix the failing tests..." })
+subagent({ subagent_type: "worker", description: "Fix tests", prompt: "Fix the failing tests..." })
 
 // Parallel agents
-subagent({
-  tasks: [
-    { agent: "worker", task: "Fix abort tests...", context: "fresh" },
-    { agent: "worker", task: "Fix batch tests...", context: "fresh" }
-  ]
-})
+subagent({ subagent_type: "worker", description: "Fix abort", prompt: "...", run_in_background: true })
+subagent({ subagent_type: "worker", description: "Fix batch", prompt: "...", run_in_background: true })
 ```
 
 **Key parameters:**
 
 | Parameter | Description |
 |---|---|
-| `agent` | Required. Built-in name (`worker`, `reviewer`, `scout`, `planner`, etc.) or custom agent file. |
-| `task` | Required. Full, self-contained instruction. |
-| `async` | Boolean. Background execution (returns immediately). |
-| `context` | `"fresh"` for clean session, `"fork"` to inherit parent. |
+| `subagent_type` | Required. Agent type name (matches `.md` filename). |
+| `prompt` | Required. Full, self-contained instruction. |
+| `description` | Required. Short summary shown in UI. |
+| `run_in_background` | Boolean. Background execution (returns immediately). |
 
 **Post-dispatch:**
 
 ```typescript
-subagent({ action: "status", id: "<agent-id>" })
-subagent({ action: "interrupt", id: "<agent-id>" })
-subagent({ action: "resume", id: "<agent-id>", message: "..." })
+get_subagent_result({ agent_id: "<agent-id>" })
+steer_subagent({ agent_id: "<agent-id>", message: "..." })
 ```
 
 ### Task Syntax (Claude Code Specific)
 
-Claude Code supports a `Task()` shorthand for dispatching parallel agents:
+Claude Code supports a `Task()` shorthand. gotgenes has no `Task()` shorthand — use `subagent()` calls:
 
 ```typescript
-// Claude Code — REMOVE or replace
+// Claude Code — REMOVE
 Task("Fix abort test failures")
-Task("Fix batch test failures")
+
+// gotgenes — correct replacement
+subagent({ subagent_type: "worker", description: "Fix abort", prompt: "Fix abort test failures...", run_in_background: true })
 ```
-
-`pi-subagents` has no `Task()` shorthand. Use `subagent({ tasks: [...] })`:
-
-```typescript
-// Pi-subagents — correct replacement
-subagent({
-  tasks: [
-    { agent: "worker", task: "Fix abort test failures...", context: "fresh" },
-    { agent: "worker", task: "Fix batch test failures...", context: "fresh" }
-  ]
-})
-```
-
-**Migration rule:** When the source skill shows `Task("...")` examples, replace with `subagent({ tasks: [...] })`.
-
-**Reference:** See Pi docs at `docs/skills.md` for agent selection guidance.
-
-**Reference:** See Pi docs at `docs/skills.md` for subagent type selection guidance.
 
 ---
 
@@ -573,10 +539,13 @@ grep -ri "CLAUDE.md" pi-skills/YOUR-SKILL/ || echo "OK: no CLAUDE.md refs"
 grep -ri "~/.claude/skills" pi-skills/YOUR-SKILL/ || echo "OK: no ~/.claude/skills refs"
 
 # Check for old tintinweb agent syntax
-grep -ri "subagent_type" pi-skills/YOUR-SKILL/ || echo "OK: no subagent_type refs"
-grep -ri "run_in_background" pi-skills/YOUR-SKILL/ || echo "OK: no run_in_background refs"
-grep -ri "get_subagent_result" pi-skills/YOUR-SKILL/ || echo "OK: no get_subagent_result refs"
-grep -ri "steer_subagent" pi-skills/YOUR-SKILL/ || echo "OK: no steer_subagent refs"
+grep -ri 'subagent({ agent: ' pi-skills/YOUR-SKILL/ || echo "OK: no nicobailon agent syntax"
+grep -ri 'context.*fresh' pi-skills/YOUR-SKILL/ || echo "OK: no context fresh refs"
+grep -ri 'tasks:.*\[' pi-skills/YOUR-SKILL/ || echo "OK: no tasks array refs"
+grep -ri 'chain:.*\[' pi-skills/YOUR-SKILL/ || echo "OK: no chain array refs"
+
+# Check for correct gotgenes syntax
+grep -ri 'subagent_type' pi-skills/YOUR-SKILL/ || echo "MISSING: no subagent_type refs"
 ```
 
 ---
@@ -704,10 +673,12 @@ Invoke `subagent-driven-development`
 - [ ] `ask_user_question` is used for structured questioning (not free-form)
 - [ ] `todo` is used for multi-step workflow tracking (not Markdown checklists)
 - [ ] `Agent` tool uses appropriate `subagent_type` (not generic "subagent")
-- [ ] `subagent()` uses correct `agent` name (not `subagent_type`)
-- [ ] Parallel dispatch uses `tasks` array (not multiple `Agent` calls)
-- [ ] Background execution uses `async: true` (not `run_in_background`)
-- [ ] Sequential workflows use `chain` array where appropriate
+- [ ] `subagent()` uses `subagent_type` + `prompt` + `description` (not `agent` + `task`)
+- [ ] Parallel dispatch uses multiple `subagent()` calls with `run_in_background: true`
+- [ ] Background execution uses `run_in_background` (not `async`)
+- [ ] Sequential workflows use step-by-step independent calls
+- [ ] Status checks use `get_subagent_result` (not `subagent({ action: "status" })`)
+- [ ] Steering uses `steer_subagent` (not `subagent({ action: "interrupt" })`)
 - [ ] No `get_subagent_result` or `steer_subagent` references remain
 - [ ] All verification commands pass
 - [ ] `./install.sh` runs without errors

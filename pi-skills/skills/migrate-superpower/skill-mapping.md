@@ -24,10 +24,10 @@ Tracks the migration status of every skill in the Superpowers ecosystem.
 | 2 | `writing-plans` | ✅ Migrated | Paths updated to `.lychee/artifacts/plans/`; removed `superpowers:` prefix; neutralized branding. |
 | 3 | `executing-plans` | ✅ Migrated | Removed `superpowers:` prefixes; replaced `TodoWrite` with `todo`; neutralized branding. |
 | 4 | `verification-before-completion` | ✅ Migrated | Pure documentation skill; no platform-specific content. Deployed via `./install.sh`. |
-| 5 | `requesting-code-review` | ✅ Migrated | Replaced `Task tool` with `subagent({ chain: [scout, reviewer] })`; updated plan path to `.lychee/artifacts/plans/`. |
+| 5 | `requesting-code-review` | ✅ Migrated | Replaced `Task tool` with two-step `subagent()` (scout gather diff then reviewer review); updated plan path to `.lychee/artifacts/plans/`. |
 | 6 | `receiving-code-review` | ✅ Migrated | Migrated as-is. Replaced `CLAUDE.md` with `AGENTS.md`. |
-| 7 | `dispatching-parallel-agents` | ✅ Migrated | Replaced `Task()` syntax with `subagent({ tasks: [...] })` using `worker` agents. No platform-specific content. |
-| 8 | `subagent-driven-development` | ✅ Migrated | Replaced `TodoWrite` with `todo`, `Task tool` with `subagent()` function, updated prompt templates to `subagent({ agent: "worker"|"reviewer", task: ... })` syntax, removed `using-git-worktrees` reference, updated paths to `.lychee/artifacts/`. |
+| 7 | `dispatching-parallel-agents` | ✅ Migrated | Replaced `Task()` syntax with `subagent({ subagent_type: "worker", ..., run_in_background: true })` using multiple independent calls. No platform-specific content. |
+| 8 | `subagent-driven-development` | ✅ Migrated | Replaced `TodoWrite` with `todo`, `Task tool` with `subagent({ subagent_type: "worker"|"reviewer", ... })` calling convention, updated prompt templates, removed `using-git-worktrees` reference, updated paths to `.lychee/artifacts/`. |
 | 9 | `using-git-worktrees` | 🚫 Skip | Pi does not support git worktrees. Remove all references. |
 | 10 | `systematic-debugging` | 🚫 Skip | Pi already has equivalent debugging capabilities built-in. |
 | 11 | `test-driven-development` | ✅ Migrated | Pure documentation skill; no platform-specific content. Migrated as-is with no changes. |
@@ -86,9 +86,9 @@ After each phase, run verification-before-completion.
 - File paths (`.superpowers/` → `.lychee/`, `docs/superpowers/` → `.lychee/artifacts/`)
 - Platform-specific logic (CODEX_CI, MSYSTEM, etc.)
 - Tool casing (`Bash` → `bash`, `Write` → `write`)
-- Background params (`run_in_background` → `background`)
+- Background params (`async` → `run_in_background`)
 - Branding (`Superpowers` → neutral, `Claude Code` → `Pi`)
-- Pi-native tool integration (`ask_user_question`, `todo`, `Agent` with `subagent_type`)
+- Pi-native tool integration (`ask_user_question`, `todo`, `subagent` with `subagent_type`)
 
 ---
 
