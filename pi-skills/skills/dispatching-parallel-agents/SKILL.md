@@ -65,43 +65,55 @@ Each agent gets:
 
 ### 3. Dispatch in Parallel
 
-Use `subagent()` with a `tasks` array to dispatch multiple agents concurrently:
+Use the `subagent` tool with `run_in_background: true` to dispatch multiple agents concurrently:
 
 ```typescript
 subagent({
-  tasks: [
-    {
-      agent: "worker",
-      task: "Fix the 3 failing tests in src/agents/agent-tool-abort.test.ts...",
-      context: "fresh"
-    },
-    {
-      agent: "worker",
-      task: "Fix the 2 failing tests in src/agents/batch-completion-behavior.test.ts...",
-      context: "fresh"
-    },
-    {
-      agent: "worker",
-      task: "Fix the failing test in src/agents/tool-approval-race-conditions.test.ts...",
-      context: "fresh"
-    }
-  ]
+  subagent_type: "worker",
+  description: "Fix abort tests",
+  prompt: `Fix the 3 failing tests in src/agents/agent-tool-abort.test.ts:
+1. "should abort tool with partial output capture"
+2. "should handle mixed completed and aborted tools"
+3. "should properly track pendingToolCount"
+
+Your task:
+1. Read the test file and understand what each test verifies
+2. Identify root cause
+3. Fix by replacing arbitrary timeouts with event-based waiting or fixing bugs
+4. Do NOT just increase timeouts — find the real issue
+
+Return: Summary of root cause and changes.`,
+  run_in_background: true
+})
+
+subagent({
+  subagent_type: "worker",
+  description: "Fix batch tests",
+  prompt: `Fix the 2 failing tests in src/agents/batch-completion-behavior.test.ts.
+Read the test file, identify root cause, fix the issue.
+Return: Summary of what was found and fixed.`,
+  run_in_background: true
+})
+
+subagent({
+  subagent_type: "worker",
+  description: "Fix race tests",
+  prompt: `Fix the failing test in src/agents/tool-approval-race-conditions.test.ts.
+Read the test file, identify the race condition, fix it.
+Return: Summary of root cause and changes.`,
+  run_in_background: true
 })
 ```
 
-All three agents run concurrently with isolated (`fresh`) context. You continue with coordination work while they investigate.
-
-**Why `context: "fresh"`?** Parallel workers with `fork` (the default for `worker`) would inherit the full parent session, wasting tokens. `fresh` starts each worker with a clean context — you provide exactly what they need in the `task` string.
+All three agents run concurrently in the background. You continue with coordination work while they investigate.
 
 ### 4. Review and Integrate
 
-When the parallel dispatch returns:
-- Read each agent's result (returned as aggregated output with separators)
-- Verify fixes don't conflict
+When agents complete (you'll receive completion notifications):
+- Check each agent's result with `get_subagent_result({ agent_id: "..." })`
+- Read each summary and verify fixes don't conflict
 - Run full test suite
 - Integrate all changes
-
-**Note:** `pi-subagents` returns aggregated parallel results with separators, not individual agent results to poll. No need to call `get_subagent_result` for each agent.
 
 ## Agent Prompt Structure
 
@@ -165,13 +177,15 @@ Return: Summary of what you found and what you fixed.
 
 **Dispatch:**
 ```typescript
-subagent({
-  tasks: [
-    { agent: "worker", task: "Fix agent-tool-abort.test.ts...", context: "fresh" },
-    { agent: "worker", task: "Fix batch-completion-behavior.test.ts...", context: "fresh" },
-    { agent: "worker", task: "Fix tool-approval-race-conditions.test.ts...", context: "fresh" }
-  ]
-})
+subagent({ subagent_type: "worker", description: "Fix abort tests",
+  prompt: "Fix agent-tool-abort.test.ts: replace timeouts with event-based waiting...",
+  run_in_background: true })
+subagent({ subagent_type: "worker", description: "Fix batch tests",
+  prompt: "Fix batch-completion-behavior.test.ts: fix event structure bug...",
+  run_in_background: true })
+subagent({ subagent_type: "worker", description: "Fix race tests",
+  prompt: "Fix tool-approval-race-conditions.test.ts: add wait for async execution...",
+  run_in_background: true })
 ```
 
 **Results:**
