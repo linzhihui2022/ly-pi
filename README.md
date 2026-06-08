@@ -12,7 +12,7 @@ Personal shell, terminal, and coding agent configuration — managed as a git re
 | `AGENTS.md` | auto-discovered by pi | Configure-repo development guide (loaded by pi alongside `MY-AGENTS.md`) |
 | `pi-extensions/` | `./install.sh` → `~/.pi/agent/extensions/` | Pi custom extensions (Bun workspaces) |
 | `pi-skills/` | `./install.sh` → `~/.pi/agent/skills/` | Custom skills |
-| `pi-themes/` | `./install.sh` → `~/.pi/agent/themes/` | Custom themes |
+| `pi-themes/` | `./install.sh` → `~/.pi/agent/themes/` | Custom themes（仅 `*.json`，排除 `package.json`） |
 | `turbo.json` | — | Turborepo pipeline (build → test → deploy) |
 | `install.sh` | — | Thin wrapper: `bun run deploy` |
 

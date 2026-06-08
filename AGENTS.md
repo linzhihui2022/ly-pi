@@ -70,6 +70,7 @@ cd pi-extensions/my-hud && vitest run
 - JSON 配置文件与扩展目录同级：`pi-extensions/my-xxx.json`
 - 支持热重载（通过 `/reload`）
 - 纯配置扩展统一放在 `pi-config/`
+- `pi-themes/scripts/deploy.ts` 只部署 `*.json` 主题文件，排除 `package.json`（Pi 会把目录下所有 `.json` 当主题加载，非主题文件会导致校验错误）
 
 ### 需求文档同步
 

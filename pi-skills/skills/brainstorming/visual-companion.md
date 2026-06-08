@@ -26,7 +26,7 @@ A question *about* a UI topic is not automatically a visual question. "What kind
 
 ## How It Works
 
-The Visual Companion is a Pi extension that provides four tools. You call `visual_companion_start` to open a browser session, then push HTML screens with `visual_companion_show`. The user sees the content in their browser and can click to select options. You read their interactions with `visual_companion_read_events`.
+The Visual Companion is a Pi extension that provides five tools. You call `visual_companion_start` to open a browser session, then push HTML screens with `visual_companion_show`. The user sees the content in their browser and can click to select options. You call `visual_companion_wait` to block until the user clicks the **确认** button, which automatically returns their confirmed selection.
 
 **Content fragments vs full documents:** If your HTML starts with `<!DOCTYPE` or `<html`, it is served as-is. Otherwise, the server automatically wraps your content in the frame template — adding the header, CSS theme, selection indicator, and all interactive infrastructure. **Write content fragments by default.** Only write full documents when you need complete control over the page.
 
@@ -46,21 +46,25 @@ Tell the user to open the URL.
    - **Never reuse screen names** within a session — each screen gets a fresh name
    - The server automatically serves the newest screen
 
-2. **Tell user what to expect and end your turn:**
+2. **Tell user what to expect:**
    - Remind them of the URL (every step, not just first)
    - Give a brief text summary of what's on screen (e.g., "Showing 3 layout options for the homepage")
-   - Ask them to respond in the terminal: "Take a look and let me know what you think. Click to select an option if you'd like."
+   - Instruct them: "Click to select an option, then click **确认** when you've decided."
 
-3. **On your next turn** — after the user responds in the terminal:
-   - Call `visual_companion_read_events` with the `session_id`
-   - **Look for `type: "confirm"` events first** — these represent the user's final decision after clicking the confirm button
-   - If no `confirm` event exists, fall back to the last `click` event as the tentative selection
-   - Merge with the user's terminal text to get the full picture
-   - The terminal message is the primary feedback; events provide structured interaction data
+3. **Call `visual_companion_wait`** — this blocks until the user clicks the confirm button:
+   - Parameters: `session_id` (from start), `timeout_ms` (default 300000 = 5 minutes)
+   - Returns the confirm event directly with `choice`, `text`, `count` fields
+   - **You get the result automatically** — no need for the user to type in the terminal
+   - If the user hasn't confirmed by timeout, you'll get an error — prompt them again
 
-4. **Iterate or advance** — if feedback changes current screen, push a new screen with a new name (e.g., `layout-v2`). Only move to the next question when the current step is validated.
+4. **Proceed with the result** — the confirm event contains:
+   - `choice`: single string or array (multi-select) — use this as the definitive selection
+   - `text`: comma-joined labels — for display or confirmation
+   - `count`: number of selections — for multi-select validation
 
-5. **Unload when returning to terminal** — when the next step doesn't need the browser (e.g., a clarifying question, a tradeoff discussion), push a waiting screen to clear the stale content:
+5. **Iterate or advance** — if feedback changes current screen, push a new screen with a new name (e.g., `layout-v2`). Only move to the next question when the current step is validated.
+
+6. **Unload when returning to terminal** — when the next step doesn't need the browser (e.g., a clarifying question, a tradeoff discussion), push a waiting screen to clear the stale content:
 
    ```html
    <!-- name: waiting (or waiting-2, etc.) -->
@@ -71,7 +75,14 @@ Tell the user to open the URL.
 
    This prevents the user from staring at a resolved choice while the conversation has moved on. When the next visual question comes up, push a new content screen as usual.
 
-6. Repeat until done.
+7. Repeat until done.
+
+### Reading Events Without Waiting (Fallback)
+
+If you need to inspect click events without blocking for confirmation, use `visual_companion_read_events`:
+- Returns all click and confirm events as an array
+- Use for diagnostics or checking if the user explored options without confirming
+- In the main flow, prefer `visual_companion_wait` for automatic results
 
 ## Writing Content Fragments
 
@@ -193,7 +204,7 @@ The frame template provides these CSS classes for your content:
 
 ## Browser Events Format
 
-When the user interacts with the browser, events are returned by `visual_companion_read_events` as an array of objects.
+When the user interacts with the browser, events are returned by `visual_companion_wait` (single confirm event) or `visual_companion_read_events` (array of all click/confirm events).
 
 **Click events** — recorded when the user clicks an option:
 ```json
@@ -211,12 +222,17 @@ For multi-select mode, `choice` is an array and `count` reflects the number of s
 {"type":"confirm","choice":["a","c"],"text":"Option A, Option C","count":2,"timestamp":1706000125}
 ```
 
-**Reading events in Pi:**
-- **Prefer `confirm` events** — they represent the user's explicit final decision. The confirm button disables further interaction, so you can trust this as the definitive answer.
-- **Fall back to `click` events** — if no confirm exists, the last `click` event is typically the tentative selection.
-- The full `click` stream can reveal hesitation or exploration patterns worth asking about.
+**Using `visual_companion_wait`:**
+- Call immediately after `visual_companion_show` — blocks until user clicks **确认**
+- Returns the confirm event directly: `{type:"confirm", choice, text, count, timestamp}`
+- This is the primary flow — no need for the user to type in the terminal
 
-If no events are returned, the user didn't interact with the browser — use only their terminal text.
+**Using `visual_companion_read_events` (fallback):**
+- **Prefer `confirm` events** — they represent the user's explicit final decision
+- **Fall back to `click` events** — if no confirm exists, the last `click` event is the tentative selection
+- The full `click` stream can reveal hesitation or exploration patterns worth asking about
+
+If no events are returned, the user didn't interact with the browser.
 
 ## Design Tips
 
