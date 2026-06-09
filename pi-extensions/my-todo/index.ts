@@ -11,8 +11,14 @@ export default function myTodo(pi: ExtensionAPI): void {
   function refreshOverlay(ctx: ExtensionContext): void {
     if (!ctx.hasUI) return;
     const tasks = state.list();
-    const lines = renderOverlay(tasks);
-    ctx.ui.setWidget("my-todo", lines.length > 0 ? lines : undefined);
+    if (tasks.length === 0) {
+      ctx.ui.setWidget("my-todo", undefined);
+      return;
+    }
+    ctx.ui.setWidget("my-todo", (_tui, theme) => ({
+      render: () => renderOverlay(tasks, theme),
+      invalidate: () => {},
+    }));
   }
 
   pi.on("session_start", async (_event, ctx) => {

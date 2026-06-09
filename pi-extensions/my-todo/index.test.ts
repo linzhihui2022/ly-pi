@@ -21,8 +21,8 @@ const mockPi = {
 const createMockCtx = (entries: any[] = []) => ({
   hasUI: true,
   ui: {
-    setWidget: vi.fn((_name: string, lines?: string[]) => {
-      widgetLines.push(lines);
+    setWidget: vi.fn((_name: string, _factory?: unknown) => {
+      widgetLines.push(undefined);
     }),
     notify: vi.fn(),
   },
@@ -101,7 +101,7 @@ describe("my-todo extension", () => {
     await handler({}, ctx);
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
       "my-todo",
-      expect.any(Array)
+      expect.any(Function)
     );
   });
 
