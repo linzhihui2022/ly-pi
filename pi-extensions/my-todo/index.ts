@@ -143,12 +143,92 @@ export default function myTodo(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("todos", {
-    description: "List all tasks",
-    handler: async (_args, ctx) => {
-      const tasks = state.list();
-      const lines = tasks.map(formatTaskLine);
-      const text = tasks.length > 0 ? lines.join("\n") : "No tasks.";
-      ctx.ui.notify(text, "info");
+    description: "Manage tasks: /todos [list|done|start|delete|clear|add] [args]",
+    handler: async (args, ctx) => {
+      const trimmed = (args ?? "").trim();
+      const [sub, ...rest] = trimmed.split(/\s+/);
+
+      const listAll = () => {
+        const tasks = state.list();
+        const lines = tasks.map(formatTaskLine);
+        ctx.ui.notify(tasks.length > 0 ? lines.join("\n") : "No tasks.", "info");
+      };
+
+      // No args or "list" → show all
+      if (!trimmed || sub === "list") {
+        listAll();
+        return;
+      }
+
+      if (sub === "clear") {
+        state.clear();
+        refreshOverlay(ctx);
+        ctx.ui.notify("All tasks cleared.", "info");
+        return;
+      }
+
+      if (sub === "add") {
+        const subject = rest.join(" ").trim();
+        if (!subject) {
+          ctx.ui.notify("Usage: /todos add <subject>", "warning");
+          return;
+        }
+        const task = state.create(subject);
+        refreshOverlay(ctx);
+        ctx.ui.notify(`Created task #${task.id}: ${task.subject}`, "info");
+        return;
+      }
+
+      const validMutations = ["done", "start", "delete"] as const;
+      if (!validMutations.includes(sub as (typeof validMutations)[number])) {
+        ctx.ui.notify(`Unknown subcommand: ${sub}\nUsage: /todos [list|done|start|delete|clear|add]`, "warning");
+        return;
+      }
+
+      const parseId = (raw: string | undefined): number | null => {
+        if (!raw) return null;
+        const n = Number(raw);
+        return Number.isNaN(n) ? null : n;
+      };
+
+      const id = parseId(rest[0]);
+      if (id === null) {
+        ctx.ui.notify(`Usage: /todos ${sub} <id>`, "warning");
+        return;
+      }
+
+      if (sub === "done") {
+        try {
+          const task = state.update(id, { status: "completed" });
+          refreshOverlay(ctx);
+          ctx.ui.notify(`Completed task #${task.id}: ${task.subject}`, "info");
+        } catch (err) {
+          ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+        }
+        return;
+      }
+
+      if (sub === "start") {
+        try {
+          const task = state.update(id, { status: "in_progress" });
+          refreshOverlay(ctx);
+          ctx.ui.notify(`Started task #${task.id}: ${task.subject}`, "info");
+        } catch (err) {
+          ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+        }
+        return;
+      }
+
+      if (sub === "delete") {
+        try {
+          const task = state.delete(id);
+          refreshOverlay(ctx);
+          ctx.ui.notify(`Deleted task #${task.id}: ${task.subject}`, "info");
+        } catch (err) {
+          ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+        }
+        return;
+      }
     },
   });
 }

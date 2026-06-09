@@ -182,4 +182,132 @@ describe("my-todo extension", () => {
     await cmd.handler("", ctx);
     expect(ctx.ui.notify).toHaveBeenCalledWith("No tasks.", "info");
   });
+
+  describe("/todos subcommands", () => {
+    it("done marks task as completed", async () => {
+      const mod = await loadModule();
+      mod.default(mockPi as unknown as ExtensionAPI);
+
+      const toolDef = registeredTools[0];
+      const ctx = createMockCtx();
+      await toolDef.execute("tc-1", { action: "create", subject: "X" }, undefined, undefined, ctx);
+
+      const cmd = registeredCommands.get("todos")!;
+      await cmd.handler("done 1", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("Completed task #1"),
+        "info"
+      );
+    });
+
+    it("start marks task as in_progress", async () => {
+      const mod = await loadModule();
+      mod.default(mockPi as unknown as ExtensionAPI);
+
+      const toolDef = registeredTools[0];
+      const ctx = createMockCtx();
+      await toolDef.execute("tc-1", { action: "create", subject: "X" }, undefined, undefined, ctx);
+
+      const cmd = registeredCommands.get("todos")!;
+      await cmd.handler("start 1", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("Started task #1"),
+        "info"
+      );
+    });
+
+    it("delete removes task", async () => {
+      const mod = await loadModule();
+      mod.default(mockPi as unknown as ExtensionAPI);
+
+      const toolDef = registeredTools[0];
+      const ctx = createMockCtx();
+      await toolDef.execute("tc-1", { action: "create", subject: "X" }, undefined, undefined, ctx);
+
+      const cmd = registeredCommands.get("todos")!;
+      await cmd.handler("delete 1", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("Deleted task #1"),
+        "info"
+      );
+    });
+
+    it("add creates a task", async () => {
+      const mod = await loadModule();
+      mod.default(mockPi as unknown as ExtensionAPI);
+
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("add New task here", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("Created task #1"),
+        "info"
+      );
+    });
+
+    it("clear removes all tasks", async () => {
+      const mod = await loadModule();
+      mod.default(mockPi as unknown as ExtensionAPI);
+
+      const toolDef = registeredTools[0];
+      const ctx = createMockCtx();
+      await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
+
+      const cmd = registeredCommands.get("todos")!;
+      await cmd.handler("clear", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith("All tasks cleared.", "info");
+    });
+
+    it("warns on missing id", async () => {
+      const mod = await loadModule();
+      mod.default(mockPi as unknown as ExtensionAPI);
+
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("done", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("Usage"),
+        "warning"
+      );
+    });
+
+    it("warns on unknown subcommand", async () => {
+      const mod = await loadModule();
+      mod.default(mockPi as unknown as ExtensionAPI);
+
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("foobar", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("Unknown subcommand"),
+        "warning"
+      );
+    });
+
+    it("warns on invalid id", async () => {
+      const mod = await loadModule();
+      mod.default(mockPi as unknown as ExtensionAPI);
+
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("done xyz", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("Usage"),
+        "warning"
+      );
+    });
+
+    it("errors on nonexistent task", async () => {
+      const mod = await loadModule();
+      mod.default(mockPi as unknown as ExtensionAPI);
+
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("done 999", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("not found"),
+        "error"
+      );
+    });
+  });
 });
