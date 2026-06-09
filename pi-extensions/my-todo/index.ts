@@ -3,7 +3,18 @@ import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { TaskState } from "./state";
 import { renderOverlay } from "./overlay";
-import type { TaskStatus } from "./types";
+import type { Task, TaskStatus } from "./types";
+
+const STATUS_SYMBOLS: Record<Task["status"], string> = {
+  pending: "○",
+  in_progress: "●",
+  completed: "✓",
+  deleted: "🗑",
+};
+
+function formatTaskLine(task: Task): string {
+  return `${STATUS_SYMBOLS[task.status]} #${task.id} ${task.subject}`;
+}
 
 export default function myTodo(pi: ExtensionAPI): void {
   let state = new TaskState();
@@ -80,7 +91,7 @@ export default function myTodo(pi: ExtensionAPI): void {
           }
           case "list": {
             const tasks = state.list(params.includeDeleted ?? false);
-            const lines = tasks.map((t) => `#${t.id} [${t.status}] ${t.subject}`);
+            const lines = tasks.map(formatTaskLine);
             return {
               content: [{ type: "text", text: tasks.length > 0 ? lines.join("\n") : "No tasks." }],
               details: { action: params.action, params, tasks, nextId: state.getNextId() },
@@ -135,7 +146,7 @@ export default function myTodo(pi: ExtensionAPI): void {
     description: "List all tasks",
     handler: async (_args, ctx) => {
       const tasks = state.list();
-      const lines = tasks.map((t) => `#${t.id} [${t.status}] ${t.subject}`);
+      const lines = tasks.map(formatTaskLine);
       const text = tasks.length > 0 ? lines.join("\n") : "No tasks.";
       ctx.ui.notify(text, "info");
     },
