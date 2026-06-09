@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { exec } from "node:child_process";
-import { listCategories, pickSoundFile, resolveSoundPath, playCategory, playOverlay } from "./player";
+import { listCategories, pickSoundFile, resolveSoundPath, playCategory, playOverlay, detectTerminal } from "./player";
 import type { BtConfig } from "./types";
 
 vi.mock("node:child_process", () => ({
@@ -135,8 +135,9 @@ describe("playOverlay", () => {
     expect(cmd).toContain("SESSION START");
     expect(cmd).toContain("BT-7274 已上线");
     expect(cmd).toContain("系统重启");
-    expect(cmd).toContain("3");
+    expect(cmd).toContain("5");
     expect(cmd).toContain("blue");
+    expect(cmd).toContain("WezTerm");
   });
 
   it("spawns osascript with orange color for agent_start", () => {
@@ -183,7 +184,7 @@ describe("playOverlay", () => {
     // Slots: 0,1,2,3,4,0,1 → last should be slot 1
     const lastCall = vi.mocked(exec).mock.calls[before + 6];
     const cmd = lastCall[0] as string;
-    expect(cmd).toContain('blue" 1');
+    expect(cmd).toMatch(/blue"\s+1\s+"WezTerm"/);
   });
 
   it("no-ops when overlayTextMap is missing", () => {
@@ -212,5 +213,60 @@ describe("playOverlay", () => {
       expect.stringContaining("osascript failed"),
     );
     consoleSpy.mockRestore();
+  });
+});
+
+describe("detectTerminal", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    // Reset cache between tests
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it("returns WezTerm when TERM_PROGRAM is WezTerm", async () => {
+    process.env = { ...originalEnv, TERM_PROGRAM: "WezTerm", WEZTERM_PANE: undefined, ITERM_SESSION_ID: undefined };
+    vi.resetModules();
+    const fresh = await import("./player");
+    expect(fresh.detectTerminal()).toBe("WezTerm");
+  });
+
+  it("returns iTerm when TERM_PROGRAM is iTerm.app", async () => {
+    process.env = { ...originalEnv, TERM_PROGRAM: "iTerm.app", WEZTERM_PANE: undefined, ITERM_SESSION_ID: undefined };
+    vi.resetModules();
+    const fresh = await import("./player");
+    expect(fresh.detectTerminal()).toBe("iTerm");
+  });
+
+  it("returns Terminal when TERM_PROGRAM is Apple_Terminal", async () => {
+    process.env = { ...originalEnv, TERM_PROGRAM: "Apple_Terminal", WEZTERM_PANE: undefined, ITERM_SESSION_ID: undefined };
+    vi.resetModules();
+    const fresh = await import("./player");
+    expect(fresh.detectTerminal()).toBe("Terminal");
+  });
+
+  it("returns WezTerm when WEZTERM_PANE is set", async () => {
+    process.env = { ...originalEnv, TERM_PROGRAM: undefined, WEZTERM_PANE: "1", ITERM_SESSION_ID: undefined };
+    vi.resetModules();
+    const fresh = await import("./player");
+    expect(fresh.detectTerminal()).toBe("WezTerm");
+  });
+
+  it("returns iTerm when ITERM_SESSION_ID is set", async () => {
+    process.env = { ...originalEnv, TERM_PROGRAM: undefined, WEZTERM_PANE: undefined, ITERM_SESSION_ID: "abc123" };
+    vi.resetModules();
+    const fresh = await import("./player");
+    expect(fresh.detectTerminal()).toBe("iTerm");
+  });
+
+  it("defaults to WezTerm when no env vars match", async () => {
+    process.env = { ...originalEnv, TERM_PROGRAM: undefined, WEZTERM_PANE: undefined, ITERM_SESSION_ID: undefined };
+    vi.resetModules();
+    const fresh = await import("./player");
+    expect(fresh.detectTerminal()).toBe("WezTerm");
   });
 });

@@ -3,6 +3,26 @@ import { exec } from "node:child_process";
 import type { BtCategory, BtConfig, OverlayColor } from "./types";
 
 /**
+ * Detect the terminal emulator running the current process.
+ * Caches result after first call.
+ */
+let cachedTerminal: string | undefined;
+
+export function detectTerminal(): string {
+  if (cachedTerminal !== undefined) return cachedTerminal;
+
+  const term = process.env.TERM_PROGRAM;
+  if (term === "WezTerm") cachedTerminal = "WezTerm";
+  else if (term === "iTerm.app") cachedTerminal = "iTerm";
+  else if (term === "Apple_Terminal") cachedTerminal = "Terminal";
+  else if (process.env.WEZTERM_PANE) cachedTerminal = "WezTerm";
+  else if (process.env.ITERM_SESSION_ID) cachedTerminal = "iTerm";
+  else cachedTerminal = "WezTerm";
+
+  return cachedTerminal;
+}
+
+/**
  * List all available sound categories with their descriptions.
  */
 export function listCategories(config: BtConfig): { name: string; description: string }[] {
@@ -47,15 +67,16 @@ export function playOverlay(
   if (!textConfig) return;
 
   const color = EVENT_COLOR_MAP[eventName] ?? "blue";
-  const duration = 3;
+  const duration = 5;
   const slot = overlaySlot % MAX_OVERLAY_SLOTS;
   overlaySlot++;
 
   const scriptPath = resolve(extDir, "dist", "mac-overlay.js");
+  const terminalApp = detectTerminal();
   exec(
     `osascript -l JavaScript "${scriptPath}" ` +
       `"${textConfig.type}" "${textConfig.title}" "${textConfig.subtitle ?? ""}" ` +
-      `${duration} "${color}" ${slot}`,
+      `${duration} "${color}" ${slot} "${terminalApp}"`,
     (error) => {
       if (error) {
         console.error(`[my-bt] Overlay failed: ${error.message}`);
