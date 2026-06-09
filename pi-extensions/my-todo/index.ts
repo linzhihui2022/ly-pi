@@ -149,23 +149,32 @@ export default function myTodo(pi: ExtensionAPI): void {
       const parts = trimmed.split(/\s+/);
 
       if (parts.length <= 1) {
-        // Completing subcommand
-        const subs = ["list", "done", "start", "delete", "clear", "add"];
+        const subs: { value: string; label: string; description: string }[] = [
+          { value: "list", label: "list", description: "List all tasks" },
+          { value: "done", label: "done", description: "Mark a task as completed" },
+          { value: "start", label: "start", description: "Mark a task as in progress" },
+          { value: "delete", label: "delete", description: "Delete a task" },
+          { value: "clear", label: "clear", description: "Clear all tasks" },
+          { value: "add", label: "add", description: "Add a new task" },
+        ];
         const p = parts[0] ?? "";
         const filtered = subs
-          .filter((s) => s.startsWith(p))
-          .map((s) => ({ value: s, label: s }));
+          .filter((s) => s.value.startsWith(p))
+          .map((s) => ({ value: s.value, label: s.label, description: s.description }));
         return filtered.length > 0 ? filtered : null;
       }
 
       const sub = parts[0];
       if (sub === "done" || sub === "start" || sub === "delete") {
-        // Completing task ID
         const tasks = state.list();
         const idPrefix = parts[1] ?? "";
         const filtered = tasks
           .filter((t) => String(t.id).startsWith(idPrefix))
-          .map((t) => ({ value: String(t.id), label: `#${t.id} ${t.subject}` }));
+          .map((t) => ({
+            value: String(t.id),
+            label: `#${t.id} ${t.subject}`,
+            description: t.status,
+          }));
         return filtered.length > 0 ? filtered : null;
       }
 
