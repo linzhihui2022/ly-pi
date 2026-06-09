@@ -144,6 +144,33 @@ export default function myTodo(pi: ExtensionAPI): void {
 
   pi.registerCommand("todos", {
     description: "Manage tasks: /todos [list|done|start|delete|clear|add] [args]",
+    getArgumentCompletions: (prefix: string) => {
+      const trimmed = prefix.trimStart();
+      const parts = trimmed.split(/\s+/);
+
+      if (parts.length <= 1) {
+        // Completing subcommand
+        const subs = ["list", "done", "start", "delete", "clear", "add"];
+        const p = parts[0] ?? "";
+        const filtered = subs
+          .filter((s) => s.startsWith(p))
+          .map((s) => ({ value: s, label: s }));
+        return filtered.length > 0 ? filtered : null;
+      }
+
+      const sub = parts[0];
+      if (sub === "done" || sub === "start" || sub === "delete") {
+        // Completing task ID
+        const tasks = state.list();
+        const idPrefix = parts[1] ?? "";
+        const filtered = tasks
+          .filter((t) => String(t.id).startsWith(idPrefix))
+          .map((t) => ({ value: String(t.id), label: `#${t.id} ${t.subject}` }));
+        return filtered.length > 0 ? filtered : null;
+      }
+
+      return null;
+    },
     handler: async (args, ctx) => {
       const trimmed = (args ?? "").trim();
       const [sub, ...rest] = trimmed.split(/\s+/);
