@@ -1,6 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { renderOverlay } from "./overlay";
 import type { Task } from "./types";
+
+const mockTheme = {
+  fg: vi.fn((color: string, text: string) => `[${color}]${text}[/${color}]`),
+  bold: vi.fn((text: string) => `**${text}**`),
+};
 
 describe("renderOverlay", () => {
   it("returns empty array for no tasks", () => {
@@ -109,5 +114,42 @@ describe("renderOverlay", () => {
     const result = renderOverlay(tasks);
     expect(result).toHaveLength(6); // title + 5 tasks, no overflow line
     expect(result[result.length - 1]).not.toContain("more");
+  });
+
+  describe("with theme", () => {
+    it("styles title with accent and bold", () => {
+      const tasks: Task[] = [{ id: 1, subject: "A", status: "pending" }];
+      renderOverlay(tasks, mockTheme);
+      expect(mockTheme.bold).toHaveBeenCalledWith("Tasks (1)");
+      expect(mockTheme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("Tasks (1)"));
+    });
+
+    it("styles pending task in dim", () => {
+      const tasks: Task[] = [{ id: 1, subject: "A", status: "pending" }];
+      renderOverlay(tasks, mockTheme);
+      expect(mockTheme.fg).toHaveBeenCalledWith("dim", "○ #1 A");
+    });
+
+    it("styles in_progress task in accent", () => {
+      const tasks: Task[] = [{ id: 1, subject: "A", status: "in_progress" }];
+      renderOverlay(tasks, mockTheme);
+      expect(mockTheme.fg).toHaveBeenCalledWith("accent", "● #1 A");
+    });
+
+    it("styles completed task in muted", () => {
+      const tasks: Task[] = [{ id: 1, subject: "A", status: "completed" }];
+      renderOverlay(tasks, mockTheme);
+      expect(mockTheme.fg).toHaveBeenCalledWith("muted", "✓ #1 A");
+    });
+
+    it("styles overflow in dim", () => {
+      const tasks: Task[] = Array.from({ length: 6 }, (_, i) => ({
+        id: i + 1,
+        subject: `Task ${i + 1}`,
+        status: "pending" as const,
+      }));
+      renderOverlay(tasks, mockTheme);
+      expect(mockTheme.fg).toHaveBeenCalledWith("dim", "  +1 more");
+    });
   });
 });
