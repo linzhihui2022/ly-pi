@@ -119,134 +119,90 @@ describe("myWebtool", () => {
     expect(result.details.error).toBe("Tavily is not enabled");
   });
 
-  it("web_search renderCall returns Text component", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
+  describe("web_search render", () => {
+    let webSearch: any;
 
-    const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
-    )[0];
+    beforeEach(async () => {
+      const mod = await import("./index");
+      mod.default(mockPi);
+      webSearch = mockRegisterTool.mock.calls.find(
+        (call) => call[0].name === "web_search"
+      )[0];
+    });
 
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-      bold: vi.fn((text: string) => text),
-    };
+    it("renderCall formats query with theme colors", () => {
+      const theme = {
+        fg: vi.fn((_c: string, text: string) => text),
+        bold: vi.fn((text: string) => text),
+      };
+      webSearch.renderCall({ query: "test" }, theme as any, {});
+      expect(theme.bold).toHaveBeenCalledWith("WebSearch ");
+      expect(theme.fg).toHaveBeenCalledWith("toolTitle", "WebSearch ");
+      expect(theme.fg).toHaveBeenCalledWith("accent", '"test"');
+    });
 
-    const text = webSearch.renderCall({ query: "test" }, theme as any, {});
-    expect(text).toBeDefined();
-  });
+    it("renderResult emits warning color when partial", () => {
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      webSearch.renderResult(
+        { content: [], details: {} },
+        { expanded: false, isPartial: true },
+        theme as any,
+        {}
+      );
+      expect(theme.fg).toHaveBeenCalledOnce();
+      expect(theme.fg).toHaveBeenCalledWith("warning", "Searching...");
+    });
 
-  it("web_search renderResult shows searching state", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
+    it("renderResult emits plural result count", () => {
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      webSearch.renderResult(
+        { content: [], details: { resultCount: 5, results: [] } },
+        { expanded: false, isPartial: false },
+        theme as any,
+        {}
+      );
+      expect(theme.fg).toHaveBeenCalledWith("success", "✓ 5 results");
+    });
 
-    const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
-    )[0];
+    it("renderResult uses singular form for 1 result", () => {
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      webSearch.renderResult(
+        { content: [], details: { resultCount: 1, results: [] } },
+        { expanded: false, isPartial: false },
+        theme as any,
+        {}
+      );
+      expect(theme.fg).toHaveBeenCalledWith("success", "✓ 1 result");
+    });
 
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-    };
+    it("renderResult defaults to 0 results when details is empty", () => {
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      webSearch.renderResult(
+        { content: [], details: {} },
+        { expanded: false, isPartial: false },
+        theme as any,
+        {}
+      );
+      expect(theme.fg).toHaveBeenCalledWith("success", "✓ 0 results");
+    });
 
-    const text = webSearch.renderResult(
-      { content: [], details: {} },
-      { expanded: false, isPartial: true },
-      theme as any,
-      {}
-    );
-    expect(text).toBeDefined();
-  });
-
-  it("web_search renderResult shows results count", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
-
-    const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
-    )[0];
-
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-    };
-
-    const text = webSearch.renderResult(
-      { content: [], details: { resultCount: 5, results: [] } },
-      { expanded: false, isPartial: false },
-      theme as any,
-      {}
-    );
-    expect(text).toBeDefined();
-  });
-
-  it("web_search renderResult shows singular result", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
-
-    const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
-    )[0];
-
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-    };
-
-    const text = webSearch.renderResult(
-      { content: [], details: { resultCount: 1, results: [] } },
-      { expanded: false, isPartial: false },
-      theme as any,
-      {}
-    );
-    expect(text).toBeDefined();
-  });
-
-  it("web_search renderResult handles missing details", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
-
-    const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
-    )[0];
-
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-    };
-
-    const text = webSearch.renderResult(
-      { content: [], details: {} },
-      { expanded: false, isPartial: false },
-      theme as any,
-      {}
-    );
-    expect(text).toBeDefined();
-  });
-
-  it("web_search renderResult expands to show results", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
-
-    const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
-    )[0];
-
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-    };
-
-    const text = webSearch.renderResult(
-      {
-        content: [],
-        details: {
-          resultCount: 2,
-          results: [
-            { title: "A", url: "https://a.com", snippet: "..." },
-          ],
+    it("renderResult appends preview lines when expanded", () => {
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      webSearch.renderResult(
+        {
+          content: [],
+          details: {
+            resultCount: 2,
+            results: [{ title: "A", url: "https://a.com", snippet: "..." }],
+          },
         },
-      },
-      { expanded: true, isPartial: false },
-      theme as any,
-      {}
-    );
-    expect(text).toBeDefined();
+        { expanded: true, isPartial: false },
+        theme as any,
+        {}
+      );
+      expect(theme.fg).toHaveBeenCalledWith("success", "✓ 2 results");
+      expect(theme.fg).toHaveBeenCalledWith("dim", "• A");
+    });
   });
 
   it("web_fetch renderCall returns Text component", async () => {
@@ -622,6 +578,49 @@ describe("myWebtool", () => {
       "Tavily: key 10/100 used (90 remaining); plan 5/200 used (195 remaining)",
       "info"
     );
+  });
+
+  it("webtool-usage handler clears widget after timeout", async () => {
+    vi.useFakeTimers();
+
+    const { Tavily } = await import("./backends/tavily");
+    const mockNotify = vi.fn();
+    const mockSetWidget = vi.fn();
+    vi.mocked(Tavily).mockImplementation(function () {
+      return {
+        name: "tavily",
+        label: "Tavily",
+        check: vi.fn().mockResolvedValue({ enabled: true, message: "ok" }),
+        search: vi.fn(),
+        fetch: vi.fn(),
+        usage: vi.fn().mockResolvedValue({
+          ok: true,
+          key: { usage: 10, limit: 100, remaining: 90 },
+          plan: { usage: 5, limit: 200, remaining: 195 },
+          features: {},
+        }),
+      } as any;
+    });
+
+    const mod = await import("./index");
+    mod.default(mockPi);
+    await vi.runAllTimersAsync();
+
+    const cmd = mockRegisterCommand.mock.calls.find(
+      (call) => call[0] === "webtool-usage"
+    );
+    const handler = cmd[1].handler;
+    await handler("", { ui: { notify: mockNotify, setWidget: mockSetWidget } } as any);
+
+    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", [
+      "Tavily: key 10/100 used (90 remaining); plan 5/200 used (195 remaining)",
+    ]);
+
+    // Clear all pending timers
+    vi.advanceTimersByTime(3000);
+    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", undefined);
+
+    vi.useRealTimers();
   });
 
   it("webtool-usage handler notifies on error", async () => {
