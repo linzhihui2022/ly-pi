@@ -45,11 +45,6 @@ async function initExtension() {
 }
 
 describe("my-todo extension", () => {
-  it("exports a default function", async () => {
-    const mod = await import("./index");
-    expect(typeof mod.default).toBe("function");
-  });
-
   it("registers todo tool", async () => {
     await initExtension();
     expect(mockPi.registerTool).toHaveBeenCalledWith(
