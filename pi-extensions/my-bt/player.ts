@@ -49,6 +49,7 @@ const EVENT_COLOR_MAP: Record<string, OverlayColor> = {
   session_start: "blue",
   agent_start: "orange",
   agent_end: "green",
+  permissions_ui_prompt: "red",
 };
 
 /**

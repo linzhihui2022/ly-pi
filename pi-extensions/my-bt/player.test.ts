@@ -203,6 +203,22 @@ describe("playOverlay", () => {
     expect(vi.mocked(exec).mock.calls.length).toBe(before);
   });
 
+  it("uses red color for permissions_ui_prompt", () => {
+    const configWithPermissionOverlay: BtConfig = {
+      ...mockConfig,
+      overlayTextMap: {
+        permissions_ui_prompt: { type: "WARNING", title: "侦测到危险操作", subtitle: "铁御，请确认权限" },
+      },
+    };
+    playOverlay(configWithPermissionOverlay, "permissions_ui_prompt", extDir);
+    const lastCall = vi.mocked(exec).mock.calls.at(-1);
+    const cmd = lastCall![0] as string;
+    expect(cmd).toContain("red");
+    expect(cmd).toContain("WARNING");
+    expect(cmd).toContain("侦测到危险操作");
+    expect(cmd).toContain("铁御，请确认权限");
+  });
+
   it("logs error when osascript fails", () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(exec).mockImplementationOnce((_cmd, cb) => {
