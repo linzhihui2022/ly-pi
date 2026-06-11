@@ -205,126 +205,87 @@ describe("myWebtool", () => {
     });
   });
 
-  it("web_fetch renderCall returns Text component", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
+  describe("web_fetch render", () => {
+    let webFetch: any;
 
-    const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
-    )[0];
+    beforeEach(async () => {
+      const mod = await import("./index");
+      mod.default(mockPi);
+      webFetch = mockRegisterTool.mock.calls.find(
+        (call) => call[0].name === "web_fetch"
+      )[0];
+    });
 
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-      bold: vi.fn((text: string) => text),
-    };
+    it("renderCall formats URL with theme colors", () => {
+      const theme = {
+        fg: vi.fn((_c: string, text: string) => text),
+        bold: vi.fn((text: string) => text),
+      };
+      webFetch.renderCall({ url: "https://example.com" }, theme as any, {});
+      expect(theme.bold).toHaveBeenCalledWith("WebFetch ");
+      expect(theme.fg).toHaveBeenCalledWith("toolTitle", "WebFetch ");
+      expect(theme.fg).toHaveBeenCalledWith("accent", "https://example.com");
+    });
 
-    const text = webFetch.renderCall({ url: "https://example.com" }, theme as any, {});
-    expect(text).toBeDefined();
-  });
+    it("renderResult emits warning color when partial", () => {
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      webFetch.renderResult(
+        { content: [], details: {} },
+        { expanded: false, isPartial: true },
+        theme as any,
+        {}
+      );
+      expect(theme.fg).toHaveBeenCalledOnce();
+      expect(theme.fg).toHaveBeenCalledWith("warning", "Fetching...");
+    });
 
-  it("web_fetch renderResult shows fetching state", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
+    it("renderResult appends title in muted color", () => {
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      webFetch.renderResult(
+        { content: [], details: { title: "Example" } },
+        { expanded: false, isPartial: false },
+        theme as any,
+        {}
+      );
+      expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
+      expect(theme.fg).toHaveBeenCalledWith("muted", ": Example");
+    });
 
-    const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
-    )[0];
+    it("renderResult appends truncated warning when content was truncated", () => {
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      webFetch.renderResult(
+        { content: [], details: { truncation: { truncated: true } } },
+        { expanded: false, isPartial: false },
+        theme as any,
+        {}
+      );
+      expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
+      expect(theme.fg).toHaveBeenCalledWith("warning", " (truncated)");
+    });
 
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-    };
+    it("renderResult renders content preview lines when expanded", () => {
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      webFetch.renderResult(
+        { content: [{ type: "text", text: "Hello world" }], details: {} },
+        { expanded: true, isPartial: false },
+        theme as any,
+        {}
+      );
+      expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
+      expect(theme.fg).toHaveBeenCalledWith("dim", "Hello world");
+    });
 
-    const text = webFetch.renderResult(
-      { content: [], details: {} },
-      { expanded: false, isPartial: true },
-      theme as any,
-      {}
-    );
-    expect(text).toBeDefined();
-  });
-
-  it("web_fetch renderResult shows fetched state with title", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
-
-    const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
-    )[0];
-
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-    };
-
-    const text = webFetch.renderResult(
-      { content: [], details: { title: "Example" } },
-      { expanded: false, isPartial: false },
-      theme as any,
-      {}
-    );
-    expect(text).toBeDefined();
-  });
-
-  it("web_fetch renderResult shows truncated state", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
-
-    const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
-    )[0];
-
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-    };
-
-    const text = webFetch.renderResult(
-      { content: [], details: { truncation: { truncated: true } } },
-      { expanded: false, isPartial: false },
-      theme as any,
-      {}
-    );
-    expect(text).toBeDefined();
-  });
-
-  it("web_fetch renderResult expands to show content preview", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
-
-    const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
-    )[0];
-
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-    };
-
-    const text = webFetch.renderResult(
-      { content: [{ type: "text", text: "Hello world" }], details: {} },
-      { expanded: true, isPartial: false },
-      theme as any,
-      {}
-    );
-    expect(text).toBeDefined();
-  });
-
-  it("web_fetch renderResult skips non-text content when expanded", async () => {
-    const mod = await import("./index");
-    mod.default(mockPi);
-
-    const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
-    )[0];
-
-    const theme = {
-      fg: vi.fn((_c: string, text: string) => text),
-    };
-
-    const text = webFetch.renderResult(
-      { content: [{ type: "image", url: "http://x" }], details: {} },
-      { expanded: true, isPartial: false },
-      theme as any,
-      {}
-    );
-    expect(text).toBeDefined();
+    it("renderResult skips preview when expanded content is not text type", () => {
+      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      webFetch.renderResult(
+        { content: [{ type: "image", url: "http://x" }], details: {} },
+        { expanded: true, isPartial: false },
+        theme as any,
+        {}
+      );
+      expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
+      expect(theme.fg).not.toHaveBeenCalledWith("dim", expect.any(String));
+    });
   });
 
   it("web_search execute calls onUpdate and returns results", async () => {
