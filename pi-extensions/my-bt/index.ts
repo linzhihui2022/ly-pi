@@ -52,6 +52,18 @@ export default function myBt(pi: ExtensionAPI): void {
     });
   }
 
+  // ── Permission event-driven playback ──
+
+  if (config.permissionEventMap) {
+    pi.events?.on("permissions:ui_prompt", () => {
+      if (!config.enabled) return;
+      const category = config.permissionEventMap?.["permissions:ui_prompt"];
+      if (!category) return;
+      playCategory(config, category);
+      playOverlay(config, "permissions_ui_prompt", EXT_DIR);
+    });
+  }
+
   // ── /bt command ──
 
   pi.registerCommand("bt", {

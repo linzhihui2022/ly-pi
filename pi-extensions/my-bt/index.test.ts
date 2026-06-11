@@ -35,7 +35,15 @@ const DEFAULT_CONFIG = {
 
 const registeredEvents = new Map<string, (...args: any[]) => any>();
 const registeredCommands = new Map<string, any>();
+const registeredPermissionEvents = new Map<string, (...args: any[]) => any>();
 const mockNotify = vi.fn();
+
+const mockEvents = {
+  on: vi.fn((channel: string, handler: (...args: any[]) => any) => {
+    registeredPermissionEvents.set(channel, handler);
+  }),
+  emit: vi.fn(),
+};
 
 const mockPi = {
   on: vi.fn((event: string, handler: (...args: any[]) => any) => {
@@ -44,6 +52,7 @@ const mockPi = {
   registerCommand: vi.fn((name: string, opts: any) => {
     registeredCommands.set(name, opts);
   }),
+  events: mockEvents,
 };
 
 const mockCtx = {
@@ -58,9 +67,12 @@ describe("my-bt extension", () => {
   beforeEach(() => {
     registeredEvents.clear();
     registeredCommands.clear();
+    registeredPermissionEvents.clear();
     mockNotify.mockClear();
     mockPi.on.mockClear();
     mockPi.registerCommand.mockClear();
+    mockEvents.on.mockClear();
+    mockEvents.emit.mockClear();
     vi.mocked(readFileSync).mockClear();
     vi.mocked(writeFileSync).mockClear();
     vi.mocked(playCategory).mockClear();
@@ -373,5 +385,82 @@ describe("my-bt extension", () => {
     const handler = registeredEvents.get("session_start");
     expect(() => handler?.()).not.toThrow();
     expect(playCategory).toHaveBeenCalled();
+  });
+
+  // ── Permission event integration tests ──
+
+  it("subscribes to permissions:ui_prompt via pi.events", async () => {
+    const configWithPermission = {
+      ...DEFAULT_CONFIG,
+      permissionEventMap: {
+        "permissions:ui_prompt": "warning",
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithPermission));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+    expect(mockEvents.on).toHaveBeenCalledWith(
+      "permissions:ui_prompt",
+      expect.any(Function),
+    );
+  });
+
+  it("plays sound and overlay on permissions:ui_prompt when enabled", async () => {
+    const configWithPermission = {
+      ...DEFAULT_CONFIG,
+      permissionEventMap: {
+        "permissions:ui_prompt": "warning",
+      },
+      overlayTextMap: {
+        permissions_ui_prompt: { type: "WARNING", title: "侦测到危险操作", subtitle: "铁御，请确认权限" },
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithPermission));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredPermissionEvents.get("permissions:ui_prompt");
+    handler?.({ requestId: "req-1", source: "tool_call", surface: "bash", value: "rm -rf *", message: "Dangerous command", agentName: null, forwarding: null });
+
+    expect(playCategory).toHaveBeenCalledWith(
+      expect.objectContaining({ permissionEventMap: expect.any(Object) }),
+      "warning",
+    );
+    expect(playOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({ overlayTextMap: expect.any(Object) }),
+      "permissions_ui_prompt",
+      expect.any(String),
+    );
+  });
+
+  it("does not play on permissions:ui_prompt when disabled", async () => {
+    const configWithPermission = {
+      ...DEFAULT_CONFIG,
+      enabled: false,
+      permissionEventMap: {
+        "permissions:ui_prompt": "warning",
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithPermission));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredPermissionEvents.get("permissions:ui_prompt");
+    handler?.({ requestId: "req-1", source: "tool_call", surface: "bash", value: "rm -rf *", message: "Dangerous command", agentName: null, forwarding: null });
+
+    expect(playCategory).not.toHaveBeenCalled();
+    expect(playOverlay).not.toHaveBeenCalled();
+  });
+
+  it("does not play on permissions:ui_prompt when permissionEventMap is missing", async () => {
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredPermissionEvents.get("permissions:ui_prompt");
+    handler?.({ requestId: "req-1", source: "tool_call", surface: "bash", value: "rm -rf *", message: "Dangerous command", agentName: null, forwarding: null });
+
+    expect(playCategory).not.toHaveBeenCalled();
+    expect(playOverlay).not.toHaveBeenCalled();
   });
 });
