@@ -2,8 +2,8 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { TaskState } from "./state";
-import { renderActiveOverlay, renderCompletedOverlay } from "./overlay";
-import type { Task, TaskStatus } from "./types";
+import { renderActiveOverlay, renderCompletedOverlay, renderPlanOverlay } from "./overlay";
+import type { Task, TaskStatus, PlanPhase } from "./types";
 
 const STATUS_SYMBOLS: Record<Task["status"], string> = {
   pending: "○",
@@ -23,6 +23,24 @@ export default function myTodo(pi: ExtensionAPI): void {
     if (!ctx.hasUI) return;
 
     const tasks = state.list();
+    const planMode = state.getPlanMode();
+    const planPhase = state.getPlanPhase();
+
+    if (planMode) {
+      // In plan mode, use a single plan overlay widget
+      const active = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
+      if (active.length === 0) {
+        ctx.ui.setWidget("my-todo", undefined);
+      } else {
+        ctx.ui.setWidget("my-todo", (_tui, theme) => ({
+          render: () => renderPlanOverlay(active, planPhase, theme),
+          invalidate: () => {},
+        }));
+      }
+      ctx.ui.setWidget("my-todo-completed", undefined);
+      return;
+    }
+
     const active = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
     const completed = tasks.filter((t) => t.status === "completed");
 
@@ -86,7 +104,7 @@ export default function myTodo(pi: ExtensionAPI): void {
             refreshOverlay(ctx);
             return {
               content: [{ type: "text", text: `Created task #${task.id}: ${task.subject}` }],
-              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId() },
+              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
             };
           }
           case "update": {
@@ -99,7 +117,7 @@ export default function myTodo(pi: ExtensionAPI): void {
             refreshOverlay(ctx);
             return {
               content: [{ type: "text", text: `Updated task #${task.id}: ${task.subject}` }],
-              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId() },
+              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
             };
           }
           case "list": {
@@ -107,7 +125,7 @@ export default function myTodo(pi: ExtensionAPI): void {
             const lines = tasks.map(formatTaskLine);
             return {
               content: [{ type: "text", text: tasks.length > 0 ? lines.join("\n") : "No tasks." }],
-              details: { action: params.action, params, tasks, nextId: state.getNextId() },
+              details: { action: params.action, params, tasks, nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
             };
           }
           case "get": {
@@ -119,7 +137,7 @@ export default function myTodo(pi: ExtensionAPI): void {
                 type: "text",
                 text: `#${task.id} [${task.status}] ${task.subject}${task.description ? "\n" + task.description : ""}`,
               }],
-              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId() },
+              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
             };
           }
           case "delete": {
@@ -128,7 +146,7 @@ export default function myTodo(pi: ExtensionAPI): void {
             refreshOverlay(ctx);
             return {
               content: [{ type: "text", text: `Deleted task #${task.id}: ${task.subject}` }],
-              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId() },
+              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
             };
           }
           case "clear": {
@@ -136,7 +154,7 @@ export default function myTodo(pi: ExtensionAPI): void {
             refreshOverlay(ctx);
             return {
               content: [{ type: "text", text: "All tasks cleared." }],
-              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId() },
+              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
             };
           }
           default: {
@@ -148,7 +166,7 @@ export default function myTodo(pi: ExtensionAPI): void {
         const message = err instanceof Error ? err.message : String(err);
         return {
           content: [{ type: "text", text: `Error: ${message}` }],
-          details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), error: message },
+          details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase(), error: message },
           isError: true,
         };
       }
@@ -169,6 +187,9 @@ export default function myTodo(pi: ExtensionAPI): void {
           { value: "delete", label: "delete", description: "Delete a task" },
           { value: "clear", label: "clear", description: "Clear all tasks" },
           { value: "add", label: "add", description: "Add a new task" },
+          { value: "plan", label: "plan", description: "Enter plan mode" },
+          { value: "execute", label: "execute", description: "Start executing the plan" },
+          { value: "reset", label: "reset", description: "Clear all tasks and exit plan mode" },
         ];
         const p = parts[0] ?? "";
         const filtered = subs
@@ -228,6 +249,36 @@ export default function myTodo(pi: ExtensionAPI): void {
         return;
       }
 
+      if (sub === "plan") {
+        if (state.getPlanMode() && state.getPlanPhase() === "planning") {
+          ctx.ui.notify("Already in plan mode.", "info");
+          return;
+        }
+        state.setPlanMode(true, "planning");
+        refreshOverlay(ctx);
+        ctx.ui.notify("Plan mode enabled. Only read-only tools are available.", "info");
+        return;
+      }
+
+      if (sub === "execute") {
+        if (!state.getPlanMode()) {
+          ctx.ui.notify("Not in plan mode.", "warning");
+          return;
+        }
+        state.setPlanMode(true, "executing");
+        refreshOverlay(ctx);
+        ctx.ui.notify("Executing plan. All tools are available.", "info");
+        return;
+      }
+
+      if (sub === "reset") {
+        state.clear();
+        state.setPlanMode(false, "idle");
+        refreshOverlay(ctx);
+        ctx.ui.notify("Plan reset. All tasks cleared.", "info");
+        return;
+      }
+
       const validMutations = ["done", "start", "delete"] as const;
       if (!validMutations.includes(sub as (typeof validMutations)[number])) {
         ctx.ui.notify(`Unknown subcommand: ${sub}\nUsage: /todos [list|done|start|delete|clear|add]`, "warning");
@@ -279,5 +330,92 @@ export default function myTodo(pi: ExtensionAPI): void {
         return;
       }
     },
+  });
+
+  pi.registerShortcut("Ctrl+Shift+P", {
+    description: "Toggle plan mode",
+    handler: async (ctx) => {
+      if (state.getPlanMode()) {
+        state.clear();
+        state.setPlanMode(false, "idle");
+        refreshOverlay(ctx);
+        ctx.ui.notify("Plan mode disabled.", "info");
+      } else {
+        state.setPlanMode(true, "planning");
+        refreshOverlay(ctx);
+        ctx.ui.notify("Plan mode enabled. Only read-only tools are available.", "info");
+      }
+    },
+  });
+
+  // Read-only tools allowed in planning mode
+  const READ_ONLY_TOOLS = new Set([
+    "read",
+    "bash",
+    "ask_user_question",
+    "web_search",
+    "web_fetch",
+    "todo",
+  ]);
+
+  pi.on("tool_call", async (event, _ctx) => {
+    if (!state.getPlanMode() || state.getPlanPhase() !== "planning") {
+      return;
+    }
+    if (!READ_ONLY_TOOLS.has(event.toolName)) {
+      return {
+        block: true,
+        reason: "Plan mode: only read-only tools are allowed",
+      };
+    }
+  });
+
+  pi.on("before_agent_start", async (_event, _ctx) => {
+    if (!state.getPlanMode()) return;
+
+    if (state.getPlanPhase() === "planning") {
+      return {
+        message: {
+          customType: "hidden",
+          content: "You are in plan mode. You can only use read-only tools (read, bash, grep, find, ls, ask_user_question, web_search, web_fetch). Use the todo tool to create a task list for the plan. Do not modify any files. Do not use edit, write, or any other modifying tools. Ask the user questions with ask_user_question if you need clarification.",
+          display: false,
+        },
+      };
+    }
+
+    if (state.getPlanPhase() === "executing") {
+      const tasks = state.list();
+      const taskList = tasks.map((t) => `#${t.id} [${t.status}] ${t.subject}`).join("\n");
+      return {
+        message: {
+          customType: "hidden",
+          content: `You are now executing the plan. Work through each task in order using the todo tool to mark progress. Mark tasks in_progress before beginning work on them. Mark tasks completed only when fully done.\n\nCurrent tasks:\n${taskList || "(none)"}`,
+          display: false,
+        },
+      };
+    }
+  });
+
+  pi.on("agent_end", async (_event, ctx) => {
+    if (!state.getPlanMode() || state.getPlanPhase() !== "planning") return;
+    if (!ctx.hasUI) return;
+
+    const tasks = state.list();
+    if (tasks.length === 0) return;
+
+    const choice = await ctx.ui.select(
+      "Plan Complete",
+      ["Execute plan", "Continue planning", "Discard plan"],
+    );
+
+    if (choice === "Execute plan") {
+      state.setPlanMode(true, "executing");
+      refreshOverlay(ctx);
+    } else if (choice === "Discard plan") {
+      state.clear();
+      state.setPlanMode(false, "idle");
+      refreshOverlay(ctx);
+    }
+    // choice === "Continue planning" or undefined → keep planning
   });
 }

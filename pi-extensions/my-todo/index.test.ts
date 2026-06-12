@@ -16,6 +16,7 @@ const mockPi = {
   registerCommand: vi.fn((name: string, options: any) => {
     registeredCommands.set(name, options);
   }),
+  registerShortcut: vi.fn((_key: string, _options: any) => {}),
 };
 
 const createMockCtx = (entries: any[] = []) => ({
@@ -25,6 +26,7 @@ const createMockCtx = (entries: any[] = []) => ({
       widgetLines.push(undefined);
     }),
     notify: vi.fn(),
+    select: vi.fn(),
   },
   sessionManager: {
     getEntries: vi.fn(() => entries),
@@ -623,6 +625,302 @@ describe("my-todo extension", () => {
         expect.stringContaining("A"),
         "info"
       );
+    });
+  });
+
+  describe("plan mode", () => {
+    it("registers Ctrl+Shift+P shortcut", async () => {
+      await initExtension();
+      expect(mockPi.registerShortcut).toHaveBeenCalledWith(
+        "Ctrl+Shift+P",
+        expect.any(Object)
+      );
+    });
+
+    it("registers before_agent_start event", async () => {
+      await initExtension();
+      expect(registeredEvents.has("before_agent_start")).toBe(true);
+    });
+
+    it("registers tool_call event", async () => {
+      await initExtension();
+      expect(registeredEvents.has("tool_call")).toBe(true);
+    });
+
+    it("registers agent_end event", async () => {
+      await initExtension();
+      expect(registeredEvents.has("agent_end")).toBe(true);
+    });
+
+    it("/todos plan enters planning mode", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("plan", ctx);
+      // Verify via todo tool state - create a task, check details
+      const toolDef = registeredTools[0];
+      const result = await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "Plan step 1" },
+        undefined,
+        undefined,
+        ctx
+      );
+      expect(result.details.planMode).toBe(true);
+      expect(result.details.planPhase).toBe("planning");
+      // Widget should be set for plan mode
+      expect(ctx.ui.setWidget).toHaveBeenCalled();
+    });
+
+    it("/todos execute enters executing phase", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      // Enter planning first
+      await cmd.handler("plan", ctx);
+      // Create a task
+      const toolDef = registeredTools[0];
+      await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "Step 1" },
+        undefined,
+        undefined,
+        ctx
+      );
+      // Execute
+      await cmd.handler("execute", ctx);
+      const result = await toolDef.execute(
+        "tc-1",
+        { action: "list" },
+        undefined,
+        undefined,
+        ctx
+      );
+      expect(result.details.planMode).toBe(true);
+      expect(result.details.planPhase).toBe("executing");
+    });
+
+    it("/todos reset clears tasks and exits plan mode", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      // Enter planning
+      await cmd.handler("plan", ctx);
+      const toolDef = registeredTools[0];
+      await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "Step 1" },
+        undefined,
+        undefined,
+        ctx
+      );
+      // Reset
+      await cmd.handler("reset", ctx);
+      const result = await toolDef.execute(
+        "tc-1",
+        { action: "list" },
+        undefined,
+        undefined,
+        ctx
+      );
+      expect(result.details.tasks).toHaveLength(0);
+      expect(result.details.planMode).toBe(false);
+      expect(result.details.planPhase).toBe("idle");
+    });
+
+    it("Ctrl+Shift+P toggles plan mode", async () => {
+      await initExtension();
+      const shortcutHandler = mockPi.registerShortcut.mock.calls.find(
+        ([key]: [string, any]) => key === "Ctrl+Shift+P"
+      )[1].handler;
+      const ctx = createMockCtx();
+      await shortcutHandler(ctx);
+      // Toggle on
+      const toolDef = registeredTools[0];
+      const result1 = await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "Step 1" },
+        undefined,
+        undefined,
+        ctx
+      );
+      expect(result1.details.planMode).toBe(true);
+      expect(result1.details.planPhase).toBe("planning");
+      // Toggle off
+      await shortcutHandler(ctx);
+      const result2 = await toolDef.execute(
+        "tc-1",
+        { action: "list" },
+        undefined,
+        undefined,
+        ctx
+      );
+      expect(result2.details.planMode).toBe(false);
+    });
+  });
+
+  describe("plan mode tool whitelist", () => {
+    async function enterPlanMode() {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("plan", ctx);
+      return registeredEvents.get("tool_call")!;
+    }
+
+    const blockedTools = ["edit", "write", "grep", "find", "ls"];
+    const allowedTools = ["read", "bash", "web_search", "web_fetch", "ask_user_question", "todo"];
+
+    for (const toolName of blockedTools) {
+      it(`blocks ${toolName} tool in planning mode`, async () => {
+        const handler = await enterPlanMode();
+        const ctx = createMockCtx();
+        const event = {
+          type: "tool_call" as const,
+          toolCallId: "tc-1",
+          toolName,
+          input: {} as any,
+        };
+        const result = await handler(event, ctx);
+        expect(result).toEqual({ block: true, reason: "Plan mode: only read-only tools are allowed" });
+      });
+    }
+
+    for (const toolName of allowedTools) {
+      it(`allows ${toolName} tool in planning mode`, async () => {
+        const handler = await enterPlanMode();
+        const ctx = createMockCtx();
+        const event = {
+          type: "tool_call" as const,
+          toolCallId: "tc-1",
+          toolName,
+          input: {} as any,
+        };
+        const result = await handler(event, ctx);
+        expect(result).toBeUndefined();
+      });
+    }
+
+    it("allows all tools in executing mode", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("plan", ctx);
+      await cmd.handler("execute", ctx);
+      const handler = registeredEvents.get("tool_call")!;
+      const event = {
+        type: "tool_call" as const,
+        toolCallId: "tc-1",
+        toolName: "edit",
+        input: {} as any,
+      };
+      const result = await handler(event, ctx);
+      expect(result).toBeUndefined();
+    });
+
+    it("allows all tools when not in plan mode", async () => {
+      await initExtension();
+      const handler = registeredEvents.get("tool_call")!;
+      const ctx = createMockCtx();
+      const event = {
+        type: "tool_call" as const,
+        toolCallId: "tc-1",
+        toolName: "edit",
+        input: {} as any,
+      };
+      const result = await handler(event, ctx);
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("before_agent_start", () => {
+    it("injects planning system prompt in planning phase", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("plan", ctx);
+
+      const handler = registeredEvents.get("before_agent_start")!;
+      const result = await handler({}, ctx);
+      expect(result).toBeDefined();
+      expect(result.message).toBeDefined();
+      expect(result.message.display).toBe(false);
+      expect(result.message.content).toContain("plan mode");
+      expect(result.message.content).toContain("read-only");
+    });
+
+    it("injects executing system prompt in executing phase", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("plan", ctx);
+      await cmd.handler("execute", ctx);
+
+      const handler = registeredEvents.get("before_agent_start")!;
+      const result = await handler({}, ctx);
+      expect(result).toBeDefined();
+      expect(result.message).toBeDefined();
+      expect(result.message.display).toBe(false);
+      expect(result.message.content).toContain("executing");
+      expect(result.message.content).toContain("todo");
+    });
+
+    it("does not inject when not in plan mode", async () => {
+      await initExtension();
+      const handler = registeredEvents.get("before_agent_start")!;
+      const ctx = createMockCtx();
+      const result = await handler({}, ctx);
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("agent_end dialog", () => {
+    it("shows select dialog in planning mode with tasks", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      // Set up state in planning mode with tasks
+      await cmd.handler("plan", ctx);
+      const toolDef = registeredTools[0];
+      await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "Step 1" },
+        undefined,
+        undefined,
+        ctx
+      );
+
+      ctx.ui.select = vi.fn().mockResolvedValue("Execute plan");
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({}, ctx);
+
+      expect(ctx.ui.select).toHaveBeenCalledWith(
+        "Plan Complete",
+        expect.arrayContaining(["Execute plan", "Continue planning", "Discard plan"]),
+      );
+    });
+
+    it("does not show dialog when not in plan mode", async () => {
+      await initExtension();
+      const handler = registeredEvents.get("agent_end")!;
+      const ctx = createMockCtx();
+      ctx.ui.select = vi.fn();
+      await handler({}, ctx);
+      expect(ctx.ui.select).not.toHaveBeenCalled();
+    });
+
+    it("does not show dialog when in executing phase", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+      await cmd.handler("plan", ctx);
+      await cmd.handler("execute", ctx);
+      ctx.ui.select = vi.fn();
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({}, ctx);
+      expect(ctx.ui.select).not.toHaveBeenCalled();
     });
   });
 });
