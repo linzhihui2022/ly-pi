@@ -32,13 +32,29 @@
         "vitest": "^4",
       },
       "peerDependencies": {
-        "@typescript/native-preview": "^7.0.0-beta",
+        "typescript": "^5",
       },
     },
     "pi-extensions/my-bt": {
       "name": "my-bt",
       "devDependencies": {
         "vitest": "^4",
+      },
+    },
+    "pi-extensions/my-guess-game": {
+      "name": "my-guess-game",
+      "dependencies": {
+        "@earendil-works/pi-ai": "^0.78.0",
+        "@earendil-works/pi-coding-agent": "^0.78.0",
+        "@types/node": "^25.9.1",
+        "typebox": "^1.1.39",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "vitest": "^4",
+      },
+      "peerDependencies": {
+        "typescript": "^5",
       },
     },
     "pi-extensions/my-html": {
@@ -557,6 +573,8 @@
 
     "my-bt": ["my-bt@workspace:pi-extensions/my-bt"],
 
+    "my-guess-game": ["my-guess-game@workspace:pi-extensions/my-guess-game"],
+
     "my-html": ["my-html@workspace:pi-extensions/my-html"],
 
     "my-hud": ["my-hud@workspace:pi-extensions/my-hud"],
@@ -654,6 +672,8 @@
     "turbo": ["turbo@2.9.16", "https://registry.npmmirror.com/turbo/-/turbo-2.9.16.tgz", { "optionalDependencies": { "@turbo/darwin-64": "2.9.16", "@turbo/darwin-arm64": "2.9.16", "@turbo/linux-64": "2.9.16", "@turbo/linux-arm64": "2.9.16", "@turbo/windows-64": "2.9.16", "@turbo/windows-arm64": "2.9.16" }, "bin": { "turbo": "bin/turbo" } }, "sha512-NqgRQy6j6dPYcdSdv0q1g9QsZg7SWg87RERM8otw/1AtKU2yTFVClOM7cbwKzOonZr/Ek1blTBucw64L9H0Bwg=="],
 
     "typebox": ["typebox@1.2.2", "https://registry.npmmirror.com/typebox/-/typebox-1.2.2.tgz", {}, "sha512-0nqIJFL+baWoAEtwa0l/vfbfXg0+3gEhiWGnHuoIiivXjlk/TpxDddG0WER34CojKNpHi4ZXku8XGEz9H55b5Q=="],
+
+    "typescript": ["typescript@5.9.3", "https://registry.npmmirror.com/typescript/-/typescript-5.9.3.tgz", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "undici": ["undici@8.3.0", "https://registry.npmmirror.com/undici/-/undici-8.3.0.tgz", {}, "sha512-TkUDgb6tl7KOGZ+7e8E3d2FYgUQgF6z5YypqjWmixVQSQERFcVrVg0ySADm2LVLRh5ljAaHTCR5Fmz3Q34rB7Q=="],
 
