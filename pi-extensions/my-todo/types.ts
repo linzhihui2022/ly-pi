@@ -9,6 +9,8 @@ export interface Task {
 
 export type TaskAction = "create" | "update" | "list" | "get" | "delete" | "clear";
 
+export type PlanPhase = "idle" | "planning" | "executing";
+
 export interface SessionEntry {
   type: string;
   message?: {
