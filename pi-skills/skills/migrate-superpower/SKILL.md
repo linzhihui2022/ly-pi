@@ -571,8 +571,8 @@ grep -ri 'chain:.*\[' pi-skills/YOUR-SKILL/ || echo "OK: no chain array refs"
 grep -ri 'subagent_type' pi-skills/YOUR-SKILL/ || echo "MISSING: no subagent_type refs"
 
 # Check for remaining platform-specific meta-skill references
-grep -ri "Claude Code\|Copilot CLI\|Gemini CLI\|Codex" pi-skills/using-superpowers/ || echo "OK: no external platform refs"
-grep -ri "Skill tool\|activate_skill\|skill tool" pi-skills/using-superpowers/ || echo "OK: no old skill invocation refs"
+grep -ri "Claude Code\|Copilot CLI\|Gemini CLI\|Codex" pi-skills/skills/using-superpowers/ || echo "OK: no external platform refs"
+grep -ri "Skill tool\|activate_skill\|skill tool" pi-skills/skills/using-superpowers/ || echo "OK: no old skill invocation refs"
 ```
 
 ---
