@@ -94,6 +94,10 @@ describe("my-todo extension", () => {
       "my-todo",
       expect.any(Function)
     );
+    expect(ctx.ui.setWidget).not.toHaveBeenCalledWith(
+      "my-todo-completed",
+      expect.any(Function)
+    );
   });
 
   it("session_start hides widget when no tasks", async () => {
@@ -103,6 +107,91 @@ describe("my-todo extension", () => {
     const ctx = createMockCtx([]);
     await handler({}, ctx);
     expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-todo", undefined);
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-todo-completed", undefined);
+  });
+
+  it("session_start renders both widgets when active and completed tasks exist", async () => {
+    await initExtension();
+
+    const handler = registeredEvents.get("session_start")!;
+    const ctx = createMockCtx([
+      {
+        type: "message",
+        message: {
+          role: "toolResult",
+          toolName: "todo",
+          details: {
+            tasks: [
+              { id: 1, subject: "Active task", status: "in_progress" },
+              { id: 2, subject: "Done task", status: "completed" },
+            ],
+            nextId: 3,
+          },
+        },
+      },
+    ]);
+
+    await handler({}, ctx);
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith(
+      "my-todo",
+      expect.any(Function)
+    );
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith(
+      "my-todo-completed",
+      expect.any(Function)
+    );
+  });
+
+  it("session_start hides completed widget when no completed tasks", async () => {
+    await initExtension();
+
+    const handler = registeredEvents.get("session_start")!;
+    const ctx = createMockCtx([
+      {
+        type: "message",
+        message: {
+          role: "toolResult",
+          toolName: "todo",
+          details: {
+            tasks: [{ id: 1, subject: "A", status: "pending" }],
+            nextId: 2,
+          },
+        },
+      },
+    ]);
+
+    await handler({}, ctx);
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith(
+      "my-todo",
+      expect.any(Function)
+    );
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith(
+      "my-todo-completed",
+      undefined
+    );
+  });
+
+  it("todo tool update hides active widget and shows completed when task marked done", async () => {
+    await initExtension();
+
+    const toolDef = registeredTools[0];
+    const ctx = createMockCtx();
+    await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
+    vi.clearAllMocks();
+
+    await toolDef.execute(
+      "tc-1",
+      { action: "update", id: 1, status: "completed" },
+      undefined,
+      undefined,
+      ctx
+    );
+
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-todo", undefined);
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith(
+      "my-todo-completed",
+      expect.any(Function)
+    );
   });
 
   it("turn_start refreshes overlay", async () => {
@@ -129,7 +218,7 @@ describe("my-todo extension", () => {
     // Now trigger turn_start
     const turnHandler = registeredEvents.get("turn_start")!;
     await turnHandler({}, ctx);
-    expect(ctx.ui.setWidget).toHaveBeenCalledTimes(setWidgetCalls + 1);
+    expect(ctx.ui.setWidget).toHaveBeenCalledTimes(setWidgetCalls + 2);
   });
 
   it("turn_end refreshes overlay", async () => {
@@ -163,6 +252,7 @@ describe("my-todo extension", () => {
     const ctx = createMockCtx();
     await handler({}, ctx);
     expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-todo", undefined);
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-todo-completed", undefined);
   });
 
   it("todo tool create action works", async () => {

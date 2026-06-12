@@ -37,8 +37,6 @@ function renderTaskList(
   lineColor: string | ((task: Task) => string) | undefined,
   theme?: ThemeLike
 ): string[] {
-  if (tasks.length === 0) return [];
-
   const display = tasks.slice(0, MAX_VISIBLE);
   const overflow = tasks.length - MAX_VISIBLE;
 
@@ -46,7 +44,7 @@ function renderTaskList(
   lines.push(theme ? theme.fg(titleColor, theme.bold(title)) : title);
 
   for (const task of display) {
-    if (theme && lineColor) {
+    if (theme) {
       const color = typeof lineColor === "function" ? lineColor(task) : lineColor;
       lines.push(theme.fg(color, `${STATUS_SYMBOLS[task.status]} #${task.id} ${task.subject}`));
     } else {

@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { TaskState } from "./state";
-import { renderOverlay } from "./overlay";
+import { renderActiveOverlay, renderCompletedOverlay } from "./overlay";
 import type { Task, TaskStatus } from "./types";
 
 const STATUS_SYMBOLS: Record<Task["status"], string> = {
@@ -21,15 +21,28 @@ export default function myTodo(pi: ExtensionAPI): void {
 
   function refreshOverlay(ctx: ExtensionContext): void {
     if (!ctx.hasUI) return;
+
     const tasks = state.list();
-    if (tasks.length === 0) {
+    const active = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
+    const completed = tasks.filter((t) => t.status === "completed");
+
+    if (active.length === 0) {
       ctx.ui.setWidget("my-todo", undefined);
-      return;
+    } else {
+      ctx.ui.setWidget("my-todo", (_tui, theme) => ({
+        render: () => renderActiveOverlay(active, theme),
+        invalidate: () => {},
+      }));
     }
-    ctx.ui.setWidget("my-todo", (_tui, theme) => ({
-      render: () => renderOverlay(tasks, theme),
-      invalidate: () => {},
-    }));
+
+    if (completed.length === 0) {
+      ctx.ui.setWidget("my-todo-completed", undefined);
+    } else {
+      ctx.ui.setWidget("my-todo-completed", (_tui, theme) => ({
+        render: () => renderCompletedOverlay(completed, theme),
+        invalidate: () => {},
+      }));
+    }
   }
 
   pi.on("session_start", async (_event, ctx) => {
