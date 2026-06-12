@@ -28,6 +28,8 @@ type Row =
 const CHAT_LABEL = "Chat about this";
 const OTHER_LABEL = "Type something.";
 
+const customOptions = new Map<number, string[]>();
+
 function hasPreview(question: QuestionData): boolean {
   return question.options.some((o) => typeof o.preview === "string" && o.preview.length > 0);
 }
