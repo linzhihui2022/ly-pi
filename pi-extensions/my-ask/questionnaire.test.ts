@@ -526,6 +526,29 @@ describe("createQuestionnaire", () => {
     expect(lines.some((l) => l.includes("> 2. Blue"))).toBe(true);
   });
 
+  it("renders an unchecked custom row in multi-select", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    addCustomOption(q, "custom");
+
+    // Toggle the custom row off so it renders unchecked.
+    q.handleInput("space");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("☐ custom (custom)"))).toBe(true);
+  });
+
   it("removes a custom row from multi-select selections before submit", () => {
     const params = makeParams([
       {
@@ -555,6 +578,126 @@ describe("createQuestionnaire", () => {
       ],
       cancelled: false,
     });
+  });
+
+  it("shows a transient notice when the custom option limit is reached", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    for (let i = 0; i < 9; i++) {
+      // After the first custom option, focus lands on the newly added row,
+      // so only one additional down is needed to reach Type something.
+      q.handleInput("down");
+      if (i === 0) {
+        q.handleInput("down");
+      }
+      q.handleInput("enter");
+      for (const char of `custom${i}`) {
+        q.handleInput(char);
+      }
+      q.handleInput("enter");
+    }
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Maximum 8 custom options reached."))).toBe(true);
+
+    // Pressing another key clears the transient notice.
+    q.handleInput("up");
+    const cleared = q.render(80);
+    expect(cleared.some((l) => l.includes("Maximum 8 custom options reached."))).toBe(false);
+  });
+
+  it("focuses an existing custom row instead of adding a duplicate", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    addCustomOption(q, "pink");
+
+    // Try to add the same value again.
+    q.handleInput("down");
+    q.handleInput("enter");
+    for (const char of "pink") {
+      q.handleInput(char);
+    }
+    q.handleInput("enter");
+
+    const lines = q.render(80);
+    const matches = lines.filter((l) => l.includes("pink (custom)"));
+    expect(matches.length).toBe(1);
+    expect(lines.some((l) => l.includes("> 3. pink (custom)"))).toBe(true);
+  });
+
+  it("ignores delete when a non-custom row is focused", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    q.handleInput("delete");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("> 1. Red"))).toBe(true);
+  });
+
+  it("removes a custom row and keeps remaining custom rows", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    addCustomOption(q, "first");
+
+    // Add a second custom option; focus is on the first custom row,
+    // so only one down is needed to reach Type something.
+    q.handleInput("down");
+    q.handleInput("enter");
+    for (const char of "second") {
+      q.handleInput(char);
+    }
+    q.handleInput("enter");
+
+    const before = q.render(80);
+    expect(before.some((l) => l.includes("first (custom)"))).toBe(true);
+    expect(before.some((l) => l.includes("second (custom)"))).toBe(true);
+
+    // Focus is on the second custom row; delete it.
+    q.handleInput("delete");
+
+    const after = q.render(80);
+    expect(after.some((l) => l.includes("second (custom)"))).toBe(false);
+    expect(after.some((l) => l.includes("first (custom)"))).toBe(true);
   });
 
   it("calls invalidate on the editor", () => {
@@ -614,6 +757,30 @@ describe("createQuestionnaire", () => {
     expect(done).not.toHaveBeenCalled();
   });
 
+  it("shows Del remove hint when a custom row is focused", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+    q.handleInput("x");
+    q.handleInput("enter");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("x (custom)"))).toBe(true);
+    expect(lines.some((l) => l.includes("Del remove"))).toBe(true);
+  });
+
   it("renders the inline editor after selecting Type something", () => {
     const params = makeParams([
       {
@@ -633,7 +800,7 @@ describe("createQuestionnaire", () => {
 
     const lines = q.render(80);
     expect(lines.some((l) => l.includes("Your answer:"))).toBe(true);
-    expect(lines.some((l) => l.includes("Type something. ✎"))).toBe(true);
+    expect(lines.some((l) => l.includes("Type something."))).toBe(true);
   });
 
   it("truncates preview lines that exceed available width", () => {

@@ -379,8 +379,7 @@ export function createQuestionnaire(
       const prefix = selected ? theme.fg("accent", "> ") : "  ";
 
       if (row.kind === "other") {
-        const label = OTHER_LABEL + (inputMode ? " ✎" : "");
-        add(prefix + theme.fg(selected ? "accent" : "text", `${i + 1}. ${label}`));
+        add(prefix + theme.fg(selected ? "accent" : "text", `${i + 1}. ${OTHER_LABEL}`));
         continue;
       }
 
@@ -390,9 +389,10 @@ export function createQuestionnaire(
       }
 
       if (row.kind === "custom") {
+        const label = `${row.value} (custom)`;
         const checked = q.multiSelect && getSelections(currentTab).has(row.value);
         const box = q.multiSelect ? (checked ? "☑" : "☐") : `${i + 1}.`;
-        add(prefix + theme.fg(selected ? "accent" : "text", `${box} ${row.value} (custom)`));
+        add(prefix + theme.fg(selected ? "accent" : "text", `${box} ${label}`));
         continue;
       }
 
@@ -437,6 +437,8 @@ export function createQuestionnaire(
       lines.push("");
     }
 
+    const q = currentTab === questions.length ? null : currentQuestion();
+
     if (currentTab === questions.length) {
       add(theme.fg("accent", theme.bold(" Ready to submit")));
       lines.push("");
@@ -473,7 +475,7 @@ export function createQuestionnaire(
         add(theme.fg("warning", ` Unanswered: ${missing}`));
       }
     } else if (inputMode) {
-      const q = questions[inputQuestionIndex];
+      const q = questions[inputQuestionIndex!];
       add(theme.fg("text", ` ${q.question}`));
       lines.push("");
       lines.push(...renderRows(width));
@@ -485,19 +487,17 @@ export function createQuestionnaire(
       lines.push("");
       add(theme.fg("dim", " Enter to submit • Esc to go back"));
     } else {
-      const q = currentQuestion();
-      add(theme.fg("text", ` ${q.question}`));
+      add(theme.fg("text", ` ${q!.question}`));
       lines.push("");
-      lines.push(...renderRows(width));
-
       if (transientNotice) {
-        lines.push("");
         add(theme.fg("warning", ` ${transientNotice}`));
+        lines.push("");
       }
+      lines.push(...renderRows(width));
 
       const rows = currentRows();
       const focused = rows[optionIndex];
-      if (!q.multiSelect && focused.kind === "option" && focused.option.preview) {
+      if (!q!.multiSelect && focused.kind === "option" && focused.option.preview) {
         lines.push("");
         lines.push(...renderPreview(focused.option.preview, width));
       }
@@ -505,9 +505,25 @@ export function createQuestionnaire(
 
     lines.push("");
     if (!inputMode) {
-      const help = isMulti
-        ? " Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel"
-        : " ↑↓ navigate • Enter select • Esc cancel";
+      let help: string;
+      if (currentTab === questions.length) {
+        help = isMulti
+          ? " Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel"
+          : " ↑↓ navigate • Enter select • Esc cancel";
+      } else {
+        const rows = currentRows();
+        const focused = rows[optionIndex];
+        const customFocused = focused.kind === "custom";
+        if (q!.multiSelect) {
+          help = customFocused
+            ? " Space toggle • Del remove • Enter submit"
+            : " Space toggle • Enter submit";
+        } else {
+          help = customFocused
+            ? " ↑↓ navigate • Enter select • Del remove • Esc cancel"
+            : " ↑↓ navigate • Enter select • Esc cancel";
+        }
+      }
       add(theme.fg("dim", help));
     }
     add(theme.fg("accent", "─".repeat(width)));
