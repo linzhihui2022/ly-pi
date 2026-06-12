@@ -523,6 +523,108 @@ describe("createQuestionnaire", () => {
     expect(lines.some((l) => l.includes("> 2. Blue"))).toBe(true);
   });
 
+  it("removes a custom row with delete and moves focus up", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+    q.handleInput("p");
+    q.handleInput("i");
+    q.handleInput("n");
+    q.handleInput("k");
+    q.handleInput("enter");
+
+    q.handleInput("delete");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("pink (custom)"))).toBe(false);
+    expect(lines.some((l) => l.includes("> 2. Blue"))).toBe(true);
+  });
+
+  it("removes a custom row from multi-select selections before submit", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+    q.handleInput("c");
+    q.handleInput("u");
+    q.handleInput("s");
+    q.handleInput("t");
+    q.handleInput("o");
+    q.handleInput("m");
+    q.handleInput("enter");
+
+    q.handleInput("delete");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: [] },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("clamps focus to a valid row after deleting the only custom row", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+    q.handleInput("p");
+    q.handleInput("i");
+    q.handleInput("n");
+    q.handleInput("k");
+    q.handleInput("enter");
+
+    expect(() => q.handleInput("delete")).not.toThrow();
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("pink (custom)"))).toBe(false);
+    expect(
+      lines.some(
+        (l) =>
+          l.includes("> 1. Red") ||
+          l.includes("> 2. Blue") ||
+          l.includes("> 3. Type something."),
+      ),
+    ).toBe(true);
+  });
+
   it("calls invalidate on the editor", () => {
     const params = makeParams([
       {
