@@ -17,6 +17,21 @@
     "pi-config": {
       "name": "pi-config",
     },
+    "pi-extensions/my-ask": {
+      "name": "my-ask",
+      "dependencies": {
+        "@earendil-works/pi-coding-agent": "^0.78.0",
+        "@earendil-works/pi-tui": "^0.78.0",
+        "typebox": "^1.1.39",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "vitest": "^4",
+      },
+      "peerDependencies": {
+        "typescript": "^5",
+      },
+    },
     "pi-extensions/my-bt": {
       "name": "my-bt",
       "devDependencies": {
@@ -49,6 +64,23 @@
         "@earendil-works/pi-coding-agent": "^0.78.0",
         "@earendil-works/pi-tui": "^0.78.0",
         "@types/node": "^25.9.1",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "vitest": "^4",
+      },
+      "peerDependencies": {
+        "typescript": "^5",
+      },
+    },
+    "pi-extensions/my-todo": {
+      "name": "my-todo",
+      "dependencies": {
+        "@earendil-works/pi-ai": "^0.78.0",
+        "@earendil-works/pi-coding-agent": "^0.78.0",
+        "@earendil-works/pi-tui": "^0.78.0",
+        "@types/node": "^25.9.1",
+        "typebox": "^1.1.39",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -502,11 +534,15 @@
 
     "ms": ["ms@2.1.3", "https://registry.npmmirror.com/ms/-/ms-2.1.3.tgz", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
 
+    "my-ask": ["my-ask@workspace:pi-extensions/my-ask"],
+
     "my-bt": ["my-bt@workspace:pi-extensions/my-bt"],
 
     "my-html": ["my-html@workspace:pi-extensions/my-html"],
 
     "my-hud": ["my-hud@workspace:pi-extensions/my-hud"],
+
+    "my-todo": ["my-todo@workspace:pi-extensions/my-todo"],
 
     "my-visual-companion": ["my-visual-companion@workspace:pi-extensions/my-visual-companion"],
 
