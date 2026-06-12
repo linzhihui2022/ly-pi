@@ -1,16 +1,15 @@
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "./session";
 import { createTools } from "./tools";
 import type { VisualCompanionConfig } from "./types";
 
-const EXT_DIR = (() => {
-  if (typeof __dirname !== "undefined") return __dirname;
-  try { return dirname(fileURLToPath(import.meta.url)); } catch { /* not ESM */ }
-  return process.cwd();
-})();
+export function resolveExtDir(): string {
+  return __dirname;
+}
+
+const EXT_DIR = resolveExtDir();
 
 function loadConfig(): VisualCompanionConfig {
   const raw = readFileSync(join(EXT_DIR, "my-visual-companion.json"), "utf-8");

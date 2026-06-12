@@ -1,16 +1,15 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
 import type { SessionManager } from "./session";
 import type { Session, CompanionEvent } from "./types";
 
-const EXT_DIR = (() => {
-  if (typeof __dirname !== "undefined") return __dirname;
-  try { return dirname(fileURLToPath(import.meta.url)); } catch { /* not ESM */ }
-  return process.cwd();
-})();
+export function resolveExtDir(): string {
+  return __dirname;
+}
+
+const EXT_DIR = resolveExtDir();
 
 const FRAME_TEMPLATE = readFileSync(join(EXT_DIR, "frame.html"), "utf-8");
 const HELPER_SCRIPT = readFileSync(join(EXT_DIR, "helper.js"), "utf-8");
@@ -68,6 +67,60 @@ export interface ServerOptions {
   urlHost: string;
 }
 
+export function createHttpHandler(
+  manager: SessionManager,
+  getSessionId: () => string | null,
+) {
+  return (req: IncomingMessage, res: ServerResponse) => {
+    const sessionId = getSessionId();
+    if (!sessionId) {
+      res.writeHead(503);
+      res.end("Server not ready");
+      return;
+    }
+    handleRequest(req, res, manager, sessionId);
+  };
+}
+
+export function createWsMessageHandler(
+  manager: SessionManager,
+  getSessionId: () => string | null,
+) {
+  return (data: Buffer | string) => {
+    const sessionId = getSessionId();
+    if (!sessionId) return;
+    try {
+      const event = JSON.parse(data.toString()) as CompanionEvent;
+      event.timestamp = event.timestamp || Date.now();
+      manager.appendEvent(sessionId, event);
+      if (event.type === "confirm") {
+        manager.resetIdleTimer(sessionId);
+      }
+    } catch {
+      // ignore malformed messages
+    }
+  };
+}
+
+export function createUpdateScreenHook(
+  manager: SessionManager,
+  originalUpdateScreen: (id: string, name: string, html: string) => void,
+  sessionId: string | null,
+  wss: WebSocketServer,
+) {
+  return (id: string, name: string, html: string) => {
+    originalUpdateScreen(id, name, html);
+    if (id === sessionId) {
+      const message = JSON.stringify({ type: "reload" });
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(message);
+        }
+      });
+    }
+  };
+}
+
 export async function createCompanionServer(
   manager: SessionManager,
   options: ServerOptions
@@ -79,14 +132,7 @@ export async function createCompanionServer(
   let sessionId: string | null = null;
 
   const wss = new WebSocketServer({ noServer: true });
-  const httpServer = createServer((req, res) => {
-    if (!sessionId) {
-      res.writeHead(503);
-      res.end("Server not ready");
-      return;
-    }
-    handleRequest(req, res, manager, sessionId);
-  });
+  const httpServer = createServer(createHttpHandler(manager, () => sessionId));
 
   httpServer.on("upgrade", (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, (ws) => {
@@ -95,19 +141,7 @@ export async function createCompanionServer(
   });
 
   wss.on("connection", (ws) => {
-    ws.on("message", (data) => {
-      if (!sessionId) return;
-      try {
-        const event = JSON.parse(data.toString()) as CompanionEvent;
-        event.timestamp = event.timestamp || Date.now();
-        manager.appendEvent(sessionId, event);
-        if (event.type === "confirm") {
-          manager.resetIdleTimer(sessionId);
-        }
-      } catch {
-        // ignore malformed messages
-      }
-    });
+    ws.on("message", createWsMessageHandler(manager, () => sessionId));
   });
 
   await new Promise<void>((resolve) => httpServer.listen(port, options.host, resolve));
@@ -116,23 +150,17 @@ export async function createCompanionServer(
   sessionId = session.id;
 
   // Hook updateScreen to broadcast reload
-  const originalUpdateScreen = manager.updateScreen.bind(manager);
-  manager.updateScreen = (id: string, name: string, html: string) => {
-    originalUpdateScreen(id, name, html);
-    if (id === sessionId) {
-      const message = JSON.stringify({ type: "reload" });
-      wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(message);
-        }
-      });
-    }
-  };
+  manager.updateScreen = createUpdateScreenHook(
+    manager,
+    manager.updateScreen.bind(manager),
+    sessionId,
+    wss,
+  );
 
   return { session };
 }
 
-function handleRequest(
+export function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   manager: SessionManager,
