@@ -18,7 +18,7 @@ describe("Tavily.check", () => {
         account: { current_plan: "Bootstrap", plan_usage: 0, plan_limit: 1000, paygo_usage: 0, paygo_limit: 1000, search_usage: 0, extract_usage: 0, crawl_usage: 0, map_usage: 0, research_usage: 0 },
       }),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.check();
     expect(result.enabled).toBe(true);
@@ -34,7 +34,7 @@ describe("Tavily.check", () => {
         account: { current_plan: "Bootstrap", plan_usage: 0, plan_limit: 1000, paygo_usage: 0, paygo_limit: 1000, search_usage: 0, extract_usage: 0, crawl_usage: 0, map_usage: 0, research_usage: 0 },
       }),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.check();
     expect(result.enabled).toBe(false);
@@ -50,7 +50,7 @@ describe("Tavily.check", () => {
         account: { current_plan: "Bootstrap", plan_usage: 995, plan_limit: 1000, paygo_usage: 0, paygo_limit: 1000, search_usage: 0, extract_usage: 0, crawl_usage: 0, map_usage: 0, research_usage: 0 },
       }),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.check();
     expect(result.enabled).toBe(false);
@@ -84,7 +84,7 @@ describe("Tavily.check", () => {
       ok: false,
       status: 401,
       text: async () => "Unauthorized",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.check();
     expect(result.enabled).toBe(false);
@@ -104,7 +104,7 @@ describe("Tavily.search", () => {
     const tavily = new Tavily();
     const result = await tavily.search("test", 5);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("not enabled");
+    expect((result as { error: string }).error).toContain("not enabled");
   });
 
   it("returns error when API key is missing", async () => {
@@ -115,7 +115,7 @@ describe("Tavily.search", () => {
     
     const result = await tavily.search("test", 5);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("TAVILY_SEARCH_API");
+    expect((result as { error: string }).error).toContain("TAVILY_SEARCH_API");
     
     process.env.TAVILY_SEARCH_API = originalEnv;
   });
@@ -132,7 +132,7 @@ describe("Tavily.search", () => {
         ],
       }),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.search("test", 5);
     expect(result.ok).toBe(true);
@@ -154,11 +154,11 @@ describe("Tavily.search", () => {
       ok: false,
       status: 500,
       text: async () => "Internal Server Error",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.search("test", 5);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("500");
+    expect((result as { error: string }).error).toContain("500");
   });
 
   it("returns error on JSON parse failure", async () => {
@@ -169,11 +169,11 @@ describe("Tavily.search", () => {
       ok: true,
       json: async () => { throw new Error("Invalid JSON"); },
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.search("test", 5);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("Invalid JSON");
+    expect((result as { error: string }).error).toContain("Invalid JSON");
   });
 
   it("returns generic error on non-Error throw", async () => {
@@ -184,11 +184,11 @@ describe("Tavily.search", () => {
       ok: true,
       json: async () => { throw "string error"; },
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.search("test", 5);
     expect(result.ok).toBe(false);
-    expect(result.error).toBe("Unknown error");
+    expect((result as { error: string }).error).toBe("Unknown error");
   });
 
   it("returns empty results when Tavily returns no results", async () => {
@@ -199,7 +199,7 @@ describe("Tavily.search", () => {
       ok: true,
       json: async () => ({ results: [] }),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.search("test", 5);
     expect(result.ok).toBe(true);
@@ -218,7 +218,7 @@ describe("Tavily.search", () => {
         results: [{}],
       }),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.search("test", 5);
     expect(result.ok).toBe(true);
@@ -235,7 +235,7 @@ describe("Tavily.search", () => {
       ok: true,
       json: async () => ({}),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.search("test", 5);
     expect(result.ok).toBe(true);
@@ -257,7 +257,7 @@ describe("Tavily.fetch", () => {
     const tavily = new Tavily();
     const result = await tavily.fetch("https://example.com", false);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("not enabled");
+    expect((result as { error: string }).error).toContain("not enabled");
   });
 
   it("returns error when API key is missing", async () => {
@@ -268,7 +268,7 @@ describe("Tavily.fetch", () => {
 
     const result = await tavily.fetch("https://example.com", false);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("TAVILY_SEARCH_API");
+    expect((result as { error: string }).error).toContain("TAVILY_SEARCH_API");
 
     process.env.TAVILY_SEARCH_API = originalEnv;
   });
@@ -281,7 +281,7 @@ describe("Tavily.fetch", () => {
       ok: true,
       text: async () => "<html>Hello</html>",
       headers: new Headers({ "content-type": "text/html" }),
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.fetch("https://example.com", true);
     expect(result.ok).toBe(true);
@@ -299,7 +299,7 @@ describe("Tavily.fetch", () => {
       ok: true,
       text: async () => "<html>Hello</html>",
       headers: new Headers(),
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.fetch("https://example.com", true);
     expect(result.ok).toBe(true);
@@ -316,11 +316,11 @@ describe("Tavily.fetch", () => {
       ok: false,
       status: 404,
       text: async () => "Not Found",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.fetch("https://example.com", true);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("404");
+    expect((result as { error: string }).error).toContain("404");
   });
 
   it("returns error on raw fetch network failure", async () => {
@@ -331,7 +331,7 @@ describe("Tavily.fetch", () => {
 
     const result = await tavily.fetch("https://example.com", true);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("Network error");
+    expect((result as { error: string }).error).toContain("Network error");
   });
 
   it("returns generic error on raw fetch non-Error throw", async () => {
@@ -342,7 +342,7 @@ describe("Tavily.fetch", () => {
 
     const result = await tavily.fetch("https://example.com", true);
     expect(result.ok).toBe(false);
-    expect(result.error).toBe("Unknown error");
+    expect((result as { error: string }).error).toBe("Unknown error");
   });
 
   it("uses Tavily extract when raw=false", async () => {
@@ -355,7 +355,7 @@ describe("Tavily.fetch", () => {
         results: [{ url: "https://example.com", raw_content: "Extracted text" }],
       }),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.fetch("https://example.com", false);
     expect(result.ok).toBe(true);
@@ -373,11 +373,11 @@ describe("Tavily.fetch", () => {
       ok: false,
       status: 500,
       text: async () => "Server Error",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.fetch("https://example.com", false);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("500");
+    expect((result as { error: string }).error).toContain("500");
   });
 
   it("returns error on Tavily extract failure", async () => {
@@ -390,11 +390,11 @@ describe("Tavily.fetch", () => {
         failed_results: [{ url: "https://example.com", error: "blocked" }],
       }),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.fetch("https://example.com", false);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("blocked");
+    expect((result as { error: string }).error).toContain("blocked");
   });
 
   it("returns error with defaults on extract failure with missing fields", async () => {
@@ -407,12 +407,12 @@ describe("Tavily.fetch", () => {
         failed_results: [{}],
       }),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.fetch("https://example.com", false);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("https://example.com");
-    expect(result.error).toContain("unknown error");
+    expect((result as { error: string }).error).toContain("https://example.com");
+    expect((result as { error: string }).error).toContain("unknown error");
   });
 
   it("returns error when no content returned", async () => {
@@ -425,11 +425,11 @@ describe("Tavily.fetch", () => {
         results: [],
       }),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.fetch("https://example.com", false);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("no content");
+    expect((result as { error: string }).error).toContain("no content");
   });
 
   it("returns error when results field is missing", async () => {
@@ -440,10 +440,10 @@ describe("Tavily.fetch", () => {
       ok: true,
       json: async () => ({}),
       text: async () => "",
-    } as Response);
+    } as unknown as Response);
 
     const result = await tavily.fetch("https://example.com", false);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("no content");
+    expect((result as { error: string }).error).toContain("no content");
   });
 });

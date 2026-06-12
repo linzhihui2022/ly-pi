@@ -76,7 +76,7 @@ export class Bar {
     if (this.gitStatusRefreshPending) return;
 
     this.gitStatusRefreshPending = true;
-    getGitStatus(this.ctx.cwd)
+    getGitStatus(this.ctx!.cwd)
       .then((status) => {
         this.gitStatus = status;
         this.gitStatusCacheTime = Date.now();

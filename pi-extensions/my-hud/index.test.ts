@@ -31,7 +31,35 @@ const mockPi = {
 const mockTui = { requestRender: vi.fn() };
 const mockTheme = {
   fg: vi.fn((_c: string, text: string) => text),
-};
+  bg: vi.fn((_c: string, text: string) => text),
+  bold: vi.fn((text: string) => text),
+  italic: vi.fn((text: string) => text),
+  underline: vi.fn((text: string) => text),
+  inverse: vi.fn((text: string) => text),
+  strikethrough: vi.fn((text: string) => text),
+  getFgAnsi: vi.fn(() => ""),
+  getBgAnsi: vi.fn(() => ""),
+  getColorMode: vi.fn(() => "truecolor"),
+  getThinkingBorderColor: vi.fn(() => (str: string) => str),
+  getBashModeBorderColor: vi.fn(() => (str: string) => str),
+} as any;
+
+function createMockTheme(): any {
+  return {
+    fg: vi.fn((_c: string, text: string) => text),
+    bg: vi.fn((_c: string, text: string) => text),
+    bold: vi.fn((text: string) => text),
+    italic: vi.fn((text: string) => text),
+    underline: vi.fn((text: string) => text),
+    inverse: vi.fn((text: string) => text),
+    strikethrough: vi.fn((text: string) => text),
+    getFgAnsi: vi.fn(() => ""),
+    getBgAnsi: vi.fn(() => ""),
+    getColorMode: vi.fn(() => "truecolor"),
+    getThinkingBorderColor: vi.fn(() => (str: string) => str),
+    getBashModeBorderColor: vi.fn(() => (str: string) => str),
+  };
+}
 
 const mockFooterData = {
   onBranchChange: vi.fn((cb: () => void) => {
@@ -113,14 +141,14 @@ describe("shortModelName", () => {
 describe("contextColored", () => {
   it("returns dim '--' for null percent", async () => {
     const { contextColored } = await loadModule();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     expect(contextColored(theme, null, 128000)).toBe("--");
     expect(theme.fg).toHaveBeenCalledWith("dim", "--");
   });
 
   it("treats contextWindow 0 as small window", async () => {
     const { contextColored } = await loadModule();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     expect(contextColored(theme, 50, 0)).toContain("50%");
     expect(theme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("50%"));
   });
@@ -128,7 +156,7 @@ describe("contextColored", () => {
   describe("small context window (<= 500k)", () => {
     it("returns accent for 0-70%", async () => {
       const { contextColored } = await loadModule();
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       expect(contextColored(theme, 0, 128000)).toContain("0%");
       expect(contextColored(theme, 70, 128000)).toContain("70%");
       expect(theme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("70%"));
@@ -136,7 +164,7 @@ describe("contextColored", () => {
 
     it("returns warning for 71-90%", async () => {
       const { contextColored } = await loadModule();
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       expect(contextColored(theme, 71, 128000)).toContain("71%");
       expect(contextColored(theme, 90, 128000)).toContain("90%");
       expect(theme.fg).toHaveBeenCalledWith("warning", expect.stringContaining("90%"));
@@ -144,7 +172,7 @@ describe("contextColored", () => {
 
     it("returns error for > 90%", async () => {
       const { contextColored } = await loadModule();
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       expect(contextColored(theme, 91, 128000)).toContain("91%");
       expect(contextColored(theme, 100, 128000)).toContain("100%");
       expect(theme.fg).toHaveBeenCalledWith("error", expect.stringContaining("100%"));
@@ -154,7 +182,7 @@ describe("contextColored", () => {
   describe("large context window (> 500k)", () => {
     it("returns accent for 0-20%", async () => {
       const { contextColored } = await loadModule();
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       expect(contextColored(theme, 0, 600000)).toContain("0%");
       expect(contextColored(theme, 20, 600000)).toContain("20%");
       expect(theme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("20%"));
@@ -162,7 +190,7 @@ describe("contextColored", () => {
 
     it("returns warning for 21-50%", async () => {
       const { contextColored } = await loadModule();
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       expect(contextColored(theme, 21, 600000)).toContain("21%");
       expect(contextColored(theme, 50, 600000)).toContain("50%");
       expect(theme.fg).toHaveBeenCalledWith("warning", expect.stringContaining("50%"));
@@ -170,7 +198,7 @@ describe("contextColored", () => {
 
     it("returns error for > 50%", async () => {
       const { contextColored } = await loadModule();
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       expect(contextColored(theme, 51, 600000)).toContain("51%");
       expect(theme.fg).toHaveBeenCalledWith("error", expect.stringContaining("51%"));
     });
@@ -518,67 +546,67 @@ describe("formatGitStatus", () => {
 
   it("returns empty for null status", async () => {
     const { formatGitStatus } = await loadModule();
-    expect(formatGitStatus(mockTheme as any, null)).toBe("");
+    expect(formatGitStatus(createMockTheme(), null)).toBe("");
   });
 
   it("returns empty for clean status", async () => {
     const { formatGitStatus } = await loadModule();
     const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: true };
-    expect(formatGitStatus(mockTheme as any, status)).toBe("");
+    expect(formatGitStatus(createMockTheme(), status)).toBe("");
   });
 
   it("formats ahead only", async () => {
     const { formatGitStatus } = await loadModule();
     const status = { ahead: 2, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
-    expect(formatGitStatus(mockTheme as any, status)).toBe("⇡2");
+    expect(formatGitStatus(createMockTheme(), status)).toBe("⇡2");
   });
 
   it("formats behind only", async () => {
     const { formatGitStatus } = await loadModule();
     const status = { ahead: 0, behind: 3, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
-    expect(formatGitStatus(mockTheme as any, status)).toContain("⇣3");
+    expect(formatGitStatus(createMockTheme(), status)).toContain("⇣3");
   });
 
   it("formats diverged", async () => {
     const { formatGitStatus } = await loadModule();
     const status = { ahead: 3, behind: 2, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
-    expect(formatGitStatus(mockTheme as any, status)).toContain("⇕⇡3⇣2");
+    expect(formatGitStatus(createMockTheme(), status)).toContain("⇕⇡3⇣2");
   });
 
   it("formats staged", async () => {
     const { formatGitStatus } = await loadModule();
     const status = { ahead: 0, behind: 0, staged: 3, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
-    expect(formatGitStatus(mockTheme as any, status)).toContain("++3|");
+    expect(formatGitStatus(createMockTheme(), status)).toContain("++3|");
   });
 
   it("formats stashed", async () => {
     const { formatGitStatus } = await loadModule();
     const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 1, conflicted: 0, isClean: false };
-    expect(formatGitStatus(mockTheme as any, status)).toContain("*1|");
+    expect(formatGitStatus(createMockTheme(), status)).toContain("*1|");
   });
 
   it("formats conflicted", async () => {
     const { formatGitStatus } = await loadModule();
     const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 2, isClean: false };
-    expect(formatGitStatus(mockTheme as any, status)).toContain("!!2|");
+    expect(formatGitStatus(createMockTheme(), status)).toContain("!!2|");
   });
 
   it("formats unstaged", async () => {
     const { formatGitStatus } = await loadModule();
     const status = { ahead: 0, behind: 0, staged: 0, unstaged: 3, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
-    expect(formatGitStatus(mockTheme as any, status)).toContain("~3|");
+    expect(formatGitStatus(createMockTheme(), status)).toContain("~3|");
   });
 
   it("formats untracked", async () => {
     const { formatGitStatus } = await loadModule();
     const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 2, stashed: 0, conflicted: 0, isClean: false };
-    expect(formatGitStatus(mockTheme as any, status)).toContain("?2|");
+    expect(formatGitStatus(createMockTheme(), status)).toContain("?2|");
   });
 
   it("combines multiple statuses", async () => {
     const { formatGitStatus } = await loadModule();
     const status = { ahead: 1, behind: 0, staged: 2, unstaged: 0, untracked: 0, stashed: 1, conflicted: 0, isClean: false };
-    const result = formatGitStatus(mockTheme as any, status);
+    const result = formatGitStatus(createMockTheme(), status);
     expect(result).toContain("++2|");
     expect(result).toContain("*1|");
     expect(result).toContain("⇡1");
@@ -588,8 +616,8 @@ describe("formatGitStatus", () => {
 describe("buildStatusLine", () => {
   it("builds a line with all parts when branch is present", async () => {
     const { buildStatusLine } = await loadModule();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
-    const line = buildStatusLine(theme as any, 200, {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
       project: "my-project",
       modelName: "gpt-4",
       branch: "main",
@@ -609,8 +637,8 @@ describe("buildStatusLine", () => {
 
   it("omits branch when null", async () => {
     const { buildStatusLine } = await loadModule();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
-    const line = buildStatusLine(theme as any, 200, {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
       project: "x",
       modelName: "y",
       branch: null,
@@ -623,8 +651,8 @@ describe("buildStatusLine", () => {
 
   it("truncates long project names", async () => {
     const { buildStatusLine } = await loadModule();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
-    const line = buildStatusLine(theme as any, 200, {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
       project: "very-long-project-name",
       modelName: "m",
       branch: null,
@@ -636,14 +664,14 @@ describe("buildStatusLine", () => {
 
   it("appends git status when branch is present and status is not clean", async () => {
     const { buildStatusLine } = await loadModule();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
-    const line = buildStatusLine(theme as any, 200, {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
       project: "my-project",
       modelName: "gpt-4",
       branch: "main",
       ctxColored: "42%",
       usage: { input: 1000, output: 500, cacheRead: 100, cacheWrite: 0, cost: 0.35 },
-      gitStatus: { ahead: 2, behind: 0, staged: 3, stashed: 1, conflicted: 0, isClean: false },
+      gitStatus: { ahead: 2, behind: 0, staged: 3, unstaged: 0, untracked: 0, stashed: 1, conflicted: 0, isClean: false },
     });
     expect(line).toContain("main");
     expect(line).toContain("⇡2");
@@ -673,7 +701,7 @@ describe("Bar", () => {
     const { Bar } = await loadModule();
     const bar = new Bar();
     const setWidget = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const mockEntries: any[] = [];
     const ctx = {
       cwd: "/home/user/my-project",
@@ -709,7 +737,7 @@ describe("Bar", () => {
     const { Bar } = await loadModule();
     const bar = new Bar();
     const setWidget = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = {
       cwd: "/x",
       model: { id: "m" },
@@ -735,7 +763,7 @@ describe("Bar", () => {
     const bar = new Bar();
     const setWidget = vi.fn();
     const requestRender = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = {
       cwd: "/x",
       model: { id: "m" },
@@ -791,7 +819,7 @@ describe("Bar", () => {
     const { Bar } = await loadModule();
     const bar = new Bar();
     const setWidget = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
 
     bar.setUICtx({ setWidget } as any);
     // ctx is not set
@@ -808,7 +836,7 @@ describe("Bar", () => {
     const { Bar } = await loadModule();
     const bar = new Bar();
     const setWidget = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = {
       cwd: "/x",
       model: { id: "m" },
@@ -832,7 +860,7 @@ describe("Bar", () => {
     const { Bar } = await loadModule();
     const bar = new Bar();
     const setWidget = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = {
       cwd: "/x",
       model: undefined,
@@ -857,7 +885,7 @@ describe("Bar", () => {
     const bar = new Bar();
     const setWidget = vi.fn();
     const requestRender = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = {
       cwd: "/x",
       model: { id: "m" },
@@ -886,7 +914,7 @@ describe("Bar", () => {
     const bar = new Bar();
     const setWidget = vi.fn();
     const requestRender = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = {
       cwd: "/x",
       model: { id: "m" },
@@ -917,7 +945,7 @@ describe("Bar", () => {
     const bar = new Bar();
     const setWidget = vi.fn();
     const requestRender = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = {
       cwd: "/x",
       model: { id: "m" },
@@ -950,7 +978,7 @@ describe("Bar", () => {
     const bar = new Bar();
     const setWidget = vi.fn();
     const requestRender = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = {
       cwd: "/x",
       model: { id: "m" },
@@ -972,13 +1000,13 @@ describe("Bar", () => {
 
   it("does not trigger duplicate fetches while one is pending", async () => {
     vi.mocked(getGitStatus).mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve({
-      ahead: 1, behind: 0, staged: 0, stashed: 0, conflicted: 0, isClean: false,
+      ahead: 1, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false,
     }), 100)));
     const { Bar } = await loadModule();
     const bar = new Bar();
     const setWidget = vi.fn();
     const requestRender = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = {
       cwd: "/x",
       model: { id: "m" },
@@ -1258,7 +1286,7 @@ describe("my-hud extension", () => {
 
     const turnStartHandler = registeredEvents.get("turn_start")!;
     const setWorkingMessage = vi.fn();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = { ui: { setWorkingMessage, getTheme: vi.fn(() => theme) } };
 
     turnStartHandler({}, ctx);
@@ -1289,7 +1317,7 @@ describe("my-hud extension", () => {
 
     const turnStartHandler = registeredEvents.get("turn_start")!;
     mockTui.requestRender.mockClear();
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     turnStartHandler({}, { ui: { setWorkingMessage: vi.fn(), getTheme: vi.fn(() => theme) } });
 
     expect(mockTui.requestRender).toHaveBeenCalled();
@@ -1301,7 +1329,7 @@ describe("my-hud extension", () => {
 
     const turnStartHandler = registeredEvents.get("turn_start")!;
     const setWorkingMessage = vi.fn(() => { throw new Error("ui fail"); });
-    const theme = { fg: vi.fn((_c: string, text: string) => text) };
+    const theme = createMockTheme();
     const ctx = { ui: { setWorkingMessage, getTheme: vi.fn(() => theme) } };
 
     expect(() => turnStartHandler({}, ctx)).toThrow("ui fail");
@@ -1325,7 +1353,7 @@ describe("my-hud extension", () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
 
-    mockFooterData.getGitBranch.mockReturnValue(undefined);
+    mockFooterData.getGitBranch.mockReturnValue(undefined as any);
 
     const sessionStartHandler = registeredEvents.get("session_start")!;
     const ctx = {

@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
+import { Key } from "@earendil-works/pi-tui";
 import { TaskState } from "./state";
 import { renderActiveOverlay, renderCompletedOverlay, renderPlanOverlay } from "./overlay";
 import type { Task, TaskStatus, PlanPhase } from "./types";
@@ -342,7 +343,7 @@ export default function myTodo(pi: ExtensionAPI): void {
     },
   });
 
-  pi.registerShortcut("Ctrl+Shift+P", {
+  pi.registerShortcut(Key.ctrlShift("p"), {
     description: "Toggle plan mode",
     handler: async (ctx) => {
       if (state.getPlanMode()) {

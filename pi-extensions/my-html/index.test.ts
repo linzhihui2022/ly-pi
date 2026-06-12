@@ -50,7 +50,7 @@ describe("myHtml extension", () => {
     await cmd.handler("", mockCtx as ExtensionCommandContext);
     expect(mockCtx.ui!.notify).toHaveBeenCalledWith(
       "No agent reply to preview.",
-      "warn",
+      "warning",
     );
   });
 

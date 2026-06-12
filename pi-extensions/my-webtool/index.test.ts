@@ -26,6 +26,23 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+function createMockTheme(): any {
+  return {
+    fg: vi.fn((_c: string, text: string) => text),
+    bg: vi.fn((_c: string, text: string) => text),
+    bold: vi.fn((text: string) => text),
+    italic: vi.fn((text: string) => text),
+    underline: vi.fn((text: string) => text),
+    inverse: vi.fn((text: string) => text),
+    strikethrough: vi.fn((text: string) => text),
+    getFgAnsi: vi.fn(() => ""),
+    getBgAnsi: vi.fn(() => ""),
+    getColorMode: vi.fn(() => "truecolor"),
+    getThinkingBorderColor: vi.fn(() => (str: string) => str),
+    getBashModeBorderColor: vi.fn(() => (str: string) => str),
+  };
+}
+
 describe("myWebtool", () => {
   it("registers web_search and web_fetch tools", async () => {
     const mod = await import("./index");
@@ -61,7 +78,7 @@ describe("myWebtool", () => {
 
     const webSearch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_search"
-    )[0];
+    )![0];
     expect(webSearch.label).toBe("Web Search");
     expect(webSearch.executionMode).toBe("parallel");
     expect(webSearch.promptGuidelines).toContain("If Tavily is not enabled, skip this tool call.");
@@ -73,7 +90,7 @@ describe("myWebtool", () => {
 
     const webFetch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_fetch"
-    )[0];
+    )![0];
     expect(webFetch.label).toBe("Web Fetch");
     expect(webFetch.executionMode).toBe("parallel");
     expect(webFetch.promptGuidelines).toContain("If Tavily is not enabled, skip this tool call.");
@@ -85,7 +102,7 @@ describe("myWebtool", () => {
 
     const webSearch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_search"
-    )[0];
+    )![0];
 
     const result = await webSearch.execute(
       "tool-call-id",
@@ -105,7 +122,7 @@ describe("myWebtool", () => {
 
     const webFetch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_fetch"
-    )[0];
+    )![0];
 
     const result = await webFetch.execute(
       "tool-call-id",
@@ -127,26 +144,23 @@ describe("myWebtool", () => {
       mod.default(mockPi);
       webSearch = mockRegisterTool.mock.calls.find(
         (call) => call[0].name === "web_search"
-      )[0];
+      )![0];
     });
 
     it("renderCall formats query with theme colors", () => {
-      const theme = {
-        fg: vi.fn((_c: string, text: string) => text),
-        bold: vi.fn((text: string) => text),
-      };
-      webSearch.renderCall({ query: "test" }, theme as any, {});
+      const theme = createMockTheme();
+      webSearch.renderCall({ query: "test" }, theme, {});
       expect(theme.bold).toHaveBeenCalledWith("WebSearch ");
       expect(theme.fg).toHaveBeenCalledWith("toolTitle", "WebSearch ");
       expect(theme.fg).toHaveBeenCalledWith("accent", '"test"');
     });
 
     it("renderResult emits warning color when partial", () => {
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       webSearch.renderResult(
         { content: [], details: {} },
         { expanded: false, isPartial: true },
-        theme as any,
+        theme,
         {}
       );
       expect(theme.fg).toHaveBeenCalledOnce();
@@ -154,40 +168,40 @@ describe("myWebtool", () => {
     });
 
     it("renderResult emits plural result count", () => {
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       webSearch.renderResult(
         { content: [], details: { resultCount: 5, results: [] } },
         { expanded: false, isPartial: false },
-        theme as any,
+        theme,
         {}
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ 5 results");
     });
 
     it("renderResult uses singular form for 1 result", () => {
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       webSearch.renderResult(
         { content: [], details: { resultCount: 1, results: [] } },
         { expanded: false, isPartial: false },
-        theme as any,
+        theme,
         {}
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ 1 result");
     });
 
     it("renderResult defaults to 0 results when details is empty", () => {
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       webSearch.renderResult(
         { content: [], details: {} },
         { expanded: false, isPartial: false },
-        theme as any,
+        theme,
         {}
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ 0 results");
     });
 
     it("renderResult appends preview lines when expanded", () => {
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       webSearch.renderResult(
         {
           content: [],
@@ -197,7 +211,7 @@ describe("myWebtool", () => {
           },
         },
         { expanded: true, isPartial: false },
-        theme as any,
+        theme,
         {}
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ 2 results");
@@ -213,26 +227,23 @@ describe("myWebtool", () => {
       mod.default(mockPi);
       webFetch = mockRegisterTool.mock.calls.find(
         (call) => call[0].name === "web_fetch"
-      )[0];
+      )![0];
     });
 
     it("renderCall formats URL with theme colors", () => {
-      const theme = {
-        fg: vi.fn((_c: string, text: string) => text),
-        bold: vi.fn((text: string) => text),
-      };
-      webFetch.renderCall({ url: "https://example.com" }, theme as any, {});
+      const theme = createMockTheme();
+      webFetch.renderCall({ url: "https://example.com" }, theme, {});
       expect(theme.bold).toHaveBeenCalledWith("WebFetch ");
       expect(theme.fg).toHaveBeenCalledWith("toolTitle", "WebFetch ");
       expect(theme.fg).toHaveBeenCalledWith("accent", "https://example.com");
     });
 
     it("renderResult emits warning color when partial", () => {
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       webFetch.renderResult(
         { content: [], details: {} },
         { expanded: false, isPartial: true },
-        theme as any,
+        theme,
         {}
       );
       expect(theme.fg).toHaveBeenCalledOnce();
@@ -240,11 +251,11 @@ describe("myWebtool", () => {
     });
 
     it("renderResult appends title in muted color", () => {
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       webFetch.renderResult(
         { content: [], details: { title: "Example" } },
         { expanded: false, isPartial: false },
-        theme as any,
+        theme,
         {}
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
@@ -252,11 +263,11 @@ describe("myWebtool", () => {
     });
 
     it("renderResult appends truncated warning when content was truncated", () => {
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       webFetch.renderResult(
         { content: [], details: { truncation: { truncated: true } } },
         { expanded: false, isPartial: false },
-        theme as any,
+        theme,
         {}
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
@@ -264,11 +275,11 @@ describe("myWebtool", () => {
     });
 
     it("renderResult renders content preview lines when expanded", () => {
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       webFetch.renderResult(
         { content: [{ type: "text", text: "Hello world" }], details: {} },
         { expanded: true, isPartial: false },
-        theme as any,
+        theme,
         {}
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
@@ -276,11 +287,11 @@ describe("myWebtool", () => {
     });
 
     it("renderResult skips preview when expanded content is not text type", () => {
-      const theme = { fg: vi.fn((_c: string, text: string) => text) };
+      const theme = createMockTheme();
       webFetch.renderResult(
         { content: [{ type: "image", url: "http://x" }], details: {} },
         { expanded: true, isPartial: false },
-        theme as any,
+        theme,
         {}
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
@@ -311,7 +322,7 @@ describe("myWebtool", () => {
 
     const webSearch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_search"
-    )[0];
+    )![0];
 
     const onUpdate = vi.fn();
     const result = await webSearch.execute(
@@ -345,7 +356,7 @@ describe("myWebtool", () => {
 
     const webSearch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_search"
-    )[0];
+    )![0];
 
     const result = await webSearch.execute("tool-call-id", { query: "test" }, undefined, vi.fn(), {});
     expect(result.content[0].text).toContain("No results found");
@@ -369,7 +380,7 @@ describe("myWebtool", () => {
 
     const webSearch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_search"
-    )[0];
+    )![0];
 
     const result = await webSearch.execute("tool-call-id", { query: "test" }, undefined, vi.fn(), {});
     expect(result.content[0].text).toContain("API error");
@@ -396,7 +407,7 @@ describe("myWebtool", () => {
 
     const webFetch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_fetch"
-    )[0];
+    )![0];
 
     const onUpdate = vi.fn();
     const result = await webFetch.execute(
@@ -429,7 +440,7 @@ describe("myWebtool", () => {
 
     const webFetch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_fetch"
-    )[0];
+    )![0];
 
     const result = await webFetch.execute("tool-call-id", { url: "https://example.com" }, undefined, vi.fn(), {});
     expect(result.content[0].text).toBe("Fetch failed");
@@ -456,7 +467,7 @@ describe("myWebtool", () => {
 
     const webFetch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_fetch"
-    )[0];
+    )![0];
 
     const result = await webFetch.execute("tool-call-id", { url: "https://example.com" }, undefined, vi.fn(), {});
     expect(result.content[0].text).toContain("Hello");
@@ -484,7 +495,7 @@ describe("myWebtool", () => {
 
     const webFetch = mockRegisterTool.mock.calls.find(
       (call) => call[0].name === "web_fetch"
-    )[0];
+    )![0];
 
     const result = await webFetch.execute("tool-call-id", { url: "https://example.com" }, undefined, vi.fn(), {});
     expect(result.content[0].text).toContain("truncated");
@@ -498,7 +509,7 @@ describe("myWebtool", () => {
 
     const cmd = mockRegisterCommand.mock.calls.find(
       (call) => call[0] === "webtool-usage"
-    );
+    )!;
     expect(cmd).toBeDefined();
     expect(cmd[1].description).toBe("Show Tavily usage statistics");
   });
@@ -529,7 +540,7 @@ describe("myWebtool", () => {
 
     const cmd = mockRegisterCommand.mock.calls.find(
       (call) => call[0] === "webtool-usage"
-    );
+    )!;
     const handler = cmd[1].handler;
     await handler("", { ui: { notify: mockNotify, setWidget: mockSetWidget } } as any);
 
@@ -569,7 +580,7 @@ describe("myWebtool", () => {
 
     const cmd = mockRegisterCommand.mock.calls.find(
       (call) => call[0] === "webtool-usage"
-    );
+    )!;
     const handler = cmd[1].handler;
     await handler("", { ui: { notify: mockNotify, setWidget: mockSetWidget } } as any);
 
@@ -608,7 +619,7 @@ describe("myWebtool", () => {
 
     const cmd = mockRegisterCommand.mock.calls.find(
       (call) => call[0] === "webtool-usage"
-    );
+    )!;
     const handler = cmd[1].handler;
     await handler("", { ui: { notify: mockNotify, setWidget: mockSetWidget } } as any);
 

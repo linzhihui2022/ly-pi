@@ -84,11 +84,16 @@ describe("formatTruncationFooter", () => {
   it("formats truncation info", () => {
     const truncation = {
       truncated: true,
+      truncatedBy: "lines" as const,
       content: "foo",
       totalLines: 100,
       outputLines: 50,
       totalBytes: 1000,
       outputBytes: 500,
+      lastLinePartial: false,
+      firstLineExceedsLimit: false,
+      maxLines: 2000,
+      maxBytes: 51200,
     };
     const footer = formatTruncationFooter(truncation, "/tmp/file.txt");
     expect(footer).toContain("showing 50 of 100 lines");

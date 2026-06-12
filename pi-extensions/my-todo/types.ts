@@ -16,6 +16,6 @@ export interface SessionEntry {
   message?: {
     role: string;
     toolName?: string;
-    details?: Record<string, unknown>;
+    details?: unknown;
   };
 }

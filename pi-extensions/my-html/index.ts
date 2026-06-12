@@ -44,7 +44,7 @@ export default function myHtml(pi: ExtensionAPI): void {
       const message = findLatestAssistantMessage(entries);
 
       if (!message || (!message.text && !message.thinking)) {
-        ctx.ui.notify("No agent reply to preview.", "warn");
+        ctx.ui.notify("No agent reply to preview.", "warning");
         return;
       }
 
