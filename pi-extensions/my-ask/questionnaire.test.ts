@@ -1,0 +1,901 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+vi.mock("@earendil-works/pi-tui", () => {
+  class Editor {
+    text = "";
+    theme: any;
+    onSubmit?: (text: string) => void;
+    constructor(_tui: any, theme: any) {
+      this.theme = theme;
+    }
+    setText(text: string) {
+      this.text = text;
+    }
+    getText() {
+      return this.text;
+    }
+    handleInput(data: string) {
+      if (data === "enter") {
+        this.onSubmit?.(this.text);
+      } else if (data !== "escape") {
+        this.text += data;
+      }
+    }
+    render(_width: number): string[] {
+      const t = this.theme;
+      const sample =
+        t.borderColor("-") +
+        t.selectList.selectedPrefix(">") +
+        t.selectList.selectedText("x") +
+        t.selectList.description("d") +
+        t.selectList.scrollInfo("s") +
+        t.selectList.noMatch("n");
+      return [this.text ? `${sample}${this.text}` : sample];
+    }
+    invalidate() {}
+  }
+
+  return {
+    truncateToWidth: (text: string, _width: number) => text,
+    matchesKey: (data: string, keyId: string) => data === keyId,
+    Key: {
+      up: "up",
+      down: "down",
+      left: "left",
+      right: "right",
+      tab: "tab",
+      shift: (key: string) => `shift+${key}`,
+      enter: "enter",
+      escape: "escape",
+      space: "space",
+    },
+    Editor,
+  };
+});
+
+import { createQuestionnaire } from "./questionnaire";
+import type { QuestionParams } from "./types";
+
+const mockTheme = {
+  fg: (_c: string, text: string) => text,
+  bg: (_c: string, text: string) => text,
+  bold: (text: string) => text,
+};
+
+const mockTui = { requestRender: vi.fn() };
+
+function makeParams(questions: QuestionParams["questions"]): QuestionParams {
+  return { questions };
+}
+
+describe("createQuestionnaire", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders a single-select question", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Which color?"))).toBe(true);
+    expect(lines.some((l) => l.includes("1. Red"))).toBe(true);
+    expect(lines.some((l) => l.includes("2. Blue"))).toBe(true);
+    expect(lines.some((l) => l.includes("3. Type something."))).toBe(true);
+    expect(lines.some((l) => l.includes("4. Chat about this"))).toBe(true);
+  });
+
+  it("selects an option and submits for a single question", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [{ questionIndex: 0, question: "Which color?", kind: "option", answer: "Red" }],
+      cancelled: false,
+    });
+  });
+
+  it("navigates down and selects the second option", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("down");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [{ questionIndex: 0, question: "Which color?", kind: "option", answer: "Blue" }],
+      cancelled: false,
+    });
+  });
+
+  it("selects chat answer and submits", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [{ questionIndex: 0, question: "Which color?", kind: "chat", answer: "Chat about this" }],
+      cancelled: false,
+    });
+  });
+
+  it("cancels on escape", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("escape");
+
+    expect(done).toHaveBeenCalledWith({ answers: [], cancelled: true });
+  });
+
+  it("renders preview and suppresses Type something row", () => {
+    const params = makeParams([
+      {
+        question: "Which layout?",
+        header: "Layout",
+        options: [
+          { label: "Vertical", description: "Top/bottom", preview: "# Vertical\nA\nB" },
+          { label: "Side", description: "Left/right", preview: "# Side\nC\nD" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Type something."))).toBe(false);
+    expect(lines.some((l) => l.includes("Preview:"))).toBe(true);
+    expect(lines.some((l) => l.includes("# Vertical"))).toBe(true);
+
+    q.handleInput("down");
+    const lines2 = q.render(80);
+    expect(lines2.some((l) => l.includes("# Side"))).toBe(true);
+  });
+
+  it("selects option with preview and includes preview in answer", () => {
+    const params = makeParams([
+      {
+        question: "Which layout?",
+        header: "Layout",
+        options: [
+          { label: "Vertical", description: "Top/bottom", preview: "# Vertical" },
+          { label: "Side", description: "Left/right" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        {
+          questionIndex: 0,
+          question: "Which layout?",
+          kind: "option",
+          answer: "Vertical",
+          preview: "# Vertical",
+        },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("supports custom input via Type something row", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+
+    q.handleInput("p");
+    q.handleInput("i");
+    q.handleInput("n");
+    q.handleInput("k");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [{ questionIndex: 0, question: "Which color?", kind: "custom", answer: "pink" }],
+      cancelled: false,
+    });
+  });
+
+  it("exits custom input mode on escape", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+    q.handleInput("x");
+    q.handleInput("escape");
+
+    expect(done).not.toHaveBeenCalled();
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("3. Type something."))).toBe(true);
+  });
+
+  it("supports multi-select with space toggle and enter submit", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+          { label: "C", description: "c" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("space");
+    q.handleInput("down");
+    q.handleInput("space");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        {
+          questionIndex: 0,
+          question: "Which features?",
+          kind: "multi",
+          answer: null,
+          selected: ["A", "B"],
+        },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("does not show Type something for multi-select", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Type something."))).toBe(false);
+    expect(lines.some((l) => l.includes("☐ A"))).toBe(true);
+  });
+
+  it("supports multi-question tab navigation and submit", () => {
+    const params = makeParams([
+      {
+        question: "Q1?",
+        header: "Q1",
+        options: [
+          { label: "A1", description: "a1" },
+          { label: "B1", description: "b1" },
+        ],
+      },
+      {
+        question: "Q2?",
+        header: "Q2",
+        options: [
+          { label: "A2", description: "a2" },
+          { label: "B2", description: "b2" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("enter");
+    expect(done).not.toHaveBeenCalled();
+
+    // Now on Q2; select B2 (second option)
+    q.handleInput("down");
+    q.handleInput("enter");
+
+    // Answered last question automatically lands on Submit tab
+    const submitLines = q.render(80);
+    expect(submitLines.some((l) => l.includes("Ready to submit"))).toBe(true);
+    expect(submitLines.some((l) => l.includes("Q1: A1"))).toBe(true);
+    expect(submitLines.some((l) => l.includes("Q2: B2"))).toBe(true);
+
+    q.handleInput("enter");
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        { questionIndex: 0, question: "Q1?", kind: "option", answer: "A1" },
+        { questionIndex: 1, question: "Q2?", kind: "option", answer: "B2" },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("wraps around tabs with right/left", () => {
+    const params = makeParams([
+      {
+        question: "Q1?",
+        header: "Q1",
+        options: [
+          { label: "A1", description: "a1" },
+          { label: "B1", description: "b1" },
+        ],
+      },
+      {
+        question: "Q2?",
+        header: "Q2",
+        options: [
+          { label: "A2", description: "a2" },
+          { label: "B2", description: "b2" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    // Q1 -> Q2
+    q.handleInput("right");
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Q2?"))).toBe(true);
+
+    // Q2 -> Submit
+    q.handleInput("right");
+    const submitLines = q.render(80);
+    expect(submitLines.some((l) => l.includes("Ready to submit"))).toBe(true);
+
+    // Submit -> Q1 (wrap)
+    q.handleInput("right");
+    const lines2 = q.render(80);
+    expect(lines2.some((l) => l.includes("Q1?"))).toBe(true);
+
+    // Q1 -> Submit (wrap backwards)
+    q.handleInput("left");
+    const submitLines2 = q.render(80);
+    expect(submitLines2.some((l) => l.includes("Ready to submit"))).toBe(true);
+  });
+
+  it("does not submit from Submit tab unless all questions are answered", () => {
+    const params = makeParams([
+      {
+        question: "Q1?",
+        header: "Q1",
+        options: [
+          { label: "A1", description: "a1" },
+          { label: "B1", description: "b1" },
+        ],
+      },
+      {
+        question: "Q2?",
+        header: "Q2",
+        options: [
+          { label: "A2", description: "a2" },
+          { label: "B2", description: "b2" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("tab");
+    q.handleInput("tab");
+    q.handleInput("enter");
+
+    expect(done).not.toHaveBeenCalled();
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Unanswered"))).toBe(true);
+  });
+
+  it("renders the submit tab with multi-select summary", () => {
+    const params = makeParams([
+      {
+        question: "Q1?",
+        header: "Q1",
+        multiSelect: true,
+        options: [
+          { label: "A1", description: "a1" },
+          { label: "B1", description: "b1" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("space");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        { questionIndex: 0, question: "Q1?", kind: "multi", answer: null, selected: ["A1"] },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("calls invalidate on the editor", () => {
+    const params = makeParams([
+      {
+        question: "Q1?",
+        header: "Q1",
+        options: [
+          { label: "A1", description: "a1" },
+          { label: "B1", description: "b1" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+    expect(() => q.invalidate()).not.toThrow();
+  });
+
+  it("navigates up and clamps at the first row", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    q.handleInput("up");
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("> 1. Red"))).toBe(true);
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("up");
+    const lines2 = q.render(80);
+    expect(lines2.some((l) => l.includes("> 2. Blue"))).toBe(true);
+  });
+
+  it("ignores unknown keys", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("?");
+    expect(done).not.toHaveBeenCalled();
+  });
+
+  it("renders the inline editor after selecting Type something", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Your answer:"))).toBe(true);
+    expect(lines.some((l) => l.includes("Type something. ✎"))).toBe(true);
+  });
+
+  it("truncates preview lines that exceed available width", () => {
+    const params = makeParams([
+      {
+        question: "Which layout?",
+        header: "Layout",
+        options: [
+          { label: "Vertical", description: "Top/bottom", preview: "a".repeat(100) },
+          { label: "Side", description: "Left/right" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+    const lines = q.render(20);
+    expect(lines.some((l) => l.includes("Preview:"))).toBe(true);
+  });
+
+  it("highlights the chat row when focused", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("down");
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("> 4. Chat about this"))).toBe(true);
+  });
+
+  it("toggles a multi-select option off again", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("space");
+    q.handleInput("space");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: [] },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("does not toggle when space is pressed on a sentinel row in multi-select", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    // Move focus to the chat row
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("space");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        { questionIndex: 0, question: "Which features?", kind: "chat", answer: "Chat about this" },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("does nothing when space is pressed in single-select", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("space");
+    expect(done).not.toHaveBeenCalled();
+  });
+
+  it("cancels from the Submit tab on escape", () => {
+    const params = makeParams([
+      {
+        question: "Q1?",
+        header: "Q1",
+        options: [
+          { label: "A1", description: "a1" },
+          { label: "B1", description: "b1" },
+        ],
+      },
+      {
+        question: "Q2?",
+        header: "Q2",
+        options: [
+          { label: "A2", description: "a2" },
+          { label: "B2", description: "b2" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("enter");
+    q.handleInput("enter");
+    q.handleInput("escape");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        { questionIndex: 0, question: "Q1?", kind: "option", answer: "A1" },
+        { questionIndex: 1, question: "Q2?", kind: "option", answer: "A2" },
+      ],
+      cancelled: true,
+    });
+  });
+
+  it("renders the Submit tab with each answer kind", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+      {
+        question: "Talk?",
+        header: "Talk",
+        options: [
+          { label: "Yes", description: "y" },
+          { label: "No", description: "n" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    // Q1: multi-select A
+    q.handleInput("space");
+    q.handleInput("enter");
+
+    // Q2: custom input
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+    q.handleInput("p");
+    q.handleInput("i");
+    q.handleInput("n");
+    q.handleInput("k");
+    q.handleInput("enter");
+
+    // Q3: chat
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Ready to submit"))).toBe(true);
+    expect(lines.some((l) => l.includes("Features: A"))).toBe(true);
+    expect(lines.some((l) => l.includes("Color: pink"))).toBe(true);
+    expect(lines.some((l) => l.includes("Talk: Chat about this"))).toBe(true);
+    expect(lines.some((l) => l.includes("Press Enter to submit"))).toBe(true);
+
+    q.handleInput("enter");
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: ["A"] },
+        { questionIndex: 1, question: "Which color?", kind: "custom", answer: "pink" },
+        { questionIndex: 2, question: "Talk?", kind: "chat", answer: "Chat about this" },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("renders a checked multi-select box", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    q.handleInput("space");
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("☑ A"))).toBe(true);
+  });
+
+  it("renders empty multi-select and custom answers on the Submit tab", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+      {
+        question: "Any notes?",
+        header: "Notes",
+        options: [
+          { label: "Yes", description: "y" },
+          { label: "No", description: "n" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    // Q1: submit multi-select with nothing selected
+    q.handleInput("enter");
+
+    // Q2: choose Type something and submit empty text
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+    q.handleInput("enter");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Features: (no input)"))).toBe(true);
+    expect(lines.some((l) => l.includes("Notes: (no input)"))).toBe(true);
+  });
+
+  it("renders an option answer with an empty label on the Submit tab", () => {
+    const params = makeParams([
+      {
+        question: "Empty?",
+        header: "Empty",
+        options: [
+          { label: "", description: "empty label" },
+          { label: "B", description: "b" },
+        ],
+      },
+      {
+        question: "Confirm?",
+        header: "Confirm",
+        options: [
+          { label: "Yes", description: "y" },
+          { label: "No", description: "n" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("enter");
+    q.handleInput("enter");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Empty: (no input)"))).toBe(true);
+  });
+
+  it("uses success styling for the Submit tab when all questions are answered", () => {
+    const params = makeParams([
+      {
+        question: "Q1?",
+        header: "Q1",
+        options: [
+          { label: "A1", description: "a1" },
+          { label: "B1", description: "b1" },
+        ],
+      },
+      {
+        question: "Q2?",
+        header: "Q2",
+        options: [
+          { label: "A2", description: "a2" },
+          { label: "B2", description: "b2" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    q.handleInput("enter");
+    q.handleInput("enter");
+    q.handleInput("left");
+    q.handleInput("left");
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("■ Q1"))).toBe(true);
+    expect(lines.some((l) => l.includes("■ Q2"))).toBe(true);
+    expect(lines.some((l) => l.includes("✓ Submit"))).toBe(true);
+  });
+});
