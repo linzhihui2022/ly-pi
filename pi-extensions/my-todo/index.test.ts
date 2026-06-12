@@ -768,8 +768,8 @@ describe("my-todo extension", () => {
       return registeredEvents.get("tool_call")!;
     }
 
-    const blockedTools = ["edit", "write", "grep", "find", "ls"];
-    const allowedTools = ["read", "bash", "web_search", "web_fetch", "ask_user_question", "todo"];
+    const blockedTools = ["edit", "write"];
+    const allowedTools = ["read", "bash", "grep", "find", "ls", "web_search", "web_fetch", "ask_user_question", "todo"];
 
     for (const toolName of blockedTools) {
       it(`blocks ${toolName} tool in planning mode`, async () => {

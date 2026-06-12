@@ -352,6 +352,9 @@ export default function myTodo(pi: ExtensionAPI): void {
   const READ_ONLY_TOOLS = new Set([
     "read",
     "bash",
+    "grep",
+    "find",
+    "ls",
     "ask_user_question",
     "web_search",
     "web_fetch",
