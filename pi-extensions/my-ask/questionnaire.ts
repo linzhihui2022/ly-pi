@@ -51,6 +51,8 @@ export function createQuestionnaire(
   let inputMode = false;
   let inputQuestionIndex: number | null = null;
 
+  const MAX_CUSTOM_OPTIONS = 8;
+
   const answers = new Map<number, QuestionAnswer>();
   const multiSelections = new Map<number, Set<string>>();
   const customOptions = new Map<number, string[]>();
@@ -101,24 +103,16 @@ export function createQuestionnaire(
 
     const customs = customOptions.get(index) ?? [];
     const existingRowIndex = customs.indexOf(trimmed);
+    const optionsLength = questions[index].options.length;
+
     if (existingRowIndex !== -1) {
-      const rows = buildRows(questions[index], index);
-      let targetIndex = -1;
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i].kind === "custom" && rows[i].value === trimmed) {
-          targetIndex = i;
-          break;
-        }
-      }
-      if (targetIndex !== -1) {
-        optionIndex = targetIndex;
-      }
+      optionIndex = optionsLength + existingRowIndex;
       refresh();
       return;
     }
 
-    if (customs.length >= 8) {
-      transientNotice = "Maximum 8 custom options reached.";
+    if (customs.length >= MAX_CUSTOM_OPTIONS) {
+      transientNotice = `Maximum ${MAX_CUSTOM_OPTIONS} custom options reached.`;
       refresh();
       return;
     }
@@ -129,17 +123,7 @@ export function createQuestionnaire(
       getSelections(index).add(trimmed);
     }
 
-    const rows = buildRows(questions[index], index);
-    let targetIndex = -1;
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i].kind === "custom" && rows[i].value === trimmed) {
-        targetIndex = i;
-        break;
-      }
-    }
-    if (targetIndex !== -1) {
-      optionIndex = targetIndex;
-    }
+    optionIndex = optionsLength + updated.length - 1;
     refresh();
   };
 
@@ -225,17 +209,6 @@ export function createQuestionnaire(
       return;
     }
 
-    if (row.kind === "custom") {
-      saveAnswer({
-        questionIndex: currentTab,
-        question: q.question,
-        kind: "custom",
-        answer: row.value,
-      });
-      advanceAfterAnswer(currentTab);
-      return;
-    }
-
     if (q.multiSelect) {
       const selected = Array.from(getSelections(currentTab));
       saveAnswer({
@@ -244,6 +217,17 @@ export function createQuestionnaire(
         kind: "multi",
         answer: null,
         selected,
+      });
+      advanceAfterAnswer(currentTab);
+      return;
+    }
+
+    if (row.kind === "custom") {
+      saveAnswer({
+        questionIndex: currentTab,
+        question: q.question,
+        kind: "custom",
+        answer: row.value,
       });
       advanceAfterAnswer(currentTab);
       return;
@@ -262,12 +246,13 @@ export function createQuestionnaire(
   function toggleMulti() {
     const rows = currentRows();
     const row = rows[optionIndex];
-    if (row.kind !== "option") return;
+    if (row.kind !== "option" && row.kind !== "custom") return;
     const set = getSelections(currentTab);
-    if (set.has(row.option.label)) {
-      set.delete(row.option.label);
+    const key = row.kind === "custom" ? row.value : row.option.label;
+    if (set.has(key)) {
+      set.delete(key);
     } else {
-      set.add(row.option.label);
+      set.add(key);
     }
     refresh();
   }
@@ -429,8 +414,10 @@ export function createQuestionnaire(
       lines.push("");
       for (let i = 0; i < questions.length; i++) {
         const answer = answers.get(i);
-        if (answer) {
-          let value: string;
+        let value: string;
+        if (!answer) {
+          value = "(no input)";
+        } else {
           switch (answer.kind) {
             case "multi":
               value = answer.selected?.length ? answer.selected.join(", ") : "(no input)";
@@ -444,8 +431,8 @@ export function createQuestionnaire(
             default:
               value = answer.answer || "(no input)";
           }
-          add(`${theme.fg("muted", ` ${questions[i].header}: `)}${theme.fg("text", value)}`);
         }
+        add(`${theme.fg("muted", ` ${questions[i].header}: `)}${theme.fg("text", value)}`);
       }
       lines.push("");
       if (allAnswered()) {

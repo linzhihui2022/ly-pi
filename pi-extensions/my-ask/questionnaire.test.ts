@@ -761,6 +761,8 @@ describe("createQuestionnaire", () => {
     q.handleInput("n");
     q.handleInput("k");
     q.handleInput("enter");
+    // the new custom row is focused; press Enter again to submit it
+    q.handleInput("enter");
 
     // Q3: chat
     q.handleInput("down");
@@ -836,6 +838,9 @@ describe("createQuestionnaire", () => {
     q.handleInput("down");
     q.handleInput("enter");
     q.handleInput("enter");
+
+    // navigate to the Submit tab to see the unanswered summary
+    q.handleInput("tab");
 
     const lines = q.render(80);
     expect(lines.some((l) => l.includes("Features: (no input)"))).toBe(true);
