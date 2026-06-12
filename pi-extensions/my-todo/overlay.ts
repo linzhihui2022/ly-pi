@@ -101,7 +101,3 @@ export function renderPlanOverlay(tasks: Task[], phase: PlanPhase, theme?: Theme
   );
 }
 
-// Backward-compatible alias until index.ts is updated:
-export function renderOverlay(tasks: Task[], theme?: ThemeLike): string[] {
-  return renderActiveOverlay(tasks, theme);
-}

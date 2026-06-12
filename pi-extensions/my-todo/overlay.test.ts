@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderOverlay, renderActiveOverlay, renderCompletedOverlay } from "./overlay";
+import { renderActiveOverlay, renderCompletedOverlay, renderPlanOverlay } from "./overlay";
 import type { Task } from "./types";
 
 const mockTheme = {
@@ -9,145 +9,6 @@ const mockTheme = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-});
-
-describe("renderOverlay", () => {
-  it("returns empty array for no tasks", () => {
-    expect(renderOverlay([])).toEqual([]);
-  });
-
-  it("returns empty array for only deleted tasks", () => {
-    const tasks: Task[] = [{ id: 1, subject: "A", status: "deleted" }];
-    expect(renderOverlay(tasks)).toEqual([]);
-  });
-
-  it("returns empty array for only completed tasks", () => {
-    const tasks: Task[] = [{ id: 1, subject: "A", status: "completed" }];
-    expect(renderOverlay(tasks)).toEqual([]);
-  });
-
-  it("renders pending task", () => {
-    const tasks: Task[] = [{ id: 1, subject: "A", status: "pending" }];
-    expect(renderOverlay(tasks)).toEqual(["Active (1)", "○ #1 A"]);
-  });
-
-  it("renders in_progress task", () => {
-    const tasks: Task[] = [{ id: 1, subject: "A", status: "in_progress" }];
-    expect(renderOverlay(tasks)).toEqual(["Active (1)", "● #1 A"]);
-  });
-
-  it("omits completed tasks", () => {
-    const tasks: Task[] = [{ id: 1, subject: "A", status: "completed" }];
-    expect(renderOverlay(tasks)).toEqual([]);
-  });
-
-  it("sorts in_progress before pending", () => {
-    const tasks: Task[] = [
-      { id: 1, subject: "A", status: "pending" },
-      { id: 2, subject: "B", status: "in_progress" },
-    ];
-    expect(renderOverlay(tasks)).toEqual([
-      "Active (2)",
-      "● #2 B",
-      "○ #1 A",
-    ]);
-  });
-
-  it("filters deleted tasks from visible list", () => {
-    const tasks: Task[] = [
-      { id: 1, subject: "A", status: "pending" },
-      { id: 2, subject: "B", status: "deleted" },
-      { id: 3, subject: "C", status: "completed" },
-    ];
-    expect(renderOverlay(tasks)).toEqual([
-      "Active (1)",
-      "○ #1 A",
-    ]);
-  });
-
-  it("does not render description in overlay", () => {
-    const tasks: Task[] = [{ id: 1, subject: "A", description: "Desc", status: "pending" }];
-    expect(renderOverlay(tasks)).toEqual(["Active (1)", "○ #1 A"]);
-  });
-
-  it("shows correct count after some deleted", () => {
-    const tasks: Task[] = [
-      { id: 1, subject: "A", status: "deleted" },
-      { id: 2, subject: "B", status: "deleted" },
-      { id: 3, subject: "C", status: "pending" },
-    ];
-    expect(renderOverlay(tasks)).toEqual(["Active (1)", "○ #3 C"]);
-  });
-
-  it("caps at 3 tasks and shows overflow", () => {
-    const tasks: Task[] = [
-      { id: 1, subject: "A", status: "pending" },
-      { id: 2, subject: "B", status: "pending" },
-      { id: 3, subject: "C", status: "pending" },
-      { id: 4, subject: "D", status: "pending" },
-    ];
-    expect(renderOverlay(tasks)).toEqual([
-      "Active (4)",
-      "○ #1 A",
-      "○ #2 B",
-      "○ #3 C",
-      "  +1 more",
-    ]);
-  });
-
-  it("shows exact overflow count for many tasks", () => {
-    const tasks: Task[] = Array.from({ length: 10 }, (_, i) => ({
-      id: i + 1,
-      subject: `Task ${i + 1}`,
-      status: "pending" as const,
-    }));
-    const result = renderOverlay(tasks);
-    expect(result[0]).toBe("Active (10)");
-    expect(result).toHaveLength(5); // title + 3 tasks + overflow
-    expect(result[result.length - 1]).toBe("  +7 more");
-  });
-
-  it("does not show overflow when exactly 3 tasks", () => {
-    const tasks: Task[] = Array.from({ length: 3 }, (_, i) => ({
-      id: i + 1,
-      subject: `Task ${i + 1}`,
-      status: "pending" as const,
-    }));
-    const result = renderOverlay(tasks);
-    expect(result).toHaveLength(4); // title + 3 tasks, no overflow line
-    expect(result[result.length - 1]).not.toContain("more");
-  });
-
-  describe("with theme", () => {
-    it("styles title with accent and bold", () => {
-      const tasks: Task[] = [{ id: 1, subject: "A", status: "pending" }];
-      renderOverlay(tasks, mockTheme);
-      expect(mockTheme.bold).toHaveBeenCalledWith("Active (1)");
-      expect(mockTheme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("Active (1)"));
-    });
-
-    it("styles pending task in dim", () => {
-      const tasks: Task[] = [{ id: 1, subject: "A", status: "pending" }];
-      renderOverlay(tasks, mockTheme);
-      expect(mockTheme.fg).toHaveBeenCalledWith("dim", "○ #1 A");
-    });
-
-    it("styles in_progress task in accent", () => {
-      const tasks: Task[] = [{ id: 1, subject: "A", status: "in_progress" }];
-      renderOverlay(tasks, mockTheme);
-      expect(mockTheme.fg).toHaveBeenCalledWith("accent", "● #1 A");
-    });
-
-    it("styles overflow in dim", () => {
-      const tasks: Task[] = Array.from({ length: 4 }, (_, i) => ({
-        id: i + 1,
-        subject: `Task ${i + 1}`,
-        status: "pending" as const,
-      }));
-      renderOverlay(tasks, mockTheme);
-      expect(mockTheme.fg).toHaveBeenCalledWith("dim", "  +1 more");
-    });
-  });
 });
 
 describe("renderActiveOverlay", () => {
@@ -201,6 +62,33 @@ describe("renderActiveOverlay", () => {
       "○ #3 C",
       "  +1 more",
     ]);
+  });
+
+  it("does not render description in overlay", () => {
+    const tasks: Task[] = [
+      { id: 1, subject: "A", description: "details", status: "pending" },
+    ];
+    expect(renderActiveOverlay(tasks)).toEqual(["Active (1)", "○ #1 A"]);
+  });
+
+  it("does not show overflow when exactly 3 tasks", () => {
+    const tasks: Task[] = [
+      { id: 1, subject: "A", status: "pending" },
+      { id: 2, subject: "B", status: "pending" },
+      { id: 3, subject: "C", status: "pending" },
+    ];
+    const result = renderActiveOverlay(tasks);
+    expect(result).toHaveLength(4);
+    expect(result[result.length - 1]).not.toContain("more");
+  });
+
+  it("shows correct count after some deleted", () => {
+    const tasks: Task[] = [
+      { id: 1, subject: "A", status: "deleted" },
+      { id: 2, subject: "B", status: "deleted" },
+      { id: 3, subject: "C", status: "pending" },
+    ];
+    expect(renderActiveOverlay(tasks)).toEqual(["Active (1)", "○ #3 C"]);
   });
 });
 
@@ -311,5 +199,94 @@ describe("renderCompletedOverlay with theme", () => {
     }));
     renderCompletedOverlay(tasks, mockTheme);
     expect(mockTheme.fg).toHaveBeenCalledWith("dim", "  +1 more");
+  });
+});
+
+describe("renderPlanOverlay", () => {
+  it("returns empty array for no tasks", () => {
+    expect(renderPlanOverlay([], "planning")).toEqual([]);
+  });
+
+  it("returns empty array for only deleted tasks", () => {
+    const tasks: Task[] = [{ id: 1, subject: "A", status: "deleted" }];
+    expect(renderPlanOverlay(tasks, "planning")).toEqual([]);
+  });
+
+  it("renders title 'Plan (N)' for planning phase", () => {
+    const tasks: Task[] = [
+      { id: 1, subject: "A", status: "pending" },
+      { id: 2, subject: "B", status: "pending" },
+    ];
+    const result = renderPlanOverlay(tasks, "planning");
+    expect(result[0]).toBe("Plan (2)");
+    expect(result).toEqual([
+      "Plan (2)",
+      "○ #1 A",
+      "○ #2 B",
+    ]);
+  });
+
+  it("renders title 'Executing (N)' for executing phase", () => {
+    const tasks: Task[] = [
+      { id: 1, subject: "A", status: "in_progress" },
+    ];
+    const result = renderPlanOverlay(tasks, "executing");
+    expect(result[0]).toBe("Executing (1)");
+    expect(result).toEqual([
+      "Executing (1)",
+      "● #1 A",
+    ]);
+  });
+
+  it("sorts in_progress before pending", () => {
+    const tasks: Task[] = [
+      { id: 1, subject: "A", status: "pending" },
+      { id: 2, subject: "B", status: "in_progress" },
+    ];
+    const result = renderPlanOverlay(tasks, "executing");
+    expect(result).toEqual([
+      "Executing (2)",
+      "● #2 B",
+      "○ #1 A",
+    ]);
+  });
+
+  it("caps at 3 tasks with overflow", () => {
+    const tasks: Task[] = [
+      { id: 1, subject: "A", status: "pending" },
+      { id: 2, subject: "B", status: "pending" },
+      { id: 3, subject: "C", status: "pending" },
+      { id: 4, subject: "D", status: "pending" },
+    ];
+    const result = renderPlanOverlay(tasks, "planning");
+    expect(result).toEqual([
+      "Plan (4)",
+      "○ #1 A",
+      "○ #2 B",
+      "○ #3 C",
+      "  +1 more",
+    ]);
+  });
+
+  it("filters completed and deleted tasks", () => {
+    const tasks: Task[] = [
+      { id: 1, subject: "A", status: "pending" },
+      { id: 2, subject: "B", status: "completed" },
+      { id: 3, subject: "C", status: "deleted" },
+    ];
+    const result = renderPlanOverlay(tasks, "planning");
+    expect(result).toEqual([
+      "Plan (1)",
+      "○ #1 A",
+    ]);
+  });
+});
+
+describe("renderPlanOverlay with theme", () => {
+  it("styles title with accent and bold", () => {
+    const tasks: Task[] = [{ id: 1, subject: "A", status: "pending" }];
+    renderPlanOverlay(tasks, "planning", mockTheme);
+    expect(mockTheme.bold).toHaveBeenCalledWith("Plan (1)");
+    expect(mockTheme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("Plan (1)"));
   });
 });
