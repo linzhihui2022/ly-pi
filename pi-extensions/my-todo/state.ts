@@ -7,6 +7,8 @@ const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   deleted: [],
 };
 
+const VALID_PLAN_PHASES: PlanPhase[] = ["idle", "planning", "executing"];
+
 function deepCopyTask(task: Task): Task {
   return {
     id: task.id,
@@ -20,11 +22,15 @@ function deepCopyTasks(tasks: Task[]): Task[] {
   return tasks.map(deepCopyTask);
 }
 
+function isValidPlanPhase(value: unknown): value is PlanPhase {
+  return typeof value === "string" && (VALID_PLAN_PHASES as string[]).includes(value);
+}
+
 function isValidDetails(value: unknown): value is {
   tasks: Task[];
   nextId: number;
   planMode?: boolean;
-  planPhase?: string;
+  planPhase?: PlanPhase;
 } {
   if (typeof value !== "object" || value === null) return false;
   const obj = value as Record<string, unknown>;
@@ -32,7 +38,7 @@ function isValidDetails(value: unknown): value is {
   if (typeof obj.nextId !== "number") return false;
   // planMode/planPhase are optional for backward compat
   if (obj.planMode !== undefined && typeof obj.planMode !== "boolean") return false;
-  if (obj.planPhase !== undefined && typeof obj.planPhase !== "string") return false;
+  if (obj.planPhase !== undefined && !isValidPlanPhase(obj.planPhase)) return false;
   return obj.tasks.every(
     (t) =>
       typeof t === "object" &&
@@ -129,6 +135,9 @@ export class TaskState {
   }
 
   setPlanMode(mode: boolean, phase: PlanPhase): void {
+    if (!isValidPlanPhase(phase)) {
+      throw new Error(`Invalid plan phase: ${phase}`);
+    }
     this.planMode = mode;
     this.planPhase = phase;
   }
@@ -156,8 +165,8 @@ export class TaskState {
       if (typeof entry.message.details.planMode === "boolean") {
         state.planMode = entry.message.details.planMode;
       }
-      if (typeof entry.message.details.planPhase === "string") {
-        state.planPhase = entry.message.details.planPhase as PlanPhase;
+      if (isValidPlanPhase(entry.message.details.planPhase)) {
+        state.planPhase = entry.message.details.planPhase;
       }
       break;
     }

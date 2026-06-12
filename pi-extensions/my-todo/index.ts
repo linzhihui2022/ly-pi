@@ -19,7 +19,7 @@ function formatTaskLine(task: Task): string {
 export default function myTodo(pi: ExtensionAPI): void {
   let state = new TaskState();
 
-  function refreshOverlay(ctx: ExtensionContext): void {
+  function refreshWidgets(ctx: ExtensionContext): void {
     if (!ctx.hasUI) return;
 
     const tasks = state.list();
@@ -65,15 +65,25 @@ export default function myTodo(pi: ExtensionAPI): void {
 
   pi.on("session_start", async (_event, ctx) => {
     state = TaskState.fromSession(ctx.sessionManager.getEntries());
-    refreshOverlay(ctx);
+    refreshWidgets(ctx);
   });
 
   pi.on("turn_start", async (_event, ctx) => {
-    refreshOverlay(ctx);
+    refreshWidgets(ctx);
   });
 
   pi.on("turn_end", async (_event, ctx) => {
-    refreshOverlay(ctx);
+    refreshWidgets(ctx);
+
+    // Auto-exit plan mode when all tasks are completed during execution
+    if (state.getPlanMode() && state.getPlanPhase() === "executing") {
+      const tasks = state.list();
+      if (tasks.length > 0 && tasks.every((t) => t.status === "completed")) {
+        state.setPlanMode(false, "idle");
+        refreshWidgets(ctx);
+        ctx.ui.notify("Plan complete. All tasks finished.", "info");
+      }
+    }
   });
 
   pi.registerTool({
@@ -101,7 +111,7 @@ export default function myTodo(pi: ExtensionAPI): void {
           case "create": {
             if (!params.subject) throw new Error("subject is required for create");
             const task = state.create(params.subject, params.description);
-            refreshOverlay(ctx);
+            refreshWidgets(ctx);
             return {
               content: [{ type: "text", text: `Created task #${task.id}: ${task.subject}` }],
               details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
@@ -114,7 +124,7 @@ export default function myTodo(pi: ExtensionAPI): void {
             if (params.description !== undefined) updates.description = params.description;
             if (params.status !== undefined) updates.status = params.status;
             const task = state.update(params.id, updates);
-            refreshOverlay(ctx);
+            refreshWidgets(ctx);
             return {
               content: [{ type: "text", text: `Updated task #${task.id}: ${task.subject}` }],
               details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
@@ -143,7 +153,7 @@ export default function myTodo(pi: ExtensionAPI): void {
           case "delete": {
             if (params.id === undefined) throw new Error("id is required for delete");
             const task = state.delete(params.id);
-            refreshOverlay(ctx);
+            refreshWidgets(ctx);
             return {
               content: [{ type: "text", text: `Deleted task #${task.id}: ${task.subject}` }],
               details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
@@ -151,7 +161,7 @@ export default function myTodo(pi: ExtensionAPI): void {
           }
           case "clear": {
             state.clear();
-            refreshOverlay(ctx);
+            refreshWidgets(ctx);
             return {
               content: [{ type: "text", text: "All tasks cleared." }],
               details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
@@ -174,7 +184,7 @@ export default function myTodo(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("todos", {
-    description: "Manage tasks: /todos [list|done|start|delete|clear|add] [args]",
+    description: "Manage tasks: /todos [list|done|start|delete|clear|add|plan|execute|reset] [args]",
     getArgumentCompletions: (prefix: string) => {
       const trimmed = prefix.trimStart();
       const parts = trimmed.split(/\s+/);
@@ -232,7 +242,7 @@ export default function myTodo(pi: ExtensionAPI): void {
 
       if (sub === "clear") {
         state.clear();
-        refreshOverlay(ctx);
+        refreshWidgets(ctx);
         ctx.ui.notify("All tasks cleared.", "info");
         return;
       }
@@ -244,7 +254,7 @@ export default function myTodo(pi: ExtensionAPI): void {
           return;
         }
         const task = state.create(subject);
-        refreshOverlay(ctx);
+        refreshWidgets(ctx);
         ctx.ui.notify(`Created task #${task.id}: ${task.subject}`, "info");
         return;
       }
@@ -255,8 +265,8 @@ export default function myTodo(pi: ExtensionAPI): void {
           return;
         }
         state.setPlanMode(true, "planning");
-        refreshOverlay(ctx);
-        ctx.ui.notify("Plan mode enabled. Only read-only tools are available.", "info");
+        refreshWidgets(ctx);
+        ctx.ui.notify("Plan mode enabled. Only planning tools are available.", "info");
         return;
       }
 
@@ -266,7 +276,7 @@ export default function myTodo(pi: ExtensionAPI): void {
           return;
         }
         state.setPlanMode(true, "executing");
-        refreshOverlay(ctx);
+        refreshWidgets(ctx);
         ctx.ui.notify("Executing plan. All tools are available.", "info");
         return;
       }
@@ -274,7 +284,7 @@ export default function myTodo(pi: ExtensionAPI): void {
       if (sub === "reset") {
         state.clear();
         state.setPlanMode(false, "idle");
-        refreshOverlay(ctx);
+        refreshWidgets(ctx);
         ctx.ui.notify("Plan reset. All tasks cleared.", "info");
         return;
       }
@@ -300,7 +310,7 @@ export default function myTodo(pi: ExtensionAPI): void {
       if (sub === "done") {
         try {
           const task = state.update(id, { status: "completed" });
-          refreshOverlay(ctx);
+          refreshWidgets(ctx);
           ctx.ui.notify(`Completed task #${task.id}: ${task.subject}`, "info");
         } catch (err) {
           ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
@@ -311,7 +321,7 @@ export default function myTodo(pi: ExtensionAPI): void {
       if (sub === "start") {
         try {
           const task = state.update(id, { status: "in_progress" });
-          refreshOverlay(ctx);
+          refreshWidgets(ctx);
           ctx.ui.notify(`Started task #${task.id}: ${task.subject}`, "info");
         } catch (err) {
           ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
@@ -322,7 +332,7 @@ export default function myTodo(pi: ExtensionAPI): void {
       if (sub === "delete") {
         try {
           const task = state.delete(id);
-          refreshOverlay(ctx);
+          refreshWidgets(ctx);
           ctx.ui.notify(`Deleted task #${task.id}: ${task.subject}`, "info");
         } catch (err) {
           ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
@@ -338,18 +348,20 @@ export default function myTodo(pi: ExtensionAPI): void {
       if (state.getPlanMode()) {
         state.clear();
         state.setPlanMode(false, "idle");
-        refreshOverlay(ctx);
+        refreshWidgets(ctx);
         ctx.ui.notify("Plan mode disabled.", "info");
       } else {
         state.setPlanMode(true, "planning");
-        refreshOverlay(ctx);
-        ctx.ui.notify("Plan mode enabled. Only read-only tools are available.", "info");
+        refreshWidgets(ctx);
+        ctx.ui.notify("Plan mode enabled. Only planning tools are available.", "info");
       }
     },
   });
 
-  // Read-only tools allowed in planning mode
-  const READ_ONLY_TOOLS = new Set([
+  // Tools allowed during planning phase. Note: bash is included because it is
+  // useful for exploration, but it is NOT read-only; destructive commands are
+  // still possible, so the LLM must exercise judgment.
+  const PLANNING_TOOLS = new Set([
     "read",
     "bash",
     "grep",
@@ -365,10 +377,10 @@ export default function myTodo(pi: ExtensionAPI): void {
     if (!state.getPlanMode() || state.getPlanPhase() !== "planning") {
       return;
     }
-    if (!READ_ONLY_TOOLS.has(event.toolName)) {
+    if (!PLANNING_TOOLS.has(event.toolName)) {
       return {
         block: true,
-        reason: "Plan mode: only read-only tools are allowed",
+        reason: "Plan mode: only planning tools are allowed",
       };
     }
   });
@@ -380,7 +392,7 @@ export default function myTodo(pi: ExtensionAPI): void {
       return {
         message: {
           customType: "hidden",
-          content: "You are in plan mode. You can only use read-only tools (read, bash, grep, find, ls, ask_user_question, web_search, web_fetch). Use the todo tool to create a task list for the plan. Do not modify any files. Do not use edit, write, or any other modifying tools. Ask the user questions with ask_user_question if you need clarification.",
+          content: "You are in plan mode. You can only use the following planning tools: read, bash (note: bash can execute commands, including destructive ones, so use it carefully), grep, find, ls, ask_user_question, web_search, web_fetch. Use the todo tool to create a task list for the plan. Do not modify any files. Do not use edit, write, or any other modifying tools. Ask the user questions with ask_user_question if you need clarification.",
           display: false,
         },
       };
@@ -413,11 +425,11 @@ export default function myTodo(pi: ExtensionAPI): void {
 
     if (choice === "Execute plan") {
       state.setPlanMode(true, "executing");
-      refreshOverlay(ctx);
+      refreshWidgets(ctx);
     } else if (choice === "Discard plan") {
       state.clear();
       state.setPlanMode(false, "idle");
-      refreshOverlay(ctx);
+      refreshWidgets(ctx);
     }
     // choice === "Continue planning" or undefined → keep planning
   });

@@ -317,6 +317,11 @@ describe("TaskState plan mode", () => {
     expect(state.getPlanPhase()).toBe("planning");
   });
 
+  it("setPlanMode rejects invalid planPhase", () => {
+    const state = new TaskState();
+    expect(() => state.setPlanMode(true, "invalid" as PlanPhase)).toThrow("Invalid plan phase: invalid");
+  });
+
   it("snapshot includes planMode and planPhase", () => {
     const state = new TaskState();
     state.create("A");

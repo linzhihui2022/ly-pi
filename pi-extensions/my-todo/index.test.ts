@@ -782,7 +782,7 @@ describe("my-todo extension", () => {
           input: {} as any,
         };
         const result = await handler(event, ctx);
-        expect(result).toEqual({ block: true, reason: "Plan mode: only read-only tools are allowed" });
+        expect(result).toEqual({ block: true, reason: "Plan mode: only planning tools are allowed" });
       });
     }
 
@@ -846,7 +846,7 @@ describe("my-todo extension", () => {
       expect(result.message).toBeDefined();
       expect(result.message.display).toBe(false);
       expect(result.message.content).toContain("plan mode");
-      expect(result.message.content).toContain("read-only");
+      expect(result.message.content).toContain("planning tools");
     });
 
     it("injects executing system prompt in executing phase", async () => {
@@ -871,6 +871,103 @@ describe("my-todo extension", () => {
       const ctx = createMockCtx();
       const result = await handler({}, ctx);
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe("auto-exit plan mode on completion", () => {
+    it("exits plan mode when all tasks are completed in executing phase", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+
+      await cmd.handler("plan", ctx);
+      const toolDef = registeredTools[0];
+      await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "Step 1" },
+        undefined,
+        undefined,
+        ctx
+      );
+      await cmd.handler("execute", ctx);
+
+      // Mark task as completed
+      await toolDef.execute(
+        "tc-1",
+        { action: "update", id: 1, status: "completed" },
+        undefined,
+        undefined,
+        ctx
+      );
+
+      vi.clearAllMocks();
+      const handler = registeredEvents.get("turn_end")!;
+      await handler({}, ctx);
+
+      // Should have exited plan mode and refreshed widgets
+      expect(ctx.ui.setWidget).toHaveBeenCalled();
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        "Plan complete. All tasks finished.",
+        "info"
+      );
+
+      // Verify subsequent tool calls are no longer in plan mode
+      const result = await toolDef.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
+      expect(result.details.planMode).toBe(false);
+      expect(result.details.planPhase).toBe("idle");
+    });
+
+    it("does not exit plan mode when tasks are still active", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+
+      await cmd.handler("plan", ctx);
+      const toolDef = registeredTools[0];
+      await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "Step 1" },
+        undefined,
+        undefined,
+        ctx
+      );
+      await cmd.handler("execute", ctx);
+
+      vi.clearAllMocks();
+      const handler = registeredEvents.get("turn_end")!;
+      await handler({}, ctx);
+
+      expect(ctx.ui.notify).not.toHaveBeenCalledWith(
+        "Plan complete. All tasks finished.",
+        "info"
+      );
+
+      const result = await toolDef.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
+      expect(result.details.planMode).toBe(true);
+      expect(result.details.planPhase).toBe("executing");
+    });
+
+    it("does not exit plan mode when there are no tasks", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("todos")!;
+      const ctx = createMockCtx();
+
+      await cmd.handler("plan", ctx);
+      await cmd.handler("execute", ctx);
+
+      vi.clearAllMocks();
+      const handler = registeredEvents.get("turn_end")!;
+      await handler({}, ctx);
+
+      expect(ctx.ui.notify).not.toHaveBeenCalledWith(
+        "Plan complete. All tasks finished.",
+        "info"
+      );
+
+      const toolDef = registeredTools[0];
+      const result = await toolDef.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
+      expect(result.details.planMode).toBe(true);
+      expect(result.details.planPhase).toBe("executing");
     });
   });
 
