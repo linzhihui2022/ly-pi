@@ -1,4 +1,4 @@
-import type { Task } from "./types";
+import type { Task, PlanPhase } from "./types";
 
 interface ThemeLike {
   fg(color: string, text: string): string;
@@ -34,7 +34,7 @@ function renderTaskList(
   tasks: Task[],
   title: string,
   titleColor: string,
-  lineColor: string | ((task: Task) => string) | undefined,
+  lineColor: string | ((task: Task) => string),
   theme?: ThemeLike
 ): string[] {
   const display = tasks.slice(0, MAX_VISIBLE);
@@ -82,6 +82,23 @@ export function renderCompletedOverlay(tasks: Task[], theme?: ThemeLike): string
   const sorted = [...visible].sort((a, b) => b.id - a.id);
   const title = `Completed (${sorted.length})`;
   return renderTaskList(sorted, title, "muted", "muted", theme);
+}
+
+export function renderPlanOverlay(tasks: Task[], phase: PlanPhase, theme?: ThemeLike): string[] {
+  const visible = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
+  if (visible.length === 0) return [];
+
+  const sorted = sortByPriority(visible);
+  const title = phase === "planning"
+    ? `Plan (${sorted.length})`
+    : `Executing (${sorted.length})`;
+  return renderTaskList(
+    sorted,
+    title,
+    "accent",
+    (task) => STATUS_COLORS[task.status as "pending" | "in_progress"],
+    theme
+  );
 }
 
 // Backward-compatible alias until index.ts is updated:
