@@ -53,7 +53,7 @@ format = '\[[$symbol($profile)($region)(\[$duration\])]($style)\]'
 
 [bun]
 symbol = ""
-format = 'bun $version'
+format = 'bun $version '
 version_format = "${raw}"
 
 [buf]
@@ -244,7 +244,7 @@ symbol = " "
 
 [rust]
 symbol = ""
-format = "rust $version"
+format = "rust $version "
 version_format = "${raw}"
 
 [scala]
@@ -258,4 +258,3 @@ symbol = " "
 
 [gradle]
 symbol = " "
-
