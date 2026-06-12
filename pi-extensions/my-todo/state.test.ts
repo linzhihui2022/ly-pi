@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { TaskState } from "./state";
-import type { SessionEntry } from "./types";
+import type { SessionEntry, PlanPhase } from "./types";
 
 describe("TaskState", () => {
   it("creates empty state", () => {
@@ -300,5 +300,92 @@ describe("TaskState", () => {
       const state = TaskState.fromSession(entries);
       expect(state.list()).toEqual([]);
     });
+  });
+});
+
+describe("TaskState plan mode", () => {
+  it("defaults to planMode=false, planPhase=idle", () => {
+    const state = new TaskState();
+    expect(state.getPlanMode()).toBe(false);
+    expect(state.getPlanPhase()).toBe("idle");
+  });
+
+  it("setPlanMode sets planMode and planPhase", () => {
+    const state = new TaskState();
+    state.setPlanMode(true, "planning");
+    expect(state.getPlanMode()).toBe(true);
+    expect(state.getPlanPhase()).toBe("planning");
+  });
+
+  it("snapshot includes planMode and planPhase", () => {
+    const state = new TaskState();
+    state.create("A");
+    state.setPlanMode(true, "planning");
+    const snap = state.snapshot();
+    expect(snap.planMode).toBe(true);
+    expect(snap.planPhase).toBe("planning");
+  });
+
+  it("fromSession restores planMode and planPhase", () => {
+    const entries: SessionEntry[] = [
+      {
+        type: "message",
+        message: {
+          role: "toolResult",
+          toolName: "todo",
+          details: {
+            tasks: [{ id: 1, subject: "A", status: "pending" }],
+            nextId: 2,
+            planMode: true,
+            planPhase: "planning" as PlanPhase,
+          },
+        },
+      },
+    ];
+    const state = TaskState.fromSession(entries);
+    expect(state.getPlanMode()).toBe(true);
+    expect(state.getPlanPhase()).toBe("planning");
+  });
+
+  it("fromSession defaults planMode/planPhase when missing in details", () => {
+    const entries: SessionEntry[] = [
+      {
+        type: "message",
+        message: {
+          role: "toolResult",
+          toolName: "todo",
+          details: {
+            tasks: [{ id: 1, subject: "A", status: "pending" }],
+            nextId: 2,
+          },
+        },
+      },
+    ];
+    const state = TaskState.fromSession(entries);
+    expect(state.getPlanMode()).toBe(false);
+    expect(state.getPlanPhase()).toBe("idle");
+  });
+
+  it("isValidDetails rejects invalid planMode", () => {
+    // We'll test via fromSession which internally uses isValidDetails
+    const entries: SessionEntry[] = [
+      {
+        type: "message",
+        message: {
+          role: "toolResult",
+          toolName: "todo",
+          details: {
+            tasks: [{ id: 1, subject: "A", status: "pending" }],
+            nextId: 2,
+            planMode: "yes" as unknown as boolean,
+            planPhase: "planning",
+          },
+        },
+      },
+    ];
+    const state = TaskState.fromSession(entries);
+    // Should fall back to defaults since planMode is not boolean
+    expect(state.getPlanMode()).toBe(false);
+    expect(state.getPlanPhase()).toBe("idle");
   });
 });

@@ -1,4 +1,4 @@
-import type { Task, TaskStatus, SessionEntry } from "./types";
+import type { Task, TaskStatus, SessionEntry, PlanPhase } from "./types";
 
 const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   pending: ["in_progress", "completed", "deleted"],
@@ -20,11 +20,19 @@ function deepCopyTasks(tasks: Task[]): Task[] {
   return tasks.map(deepCopyTask);
 }
 
-function isValidDetails(value: unknown): value is { tasks: Task[]; nextId: number } {
+function isValidDetails(value: unknown): value is {
+  tasks: Task[];
+  nextId: number;
+  planMode?: boolean;
+  planPhase?: string;
+} {
   if (typeof value !== "object" || value === null) return false;
   const obj = value as Record<string, unknown>;
   if (!Array.isArray(obj.tasks)) return false;
   if (typeof obj.nextId !== "number") return false;
+  // planMode/planPhase are optional for backward compat
+  if (obj.planMode !== undefined && typeof obj.planMode !== "boolean") return false;
+  if (obj.planPhase !== undefined && typeof obj.planPhase !== "string") return false;
   return obj.tasks.every(
     (t) =>
       typeof t === "object" &&
@@ -38,6 +46,8 @@ function isValidDetails(value: unknown): value is { tasks: Task[]; nextId: numbe
 export class TaskState {
   private tasks: Task[] = [];
   private nextId = 1;
+  private planMode = false;
+  private planPhase: PlanPhase = "idle";
 
   create(subject: string, description?: string): Task {
     const trimmed = subject.trim();
@@ -110,10 +120,25 @@ export class TaskState {
     return this.nextId;
   }
 
-  snapshot(): { tasks: Task[]; nextId: number } {
+  getPlanMode(): boolean {
+    return this.planMode;
+  }
+
+  getPlanPhase(): PlanPhase {
+    return this.planPhase;
+  }
+
+  setPlanMode(mode: boolean, phase: PlanPhase): void {
+    this.planMode = mode;
+    this.planPhase = phase;
+  }
+
+  snapshot(): { tasks: Task[]; nextId: number; planMode: boolean; planPhase: PlanPhase } {
     return {
       tasks: deepCopyTasks(this.tasks),
       nextId: this.nextId,
+      planMode: this.planMode,
+      planPhase: this.planPhase,
     };
   }
 
@@ -128,6 +153,12 @@ export class TaskState {
 
       state.tasks = deepCopyTasks(entry.message.details.tasks);
       state.nextId = entry.message.details.nextId;
+      if (typeof entry.message.details.planMode === "boolean") {
+        state.planMode = entry.message.details.planMode;
+      }
+      if (typeof entry.message.details.planPhase === "string") {
+        state.planPhase = entry.message.details.planPhase as PlanPhase;
+      }
       break;
     }
     return state;
