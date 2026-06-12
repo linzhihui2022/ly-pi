@@ -28,23 +28,8 @@ type Row =
 const CHAT_LABEL = "Chat about this";
 const OTHER_LABEL = "Type something.";
 
-const customOptions = new Map<number, string[]>();
-
 function hasPreview(question: QuestionData): boolean {
   return question.options.some((o) => typeof o.preview === "string" && o.preview.length > 0);
-}
-
-function buildRows(question: QuestionData, questionIndex: number): Row[] {
-  const rows: Row[] = question.options.map((o, i) => ({ kind: "option", option: o, index: i }));
-  const customs = customOptions.get(questionIndex) ?? [];
-  for (const value of customs) {
-    rows.push({ kind: "custom", value });
-  }
-  if (!hasPreview(question)) {
-    rows.push({ kind: "other" });
-  }
-  rows.push({ kind: "chat" });
-  return rows;
 }
 
 export function createQuestionnaire(
@@ -68,6 +53,28 @@ export function createQuestionnaire(
 
   const answers = new Map<number, QuestionAnswer>();
   const multiSelections = new Map<number, Set<string>>();
+  const customOptions = new Map<number, string[]>();
+  let transientNotice: string | null = null;
+
+  function clearNotice() {
+    if (transientNotice) {
+      transientNotice = null;
+      refresh();
+    }
+  }
+
+  function buildRows(question: QuestionData, questionIndex: number): Row[] {
+    const rows: Row[] = question.options.map((o, i) => ({ kind: "option", option: o, index: i }));
+    const customs = customOptions.get(questionIndex) ?? [];
+    for (const value of customs) {
+      rows.push({ kind: "custom", value });
+    }
+    if (!hasPreview(question)) {
+      rows.push({ kind: "other" });
+    }
+    rows.push({ kind: "chat" });
+    return rows;
+  }
 
   const editor = new Editor(tui, {
     borderColor: (s) => theme.fg("accent", s),
@@ -83,16 +90,57 @@ export function createQuestionnaire(
   editor.onSubmit = (value) => {
     const index = inputQuestionIndex!;
     const trimmed = value.trim();
-    answers.set(index, {
-      questionIndex: index,
-      question: questions[index].question,
-      kind: "custom",
-      answer: trimmed,
-    });
     inputMode = false;
     inputQuestionIndex = null;
     editor.setText("");
-    advanceAfterAnswer(index);
+
+    if (trimmed === "") {
+      refresh();
+      return;
+    }
+
+    const customs = customOptions.get(index) ?? [];
+    const existingRowIndex = customs.indexOf(trimmed);
+    if (existingRowIndex !== -1) {
+      const rows = buildRows(questions[index], index);
+      let targetIndex = -1;
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].kind === "custom" && rows[i].value === trimmed) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex !== -1) {
+        optionIndex = targetIndex;
+      }
+      refresh();
+      return;
+    }
+
+    if (customs.length >= 8) {
+      transientNotice = "Maximum 8 custom options reached.";
+      refresh();
+      return;
+    }
+
+    const updated = [...customs, trimmed];
+    customOptions.set(index, updated);
+    if (questions[index].multiSelect) {
+      getSelections(index).add(trimmed);
+    }
+
+    const rows = buildRows(questions[index], index);
+    let targetIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].kind === "custom" && rows[i].value === trimmed) {
+        targetIndex = i;
+        break;
+      }
+    }
+    if (targetIndex !== -1) {
+      optionIndex = targetIndex;
+    }
+    refresh();
   };
 
   function refresh() {
@@ -244,6 +292,8 @@ export function createQuestionnaire(
       return;
     }
 
+    clearNotice();
+
     if (isMulti) {
       if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) {
         switchTab(1);
@@ -327,7 +377,9 @@ export function createQuestionnaire(
       }
 
       if (row.kind === "custom") {
-        add(prefix + theme.fg(selected ? "accent" : "text", `${i + 1}. ${row.value} (custom)`));
+        const checked = q.multiSelect && getSelections(currentTab).has(row.value);
+        const box = q.multiSelect ? (checked ? "☑" : "☐") : `${i + 1}.`;
+        add(prefix + theme.fg(selected ? "accent" : "text", `${box} ${row.value} (custom)`));
         continue;
       }
 
@@ -422,6 +474,11 @@ export function createQuestionnaire(
       add(theme.fg("text", ` ${q.question}`));
       lines.push("");
       lines.push(...renderRows(width));
+
+      if (transientNotice) {
+        lines.push("");
+        add(theme.fg("warning", ` ${transientNotice}`));
+      }
 
       const rows = currentRows();
       const focused = rows[optionIndex];
