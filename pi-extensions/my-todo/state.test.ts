@@ -388,4 +388,26 @@ describe("TaskState plan mode", () => {
     expect(state.getPlanMode()).toBe(false);
     expect(state.getPlanPhase()).toBe("idle");
   });
+
+  it("isValidDetails rejects invalid planPhase", () => {
+    const entries: SessionEntry[] = [
+      {
+        type: "message",
+        message: {
+          role: "toolResult",
+          toolName: "todo",
+          details: {
+            tasks: [{ id: 1, subject: "A", status: "pending" }],
+            nextId: 2,
+            planMode: true,
+            planPhase: 123 as unknown as string,
+          },
+        },
+      },
+    ];
+    const state = TaskState.fromSession(entries);
+    // Should fall back to defaults since planPhase is not a string
+    expect(state.getPlanMode()).toBe(false);
+    expect(state.getPlanPhase()).toBe("idle");
+  });
 });

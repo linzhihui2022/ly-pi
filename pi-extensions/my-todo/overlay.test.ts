@@ -64,6 +64,18 @@ describe("renderActiveOverlay", () => {
     ]);
   });
 
+  it("shows exact overflow count for many tasks", () => {
+    const tasks: Task[] = Array.from({ length: 10 }, (_, i) => ({
+      id: i + 1,
+      subject: `Task ${i + 1}`,
+      status: "pending" as const,
+    }));
+    const result = renderActiveOverlay(tasks);
+    expect(result[0]).toBe("Active (10)");
+    expect(result).toHaveLength(5); // title + 3 tasks + overflow
+    expect(result[result.length - 1]).toBe("  +7 more");
+  });
+
   it("does not render description in overlay", () => {
     const tasks: Task[] = [
       { id: 1, subject: "A", description: "details", status: "pending" },
