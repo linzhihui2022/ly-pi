@@ -70,6 +70,16 @@ function makeParams(questions: QuestionParams["questions"]): QuestionParams {
   return { questions };
 }
 
+function addCustomOption(q: ReturnType<typeof createQuestionnaire>, value: string) {
+  q.handleInput("down");
+  q.handleInput("down");
+  q.handleInput("enter");
+  for (const char of value) {
+    q.handleInput(char);
+  }
+  q.handleInput("enter");
+}
+
 describe("createQuestionnaire", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -494,7 +504,7 @@ describe("createQuestionnaire", () => {
     });
   });
 
-  it("removes a custom row with backspace and moves focus up", () => {
+  it.each(["backspace", "delete"] as const)("removes a custom row with %s and moves focus up", (key) => {
     const params = makeParams([
       {
         question: "Which color?",
@@ -507,45 +517,9 @@ describe("createQuestionnaire", () => {
     ]);
     const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
 
-    q.handleInput("down");
-    q.handleInput("down");
-    q.handleInput("enter");
-    q.handleInput("p");
-    q.handleInput("i");
-    q.handleInput("n");
-    q.handleInput("k");
-    q.handleInput("enter");
+    addCustomOption(q, "pink");
 
-    q.handleInput("backspace");
-
-    const lines = q.render(80);
-    expect(lines.some((l) => l.includes("pink (custom)"))).toBe(false);
-    expect(lines.some((l) => l.includes("> 2. Blue"))).toBe(true);
-  });
-
-  it("removes a custom row with delete and moves focus up", () => {
-    const params = makeParams([
-      {
-        question: "Which color?",
-        header: "Color",
-        options: [
-          { label: "Red", description: "Warm" },
-          { label: "Blue", description: "Cool" },
-        ],
-      },
-    ]);
-    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
-
-    q.handleInput("down");
-    q.handleInput("down");
-    q.handleInput("enter");
-    q.handleInput("p");
-    q.handleInput("i");
-    q.handleInput("n");
-    q.handleInput("k");
-    q.handleInput("enter");
-
-    q.handleInput("delete");
+    q.handleInput(key);
 
     const lines = q.render(80);
     expect(lines.some((l) => l.includes("pink (custom)"))).toBe(false);
@@ -567,16 +541,10 @@ describe("createQuestionnaire", () => {
     const done = vi.fn();
     const q = createQuestionnaire(params, mockTui, mockTheme, done);
 
-    q.handleInput("down");
-    q.handleInput("down");
-    q.handleInput("enter");
-    q.handleInput("c");
-    q.handleInput("u");
-    q.handleInput("s");
-    q.handleInput("t");
-    q.handleInput("o");
-    q.handleInput("m");
-    q.handleInput("enter");
+    addCustomOption(q, "custom");
+
+    const beforeDelete = q.render(80);
+    expect(beforeDelete.some((l) => l.includes("☑ custom (custom)"))).toBe(true);
 
     q.handleInput("delete");
     q.handleInput("enter");
@@ -587,42 +555,6 @@ describe("createQuestionnaire", () => {
       ],
       cancelled: false,
     });
-  });
-
-  it("clamps focus to a valid row after deleting the only custom row", () => {
-    const params = makeParams([
-      {
-        question: "Which color?",
-        header: "Color",
-        options: [
-          { label: "Red", description: "Warm" },
-          { label: "Blue", description: "Cool" },
-        ],
-      },
-    ]);
-    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
-
-    q.handleInput("down");
-    q.handleInput("down");
-    q.handleInput("enter");
-    q.handleInput("p");
-    q.handleInput("i");
-    q.handleInput("n");
-    q.handleInput("k");
-    q.handleInput("enter");
-
-    expect(() => q.handleInput("delete")).not.toThrow();
-
-    const lines = q.render(80);
-    expect(lines.some((l) => l.includes("pink (custom)"))).toBe(false);
-    expect(
-      lines.some(
-        (l) =>
-          l.includes("> 1. Red") ||
-          l.includes("> 2. Blue") ||
-          l.includes("> 3. Type something."),
-      ),
-    ).toBe(true);
   });
 
   it("calls invalidate on the editor", () => {
