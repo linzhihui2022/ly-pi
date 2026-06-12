@@ -48,6 +48,8 @@ vi.mock("@earendil-works/pi-tui", () => {
       enter: "enter",
       escape: "escape",
       space: "space",
+      backspace: "backspace",
+      delete: "delete",
     },
     Editor,
   };
@@ -490,6 +492,35 @@ describe("createQuestionnaire", () => {
       ],
       cancelled: false,
     });
+  });
+
+  it("removes a custom row with backspace and moves focus up", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    q.handleInput("down");
+    q.handleInput("down");
+    q.handleInput("enter");
+    q.handleInput("p");
+    q.handleInput("i");
+    q.handleInput("n");
+    q.handleInput("k");
+    q.handleInput("enter");
+
+    q.handleInput("backspace");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("pink (custom)"))).toBe(false);
+    expect(lines.some((l) => l.includes("> 2. Blue"))).toBe(true);
   });
 
   it("calls invalidate on the editor", () => {

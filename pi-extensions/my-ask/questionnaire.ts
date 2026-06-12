@@ -257,6 +257,30 @@ export function createQuestionnaire(
     refresh();
   }
 
+  function removeCustom() {
+    const rows = currentRows();
+    const row = rows[optionIndex];
+    if (row.kind !== "custom") return;
+
+    const customs = customOptions.get(currentTab) ?? [];
+    const idx = customs.indexOf(row.value);
+    if (idx >= 0) {
+      customs.splice(idx, 1);
+      if (customs.length === 0) {
+        customOptions.delete(currentTab);
+      } else {
+        customOptions.set(currentTab, customs);
+      }
+    }
+
+    getSelections(currentTab).delete(row.value);
+
+    optionIndex = Math.max(0, optionIndex - 1);
+    const newRows = currentRows();
+    optionIndex = Math.min(optionIndex, newRows.length - 1);
+    refresh();
+  }
+
   function switchTab(delta: number) {
     currentTab = (currentTab + delta + totalTabs) % totalTabs;
     optionIndex = 0;
@@ -317,6 +341,10 @@ export function createQuestionnaire(
     }
     if (matchesKey(data, Key.space) && currentQuestion().multiSelect) {
       toggleMulti();
+      return;
+    }
+    if (matchesKey(data, Key.delete) || matchesKey(data, Key.backspace)) {
+      removeCustom();
       return;
     }
     if (matchesKey(data, Key.escape)) {
