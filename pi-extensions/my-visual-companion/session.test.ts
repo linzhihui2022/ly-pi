@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SessionManager } from "./session";
 
+vi.mock("node:child_process", () => ({
+  execSync: vi.fn(),
+}));
+
 describe("SessionManager", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.clearAllMocks();
   });
 
   it("creates a session with unique id and stores it", () => {
@@ -25,6 +30,8 @@ describe("SessionManager", () => {
     const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
 
     const id = session.id;
+    // Verify session exists before destroying
+    expect(manager.get(id)).toBeDefined();
     manager.destroy(id);
 
     expect(manager.get(id)).toBeUndefined();
@@ -202,6 +209,37 @@ describe("SessionManager", () => {
     expect(all.map((s) => s.id)).toContain(s2.id);
   });
 
+  it("destroy handles session with cleared idle timer", () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    // Hit the defensive false branch of if (session.idleTimer) in destroy
+    session.idleTimer = null;
+    manager.destroy(session.id);
+
+    expect(manager.get(session.id)).toBeUndefined();
+    expect(mockServer.close).toHaveBeenCalled();
+    expect(mockWss.close).toHaveBeenCalled();
+  });
+
+  it("destroy closes all WebSocket clients", () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockTerminate = vi.fn();
+    const mockClient = { terminate: mockTerminate };
+    const mockWss = {
+      close: vi.fn(),
+      clients: new Set([mockClient]),
+    } as any;
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    manager.destroy(session.id);
+
+    expect(mockTerminate).toHaveBeenCalled();
+  });
+
   it("destroy silently ignores already destroyed session", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
@@ -212,5 +250,46 @@ describe("SessionManager", () => {
     // Should not throw
     manager.destroy(session.id);
     expect(manager.get(session.id)).toBeUndefined();
+  });
+
+  it("focusApplication calls osascript when focusApp is set on confirm", async () => {
+    const { execSync } = await import("node:child_process");
+    const manager = new SessionManager({ idleTimeoutMs: 30_000, focusApp: "Terminal" });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    manager.appendEvent(session.id, { type: "confirm", text: "yes", timestamp: 1 });
+
+    expect(execSync).toHaveBeenCalledWith(
+      `osascript -e 'tell application "Terminal" to activate'`,
+      { timeout: 5000 }
+    );
+  });
+
+  it("focusApplication silently ignores osascript errors", async () => {
+    const { execSync } = await import("node:child_process");
+    const mockExecSync = execSync as ReturnType<typeof vi.fn>;
+    mockExecSync.mockImplementation(() => { throw new Error("OS error"); });
+
+    const manager = new SessionManager({ idleTimeoutMs: 30_000, focusApp: "Terminal" });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    // Should not throw
+    expect(() => manager.appendEvent(session.id, { type: "confirm", text: "yes", timestamp: 1 })).not.toThrow();
+  });
+
+  it("focusApplication does nothing when focusApp is not set", async () => {
+    const { execSync } = await import("node:child_process");
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+
+    manager.appendEvent(session.id, { type: "confirm", text: "yes", timestamp: 1 });
+
+    expect(execSync).not.toHaveBeenCalled();
   });
 });

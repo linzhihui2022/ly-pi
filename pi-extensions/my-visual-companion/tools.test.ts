@@ -49,7 +49,7 @@ describe("createTools", () => {
     expect((result.details as any).error).toContain("Session not found");
   });
 
-  it("read_events tool returns events", async () => {
+  it("read_events tool returns events with text", async () => {
     const startTool = tools.find((t) => t.name === "visual_companion_start")!;
     const readTool = tools.find((t) => t.name === "visual_companion_read_events")!;
 
@@ -60,6 +60,34 @@ describe("createTools", () => {
 
     const result = await readTool.execute("tc-3", { session_id: sessionId }, undefined, undefined, {} as any);
     expect((result.details as any).events).toHaveLength(1);
+  });
+
+  it("read_events tool returns events with choice", async () => {
+    const startTool = tools.find((t) => t.name === "visual_companion_start")!;
+    const readTool = tools.find((t) => t.name === "visual_companion_read_events")!;
+
+    const startResult = await startTool.execute("tc-1", {}, undefined, undefined, {} as any);
+    const sessionId = (startResult.details as any).sessionId;
+
+    manager.appendEvent(sessionId, { type: "click", choice: "option-c", timestamp: 1 });
+
+    const result = await readTool.execute("tc-3b", { session_id: sessionId }, undefined, undefined, {} as any);
+    expect((result.details as any).events).toHaveLength(1);
+    expect(result.content[0].text).toContain("option-c");
+  });
+
+  it("read_events tool returns events with no text or choice", async () => {
+    const startTool = tools.find((t) => t.name === "visual_companion_start")!;
+    const readTool = tools.find((t) => t.name === "visual_companion_read_events")!;
+
+    const startResult = await startTool.execute("tc-1", {}, undefined, undefined, {} as any);
+    const sessionId = (startResult.details as any).sessionId;
+
+    manager.appendEvent(sessionId, { type: "click", timestamp: 1 });
+
+    const result = await readTool.execute("tc-3c", { session_id: sessionId }, undefined, undefined, {} as any);
+    expect((result.details as any).events).toHaveLength(1);
+    expect(result.content[0].text).toContain("- click: ");
   });
 
   it("read_events tool returns empty when no events", async () => {
@@ -93,6 +121,34 @@ describe("createTools", () => {
     expect((result.details as any).confirmed).toBe(true);
     expect((result.details as any).event.text).toBe("choice-a");
     expect(result.content[0].text).toContain("Confirmed: choice-a");
+  });
+
+  it("wait tool supports events with choice field", async () => {
+    const startTool = tools.find((t) => t.name === "visual_companion_start")!;
+    const waitTool = tools.find((t) => t.name === "visual_companion_wait")!;
+
+    const startResult = await startTool.execute("tc-1", {}, undefined, undefined, {} as any);
+    const sessionId = (startResult.details as any).sessionId;
+
+    manager.appendEvent(sessionId, { type: "confirm", choice: "option-b", timestamp: 1 });
+
+    const result = await waitTool.execute("tc-5b", { session_id: sessionId, timeout_ms: 5000 }, undefined, undefined, {} as any);
+    expect((result.details as any).confirmed).toBe(true);
+    expect(result.content[0].text).toContain("Confirmed: option-b");
+  });
+
+  it("wait tool handles event with no text or choice", async () => {
+    const startTool = tools.find((t) => t.name === "visual_companion_start")!;
+    const waitTool = tools.find((t) => t.name === "visual_companion_wait")!;
+
+    const startResult = await startTool.execute("tc-1", {}, undefined, undefined, {} as any);
+    const sessionId = (startResult.details as any).sessionId;
+
+    manager.appendEvent(sessionId, { type: "confirm", timestamp: 1 });
+
+    const result = await waitTool.execute("tc-5c", { session_id: sessionId, timeout_ms: 5000 }, undefined, undefined, {} as any);
+    expect((result.details as any).confirmed).toBe(true);
+    expect(result.content[0].text).toBe("Confirmed: ");
   });
 
   it("wait tool returns error for bad session", async () => {
