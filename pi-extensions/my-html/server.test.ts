@@ -119,6 +119,18 @@ describe("ensurePreviewServer", () => {
     expect(res.status).toBe(200);
     expect(body).toContain("Pi HTML Preview");
   });
+
+  it("returns 500 when file read fails", async () => {
+    const server = await ensurePreviewServer({ host: "127.0.0.1", urlHost: "127.0.0.1" });
+
+    // Create a directory with .html extension: existsSync returns true,
+    // but readFileSync throws EISDIR
+    mkdirSync(join(PREVIEW_DIR, "broken.html"), { recursive: true });
+
+    const res = await fetch(`${server.url}/broken.html`);
+    expect(res.status).toBe(500);
+    expect(await res.text()).toBe("Internal server error");
+  });
 });
 
 describe("stopPreviewServer", () => {

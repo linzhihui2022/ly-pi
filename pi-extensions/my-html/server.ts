@@ -53,7 +53,7 @@ export async function ensurePreviewServer(
   const url = `http://${options.urlHost}:${port}`;
 
   const server = createServer((req, res) => {
-    const urlPath = req.url || "/";
+    const urlPath = req.url!;
 
     if (req.method !== "GET") {
       res.writeHead(405);

@@ -471,19 +471,18 @@ export function ansiToHtml(text: string): string {
         result += "</span>";
         hasColorSpan = false;
       }
-    } else if (params.startsWith("38;2;")) {
+    }
+    if (params.startsWith("38;2;")) {
       const parts = params.split(";");
       const r = parseInt(parts[2], 10);
       const g = parseInt(parts[3], 10);
       const b = parseInt(parts[4], 10);
-      if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
-        // Close previous color span if any (new color overrides old)
-        if (hasColorSpan) {
-          result += "</span>";
-        }
-        result += `<span style="color:rgb(${r},${g},${b})">`;
-        hasColorSpan = true;
+      // Close previous color span if any (new color overrides old)
+      if (hasColorSpan) {
+        result += "</span>";
       }
+      result += `<span style="color:rgb(${r},${g},${b})">`;
+      hasColorSpan = true;
     }
 
     lastIndex = start + fullMatch.length;
