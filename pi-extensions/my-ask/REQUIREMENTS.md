@@ -17,10 +17,15 @@ Build a local Pi extension (`pi-extensions/my-ask`) that registers the tool `ask
   - `Other`, `Type something.`, `Chat about this`, `Next`
 - UI behaviors:
   - single-select option list
-  - automatic "Type something." row on single-select questions without preview
+  - automatic "Type something." row on questions without preview
   - inline editor when "Type something." is selected
-  - multi-select with Space toggle and Enter submit (no "Type something.")
-  - preview rendered below the focused option on single-select
+  - custom input is added to the option list as a new row `<value> (custom)`; it is not submitted automatically
+  - custom rows behave like standard options: Enter selects/submits them, Space toggles them in multi-select
+  - Delete/Backspace removes a focused custom row
+  - single-select: after adding a custom value the user must press Enter on that row (or another option) to finalise the answer
+  - multi-select with Space toggle and Enter submit
+  - "Type something." row also available on multi-select; input is appended to the current selections as a visible checked row `[x] <value> (custom)`
+  - preview rendered below the focused option on single-select, capped to a small height and without excessive padding
   - "Chat about this" escape row on every question
   - multi-question tab bar with ←→/Tab navigation and a Submit tab
   - Esc cancels the whole questionnaire

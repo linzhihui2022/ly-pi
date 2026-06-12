@@ -129,17 +129,23 @@ For single-select questions that contain a `preview` on any option, the focused 
      Description for A.
 
  Preview:
- ┌────────────────────────────┐
- │ # Sample config            │
- │ value = 42                 │
- └────────────────────────────┘
+ ┌──────────────────────────────────────┐
+ │ # Sample config                      │
+ │ value = 42                           │
+ │                                      │
+ └──────────────────────────────────────┘
 ```
 
-Preview suppresses the "Type something." row.
+- Preview suppresses the "Type something." row.
+- Long lines are wrapped inside the box.
+- The preview box is capped to a small height (around 6 lines). Empty padding is
+  not added when the content is shorter than the cap.
+- If the preview is taller than the cap, a `(more...)` hint is shown.
+- The border uses the accent color for visual consistency.
 
 ### 4.4 Custom input
 
-On single-select questions without preview, the list ends with an automatic "Type something." row. Selecting it opens an inline editor:
+On questions without preview, the list ends with an automatic "Type something." row. Selecting it opens an inline editor:
 
 ```
  Your answer:
@@ -147,19 +153,38 @@ On single-select questions without preview, the list ends with an automatic "Typ
  Enter to submit • Esc to go back
 ```
 
-### 4.5 Multi-select
+Pressing Enter applies the custom value and returns focus to the option list. The entered value is added to the option list as a new row labelled `<value> (custom)`; it is not submitted automatically. The user can then move focus to that row and press Enter to select/submit it, add more custom values, or remove it with Delete/Backspace.
 
-Multi-select questions use checkboxes:
+In single-select the list becomes:
 
 ```
-> ☐ Option A
-  ☐ Option B
-  ☑ Option C
+> 1. Red
+  2. Blue
+  3. Purple (custom)
+  4. Type something.
+  5. Chat about this
+```
+
+In multi-select the value appears as an additional checked row `[x] <value> (custom)` above the "Type something." row; Space toggles it and Enter submits the current selections.
+
+### 4.5 Multi-select
+
+Multi-select questions use checkboxes and also support a "Type something." row:
+
+```
+> [x] Option A
+  [ ] Option B
+  [x] Option C
+  [ ] Type something.
 
  Space toggle • Enter submit
 ```
 
-No "Type something." row is shown.
+Toggling a checkbox adds or removes the option from the current selections. The
+"Type something." row opens the inline editor; the entered value is added as a
+checked row `[x] <value> (custom)` and focus returns to the option list so the
+user can review or change selections before submitting the question. Space can
+toggle a custom row off, and Delete/Backspace can remove a custom row entirely.
 
 ## 5. Navigation
 
@@ -167,8 +192,9 @@ No "Type something." row is shown.
 |---|---|
 | `↑` / `↓` | move option focus |
 | `Tab` / `→` / `←` | switch question tabs (multi-question only) |
-| `Enter` | select focused option; submit custom input; submit on Submit tab |
-| `Space` | toggle checkbox in multi-select |
+| `Enter` | select focused option; apply custom input and add it to the list; submit on Submit tab |
+| `Space` | toggle checkbox (including custom rows) in multi-select |
+| `Delete` / `Backspace` | remove a focused custom row |
 | `Esc` | cancel the questionnaire, or exit custom-input mode |
 
 ## 6. Errors and return values
@@ -249,3 +275,4 @@ Key scenarios:
 | Date | Change |
 |---|---|
 | 2026-06-12 | confirmed replacement approach, schema, UI layout, and testing strategy |
+| 2026-06-12 | revised custom-input flow: custom values become selectable list rows with delete support |
