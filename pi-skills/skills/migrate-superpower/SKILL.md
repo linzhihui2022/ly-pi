@@ -118,7 +118,7 @@ The goal is to migrate **all** Superpowers skills as-is. Each skill retains its 
 | `systematic-debugging` | 🚫 Skip | Pi already has equivalent debugging capabilities built-in. |
 | `test-driven-development` | ✅ Migrated | Pure documentation skill; no platform-specific content. Migrated as-is with no changes. |
 | `finishing-a-development-branch` | ✅ Migrated | Already present in `pi-skills/`. |
-| `using-superpowers` | 🚫 Skip | Platform-specific to Superpowers; do not migrate. |
+| `using-superpowers` | ✅ Migrated (no SHA) | Migrated as Pi-native meta skill. Removed platform-specific references for Claude Code / Copilot CLI / Gemini CLI / Codex. Kept only `references/pi-tools.md`. |
 | `writing-skills` | ✅ Migrated (no SHA) | Replaced `superpowers:` prefix; updated `CLAUDE.md` references to Pi equivalents (`AGENTS.md`, `.rpiv/guidance/`); updated personal skill paths; neutralized branding; renamed `examples/CLAUDE_MD_TESTING.md` to `AGENTS_MD_TESTING.md`. **Not tracked — see §3.1.** |
 | `test-driven-development` | ✅ Migrated (no SHA) | Pure documentation skill; no platform-specific content. Migrated as-is with no changes. **Not tracked — see §3.1.** |
 
@@ -146,6 +146,8 @@ Not every `✅ Migrated` skill needs an entry in `skill-sha.json`. Exclude from 
 |---|---|---|
 | **Pure documentation, zero platform-specific content** | 迁移时未做任何替换/修改，直接原样复制。上游更新只是通用最佳实践的改进，不涉及任何需要"重新应用 Pi 迁移规则"的平台适配工作。追踪 SHA 没有实际价值。 | `test-driven-development` |
 | **Migrated content has diverged from upstream purpose** | 迁移后已深度本地化为 Pi 生态指南，大量引用 Pi 特有工具（`ask_user_question`、`todo`、`Agent` 工具、CSO 策略等）和 Pi 路径。上游更新的是 Superpowers 版本，与本地 Pi 版本内容目标已不兼容。即使上游有大更新，也无法直接合并。 | `writing-skills` |
+
+`using-superpowers` also falls into this category. The upstream skill describes how to invoke skills across the Superpowers ecosystem (Claude Code, Copilot CLI, Gemini CLI, Codex). The Pi version is a complete rewrite focused solely on Pi's XML skill block and native tools, so upstream changes cannot be mechanically merged.
 
 **Rule of thumb:** 如果一个技能在上游更新后，重新迁移时不需要（或无法）重新应用任何 Pi 迁移规则，就不需要追踪 SHA。
 
@@ -241,6 +243,24 @@ get_subagent_result({ agent_id: "<agent-id>", wait: true })
 steer_subagent({ agent_id: "<agent-id>", message: "..." })
 ```
 ```
+
+### Skill Invocation
+
+Superpowers skills are invoked through platform-specific tools:
+
+- Claude Code: `Skill` tool
+- Copilot CLI: `skill` tool
+- Gemini CLI: `activate_skill` tool
+
+Pi does not use a tool to invoke skills. Instead, Pi loads skills via an XML block injected into the conversation context:
+
+```xml
+<skill name="brainstorming" location="/Users/lychee/.pi/agent/skills/brainstorming/SKILL.md">
+  <!-- skill body -->
+</skill>
+```
+
+When migrating skills that say "invoke the X skill" or "use the Skill tool," update the prose to describe Pi's XML block loading mechanism. Do not refer to a "Skill tool" in Pi.
 
 ### Context-Mode (Pi-Specific)
 
@@ -464,6 +484,16 @@ In HTML frame templates or visual companions:
 | CSS `#claude-content` | `#agent-content` |
 | `<!-- Claude injects here -->` | `<!-- agent injects here -->` or remove |
 
+### Platform-Specific Meta Skills
+
+Some Superpowers skills (notably `using-superpowers`) are primarily about how to use the Superpowers platform itself. When migrating these:
+
+- Delete instructions for other platforms (Claude Code, Copilot CLI, Gemini CLI, Codex)
+- Replace them with Pi's skill-loading mechanism (XML `<skill>` block)
+- Keep the core discipline rules: skill-first hard gate, instruction priority, Red Flags, skill priority, skill types
+- Replace platform-specific tool reference files with Pi-only references
+- Do not keep `codex-tools.md`, `copilot-tools.md`, or `gemini-tools.md` unless the skill genuinely needs them
+
 ### Process Flow References
 
 Keep skill names **exactly as they are in the source**. Do NOT rename `writing-plans` to `plan`, `executing-plans` to `implement`, etc.
@@ -539,6 +569,10 @@ grep -ri 'chain:.*\[' pi-skills/YOUR-SKILL/ || echo "OK: no chain array refs"
 
 # Check for correct gotgenes syntax
 grep -ri 'subagent_type' pi-skills/YOUR-SKILL/ || echo "MISSING: no subagent_type refs"
+
+# Check for remaining platform-specific meta-skill references
+grep -ri "Claude Code\|Copilot CLI\|Gemini CLI\|Codex" pi-skills/using-superpowers/ || echo "OK: no external platform refs"
+grep -ri "Skill tool\|activate_skill\|skill tool" pi-skills/using-superpowers/ || echo "OK: no old skill invocation refs"
 ```
 
 ---
@@ -645,6 +679,12 @@ Invoke `subagent-driven-development`
 - Remove the prefix but keep the original skill name
 - Do NOT replace with a Pi-equivalent name (e.g., keep `writing-plans`, do not change to `plan`)
 
+### 9.8 Meta-Skill Migration
+
+- **Meta skills need full rewrite, not string replacement.** A skill like `using-superpowers` describes platform behavior. Migrating it requires rethinking the content for Pi, not just replacing brand names.
+- **Delete other-platform reference files, don't rename them.** `references/codex-tools.md` should be removed, not renamed to `pi-tools.md`. Create a fresh `pi-tools.md` with Pi content.
+- **Skill invocation is not a tool in Pi.** Avoid phrases like "use the Skill tool" or "call activate_skill". Pi loads skills via XML block.
+
 ---
 
 ## 10. Post-Migration Checklist
@@ -676,6 +716,10 @@ Invoke `subagent-driven-development`
 - [ ] All verification commands pass
 - [ ] `./install.sh` runs without errors
 - [ ] Pi reloads and recognizes the new skill
+- [ ] No references to Claude Code / Copilot CLI / Gemini CLI / Codex remain
+- [ ] Skill invocation is described as XML `<skill>` block, not a tool
+- [ ] Only Pi-specific tool reference files remain in `references/`
+- [ ] Meta skill still enforces the skill-first hard gate
 
 ---
 
@@ -743,6 +787,27 @@ Invoke `subagent-driven-development`
    - 确保 Quick Reference 表格和 Common Mistakes 与本地一致
 4. 更新 `skill-sha.json` 中的 SHA
 5. 运行 `./install.sh` 部署
+
+### `using-superpowers`
+
+**Upstream SHA:** Not tracked
+
+**Local modification summary (relative to upstream):**
+
+| Change | Upstream | Local |
+|---|---|---|
+| **Platform scope** | Describes Claude Code, Copilot CLI, Gemini CLI, Codex skill invocation | Describes only Pi skill invocation |
+| **Invocation mechanism** | `Skill` / `skill` / `activate_skill` tools | XML `<skill>` block |
+| **Reference files** | `codex-tools.md`, `copilot-tools.md`, `gemini-tools.md` | Only `references/pi-tools.md` |
+| **DOT flowchart** | Centers on "Invoke Skill tool" | Centers on "Pi loads skill via XML block" |
+| **Red Flags / priority** | Generic discipline rules | Rewritten for Pi context |
+
+**Re-migration steps:**
+
+1. Do not rely on SHA diffing; the Pi version is a complete rewrite.
+2. If upstream `using-superpowers` changes significantly, re-evaluate whether Pi's meta-skill rules need updating rather than blindly porting.
+3. Apply any genuinely new discipline concepts from upstream to the Pi rewrite.
+4. Update this local customization record if the scope changes.
 
 ---
 
