@@ -31,6 +31,11 @@ src = src.replace(/:\s*(string|number|boolean|void|any|OverlayColor|\$)(\[\])?/g
 // Remove // deno-lint-ignore comments
 src = src.replace(/\/\/\s*deno-lint-ignore.*\n/g, "");
 
+// Remove trailing commas before closing parentheses. JXA's JavaScriptCore may be older
+// than the ES2017 function-parameter trailing-comma feature, so keep the compiled
+// output maximally compatible.
+src = src.replace(/,(\s*\))/g, "$1");
+
 // Collapse multiple blank lines
 src = src.replace(/\n{3,}/g, "\n\n");
 

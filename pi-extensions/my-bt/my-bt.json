@@ -62,7 +62,7 @@
     "agent_end": "completed"
   },
   "permissionEventMap": {
-    "permissions:ui_prompt": "warning"
+    "permissions:ui_prompt": "engaging"
   },
   "overlayTextMap": {
     "session_start": {

@@ -1,12 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { exec } from "node:child_process";
-import { listCategories, pickSoundFile, resolveSoundPath, playCategory, playOverlay, detectTerminal } from "./player";
+import { listCategories, pickSoundFile, resolveSoundPath, playCategory, playSound, playOverlay, detectTerminal } from "./player";
+import * as coordinator from "./coordinator";
 import type { BtConfig } from "./types";
 
-vi.mock("node:child_process", () => ({
-  exec: vi.fn((cmd: string, cb: (err: Error | null) => void) => {
-    cb(null);
-  }),
+let nextPid = 1000;
+
+vi.mock("./coordinator", () => ({
+  spawnSoundProcess: vi.fn((_config, filePath) => ({
+    pid: nextPid++,
+    cmd: `afplay "${filePath}"`,
+  })),
+  spawnOverlayProcess: vi.fn(() => ({
+    pid: nextPid++,
+    cmd: "osascript -l JavaScript",
+  })),
 }));
 
 const mockConfig: BtConfig = {
@@ -52,34 +59,34 @@ const mockConfig: BtConfig = {
 };
 
 beforeEach(() => {
-  vi.mocked(exec).mockClear();
+  vi.mocked(coordinator.spawnSoundProcess).mockClear();
+  vi.mocked(coordinator.spawnOverlayProcess).mockClear();
 });
 
 describe("playCategory", () => {
   it("plays a sound from the category", () => {
     playCategory(mockConfig, "startup");
-    expect(exec).toHaveBeenCalledOnce();
-    expect(exec).toHaveBeenCalledWith(
-      expect.stringContaining("startup.mp3"),
-      expect.any(Function),
+    expect(coordinator.spawnSoundProcess).toHaveBeenCalledOnce();
+    expect(coordinator.spawnSoundProcess).toHaveBeenCalledWith(
+      expect.objectContaining({ soundDir: "/fake/sounds" }),
+      "/fake/sounds/startup.mp3",
     );
   });
 
   it("does nothing for unknown category", () => {
     playCategory(mockConfig, "nonexistent");
-    expect(exec).not.toHaveBeenCalled();
+    expect(coordinator.spawnSoundProcess).not.toHaveBeenCalled();
   });
 
-  it("logs error when play fails", () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(exec).mockImplementationOnce((cmd, cb) => {
-      cb(new Error("play failed"));
-    });
-    playCategory(mockConfig, "startup");
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("play failed"),
+});
+
+describe("playSound", () => {
+  it("spawns sound process", () => {
+    playSound(mockConfig, "/fake/sounds/custom.mp3");
+    expect(coordinator.spawnSoundProcess).toHaveBeenCalledWith(
+      mockConfig,
+      "/fake/sounds/custom.mp3",
     );
-    consoleSpy.mockRestore();
   });
 });
 
@@ -125,66 +132,80 @@ describe("resolveSoundPath", () => {
 describe("playOverlay", () => {
   const extDir = "/fake/ext";
 
-  it("spawns osascript with correct arguments for session_start", () => {
+  it("spawns overlay with correct arguments for session_start", () => {
     playOverlay(mockConfig, "session_start", extDir);
-    const lastCall = vi.mocked(exec).mock.calls.at(-1);
-    expect(lastCall).toBeDefined();
-    const cmd = lastCall![0] as string;
-    expect(cmd).toContain("osascript -l JavaScript");
-    expect(cmd).toContain("dist/mac-overlay.js");
-    expect(cmd).toContain("SESSION START");
-    expect(cmd).toContain("BT-7274 已上线");
-    expect(cmd).toContain("系统重启");
-    expect(cmd).toContain("5");
-    expect(cmd).toContain("blue");
-    expect(cmd).toContain("WezTerm");
+    expect(coordinator.spawnOverlayProcess).toHaveBeenCalledOnce();
+    expect(coordinator.spawnOverlayProcess).toHaveBeenCalledWith(
+      extDir,
+      "SESSION START",
+      "BT-7274 已上线",
+      "系统重启",
+      5,
+      "blue",
+      0,
+      "WezTerm",
+    );
   });
 
-  it("spawns osascript with orange color for agent_start", () => {
+  it("spawns overlay with orange color for agent_start", () => {
     playOverlay(mockConfig, "agent_start", extDir);
-    const lastCall = vi.mocked(exec).mock.calls.at(-1);
-    const cmd = lastCall![0] as string;
-    expect(cmd).toContain("orange");
-    expect(cmd).toContain("MISSION");
-    expect(cmd).toContain("铁御控制");
+    expect(coordinator.spawnOverlayProcess).toHaveBeenCalledWith(
+      extDir,
+      "MISSION",
+      "执行任务",
+      "铁御控制",
+      5,
+      "orange",
+      1,
+      "WezTerm",
+    );
   });
 
   it("omits subtitle when not configured", () => {
     playOverlay(mockConfig, "agent_end", extDir);
-    const lastCall = vi.mocked(exec).mock.calls.at(-1);
-    const cmd = lastCall![0] as string;
-    expect(cmd).toContain("COMPLETE");
-    expect(cmd).toContain("任务完成");
-    // subtitle should be empty string ""
-    expect(cmd).toMatch(/"任务完成" "" /);
+    expect(coordinator.spawnOverlayProcess).toHaveBeenCalledWith(
+      extDir,
+      "COMPLETE",
+      "任务完成",
+      "",
+      5,
+      "green",
+      2,
+      "WezTerm",
+    );
   });
 
   it("defaults to blue when event is not in EVENT_COLOR_MAP", () => {
     // turn_start is in overlayTextMap but not in EVENT_COLOR_MAP
     playOverlay(mockConfig, "turn_start", extDir);
-    const lastCall = vi.mocked(exec).mock.calls.at(-1);
-    const cmd = lastCall![0] as string;
-    expect(cmd).toContain("blue");
+    expect(coordinator.spawnOverlayProcess).toHaveBeenCalledWith(
+      extDir,
+      "TURN",
+      "新回合",
+      "",
+      5,
+      "blue",
+      3,
+      "WezTerm",
+    );
   });
 
   it("no-ops when event has no overlay config", () => {
-    const before = vi.mocked(exec).mock.calls.length;
     playOverlay(mockConfig, "session_shutdown", extDir);
-    expect(vi.mocked(exec).mock.calls.length).toBe(before);
+    expect(coordinator.spawnOverlayProcess).not.toHaveBeenCalled();
   });
 
   it("cycles through slot 0-4 and wraps", async () => {
     // Reset module to start with fresh slot counter
     vi.resetModules();
     const freshPlayer = await import("./player");
-    const before = vi.mocked(exec).mock.calls.length;
     for (let i = 0; i < 7; i++) {
       freshPlayer.playOverlay(mockConfig, "session_start", extDir);
     }
     // Slots: 0,1,2,3,4,0,1 → last should be slot 1
-    const lastCall = vi.mocked(exec).mock.calls[before + 6];
-    const cmd = lastCall[0] as string;
-    expect(cmd).toMatch(/blue"\s+1\s+"WezTerm"/);
+    const calls = vi.mocked(coordinator.spawnOverlayProcess).mock.calls;
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall[6]).toBe(1);
   });
 
   it("no-ops when overlayTextMap is missing", () => {
@@ -192,15 +213,13 @@ describe("playOverlay", () => {
       ...mockConfig,
       overlayTextMap: undefined,
     };
-    const before = vi.mocked(exec).mock.calls.length;
     playOverlay(cfgNoOverlay, "session_start", extDir);
-    expect(vi.mocked(exec).mock.calls.length).toBe(before);
+    expect(coordinator.spawnOverlayProcess).not.toHaveBeenCalled();
   });
 
   it("no-ops when event has no overlay config", () => {
-    const before = vi.mocked(exec).mock.calls.length;
     playOverlay(mockConfig, "tool_call", extDir);
-    expect(vi.mocked(exec).mock.calls.length).toBe(before);
+    expect(coordinator.spawnOverlayProcess).not.toHaveBeenCalled();
   });
 
   it("uses red color for permissions_ui_prompt", () => {
@@ -211,24 +230,16 @@ describe("playOverlay", () => {
       },
     };
     playOverlay(configWithPermissionOverlay, "permissions_ui_prompt", extDir);
-    const lastCall = vi.mocked(exec).mock.calls.at(-1);
-    const cmd = lastCall![0] as string;
-    expect(cmd).toContain("red");
-    expect(cmd).toContain("WARNING");
-    expect(cmd).toContain("侦测到危险操作");
-    expect(cmd).toContain("铁御，请确认权限");
-  });
-
-  it("logs error when osascript fails", () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(exec).mockImplementationOnce((_cmd, cb) => {
-      if (typeof cb === "function") cb(new Error("osascript failed"));
-    });
-    playOverlay(mockConfig, "session_start", extDir);
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("osascript failed"),
+    expect(coordinator.spawnOverlayProcess).toHaveBeenCalledWith(
+      extDir,
+      "WARNING",
+      "侦测到危险操作",
+      "铁御，请确认权限",
+      5,
+      "red",
+      expect.any(Number),
+      "WezTerm",
     );
-    consoleSpy.mockRestore();
   });
 });
 

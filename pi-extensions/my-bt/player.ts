@@ -1,5 +1,6 @@
 import { join, resolve } from "node:path";
 import { exec } from "node:child_process";
+import { spawnOverlayProcess, spawnSoundProcess } from "./coordinator";
 import type { BtCategory, BtConfig, OverlayColor } from "./types";
 
 /**
@@ -56,11 +57,13 @@ const EVENT_COLOR_MAP: Record<string, OverlayColor> = {
  * Show overlay notification for a pi event.
  * Spawns osascript with the compiled JXA script.
  * No-ops silently when overlayTextMap is missing or event has no config.
+ * Errors are reported via the optional onError callback instead of stderr.
  */
 export function playOverlay(
   config: BtConfig,
   eventName: string,
   extDir: string,
+  onError?: (message: string) => void,
 ): void {
   if (!config.overlayTextMap) return;
 
@@ -74,15 +77,15 @@ export function playOverlay(
 
   const scriptPath = resolve(extDir, "dist", "mac-overlay.js");
   const terminalApp = detectTerminal();
-  exec(
-    `osascript -l JavaScript "${scriptPath}" ` +
-      `"${textConfig.type}" "${textConfig.title}" "${textConfig.subtitle ?? ""}" ` +
-      `${duration} "${color}" ${slot} "${terminalApp}"`,
-    (error) => {
-      if (error) {
-        console.error(`[my-bt] Overlay failed: ${error.message}`);
-      }
-    },
+  spawnOverlayProcess(
+    extDir,
+    textConfig.type,
+    textConfig.title,
+    textConfig.subtitle ?? "",
+    duration,
+    color,
+    slot,
+    terminalApp,
   );
 }
 
@@ -108,21 +111,26 @@ export function resolveSoundPath(config: BtConfig, file: string): string {
 
 /**
  * Play a sound file using afplay (macOS).
- * Fire-and-forget — resolves immediately, logs errors to stderr.
+ * Fire-and-forget — resolves immediately.
+ * Errors are reported via the optional onError callback instead of stderr.
  */
-export function playSound(filePath: string): void {
-  exec(`afplay "${filePath}"`, (error) => {
-    if (error) {
-      console.error(`[my-bt] Failed to play: ${filePath} — ${error.message}`);
-    }
-  });
+export function playSound(
+  config: BtConfig,
+  filePath: string,
+): void {
+  spawnSoundProcess(config, filePath);
 }
 
 /**
  * Play a category's sound (picks file, resolves path, plays fire-and-forget).
+ * Errors are reported via the optional onError callback.
  */
-export function playCategory(config: BtConfig, category: string): void {
+export function playCategory(
+  config: BtConfig,
+  category: string,
+  _onError?: (message: string) => void,
+): void {
   const file = pickSoundFile(config, category);
   if (!file) return;
-  playSound(resolveSoundPath(config, file));
+  playSound(config, resolveSoundPath(config, file));
 }

@@ -45,10 +45,10 @@ export default function myBt(pi: ExtensionAPI): void {
 
   for (const [eventName, category] of Object.entries(config.eventMap)) {
     if (!VALID_EVENTS.has(eventName)) continue;
-    pi.on(eventName as any, () => {
+    pi.on(eventName as any, (_event, ctx) => {
       if (!config.enabled) return;
-      playCategory(config, category);
-      playOverlay(config, eventName, EXT_DIR);
+      playCategory(config, category, ctx.ui.notify);
+      playOverlay(config, eventName, EXT_DIR, ctx.ui.notify);
     });
   }
 
@@ -59,6 +59,7 @@ export default function myBt(pi: ExtensionAPI): void {
       if (!config.enabled) return;
       const category = config.permissionEventMap?.["permissions:ui_prompt"];
       if (!category) return;
+      // EventBus handlers don't receive a UI context, so errors are silent.
       playCategory(config, category);
       playOverlay(config, "permissions_ui_prompt", EXT_DIR);
     });
@@ -116,7 +117,7 @@ export default function myBt(pi: ExtensionAPI): void {
         let i = 0;
         function playNext(): void {
           if (i >= cats.length) return;
-          playCategory(config, cats[i].name);
+          playCategory(config, cats[i].name, ctx.ui.notify);
           i++;
           setTimeout(playNext, 1500);
         }
@@ -131,7 +132,7 @@ export default function myBt(pi: ExtensionAPI): void {
       }
 
       if (config.categories[args]) {
-        playCategory(config, args);
+        playCategory(config, args, ctx.ui.notify);
         ctx.ui.notify(
           `🎙️  BT-7274: ${config.categories[args].description}`,
           "info",

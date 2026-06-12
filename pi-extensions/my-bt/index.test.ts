@@ -120,7 +120,7 @@ describe("my-bt extension", () => {
     mod.default(mockPi as any);
 
     const handler = registeredEvents.get("session_start");
-    handler?.();
+    handler?.({}, mockCtx as any);
     expect(playCategory).toHaveBeenCalled();
   });
 
@@ -132,7 +132,7 @@ describe("my-bt extension", () => {
     mod.default(mockPi as any);
 
     const handler = registeredEvents.get("session_start");
-    handler?.();
+    handler?.({}, mockCtx as any);
     expect(playCategory).not.toHaveBeenCalled();
   });
 
@@ -257,6 +257,7 @@ describe("my-bt extension", () => {
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ soundDir: expect.any(String) }),
       "startup",
+      expect.any(Function),
     );
   });
 
@@ -310,11 +311,12 @@ describe("my-bt extension", () => {
     mod.default(mockPi as any);
 
     const handler = registeredEvents.get("session_start");
-    handler?.();
+    handler?.({}, mockCtx as any);
     expect(playOverlay).toHaveBeenCalledWith(
       expect.objectContaining({ overlayTextMap: expect.any(Object) }),
       "session_start",
       expect.any(String),
+      expect.any(Function),
     );
   });
 
@@ -331,7 +333,7 @@ describe("my-bt extension", () => {
     mod.default(mockPi as any);
 
     const handler = registeredEvents.get("session_start");
-    handler?.();
+    handler?.({}, mockCtx as any);
     expect(playOverlay).not.toHaveBeenCalled();
   });
 
@@ -383,7 +385,7 @@ describe("my-bt extension", () => {
     mod.default(mockPi as any);
 
     const handler = registeredEvents.get("session_start");
-    expect(() => handler?.()).not.toThrow();
+    expect(() => handler?.({}, mockCtx as any)).not.toThrow();
     expect(playCategory).toHaveBeenCalled();
   });
 
