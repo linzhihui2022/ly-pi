@@ -21,6 +21,7 @@ export type Done = (result: QuestionnaireResult) => void;
 
 type Row =
   | { kind: "option"; option: OptionData; index: number }
+  | { kind: "custom"; value: string }
   | { kind: "other" }
   | { kind: "chat" };
 
@@ -31,9 +32,13 @@ function hasPreview(question: QuestionData): boolean {
   return question.options.some((o) => typeof o.preview === "string" && o.preview.length > 0);
 }
 
-function buildRows(question: QuestionData): Row[] {
+function buildRows(question: QuestionData, questionIndex: number): Row[] {
   const rows: Row[] = question.options.map((o, i) => ({ kind: "option", option: o, index: i }));
-  if (!question.multiSelect && !hasPreview(question)) {
+  const customs = customOptions.get(questionIndex) ?? [];
+  for (const value of customs) {
+    rows.push({ kind: "custom", value });
+  }
+  if (!hasPreview(question)) {
     rows.push({ kind: "other" });
   }
   rows.push({ kind: "chat" });
@@ -97,7 +102,7 @@ export function createQuestionnaire(
   }
 
   function currentRows(): Row[] {
-    return buildRows(currentQuestion());
+    return buildRows(currentQuestion(), currentTab);
   }
 
   function isQuestionAnswered(index: number): boolean {
@@ -165,6 +170,17 @@ export function createQuestionnaire(
         question: q.question,
         kind: "chat",
         answer: CHAT_LABEL,
+      });
+      advanceAfterAnswer(currentTab);
+      return;
+    }
+
+    if (row.kind === "custom") {
+      saveAnswer({
+        questionIndex: currentTab,
+        question: q.question,
+        kind: "custom",
+        answer: row.value,
       });
       advanceAfterAnswer(currentTab);
       return;
@@ -305,6 +321,11 @@ export function createQuestionnaire(
 
       if (row.kind === "chat") {
         add(prefix + theme.fg(selected ? "accent" : "text", `${i + 1}. ${CHAT_LABEL}`));
+        continue;
+      }
+
+      if (row.kind === "custom") {
+        add(prefix + theme.fg(selected ? "accent" : "text", `${i + 1}. ${row.value} (custom)`));
         continue;
       }
 

@@ -238,7 +238,7 @@ describe("createQuestionnaire", () => {
     });
   });
 
-  it("supports custom input via Type something row", () => {
+  it("adds a custom row but does not auto-submit in single-select", () => {
     const params = makeParams([
       {
         question: "Which color?",
@@ -252,6 +252,7 @@ describe("createQuestionnaire", () => {
     const done = vi.fn();
     const q = createQuestionnaire(params, mockTui, mockTheme, done);
 
+    // focus Type something. and open editor
     q.handleInput("down");
     q.handleInput("down");
     q.handleInput("enter");
@@ -262,10 +263,10 @@ describe("createQuestionnaire", () => {
     q.handleInput("k");
     q.handleInput("enter");
 
-    expect(done).toHaveBeenCalledWith({
-      answers: [{ questionIndex: 0, question: "Which color?", kind: "custom", answer: "pink" }],
-      cancelled: false,
-    });
+    expect(done).not.toHaveBeenCalled();
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("3. pink (custom)"))).toBe(true);
+    expect(lines.some((l) => l.includes("4. Type something."))).toBe(true);
   });
 
   it("exits custom input mode on escape", () => {
