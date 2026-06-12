@@ -18,7 +18,7 @@ const STATUS_COLORS: Record<Exclude<Task["status"], "deleted">, string> = {
   completed: "muted",
 };
 
-const MAX_VISIBLE = 5;
+const MAX_VISIBLE = 3;
 
 function sortByPriority(tasks: Task[]): Task[] {
   const priority: Record<Task["status"], number> = {
@@ -30,27 +30,27 @@ function sortByPriority(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => priority[a.status] - priority[b.status]);
 }
 
-export function renderOverlay(tasks: Task[], theme?: ThemeLike): string[] {
-  const visible = tasks.filter((t) => t.status !== "deleted");
-  if (visible.length === 0) return [];
+function renderTaskList(
+  tasks: Task[],
+  title: string,
+  titleColor: string,
+  lineColor: string | ((task: Task) => string) | undefined,
+  theme?: ThemeLike
+): string[] {
+  if (tasks.length === 0) return [];
 
-  const sorted = sortByPriority(visible);
-  const display = sorted.slice(0, MAX_VISIBLE);
-  const overflow = sorted.length - MAX_VISIBLE;
+  const display = tasks.slice(0, MAX_VISIBLE);
+  const overflow = tasks.length - MAX_VISIBLE;
 
   const lines: string[] = [];
-
-  const title = `Tasks (${visible.length})`;
-  lines.push(theme ? theme.fg("accent", theme.bold(title)) : title);
+  lines.push(theme ? theme.fg(titleColor, theme.bold(title)) : title);
 
   for (const task of display) {
-    const symbol = STATUS_SYMBOLS[task.status];
-    const line = `${symbol} #${task.id} ${task.subject}`;
-    if (theme) {
-      const color = STATUS_COLORS[task.status as Exclude<Task["status"], "deleted">];
-      lines.push(theme.fg(color, line));
+    if (theme && lineColor) {
+      const color = typeof lineColor === "function" ? lineColor(task) : lineColor;
+      lines.push(theme.fg(color, `${STATUS_SYMBOLS[task.status]} #${task.id} ${task.subject}`));
     } else {
-      lines.push(line);
+      lines.push(`${STATUS_SYMBOLS[task.status]} #${task.id} ${task.subject}`);
     }
   }
 
@@ -60,4 +60,33 @@ export function renderOverlay(tasks: Task[], theme?: ThemeLike): string[] {
   }
 
   return lines;
+}
+
+export function renderActiveOverlay(tasks: Task[], theme?: ThemeLike): string[] {
+  const visible = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
+  if (visible.length === 0) return [];
+
+  const sorted = sortByPriority(visible);
+  const title = `Active (${sorted.length})`;
+  return renderTaskList(
+    sorted,
+    title,
+    "accent",
+    (task) => STATUS_COLORS[task.status as "pending" | "in_progress"],
+    theme
+  );
+}
+
+export function renderCompletedOverlay(tasks: Task[], theme?: ThemeLike): string[] {
+  const visible = tasks.filter((t) => t.status === "completed");
+  if (visible.length === 0) return [];
+
+  const sorted = [...visible].sort((a, b) => b.id - a.id);
+  const title = `Completed (${sorted.length})`;
+  return renderTaskList(sorted, title, "muted", "muted", theme);
+}
+
+// Backward-compatible alias until index.ts is updated:
+export function renderOverlay(tasks: Task[], theme?: ThemeLike): string[] {
+  return renderActiveOverlay(tasks, theme);
 }
