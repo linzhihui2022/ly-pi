@@ -329,7 +329,7 @@ describe("createQuestionnaire", () => {
     });
   });
 
-  it("does not show Type something for multi-select", () => {
+  it("shows Type something row for multi-select", () => {
     const params = makeParams([
       {
         question: "Which features?",
@@ -343,8 +343,9 @@ describe("createQuestionnaire", () => {
     ]);
     const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
     const lines = q.render(80);
-    expect(lines.some((l) => l.includes("Type something."))).toBe(false);
+    expect(lines.some((l) => l.includes("Type something."))).toBe(true);
     expect(lines.some((l) => l.includes("☐ A"))).toBe(true);
+    expect(lines.some((l) => l.includes("☐ B"))).toBe(true);
   });
 
   it("supports multi-question tab navigation and submit", () => {
@@ -649,6 +650,7 @@ describe("createQuestionnaire", () => {
     const q = createQuestionnaire(params, mockTui, mockTheme, done);
 
     // Move focus to the chat row
+    q.handleInput("down");
     q.handleInput("down");
     q.handleInput("down");
     q.handleInput("space");
