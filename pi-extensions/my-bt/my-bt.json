@@ -61,6 +61,9 @@
     "agent_start": "engaging",
     "agent_end": "completed"
   },
+  "permissionEventMap": {
+    "permissions:ui_prompt": "warning"
+  },
   "overlayTextMap": {
     "session_start": {
       "type": "SESSION START",
@@ -76,6 +79,11 @@
       "type": "COMPLETE",
       "title": "任务完成",
       "subtitle": "做得好，铁御"
+    },
+    "permissions_ui_prompt": {
+      "type": "WARNING",
+      "title": "侦测到危险操作",
+      "subtitle": "铁御，请确认权限"
     }
   }
 }
