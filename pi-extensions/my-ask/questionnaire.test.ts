@@ -610,6 +610,15 @@ describe("createQuestionnaire", () => {
     const lines = q.render(80);
     expect(lines.some((l) => l.includes("Maximum 8 custom options reached."))).toBe(true);
 
+    const questionIndex = lines.findIndex((l) => l.includes("Which color?"));
+    const noticeIndex = lines.findIndex((l) => l.includes("Maximum 8 custom options reached."));
+    const firstOptionIndex = lines.findIndex((l) => l.includes("1. Red"));
+    expect(questionIndex).toBeGreaterThan(-1);
+    expect(noticeIndex).toBeGreaterThan(-1);
+    expect(firstOptionIndex).toBeGreaterThan(-1);
+    expect(noticeIndex).toBeGreaterThan(questionIndex);
+    expect(noticeIndex).toBeLessThan(firstOptionIndex);
+
     // Pressing another key clears the transient notice.
     q.handleInput("up");
     const cleared = q.render(80);
@@ -757,7 +766,7 @@ describe("createQuestionnaire", () => {
     expect(done).not.toHaveBeenCalled();
   });
 
-  it("shows Del remove hint when a custom row is focused", () => {
+  it("shows Del remove hint when a single-select custom row is focused", () => {
     const params = makeParams([
       {
         question: "Which color?",
@@ -781,6 +790,27 @@ describe("createQuestionnaire", () => {
     expect(lines.some((l) => l.includes("Del remove"))).toBe(true);
   });
 
+  it("shows Del remove hint when a multi-select custom row is focused", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    addCustomOption(q, "custom");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("custom (custom)"))).toBe(true);
+    expect(lines.some((l) => l.includes("Del remove"))).toBe(true);
+  });
+
   it("renders the inline editor after selecting Type something", () => {
     const params = makeParams([
       {
@@ -800,7 +830,9 @@ describe("createQuestionnaire", () => {
 
     const lines = q.render(80);
     expect(lines.some((l) => l.includes("Your answer:"))).toBe(true);
-    expect(lines.some((l) => l.includes("Type something."))).toBe(true);
+    const typeSomethingRow = lines.find((l) => l.includes("Type something."));
+    expect(typeSomethingRow).toBeDefined();
+    expect(typeSomethingRow!.includes("✎")).toBe(false);
   });
 
   it("truncates preview lines that exceed available width", () => {
