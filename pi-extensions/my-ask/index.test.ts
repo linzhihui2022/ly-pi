@@ -99,6 +99,17 @@ describe("my-ask extension", () => {
     expect(registeredTool.parameters).toBeDefined();
   });
 
+  it("promptGuidelines say Type something is available in multi-select", () => {
+    myAsk(mockPi);
+    const guidelines = registeredTool.promptGuidelines.join(" ");
+    expect(guidelines).toContain(
+      "Set multiSelect: true when multiple answers are valid; the \"Type something.\" row is available in multi-select too",
+    );
+    expect(guidelines).not.toContain(
+      "Set multiSelect: true when multiple answers are valid; this suppresses",
+    );
+  });
+
   it("returns no_ui error when UI is unavailable", async () => {
     myAsk(mockPi);
     const ctx = makeCtx(false);

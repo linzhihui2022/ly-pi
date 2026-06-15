@@ -14,7 +14,7 @@ const PROMPT_SNIPPET =
 const PROMPT_GUIDELINES = [
   "Use ask_user_question whenever the user's request is underspecified and you cannot proceed without concrete decisions — you can ask up to 4 questions per invocation.",
   "Each question MUST have 2-4 options. Every option requires a concise label (1-5 words) and a description explaining what the choice means or its trade-offs. The user can additionally type a custom answer (\"Type something.\" row is appended automatically to single-select questions) or pick \"Chat about this\" to abandon the questionnaire.",
-  "Set multiSelect: true when multiple answers are valid; this suppresses the \"Type something.\" row. Provide an options[].preview markdown string when an option benefits from richer context (mockups, code snippets, diagrams, configs) — single-select only. NOTE: any non-empty preview on a single-select question ALSO suppresses the \"Type something.\" row; \"Chat about this\" remains the escape hatch. If you recommend a specific option, make it the first option and append \"(Recommended)\" to its label.",
+  "Set multiSelect: true when multiple answers are valid; the \"Type something.\" row is available in multi-select too, allowing users to add custom values alongside standard options. Provide an options[].preview markdown string when an option benefits from richer context (mockups, code snippets, diagrams, configs) — single-select only. NOTE: any non-empty preview on a single-select question ALSO suppresses the \"Type something.\" row; \"Chat about this\" remains the escape hatch. If you recommend a specific option, make it the first option and append \"(Recommended)\" to its label.",
   "Do not stack multiple ask_user_question calls back-to-back — group all clarifying questions into one invocation.",
 ];
 
@@ -30,7 +30,7 @@ export default function myAsk(pi: ExtensionAPI): void {
 
 Usage notes:
 - Users will always be able to type a custom answer ("Type something." row is appended automatically to every single-select question) or pick "Chat about this" to abandon the questionnaire and continue in free-form conversation. Do NOT author "Other" / "Type something." / "Chat about this" labels yourself — duplicates are rejected at runtime.
-- Use multiSelect: true to allow multiple answers to be selected for a question. The "Type something." row is suppressed on multi-select questions, and is ALSO suppressed on single-select questions where any option carries a \`preview\` (no room for inline custom text — "Chat about this" remains the escape hatch).
+- Use multiSelect: true to allow multiple answers to be selected for a question. The "Type something." row is available in multi-select too, allowing users to add custom values alongside standard options. It is suppressed on single-select questions where any option carries a \`preview\` (no room for inline custom text — "Chat about this" remains the escape hatch).
 - If you recommend a specific option, make that the first option in the list and add "(Recommended)" to the end of the label.
 
 Preview feature:
