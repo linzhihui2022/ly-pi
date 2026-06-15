@@ -811,6 +811,25 @@ describe("createQuestionnaire", () => {
     expect(lines.some((l) => l.includes("Del remove"))).toBe(true);
   });
 
+  it("shows standard help when a multi-select option row is focused", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Space toggle"))).toBe(true);
+    expect(lines.some((l) => l.includes("Del remove"))).toBe(false);
+  });
+
   it("renders the inline editor after selecting Type something", () => {
     const params = makeParams([
       {

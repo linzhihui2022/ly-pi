@@ -55,7 +55,7 @@ export function createQuestionnaire(
 
   const answers = new Map<number, QuestionAnswer>();
   const multiSelections = new Map<number, Set<string>>();
-  const customOptions = new Map<number, string[]>();
+  const customOptions = new Map<number, Set<string>>();
   let transientNotice: string | null = null;
 
   function clearNotice() {
@@ -67,7 +67,7 @@ export function createQuestionnaire(
 
   function buildRows(question: QuestionData, questionIndex: number): Row[] {
     const rows: Row[] = question.options.map((o, i) => ({ kind: "option", option: o, index: i }));
-    const customs = customOptions.get(questionIndex) ?? [];
+    const customs = customOptions.get(questionIndex) ?? new Set<string>();
     for (const value of customs) {
       rows.push({ kind: "custom", value });
     }
@@ -101,29 +101,29 @@ export function createQuestionnaire(
       return;
     }
 
-    const customs = customOptions.get(index) ?? [];
-    const existingRowIndex = customs.indexOf(trimmed);
+    const customs = customOptions.get(index) ?? new Set<string>();
     const optionsLength = questions[index].options.length;
 
-    if (existingRowIndex !== -1) {
+    if (customs.has(trimmed)) {
+      const existingRowIndex = Array.from(customs).indexOf(trimmed);
       optionIndex = optionsLength + existingRowIndex;
       refresh();
       return;
     }
 
-    if (customs.length >= MAX_CUSTOM_OPTIONS) {
+    if (customs.size >= MAX_CUSTOM_OPTIONS) {
       transientNotice = `Maximum ${MAX_CUSTOM_OPTIONS} custom options reached.`;
       refresh();
       return;
     }
 
-    const updated = [...customs, trimmed];
-    customOptions.set(index, updated);
+    customs.add(trimmed);
+    customOptions.set(index, customs);
     if (questions[index].multiSelect) {
       getSelections(index).add(trimmed);
     }
 
-    optionIndex = optionsLength + updated.length - 1;
+    optionIndex = optionsLength + customs.size - 1;
     refresh();
   };
 
@@ -262,15 +262,12 @@ export function createQuestionnaire(
     const row = rows[optionIndex];
     if (row.kind !== "custom") return;
 
-    const customs = customOptions.get(currentTab) ?? [];
-    const idx = customs.indexOf(row.value);
-    if (idx >= 0) {
-      customs.splice(idx, 1);
-      if (customs.length === 0) {
-        customOptions.delete(currentTab);
-      } else {
-        customOptions.set(currentTab, customs);
-      }
+    const customs = customOptions.get(currentTab)!;
+    customs.delete(row.value);
+    if (customs.size === 0) {
+      customOptions.delete(currentTab);
+    } else {
+      customOptions.set(currentTab, customs);
     }
 
     getSelections(currentTab).delete(row.value);
@@ -453,6 +450,7 @@ export function createQuestionnaire(
               value = answer.selected?.length ? answer.selected.join(", ") : "(no input)";
               break;
             case "custom":
+              /* istanbul ignore next -- custom answers submitted through the UI are never empty */
               value = answer.answer || "(no input)";
               break;
             case "chat":
@@ -507,9 +505,12 @@ export function createQuestionnaire(
     if (!inputMode) {
       let help: string;
       if (currentTab === questions.length) {
-        help = isMulti
-          ? " Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel"
-          : " ↑↓ navigate • Enter select • Esc cancel";
+        /* istanbul ignore else -- single-question mode submits immediately, so Submit tab is never rendered */
+        if (isMulti) {
+          help = " Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel";
+        } else {
+          help = " ↑↓ navigate • Enter select • Esc cancel";
+        }
       } else {
         const rows = currentRows();
         const focused = rows[optionIndex];
