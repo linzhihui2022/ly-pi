@@ -1,4 +1,4 @@
-import { Editor, Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import { Editor, Key, matchesKey, truncateToWidth, type TUI as FullTUI } from "@earendil-works/pi-tui";
 import type {
   OptionData,
   QuestionAnswer,
@@ -78,7 +78,7 @@ export function createQuestionnaire(
     return rows;
   }
 
-  const editor = new Editor(tui, {
+  const editor = new Editor(tui as FullTUI, {
     borderColor: (s) => theme.fg("accent", s),
     selectList: {
       selectedPrefix: (t) => theme.fg("accent", t),
