@@ -827,7 +827,116 @@ describe("createQuestionnaire", () => {
 
     const lines = q.render(80);
     expect(lines.some((l) => l.includes("Space toggle"))).toBe(true);
+    expect(lines.some((l) => l.includes("a all/none"))).toBe(true);
     expect(lines.some((l) => l.includes("Del remove"))).toBe(false);
+  });
+
+  it("selects all multi-select rows with a", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("a");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: ["A", "B"] },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("clears all selections when a is pressed and everything is selected", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("a");
+    q.handleInput("a");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: [] },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("includes existing custom rows in a all/none toggle", () => {
+    const params = makeParams([
+      {
+        question: "Which features?",
+        header: "Features",
+        multiSelect: true,
+        options: [
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    addCustomOption(q, "custom");
+    q.handleInput("a");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("● A"))).toBe(true);
+    expect(lines.some((l) => l.includes("● B"))).toBe(true);
+    expect(lines.some((l) => l.includes("● custom (custom)"))).toBe(true);
+
+    q.handleInput("a");
+    q.handleInput("enter");
+
+    expect(done).toHaveBeenCalledWith({
+      answers: [
+        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: [] },
+      ],
+      cancelled: false,
+    });
+  });
+
+  it("ignores a in single-select", () => {
+    const params = makeParams([
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
+        ],
+      },
+    ]);
+    const done = vi.fn();
+    const q = createQuestionnaire(params, mockTui, mockTheme, done);
+
+    q.handleInput("a");
+    expect(done).not.toHaveBeenCalled();
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("> 1. Red"))).toBe(true);
   });
 
   it("renders the inline editor after selecting Type something", () => {

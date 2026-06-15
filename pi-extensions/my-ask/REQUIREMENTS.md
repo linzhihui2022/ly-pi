@@ -24,6 +24,7 @@ Build a local Pi extension (`pi-extensions/my-ask`) that registers the tool `ask
   - Delete/Backspace removes a focused custom row
   - single-select: after adding a custom value the user must press Enter on that row (or another option) to finalise the answer
   - multi-select with Space toggle and Enter submit
+  - press `a` in multi-select to select all current rows (preset options + existing custom rows); press `a` again to clear all selections
   - "Type something." row also available on multi-select; input is appended to the current selections as a visible checked row `[x] <value> (custom)`
   - preview rendered below the focused option on single-select, capped to a small height and without excessive padding
   - "Chat about this" escape row on every question

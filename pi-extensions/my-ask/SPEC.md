@@ -186,6 +186,10 @@ checked row `[x] <value> (custom)` and focus returns to the option list so the
 user can review or change selections before submitting the question. Space can
 toggle a custom row off, and Delete/Backspace can remove a custom row entirely.
 
+Pressing `a` selects every current row (preset options plus any existing custom
+rows). If every selectable row is already selected, `a` clears all selections
+instead. This gives a quick toggle between "all" and "none".
+
 ## 5. Navigation
 
 | Key | Action |
@@ -194,6 +198,7 @@ toggle a custom row off, and Delete/Backspace can remove a custom row entirely.
 | `Tab` / `→` / `←` | switch question tabs (multi-question only) |
 | `Enter` | select focused option; apply custom input and add it to the list; submit on Submit tab |
 | `Space` | toggle checkbox (including custom rows) in multi-select |
+| `a` | select all current rows in multi-select; press again to clear all |
 | `Delete` / `Backspace` | remove a focused custom row |
 | `Esc` | cancel the questionnaire, or exit custom-input mode |
 

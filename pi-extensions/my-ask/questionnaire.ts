@@ -257,6 +257,29 @@ export function createQuestionnaire(
     refresh();
   }
 
+  function toggleAll() {
+    const q = currentQuestion();
+    /* istanbul ignore next -- only invoked from multi-select branch */
+    if (!q.multiSelect) return;
+    const rows = currentRows();
+    const selectable = rows.filter((r) => r.kind === "option" || r.kind === "custom");
+    const set = getSelections(currentTab);
+    const allSelected = selectable.every((r) =>
+      set.has(r.kind === "custom" ? r.value : r.option.label),
+    );
+
+    if (allSelected) {
+      for (const r of selectable) {
+        set.delete(r.kind === "custom" ? r.value : r.option.label);
+      }
+    } else {
+      for (const r of selectable) {
+        set.add(r.kind === "custom" ? r.value : r.option.label);
+      }
+    }
+    refresh();
+  }
+
   function removeCustom() {
     const rows = currentRows();
     const row = rows[optionIndex];
@@ -338,6 +361,10 @@ export function createQuestionnaire(
     }
     if (matchesKey(data, Key.space) && currentQuestion().multiSelect) {
       toggleMulti();
+      return;
+    }
+    if (data === "a" && currentQuestion().multiSelect) {
+      toggleAll();
       return;
     }
     if (matchesKey(data, Key.delete) || matchesKey(data, Key.backspace)) {
@@ -517,8 +544,8 @@ export function createQuestionnaire(
         const customFocused = focused.kind === "custom";
         if (q!.multiSelect) {
           help = customFocused
-            ? " Space toggle • Del remove • Enter submit"
-            : " Space toggle • Enter submit";
+            ? " Space toggle • a all/none • Del remove • Enter submit"
+            : " Space toggle • a all/none • Enter submit";
         } else {
           help = customFocused
             ? " ↑↓ navigate • Enter select • Del remove • Esc cancel"
