@@ -388,13 +388,13 @@ export function createQuestionnaire(
       if (row.kind === "custom") {
         const label = `${row.value} (custom)`;
         const checked = q.multiSelect && getSelections(currentTab).has(row.value);
-        const box = q.multiSelect ? (checked ? "☑" : "☐") : `${i + 1}.`;
+        const box = q.multiSelect ? (checked ? "●" : "○") : `${i + 1}.`;
         add(prefix + theme.fg(selected ? "accent" : "text", `${box} ${label}`));
         continue;
       }
 
       const checked = q.multiSelect && getSelections(currentTab).has(row.option.label);
-      const box = q.multiSelect ? (checked ? "☑" : "☐") : `${i + 1}.`;
+      const box = q.multiSelect ? (checked ? "●" : "○") : `${i + 1}.`;
       add(prefix + theme.fg(selected ? "accent" : "text", `${box} ${row.option.label}`));
       if (row.option.description) {
         add(`     ${theme.fg("muted", row.option.description)}`);

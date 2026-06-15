@@ -356,8 +356,8 @@ describe("createQuestionnaire", () => {
     const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
     const lines = q.render(80);
     expect(lines.some((l) => l.includes("Type something."))).toBe(true);
-    expect(lines.some((l) => l.includes("☐ A"))).toBe(true);
-    expect(lines.some((l) => l.includes("☐ B"))).toBe(true);
+    expect(lines.some((l) => l.includes("○ A"))).toBe(true);
+    expect(lines.some((l) => l.includes("○ B"))).toBe(true);
   });
 
   it("supports multi-question tab navigation and submit", () => {
@@ -546,7 +546,7 @@ describe("createQuestionnaire", () => {
     q.handleInput("space");
 
     const lines = q.render(80);
-    expect(lines.some((l) => l.includes("☐ custom (custom)"))).toBe(true);
+    expect(lines.some((l) => l.includes("○ custom (custom)"))).toBe(true);
   });
 
   it("removes a custom row from multi-select selections before submit", () => {
@@ -567,7 +567,7 @@ describe("createQuestionnaire", () => {
     addCustomOption(q, "custom");
 
     const beforeDelete = q.render(80);
-    expect(beforeDelete.some((l) => l.includes("☑ custom (custom)"))).toBe(true);
+    expect(beforeDelete.some((l) => l.includes("● custom (custom)"))).toBe(true);
 
     q.handleInput("delete");
     q.handleInput("enter");
@@ -1087,7 +1087,7 @@ describe("createQuestionnaire", () => {
 
     q.handleInput("space");
     const lines = q.render(80);
-    expect(lines.some((l) => l.includes("☑ A"))).toBe(true);
+    expect(lines.some((l) => l.includes("● A"))).toBe(true);
   });
 
   it("renders empty multi-select and custom answers on the Submit tab", () => {
