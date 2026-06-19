@@ -5,10 +5,11 @@ export default defineConfig({
     name: "pi-pet",
     pool: "forks",
     fileParallelism: false,
+    passWithNoTests: true,
     maxWorkers: 1,
     execArgv: ["--max-old-space-size=4096"],
     coverage: {
-      exclude: ["types.ts", "index.ts", "git.ts"],
+      exclude: ["types.ts", "index.ts"],
     },
   },
 });

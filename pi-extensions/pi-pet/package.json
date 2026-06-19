@@ -16,9 +16,9 @@
     "@typescript/native-preview": "^7.0.0-beta"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "^0.78.0",
     "@earendil-works/pi-coding-agent": "^0.78.0",
     "@earendil-works/pi-tui": "^0.78.0",
-    "@earendil-works/pi-ai": "^0.78.0",
     "@types/node": "^25.9.1"
   }
 }
