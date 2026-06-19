@@ -157,20 +157,14 @@ ask_user_question:
 
 #### Option 1: Batch commit, push, and create PR
 
-Analyze the working tree, group changes logically (e.g. by feature, file type, or directory), `git add` and `git commit -m "..."` in batches to produce multiple focused commits. Then push the branch and open a Pull Request via `gh pr create`.
+Analyze the working tree, group changes logically (e.g. by feature, file type, or directory), `git add` and `git commit -m "..."` in batches to produce multiple focused commits. Then push the branch to remote.
 
 ```bash
-# Example: batch commit, push, and create PR
+# Push branch
 git push -u origin <feature-branch>
-gh pr create --title "<title>" --body "$(cat <<'EOF'
-## Summary
-<2-3 bullets of what changed>
-
-## Test Plan
-- [ ] <verification steps>
-EOF
-)"
 ```
+
+Open a Pull Request separately if needed (e.g. via `gh pr create` or the GitHub web UI).
 
 #### Option 2: Batch commit and push
 
