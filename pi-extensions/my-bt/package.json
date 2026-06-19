@@ -5,10 +5,12 @@
   "scripts": {
     "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*' && bun run build:overlay",
     "build:overlay": "bun run scripts/build-overlay.ts",
+    "typecheck": "bun x tsgo --noEmit",
     "test": "npx vitest run --coverage",
     "deploy": "bun run scripts/deploy.ts"
   },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.78.0",
     "vitest": "^4"
   }
 }

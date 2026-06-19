@@ -2,6 +2,9 @@
   "$schema": "https://turbo.build/schema.json",
   "globalPassThroughEnv": ["TAVILY_SEARCH_API"],
   "tasks": {
+    "typecheck": {
+      "inputs": ["$TURBO_DEFAULT$"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "!*.test.ts", "!*.spec.ts"],

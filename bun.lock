@@ -38,6 +38,7 @@
     "pi-extensions/my-bt": {
       "name": "my-bt",
       "devDependencies": {
+        "@earendil-works/pi-coding-agent": "^0.78.0",
         "vitest": "^4",
       },
     },
