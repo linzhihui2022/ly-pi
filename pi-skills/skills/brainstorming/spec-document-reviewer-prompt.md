@@ -6,6 +6,8 @@ Use this template when dispatching a spec document reviewer subagent.
 
 **Dispatch after:** Spec document is written to `.lychee/artifacts/designs/`
 
+**Dispatch with:** `subagent({ subagent_type: "reviewer", ... })`
+
 ```typescript
 subagent({
   subagent_type: "reviewer",
@@ -47,3 +49,5 @@ subagent({
 ```
 
 **Reviewer returns:** Status, Issues (if any), Recommendations
+
+**Note:** This prompt assumes Pi's `subagent` tool. If migrating to another platform, replace `subagent_type` with the appropriate dispatch mechanism.

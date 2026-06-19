@@ -106,7 +106,7 @@ The goal is to migrate **all** Superpowers skills as-is. Each skill retains its 
 
 | Superpowers Skill | Migration Status | Notes |
 |---|---|---|
-| `brainstorming` | ✅ Migrated | Already ported. Paths updated to `.lychee/`. **已本地自定义** — `visual-companion.md` 与上游分化（见 §10.5）。 |
+| `brainstorming` | ✅ Migrated | Already ported. Paths updated to `.lychee/`. **已本地自定义** — 终态改为 `grill-me` 而非 `writing-plans`；`visual-companion.md` 与上游分化（见 §10.5）。 |
 | `writing-plans` | ✅ Migrated | Paths updated to `.lychee/artifacts/plans/`; removed `superpowers:` prefix from skill references; removed `using-git-worktrees` context note (Pi does not support worktrees); neutralized branding. |
 | `executing-plans` | ✅ Migrated | Removed `superpowers:` prefixes from skill references; replaced `TodoWrite` with `todo` tool; removed `using-git-worktrees` reference (Pi does not support worktrees); neutralized branding. |
 | `verification-before-completion` | ✅ Migrated | Pure documentation skill; no platform-specific content. |
@@ -742,28 +742,36 @@ Invoke `subagent-driven-development`
 
 **本地修改摘要（相对于上游）：**
 
-仅在 `visual-companion.md` 中有修改。`SKILL.md`、`spec-document-reviewer-prompt.md` 等其他文件与上游一致。
-
 | 改动 | 上游行为 | 本地行为 |
 |---|---|---|
+| **终态 skill** | 设计评审通过后调用 `writing-plans` 生成实现计划 | 设计评审通过后调用 `grill-me` 挑战设计、发现隐藏风险 |
+| **Checklist 第 9 步** | "Transition to implementation — invoke `writing-plans` skill" | "Stress-test the design — invoke `grill-me` skill" |
+| **Process Flow 终态节点** | `Invoke writing-plans skill` | `Invoke grill-me skill` |
+| **User Review Gate 提示语** | "before we start writing out the implementation plan" | "before we stress-test the design" |
 | **交互流程** | 轮询模式 — agent 展示页面后结束回合，用户需回到终端打字推进下一回合，agent 再调用 `visual_companion_read_events` 获取事件 | 阻塞模式 — agent 展示页面后立即调用 `visual_companion_wait`，用户点确认后 agent **自动**获得 confirm 事件，无需终端打字 |
 | **工具数量描述** | "provides four tools"（`start`/`show`/`read_events`/`stop`） | "provides five tools"（增加 `visual_companion_wait`） |
 | **核心流程章节** | "The Loop" 步骤 3 写的是 "On your next turn — after the user responds in the terminal" 后调用 `read_events` | "The Loop" 步骤 3 改为 "Call `visual_companion_wait`" 阻塞等待确认 |
 | **事件获取文档** | 仅 `visual_companion_read_events` | 新增 `visual_companion_wait` 为主要方式，`read_events` 作为 fallback |
 | **Fallback 保留** | — | 新增 "Reading Events Without Waiting" 小节，保留 `read_events` 用于诊断或非阻塞场景 |
 
-**修改动机：** 向上游提了 PR 但未被合并。原轮询流程要求用户确认后还要切回终端打字，体验割裂。本地改为 `visual_companion_wait` 后，用户在浏览器点"确认"即可自动推进对话。
+**修改动机：**
+
+- 终态改为 `grill-me`：希望设计进入实现计划前先经受挑战，减少未经审视的假设直接进入执行阶段。
+- `visual_companion_wait`：向上游提了 PR 但未被合并。原轮询流程要求用户确认后还要切回终端打字，体验割裂。本地改为阻塞等待后，用户在浏览器点"确认"即可自动推进对话。
 
 **重新迁移时的操作步骤：**
 
 1. 从上游重新迁移 `brainstorming` 技能
-2. 仅需对比并更新 `visual-companion.md`：
+2. 对比并更新 `SKILL.md`：
+   - 将终态 skill 从 `writing-plans` 改为 `grill-me`
+   - 同步更新 Checklist 第 9 步、Process Flow 终态节点、User Review Gate 提示语
+3. 对比并更新 `visual-companion.md`：
    - 检查上游版本有无新增内容（CSS 类、事件类型、设计建议等）
    - 将上游新增内容合并到本地版本
    - **保留**本地 `visual_companion_wait` 阻塞流程，不要回退到轮询模式
    - 保留 Fallback 小节
-3. 更新 `skill-sha.json` 中的 SHA
-4. 运行 `./install.sh` 部署
+4. 更新 `skill-sha.json` 中的 SHA
+5. 运行 `./install.sh` 部署
 
 ### `finishing-a-development-branch`
 
