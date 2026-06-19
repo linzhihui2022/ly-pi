@@ -137,6 +137,9 @@
         "@types/bun": "latest",
         "vitest": "^4",
       },
+      "peerDependencies": {
+        "@typescript/native-preview": "^7.0.0-beta",
+      },
     },
     "pi-skills": {
       "name": "pi-skills",
