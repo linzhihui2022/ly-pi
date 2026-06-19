@@ -171,6 +171,70 @@ describe("GoalState", () => {
     expect(() => state.markBlocked("")).toThrow("Reason is required");
   });
 
+  it("evaluate records entry", () => {
+    const state = new GoalState();
+    state.set("X");
+    state.recordIteration();
+    state.evaluate("Tests pass", "Deploy");
+    const entries = state.getEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual({ iteration: 1, evidence: "Tests pass", nextAction: "Deploy", status: "active" });
+  });
+
+  it("markComplete records entry", () => {
+    const state = new GoalState();
+    state.set("X");
+    state.recordIteration();
+    state.markComplete("CI green");
+    const entries = state.getEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual({ iteration: 1, evidence: "CI green", nextAction: "", status: "completed" });
+  });
+
+  it("markBlocked records entry", () => {
+    const state = new GoalState();
+    state.set("X");
+    state.markBlocked("API down", false);
+    const entries = state.getEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual({ iteration: 0, evidence: "", nextAction: "", status: "blocked" });
+  });
+
+  it("set clears entries", () => {
+    const state = new GoalState();
+    state.set("X");
+    state.evaluate("E", "N");
+    expect(state.getEntries()).toHaveLength(1);
+    state.set("Y");
+    expect(state.getEntries()).toHaveLength(0);
+  });
+
+  it("clear clears entries", () => {
+    const state = new GoalState();
+    state.set("X");
+    state.evaluate("E", "N");
+    expect(state.getEntries()).toHaveLength(1);
+    state.clear();
+    expect(state.getEntries()).toHaveLength(0);
+  });
+
+  it("snapshot includes entries", () => {
+    const state = new GoalState();
+    state.set("X");
+    state.evaluate("E", "N");
+    const snap = state.snapshot()!;
+    expect(snap.entries).toHaveLength(1);
+  });
+
+  it("entries are deep copied in get", () => {
+    const state = new GoalState();
+    state.set("X");
+    state.evaluate("E", "N");
+    const g = state.get()!;
+    g.entries![0].evidence = "Mutated";
+    expect(state.getEntries()[0].evidence).toBe("E");
+  });
+
   it("records iterations", () => {
     const state = new GoalState();
     state.set("X");
@@ -233,6 +297,7 @@ describe("GoalState", () => {
                 iterationCount: 2,
                 lastEvidence: "Tests pass",
                 nextAction: "Deploy",
+                entries: [{ iteration: 1, evidence: "Started", nextAction: "Fix", status: "active" }],
               },
             },
           },
@@ -241,6 +306,8 @@ describe("GoalState", () => {
       const state = GoalState.fromSession(entries);
       expect(state.get()?.objective).toBe("Refactor");
       expect(state.get()?.iterationCount).toBe(2);
+      expect(state.getEntries()).toHaveLength(1);
+      expect(state.getEntries()[0].evidence).toBe("Started");
     });
 
     it("returns empty state from empty session", () => {

@@ -1234,6 +1234,21 @@ describe("my-todo extension", () => {
       );
     });
 
+    it("includes progress entries in follow-up", async () => {
+      const ctx = await setupActiveGoal();
+      const tool = registeredTools.find((t) => t.name === "goal")!;
+      await tool.execute("tc-1", { action: "evaluate", lastEvidence: "Read files", nextAction: "Edit config" }, undefined, undefined, ctx);
+      await fireTurnEnd(ctx, 1);
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({ type: "agent_end", messages: [] }, ctx);
+
+      expect(mockPi.sendUserMessage).toHaveBeenCalledWith(
+        expect.stringContaining("Progress so far:"),
+        { deliverAs: "followUp" }
+      );
+    });
+
     it("sends custom nextAction when set", async () => {
       const ctx = await setupActiveGoal();
       const tool = registeredTools.find((t) => t.name === "goal")!;
@@ -1243,7 +1258,10 @@ describe("my-todo extension", () => {
       const handler = registeredEvents.get("agent_end")!;
       await handler({ type: "agent_end", messages: [] }, ctx);
 
-      expect(mockPi.sendUserMessage).toHaveBeenCalledWith("Run migration", { deliverAs: "followUp" });
+      expect(mockPi.sendUserMessage).toHaveBeenCalledWith(
+        expect.stringContaining("Run migration"),
+        { deliverAs: "followUp" }
+      );
     });
 
     it("does not auto-continue when paused", async () => {

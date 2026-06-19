@@ -613,11 +613,21 @@ export default function myTodo(pi: ExtensionAPI): void {
 
     goalState.recordIteration();
     const goal = goalState.get()!;
-    const message = goal.nextAction.trim()
-      ? goal.nextAction
-      : `Continue working toward the goal: ${goal.objective}\n\nEvaluate progress against what "done" means for this goal, then choose the next useful action. Use the goal tool to record evidence and update the next step. Mark complete only when verified.`;
+    const entries = goalState.getEntries();
 
-    pi.sendUserMessage(message, { deliverAs: "followUp" });
+    let progressBlock = "";
+    if (entries.length > 0) {
+      const lines = entries.map((e) =>
+        `- [iteration ${e.iteration}] ${e.status}: ${e.evidence || "(no evidence)"} → ${e.nextAction || "(no next action)"}`
+      );
+      progressBlock = `\n\nProgress so far:\n${lines.join("\n")}`;
+    }
+
+    const baseMessage = goal.nextAction.trim()
+      ? `${goal.nextAction}${progressBlock}`
+      : `Continue working toward the goal: ${goal.objective}${progressBlock}\n\nEvaluate progress against what "done" means for this goal, then choose the next useful action. Use the goal tool to record evidence and update the next step. Mark complete only when verified.`;
+
+    pi.sendUserMessage(baseMessage, { deliverAs: "followUp" });
   });
 
 }

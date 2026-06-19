@@ -22,6 +22,13 @@ export interface SessionEntry {
 
 export type GoalStatus = "idle" | "active" | "paused" | "completed" | "blocked";
 
+export interface GoalEntry {
+  iteration: number;
+  evidence: string;
+  nextAction: string;
+  status: GoalStatus;
+}
+
 export interface Goal {
   objective: string;
   status: GoalStatus;
@@ -29,6 +36,7 @@ export interface Goal {
   lastEvidence: string;
   nextAction: string;
   blocker?: string;
+  entries?: GoalEntry[];
 }
 
 export interface GoalDetails {

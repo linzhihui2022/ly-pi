@@ -1,4 +1,4 @@
-import type { Goal, GoalStatus, SessionEntry } from "./types";
+import type { Goal, GoalEntry, GoalStatus, SessionEntry } from "./types";
 
 const VALID_GOAL_STATUSES: GoalStatus[] = ["idle", "active", "paused", "completed", "blocked"];
 const VALID_EVALUATE_STATUSES: GoalStatus[] = ["active", "paused", "blocked"];
@@ -27,15 +27,20 @@ function deepCopyGoal(goal: Goal): Goal {
     lastEvidence: goal.lastEvidence,
     nextAction: goal.nextAction,
     blocker: goal.blocker,
+    entries: goal.entries ? [...goal.entries] : undefined,
   };
 }
 
 export class GoalState {
   private goal: Goal | null = null;
   private hadUsefulWork = false;
+  private entries: GoalEntry[] = [];
 
   get(): Goal | null {
-    return this.goal ? deepCopyGoal(this.goal) : null;
+    if (!this.goal) return null;
+    const copy = deepCopyGoal(this.goal);
+    copy.entries = this.getEntries();
+    return copy;
   }
 
   getStatus(): GoalStatus {
@@ -55,6 +60,7 @@ export class GoalState {
     if (trimmed === "") {
       throw new Error("Objective is required");
     }
+    this.entries = [];
     this.goal = {
       objective: trimmed,
       status: "active",
@@ -82,6 +88,7 @@ export class GoalState {
   clear(): void {
     this.goal = null;
     this.hadUsefulWork = false;
+    this.entries = [];
   }
 
   evaluate(lastEvidence?: string, nextAction?: string, status?: GoalStatus): Goal {
@@ -94,6 +101,7 @@ export class GoalState {
       }
       this.goal.status = status;
     }
+    this.recordEntry();
     return deepCopyGoal(this.goal);
   }
 
@@ -103,6 +111,7 @@ export class GoalState {
     this.goal.status = "completed";
     this.goal.lastEvidence = evidence;
     this.goal.nextAction = "";
+    this.recordEntry();
     return deepCopyGoal(this.goal);
   }
 
@@ -112,7 +121,22 @@ export class GoalState {
     this.goal.status = "blocked";
     this.goal.blocker = reason;
     this.goal.nextAction = nextInputNeeded ? "Waiting for user input" : "";
+    this.recordEntry();
     return deepCopyGoal(this.goal);
+  }
+
+  private recordEntry(): void {
+    const g = this.goal!;
+    this.entries.push({
+      iteration: g.iterationCount,
+      evidence: g.lastEvidence,
+      nextAction: g.nextAction,
+      status: g.status,
+    });
+  }
+
+  getEntries(): GoalEntry[] {
+    return this.entries.map((e) => ({ ...e }));
   }
 
   recordIteration(): void {
@@ -125,7 +149,10 @@ export class GoalState {
   }
 
   snapshot(): Goal | null {
-    return this.goal ? deepCopyGoal(this.goal) : null;
+    if (!this.goal) return null;
+    const copy = deepCopyGoal(this.goal);
+    copy.entries = this.getEntries();
+    return copy;
   }
 
   static fromSession(entries: SessionEntry[]): GoalState {
@@ -139,6 +166,7 @@ export class GoalState {
       const details = entry.message.details as Record<string, unknown>;
       if (!isValidGoal(details.goal)) continue;
       state.goal = deepCopyGoal(details.goal as Goal);
+      if (state.goal.entries) state.entries = [...state.goal.entries];
       break;
     }
     return state;
