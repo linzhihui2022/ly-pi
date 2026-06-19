@@ -256,14 +256,15 @@ describe("PetStateManager", () => {
   });
 
   it("applyEventImpacts applies impacts and saves", () => {
+    const clock = createClock();
     const path = join(TEST_DIR, "event.json");
-    const manager = new PetStateManager({ path });
+    const manager = new PetStateManager({ path, now: clock.now });
     manager.applyEventImpacts({ mood: 5, hunger: -3 });
     const state = manager.getState();
     expect(state.mood).toBe(85);
     expect(state.hunger).toBe(77);
 
-    const reloaded = new PetStateManager({ path });
+    const reloaded = new PetStateManager({ path, now: clock.now });
     expect(reloaded.getState().mood).toBe(85);
   });
 });
