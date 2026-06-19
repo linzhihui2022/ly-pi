@@ -49,6 +49,18 @@ export class PetStateManager {
     this.applyImpacts({ energy: amount, hunger: 5 });
   }
 
+  rename(name: string): void {
+    const trimmed = name.trim();
+    if (trimmed === "") return;
+    this.state.name = trimmed;
+    this.state.lastUpdatedAt = this.now();
+    this.save();
+  }
+
+  applyEventImpacts(impacts: PetEventImpact): void {
+    this.applyImpacts(impacts);
+  }
+
   private applyImpacts(impacts: PetEventImpact): void {
     this.state.hunger = clamp(
       this.state.hunger + (impacts.hunger ?? 0),

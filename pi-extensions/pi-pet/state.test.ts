@@ -237,4 +237,33 @@ describe("PetStateManager", () => {
       renameSpy.mockRestore();
     }
   });
+
+  it("rename updates pet name and persists", () => {
+    const path = join(TEST_DIR, "rename.json");
+    const manager = new PetStateManager({ path });
+    manager.rename("Luna");
+    expect(manager.getState().name).toBe("Luna");
+
+    const reloaded = new PetStateManager({ path });
+    expect(reloaded.getState().name).toBe("Luna");
+  });
+
+  it("rename ignores empty strings", () => {
+    const path = join(TEST_DIR, "no-rename.json");
+    const manager = new PetStateManager({ path });
+    manager.rename("  ");
+    expect(manager.getState().name).toBe("Mochi");
+  });
+
+  it("applyEventImpacts applies impacts and saves", () => {
+    const path = join(TEST_DIR, "event.json");
+    const manager = new PetStateManager({ path });
+    manager.applyEventImpacts({ mood: 5, hunger: -3 });
+    const state = manager.getState();
+    expect(state.mood).toBe(85);
+    expect(state.hunger).toBe(77);
+
+    const reloaded = new PetStateManager({ path });
+    expect(reloaded.getState().mood).toBe(85);
+  });
 });
