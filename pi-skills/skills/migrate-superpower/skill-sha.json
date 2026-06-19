@@ -4,7 +4,7 @@
   "executing-plans": "6ec8686477cb4408a0de15a7eceedda809428318",
   "verification-before-completion": "48410c7f1973bd66569a627ef27ef6619e0ba923",
   "requesting-code-review": "3cd2db9f8aa48cf7907c55adfaef2db540702209",
-  "receiving-code-review": "1455ac0631e2f3824229f6a31a1877dc6b96952f",
+  "receiving-code-review": "6b9f1b214ab28a75677a9072d9333075971c333d",
   "dispatching-parallel-agents": "9ccce3bf07a40e45259004a330409ba00970eff7",
   "subagent-driven-development": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
   "finishing-a-development-branch": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7"
