@@ -2,16 +2,10 @@
  * Pet state management with decay and persistence.
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
+import fs from "node:fs";
+import os from "node:os";
 import { dirname, join } from "node:path";
-import { homedir } from "node:os";
-import type { PetState } from "./types";
+import type { PetEventImpact, PetState } from "./types";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -30,7 +24,7 @@ export class PetStateManager {
   private now: () => number;
 
   constructor(options?: PetStateManagerOptions) {
-    this.path = options?.path ?? join(homedir(), ".pi", "pet-state.json");
+    this.path = options?.path ?? join(os.homedir(), ".pi", "pet-state.json");
     this.now = options?.now ?? Date.now;
     this.state = this.load();
   }
@@ -39,38 +33,46 @@ export class PetStateManager {
     return { ...this.state };
   }
 
-  feed(): void {
-    this.applyImpacts({ hunger: -30, mood: 0, energy: -2 });
+  getPath(): string {
+    return this.path;
   }
 
-  play(): void {
-    this.applyImpacts({ hunger: 5, mood: 20, energy: -10 });
+  feed(amount = 30): void {
+    this.applyImpacts({ hunger: -amount, energy: -2 });
   }
 
-  sleep(): void {
-    this.applyImpacts({ hunger: 5, mood: 0, energy: 40 });
+  play(amount = 20): void {
+    this.applyImpacts({ mood: amount, energy: -10, hunger: 5 });
   }
 
-  private applyImpacts(impacts: {
-    hunger: number;
-    mood: number;
-    energy: number;
-  }): void {
-    this.state.hunger = clamp(this.state.hunger + impacts.hunger, 0, 100);
-    this.state.mood = clamp(this.state.mood + impacts.mood, 0, 100);
-    this.state.energy = clamp(this.state.energy + impacts.energy, 0, 100);
+  sleep(amount = 40): void {
+    this.applyImpacts({ energy: amount, hunger: 5 });
+  }
+
+  private applyImpacts(impacts: PetEventImpact): void {
+    this.state.hunger = clamp(
+      this.state.hunger + (impacts.hunger ?? 0),
+      0,
+      100,
+    );
+    this.state.mood = clamp(this.state.mood + (impacts.mood ?? 0), 0, 100);
+    this.state.energy = clamp(
+      this.state.energy + (impacts.energy ?? 0),
+      0,
+      100,
+    );
     this.state.lastUpdatedAt = this.now();
     this.save();
   }
 
   private load(): PetState {
-    if (!existsSync(this.path)) {
+    if (!fs.existsSync(this.path)) {
       const state = this.createDefaultState();
       this.save(state);
       return state;
     }
 
-    const raw = readFileSync(this.path, "utf8");
+    const raw = fs.readFileSync(this.path, "utf8");
     const loaded = JSON.parse(raw) as PetState;
     const elapsedHours = (this.now() - loaded.lastUpdatedAt) / MS_PER_HOUR;
     const state: PetState = {
@@ -79,6 +81,7 @@ export class PetStateManager {
       mood: clamp(loaded.mood - 1 * elapsedHours, 0, 100),
       energy: clamp(loaded.energy - 1.5 * elapsedHours, 0, 100),
       lastUpdatedAt: this.now(),
+      bornAt: loaded.bornAt ?? new Date(this.now()).toISOString(),
     };
     this.save(state);
     return state;
@@ -93,13 +96,14 @@ export class PetStateManager {
       mood: 80,
       energy: 80,
       lastUpdatedAt: this.now(),
+      bornAt: new Date(this.now()).toISOString(),
     };
   }
 
   private save(state: PetState = this.state): void {
-    mkdirSync(dirname(this.path), { recursive: true });
+    fs.mkdirSync(dirname(this.path), { recursive: true });
     const tempPath = `${this.path}.tmp`;
-    writeFileSync(tempPath, JSON.stringify(state, null, 2));
-    renameSync(tempPath, this.path);
+    fs.writeFileSync(tempPath, JSON.stringify(state, null, 2));
+    fs.renameSync(tempPath, this.path);
   }
 }

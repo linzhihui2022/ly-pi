@@ -9,6 +9,7 @@ export default defineConfig({
     maxWorkers: 1,
     execArgv: ["--max-old-space-size=4096"],
     coverage: {
+      reporter: [["text", { skipFull: false }], "json", "html"],
       exclude: ["types.ts", "index.ts"],
     },
   },
