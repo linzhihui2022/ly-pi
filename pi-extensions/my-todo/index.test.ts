@@ -1206,4 +1206,113 @@ describe("my-todo extension", () => {
       expect(result.message.content).toContain("Key evidence");
     });
   });
+
+  describe("agent_end auto-continue", () => {
+    async function setupActiveGoal() {
+      await initExtension();
+      const ctx = createMockCtx();
+      const cmd = registeredCommands.get("goal")!;
+      await cmd.handler("Refactor auth", ctx);
+      return ctx;
+    }
+
+    function fireTurnEnd(ctx: any, toolCount: number) {
+      const handler = registeredEvents.get("turn_end")!;
+      return handler({ type: "turn_end", turnIndex: 1, message: {}, toolResults: Array(toolCount).fill({}) }, ctx);
+    }
+
+    it("sends follow-up when active, idle, and tools ran", async () => {
+      const ctx = await setupActiveGoal();
+      await fireTurnEnd(ctx, 1);
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({ type: "agent_end", messages: [] }, ctx);
+
+      expect(mockPi.sendUserMessage).toHaveBeenCalledWith(
+        expect.stringContaining("Continue working toward the goal"),
+        { deliverAs: "followUp" }
+      );
+    });
+
+    it("sends custom nextAction when set", async () => {
+      const ctx = await setupActiveGoal();
+      const tool = registeredTools.find((t) => t.name === "goal")!;
+      await tool.execute("tc-1", { action: "evaluate", nextAction: "Run migration" }, undefined, undefined, ctx);
+      await fireTurnEnd(ctx, 1);
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({ type: "agent_end", messages: [] }, ctx);
+
+      expect(mockPi.sendUserMessage).toHaveBeenCalledWith("Run migration", { deliverAs: "followUp" });
+    });
+
+    it("does not auto-continue when paused", async () => {
+      const ctx = await setupActiveGoal();
+      const cmd = registeredCommands.get("goal")!;
+      await cmd.handler("pause", ctx);
+      await fireTurnEnd(ctx, 1);
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({ type: "agent_end", messages: [] }, ctx);
+
+      expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not auto-continue when completed", async () => {
+      const ctx = await setupActiveGoal();
+      const tool = registeredTools.find((t) => t.name === "goal")!;
+      await tool.execute("tc-1", { action: "mark_complete", evidence: "Done" }, undefined, undefined, ctx);
+      await fireTurnEnd(ctx, 1);
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({ type: "agent_end", messages: [] }, ctx);
+
+      expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not auto-continue when blocked", async () => {
+      const ctx = await setupActiveGoal();
+      const tool = registeredTools.find((t) => t.name === "goal")!;
+      await tool.execute("tc-1", { action: "mark_blocked", reason: "Stuck" }, undefined, undefined, ctx);
+      await fireTurnEnd(ctx, 1);
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({ type: "agent_end", messages: [] }, ctx);
+
+      expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not auto-continue when no tools ran", async () => {
+      const ctx = await setupActiveGoal();
+      await fireTurnEnd(ctx, 0);
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({ type: "agent_end", messages: [] }, ctx);
+
+      expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not auto-continue when pending messages exist", async () => {
+      const ctx = await setupActiveGoal();
+      ctx.hasPendingMessages = vi.fn(() => true);
+      await fireTurnEnd(ctx, 1);
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({ type: "agent_end", messages: [] }, ctx);
+
+      expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not auto-continue in planning phase", async () => {
+      const ctx = await setupActiveGoal();
+      const cmd = registeredCommands.get("todos")!;
+      await cmd.handler("plan", ctx);
+      await fireTurnEnd(ctx, 1);
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({ type: "agent_end", messages: [] }, ctx);
+
+      expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
+    });
+  });
 });

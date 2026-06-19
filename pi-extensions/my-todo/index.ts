@@ -86,8 +86,9 @@ export default function myTodo(pi: ExtensionAPI): void {
     refreshWidgets(ctx);
   });
 
-  pi.on("turn_end", async (_event, ctx) => {
+  pi.on("turn_end", async (event, ctx) => {
     refreshWidgets(ctx);
+    goalState.setHadUsefulWork((event.toolResults?.length ?? 0) > 0);
 
     // Auto-exit plan mode when all tasks are completed during execution
     if (state.getPlanMode() && state.getPlanPhase() === "executing") {
@@ -584,25 +585,38 @@ export default function myTodo(pi: ExtensionAPI): void {
   });
 
   pi.on("agent_end", async (_event, ctx) => {
-    if (!state.getPlanMode() || state.getPlanPhase() !== "planning") return;
-    if (!ctx.hasUI) return;
+    if (state.getPlanMode() && state.getPlanPhase() === "planning") {
+      if (!ctx.hasUI) return;
 
-    const tasks = state.list();
-    if (tasks.length === 0) return;
+      const tasks = state.list();
+      if (tasks.length === 0) return;
 
-    const choice = await ctx.ui.select(
-      "Plan Complete",
-      ["Execute plan", "Continue planning", "Discard plan"],
-    );
+      const choice = await ctx.ui.select(
+        "Plan Complete",
+        ["Execute plan", "Continue planning", "Discard plan"],
+      );
 
-    if (choice === "Execute plan") {
-      state.setPlanMode(true, "executing");
-      refreshWidgets(ctx);
-    } else if (choice === "Discard plan") {
-      state.clear();
-      state.setPlanMode(false, "idle");
-      refreshWidgets(ctx);
+      if (choice === "Execute plan") {
+        state.setPlanMode(true, "executing");
+        refreshWidgets(ctx);
+      } else if (choice === "Discard plan") {
+        state.clear();
+        state.setPlanMode(false, "idle");
+        refreshWidgets(ctx);
+      }
+      return;
     }
-    // choice === "Continue planning" or undefined → keep planning
+
+    if (!goalState.canAutoContinue()) return;
+    if (!ctx.isIdle()) return;
+    if (ctx.hasPendingMessages()) return;
+
+    goalState.recordIteration();
+    const goal = goalState.get()!;
+    const message = goal.nextAction.trim()
+      ? goal.nextAction
+      : `Continue working toward the goal: ${goal.objective}\n\nEvaluate progress against what "done" means for this goal, then choose the next useful action. Use the goal tool to record evidence and update the next step. Mark complete only when verified.`;
+
+    pi.sendUserMessage(message, { deliverAs: "followUp" });
   });
 }
