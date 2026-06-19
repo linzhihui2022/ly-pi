@@ -8,7 +8,10 @@ describe("createVisualCompanionAPI", () => {
 
   beforeEach(() => {
     manager = new SessionManager({ idleTimeoutMs: 30_000 });
-    api = createVisualCompanionAPI(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    api = createVisualCompanionAPI(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
   });
 
   afterEach(async () => {
@@ -32,12 +35,18 @@ describe("createVisualCompanionAPI", () => {
   });
 
   it("show throws for unknown session", async () => {
-    await expect(api.show("bad-id", "layout", "<h1>Test</h1>")).rejects.toThrow("Session not found");
+    await expect(api.show("bad-id", "layout", "<h1>Test</h1>")).rejects.toThrow(
+      "Session not found",
+    );
   });
 
   it("wait returns confirm event", async () => {
     const { sessionId } = await api.start();
-    manager.appendEvent(sessionId, { type: "confirm", text: "ok", timestamp: 1 });
+    manager.appendEvent(sessionId, {
+      type: "confirm",
+      text: "ok",
+      timestamp: 1,
+    });
 
     const event = await api.wait(sessionId, 5000);
     expect(event.type).toBe("confirm");

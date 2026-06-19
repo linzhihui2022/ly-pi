@@ -1,8 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { readFileSync, writeFileSync, mkdirSync, rmdirSync, existsSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  rmdirSync,
+  existsSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { spawnSoundProcess, spawnOverlayProcess, acquireGlobalLock, releaseGlobalLock, killPlayingProcesses, recordPids, ensureGlobalDir, withGlobalLock, onExecDone } from "./coordinator";
+import {
+  spawnSoundProcess,
+  spawnOverlayProcess,
+  acquireGlobalLock,
+  releaseGlobalLock,
+  killPlayingProcesses,
+  recordPids,
+  ensureGlobalDir,
+  withGlobalLock,
+  onExecDone,
+} from "./coordinator";
 import { exec } from "node:child_process";
 
 type ExecCallback = (err: Error | null, stdout: string, stderr: string) => void;
@@ -10,19 +26,24 @@ type ExecCallback = (err: Error | null, stdout: string, stderr: string) => void;
 const mockPid = () => Math.floor(Math.random() * 100000) + 1000;
 
 vi.mock("node:child_process", () => ({
-  exec: vi.fn((
-    _cmd: string,
-    _options: import("node:child_process").ExecOptions | undefined | null,
-    cb?: ExecCallback,
-  ): import("node:child_process").ChildProcess => {
-    const child = { pid: mockPid() } as import("node:child_process").ChildProcess;
-    cb?.(null, "", "");
-    return child;
-  }),
+  exec: vi.fn(
+    (
+      _cmd: string,
+      _options: import("node:child_process").ExecOptions | undefined | null,
+      cb?: ExecCallback,
+    ): import("node:child_process").ChildProcess => {
+      const child = {
+        pid: mockPid(),
+      } as import("node:child_process").ChildProcess;
+      cb?.(null, "", "");
+      return child;
+    },
+  ),
 }));
 
 vi.mock("node:process", async () => {
-  const actual = await vi.importActual<typeof import("node:process")>("node:process");
+  const actual =
+    await vi.importActual<typeof import("node:process")>("node:process");
   return {
     ...actual,
     kill: vi.fn((pid: number, signal: string) => true),
@@ -156,7 +177,9 @@ describe("spawnSoundProcess", () => {
       cb?.(new Error("killed"), "", "");
       return { pid: 7777 } as any;
     });
-    expect(() => spawnSoundProcess(config, "startup.wav", TEST_DIR)).not.toThrow();
+    expect(() =>
+      spawnSoundProcess(config, "startup.wav", TEST_DIR),
+    ).not.toThrow();
   });
 
   it("covers sound exec callback without error", () => {

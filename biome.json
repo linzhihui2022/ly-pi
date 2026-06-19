@@ -1,0 +1,28 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!**/.cursor/**",
+      "!**/dist/**",
+      "!coverage/**",
+      "!.turbo/**"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/dist/**", "**/.cursor/**", "coverage/**", ".turbo/**"],
+      "formatter": { "enabled": false }
+    }
+  ]
+}

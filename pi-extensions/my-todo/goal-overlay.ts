@@ -21,9 +21,15 @@ function truncate(text: string, max = 40): string {
 export function renderGoalOverlay(goal: Goal, theme?: ThemeLike): string[] {
   const lines: string[] = [];
   const title = `Goal [${goal.status}]`;
-  const titleText = theme ? theme.fg(STATUS_COLORS[goal.status], theme.bold(title)) : title;
+  const titleText = theme
+    ? theme.fg(STATUS_COLORS[goal.status], theme.bold(title))
+    : title;
   lines.push(titleText);
-  lines.push(theme ? theme.fg("dim", truncate(goal.objective)) : truncate(goal.objective));
+  lines.push(
+    theme
+      ? theme.fg("dim", truncate(goal.objective))
+      : truncate(goal.objective),
+  );
 
   if (goal.iterationCount > 0) {
     const it = `Iterations: ${goal.iterationCount}`;

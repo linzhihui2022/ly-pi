@@ -6,7 +6,7 @@ export const searchResponseSchema = Type.Array(
     title: Type.String(),
     url: Type.String(),
     snippet: Type.String(),
-  })
+  }),
 );
 export type SearchResults = Static<typeof searchResponseSchema>;
 
@@ -52,7 +52,7 @@ export interface SearchProvider {
   search(
     query: string,
     maxResults: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<SearchResponse>;
 }
 
@@ -63,7 +63,7 @@ export interface FetchProvider {
   fetch(
     url: string,
     raw: boolean,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<FetchResponse>;
 }
 

@@ -23,7 +23,9 @@ function deepCopyTasks(tasks: Task[]): Task[] {
 }
 
 function isValidPlanPhase(value: unknown): value is PlanPhase {
-  return typeof value === "string" && (VALID_PLAN_PHASES as string[]).includes(value);
+  return (
+    typeof value === "string" && (VALID_PLAN_PHASES as string[]).includes(value)
+  );
 }
 
 function isValidDetails(value: unknown): value is {
@@ -37,15 +39,17 @@ function isValidDetails(value: unknown): value is {
   if (!Array.isArray(obj.tasks)) return false;
   if (typeof obj.nextId !== "number") return false;
   // planMode/planPhase are optional for backward compat
-  if (obj.planMode !== undefined && typeof obj.planMode !== "boolean") return false;
-  if (obj.planPhase !== undefined && !isValidPlanPhase(obj.planPhase)) return false;
+  if (obj.planMode !== undefined && typeof obj.planMode !== "boolean")
+    return false;
+  if (obj.planPhase !== undefined && !isValidPlanPhase(obj.planPhase))
+    return false;
   return obj.tasks.every(
     (t) =>
       typeof t === "object" &&
       t !== null &&
       typeof (t as Record<string, unknown>).id === "number" &&
       typeof (t as Record<string, unknown>).subject === "string" &&
-      typeof (t as Record<string, unknown>).status === "string"
+      typeof (t as Record<string, unknown>).status === "string",
   );
 }
 
@@ -76,7 +80,10 @@ export class TaskState {
     return task ? deepCopyTask(task) : undefined;
   }
 
-  update(id: number, updates: Partial<Pick<Task, "subject" | "description" | "status">>): Task {
+  update(
+    id: number,
+    updates: Partial<Pick<Task, "subject" | "description" | "status">>,
+  ): Task {
     const task = this.tasks.find((t) => t.id === id);
     if (!task) {
       throw new Error(`Task ${id} not found`);
@@ -109,7 +116,9 @@ export class TaskState {
   }
 
   list(includeDeleted = false): Task[] {
-    const filtered = includeDeleted ? this.tasks : this.tasks.filter((t) => t.status !== "deleted");
+    const filtered = includeDeleted
+      ? this.tasks
+      : this.tasks.filter((t) => t.status !== "deleted");
     return deepCopyTasks(filtered);
   }
 
@@ -142,7 +151,12 @@ export class TaskState {
     this.planPhase = phase;
   }
 
-  snapshot(): { tasks: Task[]; nextId: number; planMode: boolean; planPhase: PlanPhase } {
+  snapshot(): {
+    tasks: Task[];
+    nextId: number;
+    planMode: boolean;
+    planPhase: PlanPhase;
+  } {
     return {
       tasks: deepCopyTasks(this.tasks),
       nextId: this.nextId,

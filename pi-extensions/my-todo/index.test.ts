@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 
 const registeredEvents = new Map<string, (...args: any[]) => any>();
 const registeredTools: any[] = [];
@@ -53,7 +56,7 @@ describe("my-todo extension", () => {
   it("registers todo tool", async () => {
     await initExtension();
     expect(mockPi.registerTool).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "todo" })
+      expect.objectContaining({ name: "todo" }),
     );
   });
 
@@ -61,7 +64,7 @@ describe("my-todo extension", () => {
     await initExtension();
     expect(mockPi.registerCommand).toHaveBeenCalledWith(
       "todos",
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
@@ -97,11 +100,11 @@ describe("my-todo extension", () => {
     await handler({}, ctx);
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
       "my-todo",
-      expect.any(Function)
+      expect.any(Function),
     );
     expect(ctx.ui.setWidget).not.toHaveBeenCalledWith(
       "my-todo-completed",
-      expect.any(Function)
+      expect.any(Function),
     );
   });
 
@@ -112,7 +115,10 @@ describe("my-todo extension", () => {
     const ctx = createMockCtx([]);
     await handler({}, ctx);
     expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-todo", undefined);
-    expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-todo-completed", undefined);
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith(
+      "my-todo-completed",
+      undefined,
+    );
   });
 
   it("session_start renders both widgets when active and completed tasks exist", async () => {
@@ -139,11 +145,11 @@ describe("my-todo extension", () => {
     await handler({}, ctx);
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
       "my-todo",
-      expect.any(Function)
+      expect.any(Function),
     );
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
       "my-todo-completed",
-      expect.any(Function)
+      expect.any(Function),
     );
   });
 
@@ -168,11 +174,11 @@ describe("my-todo extension", () => {
     await handler({}, ctx);
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
       "my-todo",
-      expect.any(Function)
+      expect.any(Function),
     );
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
       "my-todo-completed",
-      undefined
+      undefined,
     );
   });
 
@@ -181,7 +187,13 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
+    await toolDef.execute(
+      "tc-1",
+      { action: "create", subject: "A" },
+      undefined,
+      undefined,
+      ctx,
+    );
     vi.clearAllMocks();
 
     await toolDef.execute(
@@ -189,13 +201,13 @@ describe("my-todo extension", () => {
       { action: "update", id: 1, status: "completed" },
       undefined,
       undefined,
-      ctx
+      ctx,
     );
 
     expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-todo", undefined);
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
       "my-todo-completed",
-      expect.any(Function)
+      expect.any(Function),
     );
   });
 
@@ -257,7 +269,10 @@ describe("my-todo extension", () => {
     const ctx = createMockCtx();
     await handler({}, ctx);
     expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-todo", undefined);
-    expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-todo-completed", undefined);
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith(
+      "my-todo-completed",
+      undefined,
+    );
   });
 
   it("todo tool create action works", async () => {
@@ -270,7 +285,7 @@ describe("my-todo extension", () => {
       { action: "create", subject: "Test" },
       undefined,
       undefined,
-      ctx
+      ctx,
     );
 
     expect(result.content[0].text).toContain("Created task #1");
@@ -288,7 +303,7 @@ describe("my-todo extension", () => {
       { action: "create", subject: "Test", description: "Desc" },
       undefined,
       undefined,
-      ctx
+      ctx,
     );
 
     expect(result.content[0].text).toContain("Created task #1");
@@ -305,7 +320,7 @@ describe("my-todo extension", () => {
       { action: "create" },
       undefined,
       undefined,
-      ctx
+      ctx,
     );
 
     expect(result.isError).toBe(true);
@@ -322,7 +337,7 @@ describe("my-todo extension", () => {
       { action: "bad_action" as any },
       undefined,
       undefined,
-      ctx
+      ctx,
     );
 
     expect(result.isError).toBe(true);
@@ -333,10 +348,28 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
-    await toolDef.execute("tc-1", { action: "create", subject: "B" }, undefined, undefined, ctx);
+    await toolDef.execute(
+      "tc-1",
+      { action: "create", subject: "A" },
+      undefined,
+      undefined,
+      ctx,
+    );
+    await toolDef.execute(
+      "tc-1",
+      { action: "create", subject: "B" },
+      undefined,
+      undefined,
+      ctx,
+    );
 
-    const result = await toolDef.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
+    const result = await toolDef.execute(
+      "tc-1",
+      { action: "list" },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(result.content[0].text).toContain("○ #1 A");
     expect(result.content[0].text).toContain("○ #2 B");
   });
@@ -346,13 +379,37 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
-    await toolDef.execute("tc-1", { action: "delete", id: 1 }, undefined, undefined, ctx);
+    await toolDef.execute(
+      "tc-1",
+      { action: "create", subject: "A" },
+      undefined,
+      undefined,
+      ctx,
+    );
+    await toolDef.execute(
+      "tc-1",
+      { action: "delete", id: 1 },
+      undefined,
+      undefined,
+      ctx,
+    );
 
-    const resultWithDeleted = await toolDef.execute("tc-1", { action: "list", includeDeleted: true }, undefined, undefined, ctx);
+    const resultWithDeleted = await toolDef.execute(
+      "tc-1",
+      { action: "list", includeDeleted: true },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(resultWithDeleted.details.tasks).toHaveLength(1);
 
-    const resultWithoutDeleted = await toolDef.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
+    const resultWithoutDeleted = await toolDef.execute(
+      "tc-1",
+      { action: "list" },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(resultWithoutDeleted.details.tasks).toHaveLength(0);
   });
 
@@ -361,9 +418,21 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    await toolDef.execute("tc-1", { action: "create", subject: "A", description: "Desc" }, undefined, undefined, ctx);
+    await toolDef.execute(
+      "tc-1",
+      { action: "create", subject: "A", description: "Desc" },
+      undefined,
+      undefined,
+      ctx,
+    );
 
-    const result = await toolDef.execute("tc-1", { action: "get", id: 1 }, undefined, undefined, ctx);
+    const result = await toolDef.execute(
+      "tc-1",
+      { action: "get", id: 1 },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(result.content[0].text).toContain("#1 [pending] A");
     expect(result.content[0].text).toContain("Desc");
   });
@@ -373,7 +442,13 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    const result = await toolDef.execute("tc-1", { action: "get" }, undefined, undefined, ctx);
+    const result = await toolDef.execute(
+      "tc-1",
+      { action: "get" },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(result.isError).toBe(true);
   });
 
@@ -382,7 +457,13 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    const result = await toolDef.execute("tc-1", { action: "get", id: 999 }, undefined, undefined, ctx);
+    const result = await toolDef.execute(
+      "tc-1",
+      { action: "get", id: 999 },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("not found");
   });
@@ -392,9 +473,21 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
+    await toolDef.execute(
+      "tc-1",
+      { action: "create", subject: "A" },
+      undefined,
+      undefined,
+      ctx,
+    );
 
-    const result = await toolDef.execute("tc-1", { action: "update", id: 1, subject: "B", status: "in_progress" }, undefined, undefined, ctx);
+    const result = await toolDef.execute(
+      "tc-1",
+      { action: "update", id: 1, subject: "B", status: "in_progress" },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(result.content[0].text).toContain("Updated task #1: B");
     expect(result.details.tasks[0].subject).toBe("B");
     expect(result.details.tasks[0].status).toBe("in_progress");
@@ -405,7 +498,13 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    const result = await toolDef.execute("tc-1", { action: "update", subject: "B" }, undefined, undefined, ctx);
+    const result = await toolDef.execute(
+      "tc-1",
+      { action: "update", subject: "B" },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(result.isError).toBe(true);
   });
 
@@ -414,9 +513,21 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
+    await toolDef.execute(
+      "tc-1",
+      { action: "create", subject: "A" },
+      undefined,
+      undefined,
+      ctx,
+    );
 
-    const result = await toolDef.execute("tc-1", { action: "delete", id: 1 }, undefined, undefined, ctx);
+    const result = await toolDef.execute(
+      "tc-1",
+      { action: "delete", id: 1 },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(result.content[0].text).toContain("Deleted task #1");
   });
 
@@ -425,7 +536,13 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    const result = await toolDef.execute("tc-1", { action: "delete" }, undefined, undefined, ctx);
+    const result = await toolDef.execute(
+      "tc-1",
+      { action: "delete" },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(result.isError).toBe(true);
   });
 
@@ -434,10 +551,28 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
-    await toolDef.execute("tc-1", { action: "create", subject: "B" }, undefined, undefined, ctx);
+    await toolDef.execute(
+      "tc-1",
+      { action: "create", subject: "A" },
+      undefined,
+      undefined,
+      ctx,
+    );
+    await toolDef.execute(
+      "tc-1",
+      { action: "create", subject: "B" },
+      undefined,
+      undefined,
+      ctx,
+    );
 
-    const result = await toolDef.execute("tc-1", { action: "clear" }, undefined, undefined, ctx);
+    const result = await toolDef.execute(
+      "tc-1",
+      { action: "clear" },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(result.content[0].text).toBe("All tasks cleared.");
     expect(result.details.tasks).toHaveLength(0);
   });
@@ -447,9 +582,21 @@ describe("my-todo extension", () => {
 
     const toolDef = registeredTools[0];
     const ctx = createMockCtx();
-    await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
+    await toolDef.execute(
+      "tc-1",
+      { action: "create", subject: "A" },
+      undefined,
+      undefined,
+      ctx,
+    );
 
-    const result = await toolDef.execute("tc-1", { action: "get", id: 999 }, undefined, undefined, ctx);
+    const result = await toolDef.execute(
+      "tc-1",
+      { action: "get", id: 999 },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(result.isError).toBe(true);
     expect(result.details.tasks).toHaveLength(1);
     expect(result.details.nextId).toBe(2);
@@ -465,14 +612,14 @@ describe("my-todo extension", () => {
       { action: "create", subject: "Task A" },
       undefined,
       undefined,
-      ctx
+      ctx,
     );
 
     const cmd = registeredCommands.get("todos")!;
     await cmd.handler("", ctx);
     expect(ctx.ui.notify).toHaveBeenCalledWith(
       expect.stringContaining("Task A"),
-      "info"
+      "info",
     );
   });
 
@@ -491,13 +638,19 @@ describe("my-todo extension", () => {
 
       const toolDef = registeredTools[0];
       const ctx = createMockCtx();
-      await toolDef.execute("tc-1", { action: "create", subject: "X" }, undefined, undefined, ctx);
+      await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "X" },
+        undefined,
+        undefined,
+        ctx,
+      );
 
       const cmd = registeredCommands.get("todos")!;
       await cmd.handler("done 1", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Completed task #1"),
-        "info"
+        "info",
       );
     });
 
@@ -506,13 +659,19 @@ describe("my-todo extension", () => {
 
       const toolDef = registeredTools[0];
       const ctx = createMockCtx();
-      await toolDef.execute("tc-1", { action: "create", subject: "X" }, undefined, undefined, ctx);
+      await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "X" },
+        undefined,
+        undefined,
+        ctx,
+      );
 
       const cmd = registeredCommands.get("todos")!;
       await cmd.handler("start 1", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Started task #1"),
-        "info"
+        "info",
       );
     });
 
@@ -521,13 +680,19 @@ describe("my-todo extension", () => {
 
       const toolDef = registeredTools[0];
       const ctx = createMockCtx();
-      await toolDef.execute("tc-1", { action: "create", subject: "X" }, undefined, undefined, ctx);
+      await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "X" },
+        undefined,
+        undefined,
+        ctx,
+      );
 
       const cmd = registeredCommands.get("todos")!;
       await cmd.handler("delete 1", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Deleted task #1"),
-        "info"
+        "info",
       );
     });
 
@@ -539,7 +704,7 @@ describe("my-todo extension", () => {
       await cmd.handler("add New task here", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Created task #1"),
-        "info"
+        "info",
       );
     });
 
@@ -548,7 +713,13 @@ describe("my-todo extension", () => {
 
       const toolDef = registeredTools[0];
       const ctx = createMockCtx();
-      await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
+      await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "A" },
+        undefined,
+        undefined,
+        ctx,
+      );
 
       const cmd = registeredCommands.get("todos")!;
       await cmd.handler("clear", ctx);
@@ -563,7 +734,7 @@ describe("my-todo extension", () => {
       await cmd.handler("done", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Usage"),
-        "warning"
+        "warning",
       );
     });
 
@@ -575,7 +746,7 @@ describe("my-todo extension", () => {
       await cmd.handler("foobar", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Unknown subcommand"),
-        "warning"
+        "warning",
       );
     });
 
@@ -587,7 +758,7 @@ describe("my-todo extension", () => {
       await cmd.handler("done xyz", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Usage"),
-        "warning"
+        "warning",
       );
     });
 
@@ -599,7 +770,7 @@ describe("my-todo extension", () => {
       await cmd.handler("done 999", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("not found"),
-        "error"
+        "error",
       );
     });
 
@@ -611,7 +782,7 @@ describe("my-todo extension", () => {
       await cmd.handler("add", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Usage"),
-        "warning"
+        "warning",
       );
     });
 
@@ -620,13 +791,19 @@ describe("my-todo extension", () => {
 
       const toolDef = registeredTools[0];
       const ctx = createMockCtx();
-      await toolDef.execute("tc-1", { action: "create", subject: "A" }, undefined, undefined, ctx);
+      await toolDef.execute(
+        "tc-1",
+        { action: "create", subject: "A" },
+        undefined,
+        undefined,
+        ctx,
+      );
 
       const cmd = registeredCommands.get("todos")!;
       await cmd.handler("list", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("A"),
-        "info"
+        "info",
       );
     });
   });
@@ -636,7 +813,7 @@ describe("my-todo extension", () => {
       await initExtension();
       expect(mockPi.registerShortcut).toHaveBeenCalledWith(
         expect.any(String),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -667,7 +844,7 @@ describe("my-todo extension", () => {
         { action: "create", subject: "Plan step 1" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
       expect(result.details.planMode).toBe(true);
       expect(result.details.planPhase).toBe("planning");
@@ -688,7 +865,7 @@ describe("my-todo extension", () => {
         { action: "create", subject: "Step 1" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
       // Execute
       await cmd.handler("execute", ctx);
@@ -697,7 +874,7 @@ describe("my-todo extension", () => {
         { action: "list" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
       expect(result.details.planMode).toBe(true);
       expect(result.details.planPhase).toBe("executing");
@@ -715,7 +892,7 @@ describe("my-todo extension", () => {
         { action: "create", subject: "Step 1" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
       // Reset
       await cmd.handler("reset", ctx);
@@ -724,7 +901,7 @@ describe("my-todo extension", () => {
         { action: "list" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
       expect(result.details.tasks).toHaveLength(0);
       expect(result.details.planMode).toBe(false);
@@ -743,7 +920,7 @@ describe("my-todo extension", () => {
         { action: "create", subject: "Step 1" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
       expect(result1.details.planMode).toBe(true);
       expect(result1.details.planPhase).toBe("planning");
@@ -754,7 +931,7 @@ describe("my-todo extension", () => {
         { action: "list" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
       expect(result2.details.planMode).toBe(false);
     });
@@ -770,7 +947,17 @@ describe("my-todo extension", () => {
     }
 
     const blockedTools = ["edit", "write"];
-    const allowedTools = ["read", "bash", "grep", "find", "ls", "web_search", "web_fetch", "ask_user_question", "todo"];
+    const allowedTools = [
+      "read",
+      "bash",
+      "grep",
+      "find",
+      "ls",
+      "web_search",
+      "web_fetch",
+      "ask_user_question",
+      "todo",
+    ];
 
     for (const toolName of blockedTools) {
       it(`blocks ${toolName} tool in planning mode`, async () => {
@@ -783,7 +970,10 @@ describe("my-todo extension", () => {
           input: {} as any,
         };
         const result = await handler(event, ctx);
-        expect(result).toEqual({ block: true, reason: "Plan mode: only planning tools are allowed" });
+        expect(result).toEqual({
+          block: true,
+          reason: "Plan mode: only planning tools are allowed",
+        });
       });
     }
 
@@ -888,7 +1078,7 @@ describe("my-todo extension", () => {
         { action: "create", subject: "Step 1" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
       await cmd.handler("execute", ctx);
 
@@ -898,7 +1088,7 @@ describe("my-todo extension", () => {
         { action: "update", id: 1, status: "completed" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
 
       vi.clearAllMocks();
@@ -909,11 +1099,17 @@ describe("my-todo extension", () => {
       expect(ctx.ui.setWidget).toHaveBeenCalled();
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         "Plan complete. All tasks finished.",
-        "info"
+        "info",
       );
 
       // Verify subsequent tool calls are no longer in plan mode
-      const result = await toolDef.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
+      const result = await toolDef.execute(
+        "tc-1",
+        { action: "list" },
+        undefined,
+        undefined,
+        ctx,
+      );
       expect(result.details.planMode).toBe(false);
       expect(result.details.planPhase).toBe("idle");
     });
@@ -930,7 +1126,7 @@ describe("my-todo extension", () => {
         { action: "create", subject: "Step 1" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
       await cmd.handler("execute", ctx);
 
@@ -940,10 +1136,16 @@ describe("my-todo extension", () => {
 
       expect(ctx.ui.notify).not.toHaveBeenCalledWith(
         "Plan complete. All tasks finished.",
-        "info"
+        "info",
       );
 
-      const result = await toolDef.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
+      const result = await toolDef.execute(
+        "tc-1",
+        { action: "list" },
+        undefined,
+        undefined,
+        ctx,
+      );
       expect(result.details.planMode).toBe(true);
       expect(result.details.planPhase).toBe("executing");
     });
@@ -962,11 +1164,17 @@ describe("my-todo extension", () => {
 
       expect(ctx.ui.notify).not.toHaveBeenCalledWith(
         "Plan complete. All tasks finished.",
-        "info"
+        "info",
       );
 
       const toolDef = registeredTools[0];
-      const result = await toolDef.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
+      const result = await toolDef.execute(
+        "tc-1",
+        { action: "list" },
+        undefined,
+        undefined,
+        ctx,
+      );
       expect(result.details.planMode).toBe(true);
       expect(result.details.planPhase).toBe("executing");
     });
@@ -985,7 +1193,7 @@ describe("my-todo extension", () => {
         { action: "create", subject: "Step 1" },
         undefined,
         undefined,
-        ctx
+        ctx,
       );
 
       ctx.ui.select = vi.fn().mockResolvedValue("Execute plan");
@@ -995,7 +1203,11 @@ describe("my-todo extension", () => {
 
       expect(ctx.ui.select).toHaveBeenCalledWith(
         "Plan Complete",
-        expect.arrayContaining(["Execute plan", "Continue planning", "Discard plan"]),
+        expect.arrayContaining([
+          "Execute plan",
+          "Continue planning",
+          "Discard plan",
+        ]),
       );
     });
 
@@ -1026,7 +1238,7 @@ describe("my-todo extension", () => {
     it("registers goal tool", async () => {
       await initExtension();
       expect(mockPi.registerTool).toHaveBeenCalledWith(
-        expect.objectContaining({ name: "goal" })
+        expect.objectContaining({ name: "goal" }),
       );
     });
 
@@ -1034,7 +1246,7 @@ describe("my-todo extension", () => {
       await initExtension();
       expect(mockPi.registerCommand).toHaveBeenCalledWith(
         "goal",
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -1045,7 +1257,7 @@ describe("my-todo extension", () => {
       await cmd.handler("Refactor auth", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Goal set"),
-        "info"
+        "info",
       );
     });
 
@@ -1056,7 +1268,7 @@ describe("my-todo extension", () => {
       await cmd.handler("   ", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Usage"),
-        "warning"
+        "warning",
       );
     });
 
@@ -1069,7 +1281,7 @@ describe("my-todo extension", () => {
       await cmd.handler("", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("Refactor auth"),
-        "info"
+        "info",
       );
     });
 
@@ -1083,14 +1295,14 @@ describe("my-todo extension", () => {
       await cmd.handler("", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("paused"),
-        "info"
+        "info",
       );
       await cmd.handler("resume", ctx);
       ctx.ui.notify.mockClear();
       await cmd.handler("", ctx);
       expect(ctx.ui.notify).toHaveBeenCalledWith(
         expect.stringContaining("active"),
-        "info"
+        "info",
       );
     });
 
@@ -1102,10 +1314,7 @@ describe("my-todo extension", () => {
       await cmd.handler("clear", ctx);
       ctx.ui.notify.mockClear();
       await cmd.handler("", ctx);
-      expect(ctx.ui.notify).toHaveBeenCalledWith(
-        "No active goal.",
-        "info"
-      );
+      expect(ctx.ui.notify).toHaveBeenCalledWith("No active goal.", "info");
     });
   });
 
@@ -1121,7 +1330,17 @@ describe("my-todo extension", () => {
       const cmd = registeredCommands.get("goal")!;
       await cmd.handler("Refactor auth", ctx);
 
-      const result = await tool.execute("tc-1", { action: "evaluate", lastEvidence: "Tests pass", nextAction: "Deploy" }, undefined, undefined, ctx);
+      const result = await tool.execute(
+        "tc-1",
+        {
+          action: "evaluate",
+          lastEvidence: "Tests pass",
+          nextAction: "Deploy",
+        },
+        undefined,
+        undefined,
+        ctx,
+      );
       expect(result.content[0].text).toContain("Tests pass");
       expect(result.details.goal.lastEvidence).toBe("Tests pass");
     });
@@ -1132,7 +1351,13 @@ describe("my-todo extension", () => {
       const cmd = registeredCommands.get("goal")!;
       await cmd.handler("Refactor auth", ctx);
 
-      const result = await tool.execute("tc-1", { action: "mark_complete" }, undefined, undefined, ctx);
+      const result = await tool.execute(
+        "tc-1",
+        { action: "mark_complete" },
+        undefined,
+        undefined,
+        ctx,
+      );
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("Evidence is required");
     });
@@ -1143,7 +1368,13 @@ describe("my-todo extension", () => {
       const cmd = registeredCommands.get("goal")!;
       await cmd.handler("Refactor auth", ctx);
 
-      const result = await tool.execute("tc-1", { action: "mark_complete", evidence: "CI green" }, undefined, undefined, ctx);
+      const result = await tool.execute(
+        "tc-1",
+        { action: "mark_complete", evidence: "CI green" },
+        undefined,
+        undefined,
+        ctx,
+      );
       expect(result.details.goal.status).toBe("completed");
     });
 
@@ -1153,7 +1384,13 @@ describe("my-todo extension", () => {
       const cmd = registeredCommands.get("goal")!;
       await cmd.handler("Refactor auth", ctx);
 
-      const result = await tool.execute("tc-1", { action: "mark_blocked" }, undefined, undefined, ctx);
+      const result = await tool.execute(
+        "tc-1",
+        { action: "mark_blocked" },
+        undefined,
+        undefined,
+        ctx,
+      );
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("Reason is required");
     });
@@ -1164,7 +1401,13 @@ describe("my-todo extension", () => {
       const cmd = registeredCommands.get("goal")!;
       await cmd.handler("Refactor auth", ctx);
 
-      const result = await tool.execute("tc-1", { action: "mark_blocked", reason: "API down" }, undefined, undefined, ctx);
+      const result = await tool.execute(
+        "tc-1",
+        { action: "mark_blocked", reason: "API down" },
+        undefined,
+        undefined,
+        ctx,
+      );
       expect(result.details.goal.status).toBe("blocked");
     });
   });
@@ -1198,7 +1441,13 @@ describe("my-todo extension", () => {
       const ctx = createMockCtx();
       await cmd.handler("Refactor auth", ctx);
       const tool = registeredTools.find((t) => t.name === "goal")!;
-      await tool.execute("tc-1", { action: "mark_complete", evidence: "Done" }, undefined, undefined, ctx);
+      await tool.execute(
+        "tc-1",
+        { action: "mark_complete", evidence: "Done" },
+        undefined,
+        undefined,
+        ctx,
+      );
 
       const handler = registeredEvents.get("before_agent_start")!;
       const result = await handler({}, ctx);
@@ -1218,7 +1467,15 @@ describe("my-todo extension", () => {
 
     function fireTurnEnd(ctx: any, toolCount: number) {
       const handler = registeredEvents.get("turn_end")!;
-      return handler({ type: "turn_end", turnIndex: 1, message: {}, toolResults: Array(toolCount).fill({}) }, ctx);
+      return handler(
+        {
+          type: "turn_end",
+          turnIndex: 1,
+          message: {},
+          toolResults: Array(toolCount).fill({}),
+        },
+        ctx,
+      );
     }
 
     it("sends follow-up when active, idle, and tools ran", async () => {
@@ -1230,14 +1487,24 @@ describe("my-todo extension", () => {
 
       expect(mockPi.sendUserMessage).toHaveBeenCalledWith(
         expect.stringContaining("Continue working toward the goal"),
-        { deliverAs: "followUp" }
+        { deliverAs: "followUp" },
       );
     });
 
     it("includes progress entries in follow-up", async () => {
       const ctx = await setupActiveGoal();
       const tool = registeredTools.find((t) => t.name === "goal")!;
-      await tool.execute("tc-1", { action: "evaluate", lastEvidence: "Read files", nextAction: "Edit config" }, undefined, undefined, ctx);
+      await tool.execute(
+        "tc-1",
+        {
+          action: "evaluate",
+          lastEvidence: "Read files",
+          nextAction: "Edit config",
+        },
+        undefined,
+        undefined,
+        ctx,
+      );
       await fireTurnEnd(ctx, 1);
 
       const handler = registeredEvents.get("agent_end")!;
@@ -1245,14 +1512,20 @@ describe("my-todo extension", () => {
 
       expect(mockPi.sendUserMessage).toHaveBeenCalledWith(
         expect.stringContaining("Progress so far:"),
-        { deliverAs: "followUp" }
+        { deliverAs: "followUp" },
       );
     });
 
     it("sends custom nextAction when set", async () => {
       const ctx = await setupActiveGoal();
       const tool = registeredTools.find((t) => t.name === "goal")!;
-      await tool.execute("tc-1", { action: "evaluate", nextAction: "Run migration" }, undefined, undefined, ctx);
+      await tool.execute(
+        "tc-1",
+        { action: "evaluate", nextAction: "Run migration" },
+        undefined,
+        undefined,
+        ctx,
+      );
       await fireTurnEnd(ctx, 1);
 
       const handler = registeredEvents.get("agent_end")!;
@@ -1260,7 +1533,7 @@ describe("my-todo extension", () => {
 
       expect(mockPi.sendUserMessage).toHaveBeenCalledWith(
         expect.stringContaining("Run migration"),
-        { deliverAs: "followUp" }
+        { deliverAs: "followUp" },
       );
     });
 
@@ -1279,7 +1552,13 @@ describe("my-todo extension", () => {
     it("does not auto-continue when completed", async () => {
       const ctx = await setupActiveGoal();
       const tool = registeredTools.find((t) => t.name === "goal")!;
-      await tool.execute("tc-1", { action: "mark_complete", evidence: "Done" }, undefined, undefined, ctx);
+      await tool.execute(
+        "tc-1",
+        { action: "mark_complete", evidence: "Done" },
+        undefined,
+        undefined,
+        ctx,
+      );
       await fireTurnEnd(ctx, 1);
 
       const handler = registeredEvents.get("agent_end")!;
@@ -1291,7 +1570,13 @@ describe("my-todo extension", () => {
     it("does not auto-continue when blocked", async () => {
       const ctx = await setupActiveGoal();
       const tool = registeredTools.find((t) => t.name === "goal")!;
-      await tool.execute("tc-1", { action: "mark_blocked", reason: "Stuck" }, undefined, undefined, ctx);
+      await tool.execute(
+        "tc-1",
+        { action: "mark_blocked", reason: "Stuck" },
+        undefined,
+        undefined,
+        ctx,
+      );
       await fireTurnEnd(ctx, 1);
 
       const handler = registeredEvents.get("agent_end")!;
@@ -1340,7 +1625,10 @@ describe("my-todo extension", () => {
       const cmd = registeredCommands.get("goal")!;
       const ctx = createMockCtx();
       await cmd.handler("Refactor auth", ctx);
-      expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-goal", expect.any(Function));
+      expect(ctx.ui.setWidget).toHaveBeenCalledWith(
+        "my-goal",
+        expect.any(Function),
+      );
     });
 
     it("clears goal widget after clear", async () => {

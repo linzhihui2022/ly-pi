@@ -1,6 +1,13 @@
 import { execSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, writeFileSync, truncateSync, rmSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  truncateSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Server } from "node:http";
@@ -17,7 +24,9 @@ function generateKey(): string {
 
 export function resolveWorkspaceDir(sessionId: string): string {
   try {
-    const root = execSync("git rev-parse --show-toplevel", { encoding: "utf-8" }).trim();
+    const root = execSync("git rev-parse --show-toplevel", {
+      encoding: "utf-8",
+    }).trim();
     return join(root, ".lychee", "visual-companion", sessionId);
   } catch {
     return join(tmpdir(), ".lychee", "visual-companion", sessionId);
@@ -49,7 +58,12 @@ export class SessionManager {
     this.focusApp = options.focusApp;
   }
 
-  create(port: number, url: string, server: Server, wss: WebSocketServer): Session {
+  create(
+    port: number,
+    url: string,
+    server: Server,
+    wss: WebSocketServer,
+  ): Session {
     const id = generateId();
     const key = generateKey();
     const workspaceDir = resolveWorkspaceDir(id);
@@ -62,7 +76,10 @@ export class SessionManager {
       url,
       server,
       wss,
-      screens: new Map<string, typeof session.screens extends Map<string, infer T> ? T : never>(),
+      screens: new Map<
+        string,
+        typeof session.screens extends Map<string, infer T> ? T : never
+      >(),
       events: [],
       activeScreen: null,
       lastActivity: Date.now(),
@@ -187,7 +204,7 @@ export class SessionManager {
     try {
       execSync(
         `osascript -e 'tell application "${this.focusApp}" to activate'`,
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
     } catch {
       // Silently ignore focus errors

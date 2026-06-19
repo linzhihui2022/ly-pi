@@ -26,7 +26,10 @@ src = src.replace(/^type\s+\w+\s*=\s*.*;?\s*$/gm, "");
 //   function f(a: string, b: number): void {
 //   argv: string[]  →  argv
 //   timer: $  →  timer
-src = src.replace(/:\s*(string|number|boolean|void|any|OverlayColor|\$)(\[\])?/g, "");
+src = src.replace(
+  /:\s*(string|number|boolean|void|any|OverlayColor|\$)(\[\])?/g,
+  "",
+);
 
 // Remove // deno-lint-ignore comments
 src = src.replace(/\/\/\s*deno-lint-ignore.*\n/g, "");

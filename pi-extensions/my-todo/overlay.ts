@@ -35,7 +35,7 @@ function renderTaskList(
   title: string,
   titleColor: string,
   lineColor: string | ((task: Task) => string),
-  theme?: ThemeLike
+  theme?: ThemeLike,
 ): string[] {
   const display = tasks.slice(0, MAX_VISIBLE);
   const overflow = tasks.length - MAX_VISIBLE;
@@ -45,8 +45,14 @@ function renderTaskList(
 
   for (const task of display) {
     if (theme) {
-      const color = typeof lineColor === "function" ? lineColor(task) : lineColor;
-      lines.push(theme.fg(color, `${STATUS_SYMBOLS[task.status]} #${task.id} ${task.subject}`));
+      const color =
+        typeof lineColor === "function" ? lineColor(task) : lineColor;
+      lines.push(
+        theme.fg(
+          color,
+          `${STATUS_SYMBOLS[task.status]} #${task.id} ${task.subject}`,
+        ),
+      );
     } else {
       lines.push(`${STATUS_SYMBOLS[task.status]} #${task.id} ${task.subject}`);
     }
@@ -60,8 +66,13 @@ function renderTaskList(
   return lines;
 }
 
-export function renderActiveOverlay(tasks: Task[], theme?: ThemeLike): string[] {
-  const visible = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
+export function renderActiveOverlay(
+  tasks: Task[],
+  theme?: ThemeLike,
+): string[] {
+  const visible = tasks.filter(
+    (t) => t.status === "pending" || t.status === "in_progress",
+  );
   if (visible.length === 0) return [];
 
   const sorted = sortByPriority(visible);
@@ -71,11 +82,14 @@ export function renderActiveOverlay(tasks: Task[], theme?: ThemeLike): string[] 
     title,
     "accent",
     (task) => STATUS_COLORS[task.status as "pending" | "in_progress"],
-    theme
+    theme,
   );
 }
 
-export function renderCompletedOverlay(tasks: Task[], theme?: ThemeLike): string[] {
+export function renderCompletedOverlay(
+  tasks: Task[],
+  theme?: ThemeLike,
+): string[] {
   const visible = tasks.filter((t) => t.status === "completed");
   if (visible.length === 0) return [];
 
@@ -84,20 +98,26 @@ export function renderCompletedOverlay(tasks: Task[], theme?: ThemeLike): string
   return renderTaskList(sorted, title, "muted", "muted", theme);
 }
 
-export function renderPlanOverlay(tasks: Task[], phase: PlanPhase, theme?: ThemeLike): string[] {
-  const visible = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
+export function renderPlanOverlay(
+  tasks: Task[],
+  phase: PlanPhase,
+  theme?: ThemeLike,
+): string[] {
+  const visible = tasks.filter(
+    (t) => t.status === "pending" || t.status === "in_progress",
+  );
   if (visible.length === 0) return [];
 
   const sorted = sortByPriority(visible);
-  const title = phase === "planning"
-    ? `Plan (${sorted.length})`
-    : `Executing (${sorted.length})`;
+  const title =
+    phase === "planning"
+      ? `Plan (${sorted.length})`
+      : `Executing (${sorted.length})`;
   return renderTaskList(
     sorted,
     title,
     "accent",
     (task) => STATUS_COLORS[task.status as "pending" | "in_progress"],
-    theme
+    theme,
   );
 }
-

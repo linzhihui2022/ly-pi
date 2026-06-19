@@ -7,7 +7,11 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import open from "open";
 import { ensurePreviewServer, stopPreviewServer, PREVIEW_DIR } from "./server";
-import { renderMarkdownToHtml, buildHtmlDocument, extractAssistantText } from "./render";
+import {
+  renderMarkdownToHtml,
+  buildHtmlDocument,
+  extractAssistantText,
+} from "./render";
 
 interface AssistantContentBlock {
   type: string;
@@ -49,10 +53,7 @@ export default function myHtml(pi: ExtensionAPI): void {
       }
 
       const bodyHtml = renderMarkdownToHtml(message.text || "");
-      const html = buildHtmlDocument(
-        bodyHtml,
-        message.thinking || undefined,
-      );
+      const html = buildHtmlDocument(bodyHtml, message.thinking || undefined);
 
       try {
         const sessionId = ctx.sessionManager.getSessionId();

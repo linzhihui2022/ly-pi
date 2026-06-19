@@ -58,9 +58,17 @@ const CATPPUCCIN_MOCHA_HLJS = `/* Catppuccin Mocha for Highlight.js */
 .markdown-body .hljs-addition { color: #a6e3a1; background: rgba(166,227,161,0.15); }
 .markdown-body .hljs-deletion { color: #f38ba8; background: rgba(243,139,168,0.15); }`;
 
-export function loadCss(cssDir: string = EXT_DIR): { github: string; highlight: string } {
+export function loadCss(cssDir: string = EXT_DIR): {
+  github: string;
+  highlight: string;
+} {
   try {
-    const githubPath = join(cssDir, "node_modules", "github-markdown-css", "github-markdown-dark.css");
+    const githubPath = join(
+      cssDir,
+      "node_modules",
+      "github-markdown-css",
+      "github-markdown-dark.css",
+    );
     return {
       github: readFileSync(githubPath, "utf-8"),
       highlight: CATPPUCCIN_MOCHA_HLJS,
@@ -507,6 +515,9 @@ export function extractAssistantText(
 ): string {
   return content
     .filter((block) => block.type === targetType)
-    .map((block) => (targetType === "thinking" ? block.thinking : block.text) ?? "")
+    .map(
+      (block) =>
+        (targetType === "thinking" ? block.thinking : block.text) ?? "",
+    )
     .join("\n\n");
 }

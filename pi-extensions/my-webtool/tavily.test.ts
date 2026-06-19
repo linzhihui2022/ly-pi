@@ -39,7 +39,7 @@ describe("Tavily.usage", () => {
             research_usage: 0,
           },
         }),
-      })
+      }),
     );
 
     const result = await tavily.usage();
@@ -73,7 +73,7 @@ describe("Tavily.usage", () => {
         ok: false,
         status: 401,
         text: vi.fn().mockResolvedValue("Unauthorized"),
-      })
+      }),
     );
 
     const result = await tavily.usage();
@@ -87,7 +87,10 @@ describe("Tavily.usage", () => {
     process.env.TAVILY_SEARCH_API = "test-key";
     const tavily = new Tavily();
 
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("Network error")),
+    );
 
     const result = await tavily.usage();
     expect(result.ok).toBe(false);

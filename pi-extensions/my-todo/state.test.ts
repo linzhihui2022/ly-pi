@@ -60,8 +60,12 @@ describe("TaskState", () => {
   it("rejects empty subject on update", () => {
     const state = new TaskState();
     state.create("A");
-    expect(() => state.update(1, { subject: "" })).toThrow("Subject cannot be empty");
-    expect(() => state.update(1, { subject: "   " })).toThrow("Subject cannot be empty");
+    expect(() => state.update(1, { subject: "" })).toThrow(
+      "Subject cannot be empty",
+    );
+    expect(() => state.update(1, { subject: "   " })).toThrow(
+      "Subject cannot be empty",
+    );
   });
 
   it("updates description", () => {
@@ -112,26 +116,34 @@ describe("TaskState", () => {
     const state = new TaskState();
     state.create("A");
     state.update(1, { status: "completed" });
-    expect(() => state.update(1, { status: "in_progress" })).toThrow("Invalid status transition");
+    expect(() => state.update(1, { status: "in_progress" })).toThrow(
+      "Invalid status transition",
+    );
   });
 
   it("rejects completed → pending", () => {
     const state = new TaskState();
     state.create("A");
     state.update(1, { status: "completed" });
-    expect(() => state.update(1, { status: "pending" })).toThrow("Invalid status transition");
+    expect(() => state.update(1, { status: "pending" })).toThrow(
+      "Invalid status transition",
+    );
   });
 
   it("rejects deleted → any", () => {
     const state = new TaskState();
     state.create("A");
     state.update(1, { status: "deleted" });
-    expect(() => state.update(1, { status: "pending" })).toThrow("Invalid status transition");
+    expect(() => state.update(1, { status: "pending" })).toThrow(
+      "Invalid status transition",
+    );
   });
 
   it("rejects update on nonexistent id", () => {
     const state = new TaskState();
-    expect(() => state.update(999, { subject: "X" })).toThrow("Task 999 not found");
+    expect(() => state.update(999, { subject: "X" })).toThrow(
+      "Task 999 not found",
+    );
   });
 
   it("deletes a task", () => {
@@ -210,7 +222,10 @@ describe("TaskState", () => {
 
     it("skips entries with wrong toolName", () => {
       const entries: SessionEntry[] = [
-        { type: "message", message: { role: "toolResult", toolName: "other", details: {} } },
+        {
+          type: "message",
+          message: { role: "toolResult", toolName: "other", details: {} },
+        },
       ];
       const state = TaskState.fromSession(entries);
       expect(state.list()).toEqual([]);
@@ -218,7 +233,14 @@ describe("TaskState", () => {
 
     it("skips entries with invalid details shape", () => {
       const entries: SessionEntry[] = [
-        { type: "message", message: { role: "toolResult", toolName: "todo", details: { tasks: "bad", nextId: 1 } } },
+        {
+          type: "message",
+          message: {
+            role: "toolResult",
+            toolName: "todo",
+            details: { tasks: "bad", nextId: 1 },
+          },
+        },
       ];
       const state = TaskState.fromSession(entries);
       expect(state.list()).toEqual([]);
@@ -263,7 +285,14 @@ describe("TaskState", () => {
 
     it("skips entries with non-message type", () => {
       const entries: SessionEntry[] = [
-        { type: "other", message: { role: "toolResult", toolName: "todo", details: { tasks: [], nextId: 1 } } },
+        {
+          type: "other",
+          message: {
+            role: "toolResult",
+            toolName: "todo",
+            details: { tasks: [], nextId: 1 },
+          },
+        },
       ];
       const state = TaskState.fromSession(entries);
       expect(state.list()).toEqual([]);
@@ -271,7 +300,14 @@ describe("TaskState", () => {
 
     it("skips entries with null details", () => {
       const entries: SessionEntry[] = [
-        { type: "message", message: { role: "toolResult", toolName: "todo", details: null as unknown as Record<string, unknown> } },
+        {
+          type: "message",
+          message: {
+            role: "toolResult",
+            toolName: "todo",
+            details: null as unknown as Record<string, unknown>,
+          },
+        },
       ];
       const state = TaskState.fromSession(entries);
       expect(state.list()).toEqual([]);
@@ -279,7 +315,14 @@ describe("TaskState", () => {
 
     it("skips entries with non-object details", () => {
       const entries: SessionEntry[] = [
-        { type: "message", message: { role: "toolResult", toolName: "todo", details: "bad" as unknown as Record<string, unknown> } },
+        {
+          type: "message",
+          message: {
+            role: "toolResult",
+            toolName: "todo",
+            details: "bad" as unknown as Record<string, unknown>,
+          },
+        },
       ];
       const state = TaskState.fromSession(entries);
       expect(state.list()).toEqual([]);
@@ -287,16 +330,24 @@ describe("TaskState", () => {
 
     it("skips entries with array tasks but invalid nextId", () => {
       const entries: SessionEntry[] = [
-        { type: "message", message: { role: "toolResult", toolName: "todo", details: { tasks: [], nextId: "bad" } as unknown as Record<string, unknown> } },
+        {
+          type: "message",
+          message: {
+            role: "toolResult",
+            toolName: "todo",
+            details: { tasks: [], nextId: "bad" } as unknown as Record<
+              string,
+              unknown
+            >,
+          },
+        },
       ];
       const state = TaskState.fromSession(entries);
       expect(state.list()).toEqual([]);
     });
 
     it("skips entries with missing message", () => {
-      const entries: SessionEntry[] = [
-        { type: "message" },
-      ];
+      const entries: SessionEntry[] = [{ type: "message" }];
       const state = TaskState.fromSession(entries);
       expect(state.list()).toEqual([]);
     });
@@ -319,7 +370,9 @@ describe("TaskState plan mode", () => {
 
   it("setPlanMode rejects invalid planPhase", () => {
     const state = new TaskState();
-    expect(() => state.setPlanMode(true, "invalid" as PlanPhase)).toThrow("Invalid plan phase: invalid");
+    expect(() => state.setPlanMode(true, "invalid" as PlanPhase)).toThrow(
+      "Invalid plan phase: invalid",
+    );
   });
 
   it("snapshot includes planMode and planPhase", () => {

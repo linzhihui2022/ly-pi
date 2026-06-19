@@ -21,7 +21,12 @@ import { pickRandomMessage } from "./working";
 
 // Re-export pure helpers for consumers / tests
 export { icon } from "./icons";
-export { formatTokens, contextColored, shortModelName, formatCacheRate } from "./format";
+export {
+  formatTokens,
+  contextColored,
+  shortModelName,
+  formatCacheRate,
+} from "./format";
 export { aggregateSessionUsage, getLastUserMessage } from "./session";
 export { buildStatusLine, formatGitStatus } from "./render";
 export { pickRandomMessage, WORKING_MESSAGES } from "./working";
@@ -41,7 +46,8 @@ export default function myHud(pi: ExtensionAPI): void {
   }
   pi.on("turn_start", (_event, ctx) => {
     const theme = ctx.ui.getTheme("catppuccin-mocha");
-    const message = theme?.fg("accent", pickRandomMessage()) ?? pickRandomMessage();
+    const message =
+      theme?.fg("accent", pickRandomMessage()) ?? pickRandomMessage();
     ctx.ui.setWorkingMessage(message);
     bar?.invalidateGitStatus();
     requestRender();

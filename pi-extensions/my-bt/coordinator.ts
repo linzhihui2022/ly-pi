@@ -3,7 +3,13 @@ import { exec, type ChildProcess } from "node:child_process";
 export function onExecDone(): void {
   // exec callback; errors ignored because process may have been killed intentionally
 }
-import { existsSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmdirSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BtConfig } from "./types";
@@ -43,7 +49,12 @@ export function acquireGlobalLock(
         throw new Error(`[my-bt] Failed to acquire global lock: ${lockDir}`);
       }
       attempts++;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, retryDelayMs);
+      Atomics.wait(
+        new Int32Array(new SharedArrayBuffer(4)),
+        0,
+        0,
+        retryDelayMs,
+      );
     }
   }
 }

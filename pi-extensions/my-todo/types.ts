@@ -7,7 +7,13 @@ export interface Task {
   status: TaskStatus;
 }
 
-export type TaskAction = "create" | "update" | "list" | "get" | "delete" | "clear";
+export type TaskAction =
+  | "create"
+  | "update"
+  | "list"
+  | "get"
+  | "delete"
+  | "clear";
 
 export type PlanPhase = "idle" | "planning" | "executing";
 

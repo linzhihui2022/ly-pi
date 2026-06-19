@@ -1,4 +1,7 @@
-import type { BeforeAgentStartEvent, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  BeforeAgentStartEvent,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import type { MergedConfig } from "../config.js";
 
 export interface AgentPrepDependencies {

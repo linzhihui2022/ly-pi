@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import myHtml from "./index";
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+} from "@earendil-works/pi-coding-agent";
 
 describe("myHtml extension", () => {
   let registeredCommands: Map<string, any>;
@@ -53,6 +56,4 @@ describe("myHtml extension", () => {
       "warning",
     );
   });
-
-
 });

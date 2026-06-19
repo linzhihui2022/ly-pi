@@ -26,7 +26,9 @@ export function detectTerminal(): string {
 /**
  * List all available sound categories with their descriptions.
  */
-export function listCategories(config: BtConfig): { name: string; description: string }[] {
+export function listCategories(
+  config: BtConfig,
+): { name: string; description: string }[] {
   return Object.entries(config.categories).map(([name, cat]) => ({
     name,
     description: cat.description,
@@ -89,7 +91,10 @@ export function playOverlay(
   );
 }
 
-export function pickSoundFile(config: BtConfig, category: string): string | undefined {
+export function pickSoundFile(
+  config: BtConfig,
+  category: string,
+): string | undefined {
   const cat = config.categories[category];
   if (!cat || cat.files.length === 0) return undefined;
 
@@ -114,10 +119,7 @@ export function resolveSoundPath(config: BtConfig, file: string): string {
  * Fire-and-forget — resolves immediately.
  * Errors are reported via the optional onError callback instead of stderr.
  */
-export function playSound(
-  config: BtConfig,
-  filePath: string,
-): void {
+export function playSound(config: BtConfig, filePath: string): void {
   spawnSoundProcess(config, filePath);
 }
 

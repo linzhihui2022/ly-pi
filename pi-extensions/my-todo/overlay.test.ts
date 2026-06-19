@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderActiveOverlay, renderCompletedOverlay, renderPlanOverlay } from "./overlay";
+import {
+  renderActiveOverlay,
+  renderCompletedOverlay,
+  renderPlanOverlay,
+} from "./overlay";
 import type { Task } from "./types";
 
 const mockTheme = {
@@ -163,7 +167,10 @@ describe("renderActiveOverlay with theme", () => {
     const tasks: Task[] = [{ id: 1, subject: "A", status: "pending" }];
     renderActiveOverlay(tasks, mockTheme);
     expect(mockTheme.bold).toHaveBeenCalledWith("Active (1)");
-    expect(mockTheme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("Active (1)"));
+    expect(mockTheme.fg).toHaveBeenCalledWith(
+      "accent",
+      expect.stringContaining("Active (1)"),
+    );
   });
 
   it("styles pending task in dim", () => {
@@ -194,7 +201,10 @@ describe("renderCompletedOverlay with theme", () => {
     const tasks: Task[] = [{ id: 1, subject: "A", status: "completed" }];
     renderCompletedOverlay(tasks, mockTheme);
     expect(mockTheme.bold).toHaveBeenCalledWith("Completed (1)");
-    expect(mockTheme.fg).toHaveBeenCalledWith("muted", expect.stringContaining("Completed (1)"));
+    expect(mockTheme.fg).toHaveBeenCalledWith(
+      "muted",
+      expect.stringContaining("Completed (1)"),
+    );
   });
 
   it("styles completed task in muted", () => {
@@ -231,23 +241,14 @@ describe("renderPlanOverlay", () => {
     ];
     const result = renderPlanOverlay(tasks, "planning");
     expect(result[0]).toBe("Plan (2)");
-    expect(result).toEqual([
-      "Plan (2)",
-      "○ #1 A",
-      "○ #2 B",
-    ]);
+    expect(result).toEqual(["Plan (2)", "○ #1 A", "○ #2 B"]);
   });
 
   it("renders title 'Executing (N)' for executing phase", () => {
-    const tasks: Task[] = [
-      { id: 1, subject: "A", status: "in_progress" },
-    ];
+    const tasks: Task[] = [{ id: 1, subject: "A", status: "in_progress" }];
     const result = renderPlanOverlay(tasks, "executing");
     expect(result[0]).toBe("Executing (1)");
-    expect(result).toEqual([
-      "Executing (1)",
-      "● #1 A",
-    ]);
+    expect(result).toEqual(["Executing (1)", "● #1 A"]);
   });
 
   it("sorts in_progress before pending", () => {
@@ -256,11 +257,7 @@ describe("renderPlanOverlay", () => {
       { id: 2, subject: "B", status: "in_progress" },
     ];
     const result = renderPlanOverlay(tasks, "executing");
-    expect(result).toEqual([
-      "Executing (2)",
-      "● #2 B",
-      "○ #1 A",
-    ]);
+    expect(result).toEqual(["Executing (2)", "● #2 B", "○ #1 A"]);
   });
 
   it("caps at 3 tasks with overflow", () => {
@@ -287,10 +284,7 @@ describe("renderPlanOverlay", () => {
       { id: 3, subject: "C", status: "deleted" },
     ];
     const result = renderPlanOverlay(tasks, "planning");
-    expect(result).toEqual([
-      "Plan (1)",
-      "○ #1 A",
-    ]);
+    expect(result).toEqual(["Plan (1)", "○ #1 A"]);
   });
 });
 
@@ -299,6 +293,9 @@ describe("renderPlanOverlay with theme", () => {
     const tasks: Task[] = [{ id: 1, subject: "A", status: "pending" }];
     renderPlanOverlay(tasks, "planning", mockTheme);
     expect(mockTheme.bold).toHaveBeenCalledWith("Plan (1)");
-    expect(mockTheme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("Plan (1)"));
+    expect(mockTheme.fg).toHaveBeenCalledWith(
+      "accent",
+      expect.stringContaining("Plan (1)"),
+    );
   });
 });

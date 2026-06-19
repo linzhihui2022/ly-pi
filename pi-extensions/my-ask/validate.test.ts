@@ -61,11 +61,46 @@ describe("validateQuestionnaire", () => {
   it("rejects more than 4 questions", () => {
     const result = validateQuestionnaire(
       makeParams([
-        { question: "Q1?", header: "Q1", options: [{ label: "A", description: "a" }, { label: "B", description: "b" }] },
-        { question: "Q2?", header: "Q2", options: [{ label: "A", description: "a" }, { label: "B", description: "b" }] },
-        { question: "Q3?", header: "Q3", options: [{ label: "A", description: "a" }, { label: "B", description: "b" }] },
-        { question: "Q4?", header: "Q4", options: [{ label: "A", description: "a" }, { label: "B", description: "b" }] },
-        { question: "Q5?", header: "Q5", options: [{ label: "A", description: "a" }, { label: "B", description: "b" }] },
+        {
+          question: "Q1?",
+          header: "Q1",
+          options: [
+            { label: "A", description: "a" },
+            { label: "B", description: "b" },
+          ],
+        },
+        {
+          question: "Q2?",
+          header: "Q2",
+          options: [
+            { label: "A", description: "a" },
+            { label: "B", description: "b" },
+          ],
+        },
+        {
+          question: "Q3?",
+          header: "Q3",
+          options: [
+            { label: "A", description: "a" },
+            { label: "B", description: "b" },
+          ],
+        },
+        {
+          question: "Q4?",
+          header: "Q4",
+          options: [
+            { label: "A", description: "a" },
+            { label: "B", description: "b" },
+          ],
+        },
+        {
+          question: "Q5?",
+          header: "Q5",
+          options: [
+            { label: "A", description: "a" },
+            { label: "B", description: "b" },
+          ],
+        },
       ]),
     );
     expect(result).toEqual({
@@ -78,8 +113,22 @@ describe("validateQuestionnaire", () => {
   it("rejects duplicate question text", () => {
     const result = validateQuestionnaire(
       makeParams([
-        { question: "Same?", header: "A", options: [{ label: "X", description: "x" }, { label: "Y", description: "y" }] },
-        { question: "Same?", header: "B", options: [{ label: "X", description: "x" }, { label: "Y", description: "y" }] },
+        {
+          question: "Same?",
+          header: "A",
+          options: [
+            { label: "X", description: "x" },
+            { label: "Y", description: "y" },
+          ],
+        },
+        {
+          question: "Same?",
+          header: "B",
+          options: [
+            { label: "X", description: "x" },
+            { label: "Y", description: "y" },
+          ],
+        },
       ]),
     );
     expect(result).toEqual({
@@ -92,7 +141,11 @@ describe("validateQuestionnaire", () => {
   it("rejects fewer than 2 options", () => {
     const result = validateQuestionnaire(
       makeParams([
-        { question: "Only one?", header: "One", options: [{ label: "A", description: "a" }] },
+        {
+          question: "Only one?",
+          header: "One",
+          options: [{ label: "A", description: "a" }],
+        },
       ]),
     );
     expect(result).toEqual({
@@ -123,7 +176,12 @@ describe("validateQuestionnaire", () => {
   });
 
   it("rejects each reserved label", () => {
-    for (const label of ["Other", "Type something.", "Chat about this", "Next"]) {
+    for (const label of [
+      "Other",
+      "Type something.",
+      "Chat about this",
+      "Next",
+    ]) {
       const result = validateQuestionnaire(
         makeParams([
           {

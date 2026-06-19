@@ -143,7 +143,7 @@ export class Tavily implements SearchProvider, FetchProvider {
   async search(
     query: string,
     maxResults: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<SearchResponse> {
     if (!this.enabled) {
       return { query, error: "Tavily is not enabled", ok: false };
@@ -189,7 +189,7 @@ export class Tavily implements SearchProvider, FetchProvider {
   async fetch(
     url: string,
     raw: boolean,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<FetchResponse> {
     if (!this.enabled) {
       return { error: "Tavily is not enabled", ok: false };

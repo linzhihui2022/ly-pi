@@ -28,7 +28,8 @@ export function createLogger(options: LoggerOptions): Logger {
     if (entries.length === 0) return;
     ensureLogsDir();
     const filePath = path.join(options.logsDir, fileName);
-    const lines = entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n";
+    const lines =
+      entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n";
     fs.appendFileSync(filePath, lines, "utf-8");
   }
 

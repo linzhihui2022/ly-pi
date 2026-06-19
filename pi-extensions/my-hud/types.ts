@@ -10,7 +10,6 @@ export interface TokenUsage {
   cost: number;
 }
 
-
 export interface GitStatus {
   ahead: number;
   behind: number;

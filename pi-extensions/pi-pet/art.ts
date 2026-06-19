@@ -17,35 +17,15 @@ import type { PetState } from "./types";
 // Line 1: ears + head top    Line 2: eyes + face    Line 3: mouth + body
 
 const FRAMES: Record<string, string[]> = {
-  happy: [
-    "  /\\_/\\  ",
-    " ( ^w^ ) ",
-    "  > ^ <  ",
-  ],
+  happy: ["  /\\_/\\  ", " ( ^w^ ) ", "  > ^ <  "],
 
-  neutral: [
-    "  /\\_/\\  ",
-    " ( -_- ) ",
-    "  |   |  ",
-  ],
+  neutral: ["  /\\_/\\  ", " ( -_- ) ", "  |   |  "],
 
-  hungry: [
-    "  /\\_/\\  ",
-    " ( >_< ) ",
-    "  o   o  ",
-  ],
+  hungry: ["  /\\_/\\  ", " ( >_< ) ", "  o   o  "],
 
-  sad: [
-    "  /\\_/\\  ",
-    " ( ;_; ) ",
-    "  ~ ~ ~  ",
-  ],
+  sad: ["  /\\_/\\  ", " ( ;_; ) ", "  ~ ~ ~  "],
 
-  tired: [
-    "  /\\_/\\  ",
-    " ( -.- ) ",
-    "  z   z  ",
-  ],
+  tired: ["  /\\_/\\  ", " ( -.- ) ", "  z   z  "],
 };
 
 // ── Frame selection ─────────────────────────────────────────────

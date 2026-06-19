@@ -103,7 +103,7 @@ describe("my-ask extension", () => {
     myAsk(mockPi);
     const guidelines = registeredTool.promptGuidelines.join(" ");
     expect(guidelines).toContain(
-      "Set multiSelect: true when multiple answers are valid; the \"Type something.\" row is available in multi-select too",
+      'Set multiSelect: true when multiple answers are valid; the "Type something." row is available in multi-select too',
     );
     expect(guidelines).not.toContain(
       "Set multiSelect: true when multiple answers are valid; this suppresses",
@@ -113,7 +113,13 @@ describe("my-ask extension", () => {
   it("returns no_ui error when UI is unavailable", async () => {
     myAsk(mockPi);
     const ctx = makeCtx(false);
-    const result = await registeredTool.execute("id", makeParams(), undefined, undefined, ctx);
+    const result = await registeredTool.execute(
+      "id",
+      makeParams(),
+      undefined,
+      undefined,
+      ctx,
+    );
 
     expect(result.content[0].text).toContain("UI not available");
     expect(result.details.cancelled).toBe(true);
@@ -123,7 +129,13 @@ describe("my-ask extension", () => {
   it("returns validation error for invalid params", async () => {
     myAsk(mockPi);
     const ctx = makeCtx(true);
-    const result = await registeredTool.execute("id", { questions: [] }, undefined, undefined, ctx);
+    const result = await registeredTool.execute(
+      "id",
+      { questions: [] },
+      undefined,
+      undefined,
+      ctx,
+    );
 
     expect(result.content[0].text).toContain("At least one question");
     expect(result.details.error).toBe("no_questions");
@@ -135,15 +147,28 @@ describe("my-ask extension", () => {
     const ctx = makeCtx(true);
     customResult = {
       answers: [
-        { questionIndex: 0, question: "Which color?", kind: "option", answer: "Red" },
+        {
+          questionIndex: 0,
+          question: "Which color?",
+          kind: "option",
+          answer: "Red",
+        },
       ],
       cancelled: false,
     };
 
-    const result = await registeredTool.execute("id", makeParams(), undefined, undefined, ctx);
+    const result = await registeredTool.execute(
+      "id",
+      makeParams(),
+      undefined,
+      undefined,
+      ctx,
+    );
 
     expect(ctx.ui.custom).toHaveBeenCalled();
-    expect(result.content[0].text).toContain("User has answered your questions");
+    expect(result.content[0].text).toContain(
+      "User has answered your questions",
+    );
     expect(result.details.cancelled).toBe(false);
   });
 
@@ -152,7 +177,13 @@ describe("my-ask extension", () => {
     const ctx = makeCtx(true);
     customResult = { answers: [], cancelled: true };
 
-    const result = await registeredTool.execute("id", makeParams(), undefined, undefined, ctx);
+    const result = await registeredTool.execute(
+      "id",
+      makeParams(),
+      undefined,
+      undefined,
+      ctx,
+    );
 
     expect(result.content[0].text).toBe("User declined to answer questions");
     expect(result.details.cancelled).toBe(true);
@@ -169,7 +200,12 @@ describe("my-ask extension", () => {
     const factory = ctx.ui.custom.mock.calls[0][0];
     expect(typeof factory).toBe("function");
     const done = vi.fn();
-    const component = factory({ requestRender: vi.fn() }, mockTheme, undefined, done);
+    const component = factory(
+      { requestRender: vi.fn() },
+      mockTheme,
+      undefined,
+      done,
+    );
     expect(typeof component.render).toBe("function");
     expect(typeof component.handleInput).toBe("function");
   });

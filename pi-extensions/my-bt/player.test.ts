@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { listCategories, pickSoundFile, resolveSoundPath, playCategory, playSound, playOverlay, detectTerminal } from "./player";
+import {
+  listCategories,
+  pickSoundFile,
+  resolveSoundPath,
+  playCategory,
+  playSound,
+  playOverlay,
+  detectTerminal,
+} from "./player";
 import * as coordinator from "./coordinator";
 import type { BtConfig } from "./types";
 
@@ -51,7 +59,11 @@ const mockConfig: BtConfig = {
     agent_end: "completed",
   },
   overlayTextMap: {
-    session_start: { type: "SESSION START", title: "BT-7274 已上线", subtitle: "系统重启" },
+    session_start: {
+      type: "SESSION START",
+      title: "BT-7274 已上线",
+      subtitle: "系统重启",
+    },
     agent_start: { type: "MISSION", title: "执行任务", subtitle: "铁御控制" },
     agent_end: { type: "COMPLETE", title: "任务完成" },
     turn_start: { type: "TURN", title: "新回合" },
@@ -77,7 +89,6 @@ describe("playCategory", () => {
     playCategory(mockConfig, "nonexistent");
     expect(coordinator.spawnSoundProcess).not.toHaveBeenCalled();
   });
-
 });
 
 describe("playSound", () => {
@@ -94,8 +105,14 @@ describe("listCategories", () => {
   it("returns all category names and descriptions", () => {
     const result = listCategories(mockConfig);
     expect(result).toHaveLength(6);
-    expect(result[0]).toEqual({ name: "startup", description: "BT-7274 startup" });
-    expect(result[1]).toEqual({ name: "affirmative", description: "Affirmative response" });
+    expect(result[0]).toEqual({
+      name: "startup",
+      description: "BT-7274 startup",
+    });
+    expect(result[1]).toEqual({
+      name: "affirmative",
+      description: "Affirmative response",
+    });
   });
 });
 
@@ -228,7 +245,11 @@ describe("playOverlay", () => {
     const configWithPermissionOverlay: BtConfig = {
       ...mockConfig,
       overlayTextMap: {
-        permissions_ui_prompt: { type: "WARNING", title: "侦测到危险操作", subtitle: "铁御，请确认权限" },
+        permissions_ui_prompt: {
+          type: "WARNING",
+          title: "侦测到危险操作",
+          subtitle: "铁御，请确认权限",
+        },
       },
     };
     playOverlay(configWithPermissionOverlay, "permissions_ui_prompt", extDir);
@@ -258,42 +279,72 @@ describe("detectTerminal", () => {
   });
 
   it("returns WezTerm when TERM_PROGRAM is WezTerm", async () => {
-    process.env = { ...originalEnv, TERM_PROGRAM: "WezTerm", WEZTERM_PANE: undefined, ITERM_SESSION_ID: undefined };
+    process.env = {
+      ...originalEnv,
+      TERM_PROGRAM: "WezTerm",
+      WEZTERM_PANE: undefined,
+      ITERM_SESSION_ID: undefined,
+    };
     vi.resetModules();
     const fresh = await import("./player");
     expect(fresh.detectTerminal()).toBe("WezTerm");
   });
 
   it("returns iTerm when TERM_PROGRAM is iTerm.app", async () => {
-    process.env = { ...originalEnv, TERM_PROGRAM: "iTerm.app", WEZTERM_PANE: undefined, ITERM_SESSION_ID: undefined };
+    process.env = {
+      ...originalEnv,
+      TERM_PROGRAM: "iTerm.app",
+      WEZTERM_PANE: undefined,
+      ITERM_SESSION_ID: undefined,
+    };
     vi.resetModules();
     const fresh = await import("./player");
     expect(fresh.detectTerminal()).toBe("iTerm");
   });
 
   it("returns Terminal when TERM_PROGRAM is Apple_Terminal", async () => {
-    process.env = { ...originalEnv, TERM_PROGRAM: "Apple_Terminal", WEZTERM_PANE: undefined, ITERM_SESSION_ID: undefined };
+    process.env = {
+      ...originalEnv,
+      TERM_PROGRAM: "Apple_Terminal",
+      WEZTERM_PANE: undefined,
+      ITERM_SESSION_ID: undefined,
+    };
     vi.resetModules();
     const fresh = await import("./player");
     expect(fresh.detectTerminal()).toBe("Terminal");
   });
 
   it("returns WezTerm when WEZTERM_PANE is set", async () => {
-    process.env = { ...originalEnv, TERM_PROGRAM: undefined, WEZTERM_PANE: "1", ITERM_SESSION_ID: undefined };
+    process.env = {
+      ...originalEnv,
+      TERM_PROGRAM: undefined,
+      WEZTERM_PANE: "1",
+      ITERM_SESSION_ID: undefined,
+    };
     vi.resetModules();
     const fresh = await import("./player");
     expect(fresh.detectTerminal()).toBe("WezTerm");
   });
 
   it("returns iTerm when ITERM_SESSION_ID is set", async () => {
-    process.env = { ...originalEnv, TERM_PROGRAM: undefined, WEZTERM_PANE: undefined, ITERM_SESSION_ID: "abc123" };
+    process.env = {
+      ...originalEnv,
+      TERM_PROGRAM: undefined,
+      WEZTERM_PANE: undefined,
+      ITERM_SESSION_ID: "abc123",
+    };
     vi.resetModules();
     const fresh = await import("./player");
     expect(fresh.detectTerminal()).toBe("iTerm");
   });
 
   it("defaults to WezTerm when no env vars match", async () => {
-    process.env = { ...originalEnv, TERM_PROGRAM: undefined, WEZTERM_PANE: undefined, ITERM_SESSION_ID: undefined };
+    process.env = {
+      ...originalEnv,
+      TERM_PROGRAM: undefined,
+      WEZTERM_PANE: undefined,
+      ITERM_SESSION_ID: undefined,
+    };
     vi.resetModules();
     const fresh = await import("./player");
     expect(fresh.detectTerminal()).toBe("WezTerm");

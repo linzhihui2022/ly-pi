@@ -15,7 +15,13 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 
 export default function myPermission(pi: ExtensionAPI): void {
-  const baseDir = path.join(os.homedir(), ".pi", "agent", "extensions", "my-permission");
+  const baseDir = path.join(
+    os.homedir(),
+    ".pi",
+    "agent",
+    "extensions",
+    "my-permission",
+  );
   const dataDir = path.join(os.homedir(), ".pi", "agent", "my-permission");
   const globalConfigPath = path.join(dataDir, "config.json");
   const projectsDir = dataDir;
@@ -28,9 +34,10 @@ export default function myPermission(pi: ExtensionAPI): void {
 
   const subagentPolicy = createSubagentPolicyManager({
     snapshotsDir,
-    getSessionId: () => fs.existsSync("/proc/self")
-      ? "unknown" // actually would use pi session id
-      : "unknown",
+    getSessionId: () =>
+      fs.existsSync("/proc/self")
+        ? "unknown" // actually would use pi session id
+        : "unknown",
   });
 
   // Persist session rules into the session file.
@@ -38,7 +45,11 @@ export default function myPermission(pi: ExtensionAPI): void {
     pi.appendEntry("my-permission:session-rule", rule);
   };
 
-  const lifecycle = createLifecycleHandler({ loadConfig: () => configLoader.loadConfig("."), sessionState, logger });
+  const lifecycle = createLifecycleHandler({
+    loadConfig: () => configLoader.loadConfig("."),
+    sessionState,
+    logger,
+  });
 
   const toolCallHandler = createToolCallHandler({
     loadConfig: () => configLoader.loadConfig("."),
@@ -54,7 +65,9 @@ export default function myPermission(pi: ExtensionAPI): void {
     },
   });
 
-  const agentPrepHandler = createAgentPrepHandler({ loadConfig: () => configLoader.loadConfig(".") });
+  const agentPrepHandler = createAgentPrepHandler({
+    loadConfig: () => configLoader.loadConfig("."),
+  });
 
   pi.on("session_start", async (event, ctx) => {
     lifecycle.handleSessionStart(event, ctx);

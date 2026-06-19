@@ -133,7 +133,10 @@ export function createPermissionChecker(
   config: MergedConfig,
   sessionState: SessionState,
 ): PermissionChecker {
-  function findSessionRule(surface: string, value: string): PermissionAction | undefined {
+  function findSessionRule(
+    surface: string,
+    value: string,
+  ): PermissionAction | undefined {
     const rule = sessionState.findSessionRule(surface, value);
     return rule?.action;
   }
@@ -147,7 +150,13 @@ export function createPermissionChecker(
     const rules = config[surface as keyof MergedConfig];
     for (const [pattern, action] of Object.entries(rules)) {
       if (matchGlob(pattern, value)) {
-        return { state: action, origin: "global", matchedPattern: pattern, surface, value };
+        return {
+          state: action,
+          origin: "global",
+          matchedPattern: pattern,
+          surface,
+          value,
+        };
       }
     }
 
@@ -157,12 +166,23 @@ export function createPermissionChecker(
   function checkTool(input: CheckInput): CheckResult | undefined {
     const sessionAction = findSessionRule("tools", input.toolName);
     if (sessionAction) {
-      return { state: sessionAction, origin: "session", surface: "tools", value: input.toolName };
+      return {
+        state: sessionAction,
+        origin: "session",
+        surface: "tools",
+        value: input.toolName,
+      };
     }
 
     const toolAction = config.tools[input.toolName];
     if (toolAction) {
-      return { state: toolAction, origin: "global", matchedPattern: input.toolName, surface: "tools", value: input.toolName };
+      return {
+        state: toolAction,
+        origin: "global",
+        matchedPattern: input.toolName,
+        surface: "tools",
+        value: input.toolName,
+      };
     }
 
     return undefined;
@@ -179,8 +199,17 @@ export function createPermissionChecker(
     // Bash patterns ending in ` *` should also match the command without
     // trailing arguments (e.g. `git status *` matches `git status`).
     for (const [pattern, action] of Object.entries(config.bash)) {
-      if (pattern.endsWith(" *") && normalized.startsWith(pattern.slice(0, -2))) {
-        return { state: action, origin: "global", matchedPattern: pattern, surface: "bash", value: normalized };
+      if (
+        pattern.endsWith(" *") &&
+        normalized.startsWith(pattern.slice(0, -2))
+      ) {
+        return {
+          state: action,
+          origin: "global",
+          matchedPattern: pattern,
+          surface: "bash",
+          value: normalized,
+        };
       }
     }
 

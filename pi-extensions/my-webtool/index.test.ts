@@ -55,7 +55,9 @@ describe("myWebtool", () => {
 
   it("calls tavily.check on load", async () => {
     const { Tavily } = await import("./backends/tavily");
-    const mockCheck = vi.fn().mockResolvedValue({ enabled: true, message: "ok" });
+    const mockCheck = vi
+      .fn()
+      .mockResolvedValue({ enabled: true, message: "ok" });
     vi.mocked(Tavily).mockImplementation(function () {
       return {
         name: "tavily",
@@ -77,11 +79,13 @@ describe("myWebtool", () => {
     mod.default(mockPi);
 
     const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
+      (call) => call[0].name === "web_search",
     )![0];
     expect(webSearch.label).toBe("Web Search");
     expect(webSearch.executionMode).toBe("parallel");
-    expect(webSearch.promptGuidelines).toContain("If Tavily is not enabled, skip this tool call.");
+    expect(webSearch.promptGuidelines).toContain(
+      "If Tavily is not enabled, skip this tool call.",
+    );
   });
 
   it("web_fetch has correct metadata", async () => {
@@ -89,11 +93,13 @@ describe("myWebtool", () => {
     mod.default(mockPi);
 
     const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
+      (call) => call[0].name === "web_fetch",
     )![0];
     expect(webFetch.label).toBe("Web Fetch");
     expect(webFetch.executionMode).toBe("parallel");
-    expect(webFetch.promptGuidelines).toContain("If Tavily is not enabled, skip this tool call.");
+    expect(webFetch.promptGuidelines).toContain(
+      "If Tavily is not enabled, skip this tool call.",
+    );
   });
 
   it("web_search execute returns error when provider not enabled", async () => {
@@ -101,7 +107,7 @@ describe("myWebtool", () => {
     mod.default(mockPi);
 
     const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
+      (call) => call[0].name === "web_search",
     )![0];
 
     const result = await webSearch.execute(
@@ -109,7 +115,7 @@ describe("myWebtool", () => {
       { query: "test" },
       undefined,
       vi.fn(),
-      {}
+      {},
     );
 
     expect(result.content[0].text).toContain("No results found");
@@ -121,7 +127,7 @@ describe("myWebtool", () => {
     mod.default(mockPi);
 
     const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
+      (call) => call[0].name === "web_fetch",
     )![0];
 
     const result = await webFetch.execute(
@@ -129,7 +135,7 @@ describe("myWebtool", () => {
       { url: "https://example.com" },
       undefined,
       vi.fn(),
-      {}
+      {},
     );
 
     expect(result.content[0].text).toContain("Tavily is not enabled");
@@ -143,7 +149,7 @@ describe("myWebtool", () => {
       const mod = await import("./index");
       mod.default(mockPi);
       webSearch = mockRegisterTool.mock.calls.find(
-        (call) => call[0].name === "web_search"
+        (call) => call[0].name === "web_search",
       )![0];
     });
 
@@ -161,7 +167,7 @@ describe("myWebtool", () => {
         { content: [], details: {} },
         { expanded: false, isPartial: true },
         theme,
-        {}
+        {},
       );
       expect(theme.fg).toHaveBeenCalledOnce();
       expect(theme.fg).toHaveBeenCalledWith("warning", "Searching...");
@@ -173,7 +179,7 @@ describe("myWebtool", () => {
         { content: [], details: { resultCount: 5, results: [] } },
         { expanded: false, isPartial: false },
         theme,
-        {}
+        {},
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ 5 results");
     });
@@ -184,7 +190,7 @@ describe("myWebtool", () => {
         { content: [], details: { resultCount: 1, results: [] } },
         { expanded: false, isPartial: false },
         theme,
-        {}
+        {},
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ 1 result");
     });
@@ -195,7 +201,7 @@ describe("myWebtool", () => {
         { content: [], details: {} },
         { expanded: false, isPartial: false },
         theme,
-        {}
+        {},
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ 0 results");
     });
@@ -212,7 +218,7 @@ describe("myWebtool", () => {
         },
         { expanded: true, isPartial: false },
         theme,
-        {}
+        {},
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ 2 results");
       expect(theme.fg).toHaveBeenCalledWith("dim", "• A");
@@ -226,7 +232,7 @@ describe("myWebtool", () => {
       const mod = await import("./index");
       mod.default(mockPi);
       webFetch = mockRegisterTool.mock.calls.find(
-        (call) => call[0].name === "web_fetch"
+        (call) => call[0].name === "web_fetch",
       )![0];
     });
 
@@ -244,7 +250,7 @@ describe("myWebtool", () => {
         { content: [], details: {} },
         { expanded: false, isPartial: true },
         theme,
-        {}
+        {},
       );
       expect(theme.fg).toHaveBeenCalledOnce();
       expect(theme.fg).toHaveBeenCalledWith("warning", "Fetching...");
@@ -256,7 +262,7 @@ describe("myWebtool", () => {
         { content: [], details: { title: "Example" } },
         { expanded: false, isPartial: false },
         theme,
-        {}
+        {},
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
       expect(theme.fg).toHaveBeenCalledWith("muted", ": Example");
@@ -268,7 +274,7 @@ describe("myWebtool", () => {
         { content: [], details: { truncation: { truncated: true } } },
         { expanded: false, isPartial: false },
         theme,
-        {}
+        {},
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
       expect(theme.fg).toHaveBeenCalledWith("warning", " (truncated)");
@@ -280,7 +286,7 @@ describe("myWebtool", () => {
         { content: [{ type: "text", text: "Hello world" }], details: {} },
         { expanded: true, isPartial: false },
         theme,
-        {}
+        {},
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
       expect(theme.fg).toHaveBeenCalledWith("dim", "Hello world");
@@ -292,7 +298,7 @@ describe("myWebtool", () => {
         { content: [{ type: "image", url: "http://x" }], details: {} },
         { expanded: true, isPartial: false },
         theme,
-        {}
+        {},
       );
       expect(theme.fg).toHaveBeenCalledWith("success", "✓ Fetched");
       expect(theme.fg).not.toHaveBeenCalledWith("dim", expect.any(String));
@@ -304,7 +310,9 @@ describe("myWebtool", () => {
     const mockSearch = vi.fn().mockResolvedValue({
       ok: true,
       query: "test",
-      results: [{ title: "Title", url: "https://example.com", snippet: "Snippet" }],
+      results: [
+        { title: "Title", url: "https://example.com", snippet: "Snippet" },
+      ],
     });
     vi.mocked(Tavily).mockImplementation(function () {
       return {
@@ -321,7 +329,7 @@ describe("myWebtool", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
+      (call) => call[0].name === "web_search",
     )![0];
 
     const onUpdate = vi.fn();
@@ -330,7 +338,7 @@ describe("myWebtool", () => {
       { query: "test" },
       undefined,
       onUpdate,
-      {}
+      {},
     );
 
     expect(onUpdate).toHaveBeenCalled();
@@ -345,7 +353,9 @@ describe("myWebtool", () => {
         name: "tavily",
         label: "Tavily",
         check: vi.fn().mockResolvedValue({ enabled: true, message: "ok" }),
-        search: vi.fn().mockResolvedValue({ ok: true, query: "test", results: [] }),
+        search: vi
+          .fn()
+          .mockResolvedValue({ ok: true, query: "test", results: [] }),
         fetch: vi.fn(),
       } as any;
     });
@@ -355,10 +365,16 @@ describe("myWebtool", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
+      (call) => call[0].name === "web_search",
     )![0];
 
-    const result = await webSearch.execute("tool-call-id", { query: "test" }, undefined, vi.fn(), {});
+    const result = await webSearch.execute(
+      "tool-call-id",
+      { query: "test" },
+      undefined,
+      vi.fn(),
+      {},
+    );
     expect(result.content[0].text).toContain("No results found");
   });
 
@@ -369,7 +385,9 @@ describe("myWebtool", () => {
         name: "tavily",
         label: "Tavily",
         check: vi.fn().mockResolvedValue({ enabled: true, message: "ok" }),
-        search: vi.fn().mockResolvedValue({ ok: false, query: "test", error: "API error" }),
+        search: vi
+          .fn()
+          .mockResolvedValue({ ok: false, query: "test", error: "API error" }),
         fetch: vi.fn(),
       } as any;
     });
@@ -379,10 +397,16 @@ describe("myWebtool", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webSearch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_search"
+      (call) => call[0].name === "web_search",
     )![0];
 
-    const result = await webSearch.execute("tool-call-id", { query: "test" }, undefined, vi.fn(), {});
+    const result = await webSearch.execute(
+      "tool-call-id",
+      { query: "test" },
+      undefined,
+      vi.fn(),
+      {},
+    );
     expect(result.content[0].text).toContain("API error");
   });
 
@@ -406,7 +430,7 @@ describe("myWebtool", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
+      (call) => call[0].name === "web_fetch",
     )![0];
 
     const onUpdate = vi.fn();
@@ -415,7 +439,7 @@ describe("myWebtool", () => {
       { url: "https://example.com" },
       undefined,
       onUpdate,
-      {}
+      {},
     );
 
     expect(onUpdate).toHaveBeenCalled();
@@ -439,10 +463,16 @@ describe("myWebtool", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
+      (call) => call[0].name === "web_fetch",
     )![0];
 
-    const result = await webFetch.execute("tool-call-id", { url: "https://example.com" }, undefined, vi.fn(), {});
+    const result = await webFetch.execute(
+      "tool-call-id",
+      { url: "https://example.com" },
+      undefined,
+      vi.fn(),
+      {},
+    );
     expect(result.content[0].text).toBe("Fetch failed");
   });
 
@@ -466,10 +496,16 @@ describe("myWebtool", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
+      (call) => call[0].name === "web_fetch",
     )![0];
 
-    const result = await webFetch.execute("tool-call-id", { url: "https://example.com" }, undefined, vi.fn(), {});
+    const result = await webFetch.execute(
+      "tool-call-id",
+      { url: "https://example.com" },
+      undefined,
+      vi.fn(),
+      {},
+    );
     expect(result.content[0].text).toContain("Hello");
   });
 
@@ -494,10 +530,16 @@ describe("myWebtool", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const webFetch = mockRegisterTool.mock.calls.find(
-      (call) => call[0].name === "web_fetch"
+      (call) => call[0].name === "web_fetch",
     )![0];
 
-    const result = await webFetch.execute("tool-call-id", { url: "https://example.com" }, undefined, vi.fn(), {});
+    const result = await webFetch.execute(
+      "tool-call-id",
+      { url: "https://example.com" },
+      undefined,
+      vi.fn(),
+      {},
+    );
     expect(result.content[0].text).toContain("truncated");
     expect(result.details.truncation).toBeDefined();
     expect(result.details.fullOutputPath).toBeDefined();
@@ -508,7 +550,7 @@ describe("myWebtool", () => {
     mod.default(mockPi);
 
     const cmd = mockRegisterCommand.mock.calls.find(
-      (call) => call[0] === "webtool-usage"
+      (call) => call[0] === "webtool-usage",
     )!;
     expect(cmd).toBeDefined();
     expect(cmd[1].description).toBe("Show Tavily usage statistics");
@@ -539,16 +581,22 @@ describe("myWebtool", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const cmd = mockRegisterCommand.mock.calls.find(
-      (call) => call[0] === "webtool-usage"
+      (call) => call[0] === "webtool-usage",
     )!;
     const handler = cmd[1].handler;
-    await handler("", { ui: { notify: mockNotify, setWidget: mockSetWidget } } as any);
+    await handler("", {
+      ui: { notify: mockNotify, setWidget: mockSetWidget },
+    } as any);
 
-    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", ["Checking Tavily usage..."]);
-    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", ["Tavily: key 10/100 used (90 remaining); plan 5/200 used (195 remaining)"]);
+    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", [
+      "Checking Tavily usage...",
+    ]);
+    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", [
+      "Tavily: key 10/100 used (90 remaining); plan 5/200 used (195 remaining)",
+    ]);
     expect(mockNotify).toHaveBeenCalledWith(
       "Tavily: key 10/100 used (90 remaining); plan 5/200 used (195 remaining)",
-      "info"
+      "info",
     );
   });
 
@@ -579,10 +627,12 @@ describe("myWebtool", () => {
     await vi.runAllTimersAsync();
 
     const cmd = mockRegisterCommand.mock.calls.find(
-      (call) => call[0] === "webtool-usage"
+      (call) => call[0] === "webtool-usage",
     )!;
     const handler = cmd[1].handler;
-    await handler("", { ui: { notify: mockNotify, setWidget: mockSetWidget } } as any);
+    await handler("", {
+      ui: { notify: mockNotify, setWidget: mockSetWidget },
+    } as any);
 
     expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", [
       "Tavily: key 10/100 used (90 remaining); plan 5/200 used (195 remaining)",
@@ -618,16 +668,22 @@ describe("myWebtool", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const cmd = mockRegisterCommand.mock.calls.find(
-      (call) => call[0] === "webtool-usage"
+      (call) => call[0] === "webtool-usage",
     )!;
     const handler = cmd[1].handler;
-    await handler("", { ui: { notify: mockNotify, setWidget: mockSetWidget } } as any);
+    await handler("", {
+      ui: { notify: mockNotify, setWidget: mockSetWidget },
+    } as any);
 
-    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", ["Checking Tavily usage..."]);
-    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", ["Usage check failed: API key missing"]);
+    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", [
+      "Checking Tavily usage...",
+    ]);
+    expect(mockSetWidget).toHaveBeenCalledWith("my-webtool", [
+      "Usage check failed: API key missing",
+    ]);
     expect(mockNotify).toHaveBeenCalledWith(
       "Usage check failed: API key missing",
-      "error"
+      "error",
     );
   });
 });

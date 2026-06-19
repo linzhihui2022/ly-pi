@@ -10,10 +10,7 @@ const USD_TO_CNY = 7;
 export function aggregateSessionUsage(entries: SessionEntry[]): TokenUsage {
   return entries
     .map((entry) => {
-      if (
-        entry.type === "message" &&
-        entry.message?.role === "assistant"
-      ) {
+      if (entry.type === "message" && entry.message?.role === "assistant") {
         return {
           input: entry.message.usage.input,
           output: entry.message.usage.output,

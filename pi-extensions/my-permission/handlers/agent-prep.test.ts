@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createAgentPrepHandler, type AgentPrepDependencies } from "./agent-prep.js";
+import {
+  createAgentPrepHandler,
+  type AgentPrepDependencies,
+} from "./agent-prep.js";
 
-function makeDeps(overrides: Partial<AgentPrepDependencies> = {}): AgentPrepDependencies {
+function makeDeps(
+  overrides: Partial<AgentPrepDependencies> = {},
+): AgentPrepDependencies {
   return {
     loadConfig: () => ({
       default: "ask",
@@ -11,7 +16,7 @@ function makeDeps(overrides: Partial<AgentPrepDependencies> = {}): AgentPrepDepe
       bash: {},
       paths: {},
       skills: {},
-      ...overrides.configOverrides ?? {},
+      ...(overrides.configOverrides ?? {}),
     }),
     ...overrides,
   };
@@ -31,7 +36,9 @@ describe("createAgentPrepHandler", () => {
     );
     const event = { systemPrompt: "Use these tools: read, bash, write" } as any;
     const result = handler(event, {} as any);
-    expect(result?.systemPrompt).toContain("[my-permission] Denied tools: bash, write");
+    expect(result?.systemPrompt).toContain(
+      "[my-permission] Denied tools: bash, write",
+    );
   });
 
   it("does not append when no denied tools are configured", () => {

@@ -19,7 +19,11 @@ export async function findAvailablePort(
 
     function tryPort() {
       if (currentPort >= startPort + maxAttempts) {
-        reject(new Error(`No available port found in range ${startPort}-${startPort + maxAttempts - 1}`));
+        reject(
+          new Error(
+            `No available port found in range ${startPort}-${startPort + maxAttempts - 1}`,
+          ),
+        );
         return;
       }
 
@@ -42,14 +46,19 @@ export async function findAvailablePort(
   });
 }
 
-export async function ensurePreviewServer(
-  options: { host: string; urlHost: string; port?: number },
-): Promise<PreviewServer> {
+export async function ensurePreviewServer(options: {
+  host: string;
+  urlHost: string;
+  port?: number;
+}): Promise<PreviewServer> {
   if (activeServer) {
     return activeServer;
   }
 
-  const port = await findAvailablePort(options.port ?? DEFAULT_PORT, options.host);
+  const port = await findAvailablePort(
+    options.port ?? DEFAULT_PORT,
+    options.host,
+  );
   const url = `http://${options.urlHost}:${port}`;
 
   const server = createServer((req, res) => {
@@ -92,7 +101,9 @@ export async function ensurePreviewServer(
     res.end("Not found");
   });
 
-  await new Promise<void>((resolve) => server.listen(port, options.host, resolve));
+  await new Promise<void>((resolve) =>
+    server.listen(port, options.host, resolve),
+  );
 
   activeServer = { port, url, server };
   return activeServer;
@@ -108,5 +119,3 @@ export async function stopPreviewServer(): Promise<void> {
     server.close(() => resolve());
   });
 }
-
-

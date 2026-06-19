@@ -13,11 +13,22 @@ export function buildStatusLine(
   width: number,
   data: StatusLineData,
 ): string {
-  const { project: rawProject, modelName, branch, ctxColored, usage, gitStatus } = data;
-  const project = rawProject.length > 10 ? rawProject.slice(0, 8) + ".." : rawProject;
+  const {
+    project: rawProject,
+    modelName,
+    branch,
+    ctxColored,
+    usage,
+    gitStatus,
+  } = data;
+  const project =
+    rawProject.length > 10 ? rawProject.slice(0, 8) + ".." : rawProject;
   const parts: string[] = [
     theme.fg("mdCode", `${icon("project")}${project}`),
-    theme.fg("mdHeading", `${icon("model")}${shortModelName(modelName.trim())}`),
+    theme.fg(
+      "mdHeading",
+      `${icon("model")}${shortModelName(modelName.trim())}`,
+    ),
   ];
 
   if (branch) {
@@ -32,9 +43,15 @@ export function buildStatusLine(
     ctxColored,
     theme.fg("mdListBullet", `${icon("input")}${formatTokens(usage.input)}`),
     theme.fg("thinkingLow", `${icon("output")}${formatTokens(usage.output)}`),
-    theme.fg("thinkingMedium", `${icon("cacheRead")}${formatTokens(usage.cacheRead)}`),
+    theme.fg(
+      "thinkingMedium",
+      `${icon("cacheRead")}${formatTokens(usage.cacheRead)}`,
+    ),
     theme.fg("toolDiffRemoved", `${icon("cost")}${usage.cost.toFixed(2)}`),
-    theme.fg("accent", `${icon("cacheRate")}${formatCacheRate(usage.input, usage.cacheRead)}`),
+    theme.fg(
+      "accent",
+      `${icon("cacheRate")}${formatCacheRate(usage.input, usage.cacheRead)}`,
+    ),
   );
 
   return truncateToWidth(parts.join(" "), width);
@@ -44,7 +61,10 @@ export function buildStatusLine(
  * Format GitStatus into a colored string matching starship git_status style.
  * Returns empty string if status is null or clean.
  */
-export function formatGitStatus(theme: Theme, status: GitStatus | null | undefined): string {
+export function formatGitStatus(
+  theme: Theme,
+  status: GitStatus | null | undefined,
+): string {
   if (!status || status.isClean) return "";
 
   const parts: string[] = [];

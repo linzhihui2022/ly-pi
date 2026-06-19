@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import WebSocket from "ws";
-import { createCompanionServer, findAvailablePort, isFullDocument, handleRequest, createHttpHandler, createWsMessageHandler, createUpdateScreenHook } from "./server";
+import {
+  createCompanionServer,
+  findAvailablePort,
+  isFullDocument,
+  handleRequest,
+  createHttpHandler,
+  createWsMessageHandler,
+  createUpdateScreenHook,
+} from "./server";
 import { SessionManager } from "./session";
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -25,9 +33,13 @@ describe("findAvailablePort", () => {
   it("rejects when range is exhausted", async () => {
     // Occupy the only port in range
     const occupier = createServer();
-    await new Promise<void>((resolve) => occupier.listen(55200, "127.0.0.1", resolve));
+    await new Promise<void>((resolve) =>
+      occupier.listen(55200, "127.0.0.1", resolve),
+    );
 
-    await expect(findAvailablePort(55200, "127.0.0.1", 1)).rejects.toThrow("No available port");
+    await expect(findAvailablePort(55200, "127.0.0.1", 1)).rejects.toThrow(
+      "No available port",
+    );
 
     occupier.close();
     await new Promise<void>((resolve) => occupier.on("close", resolve));
@@ -51,7 +63,10 @@ describe("createCompanionServer", () => {
   });
 
   it("starts HTTP server on available port and serves waiting page", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
     const res = await fetch(session.url);
     const text = await res.text();
@@ -63,7 +78,10 @@ describe("createCompanionServer", () => {
   });
 
   it("serves active screen wrapped in frame", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
     manager.updateScreen(session.id, "layout", "<h1>Test Screen</h1>");
 
@@ -78,9 +96,16 @@ describe("createCompanionServer", () => {
   });
 
   it("serves full documents without wrapping", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
-    manager.updateScreen(session.id, "full", "<!DOCTYPE html><html><body><h1>Full</h1></body></html>");
+    manager.updateScreen(
+      session.id,
+      "full",
+      "<!DOCTYPE html><html><body><h1>Full</h1></body></html>",
+    );
 
     const res = await fetch(session.url);
     const text = await res.text();
@@ -92,18 +117,28 @@ describe("createCompanionServer", () => {
   });
 
   it("returns 404 for unknown files", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
-    const res = await fetch(`${session.url.replace(/\/?\?.*$/, "")}/files/nonexistent.png?key=${encodeURIComponent(session.key)}`);
+    const res = await fetch(
+      `${session.url.replace(/\/?\?.*$/, "")}/files/nonexistent.png?key=${encodeURIComponent(session.key)}`,
+    );
     expect(res.status).toBe(404);
 
     await manager.destroy(session.id);
   });
 
   it("serves helper.js route", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
-    const res = await fetch(`${session.url.replace(/\/?\?.*$/, "")}/helper.js?key=${encodeURIComponent(session.key)}`);
+    const res = await fetch(
+      `${session.url.replace(/\/?\?.*$/, "")}/helper.js?key=${encodeURIComponent(session.key)}`,
+    );
     const text = await res.text();
 
     expect(res.status).toBe(200);
@@ -113,7 +148,10 @@ describe("createCompanionServer", () => {
   });
 
   it("returns 404 for unknown methods", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
     const res = await fetch(session.url, { method: "POST" });
     expect(res.status).toBe(404);
@@ -122,7 +160,10 @@ describe("createCompanionServer", () => {
   });
 
   it("injects helper script even without </body>", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
     manager.updateScreen(session.id, "nobody", "<h1>No Body</h1>");
 
@@ -136,9 +177,14 @@ describe("createCompanionServer", () => {
   });
 
   it("broadcasts reload via WebSocket when screen updates", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
-    const ws = new WebSocket(`ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`);
+    const ws = new WebSocket(
+      `ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`,
+    );
     const messages: any[] = [];
 
     await new Promise<void>((resolve, reject) => {
@@ -160,9 +206,14 @@ describe("createCompanionServer", () => {
   });
 
   it("receives click events and appends to session", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
-    const ws = new WebSocket(`ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`);
+    const ws = new WebSocket(
+      `ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`,
+    );
 
     await new Promise<void>((resolve, reject) => {
       ws.on("open", resolve);
@@ -170,7 +221,14 @@ describe("createCompanionServer", () => {
       setTimeout(() => reject(new Error("WS timeout")), 2000);
     });
 
-    ws.send(JSON.stringify({ type: "click", text: "Option A", choice: "a", timestamp: Date.now() }));
+    ws.send(
+      JSON.stringify({
+        type: "click",
+        text: "Option A",
+        choice: "a",
+        timestamp: Date.now(),
+      }),
+    );
 
     await new Promise((r) => setTimeout(r, 300));
 
@@ -183,9 +241,14 @@ describe("createCompanionServer", () => {
   });
 
   it("ignores malformed WebSocket messages", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
-    const ws = new WebSocket(`ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`);
+    const ws = new WebSocket(
+      `ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`,
+    );
 
     await new Promise<void>((resolve, reject) => {
       ws.on("open", resolve);
@@ -204,13 +267,20 @@ describe("createCompanionServer", () => {
   });
 
   it("rejects findAvailablePort for invalid host", async () => {
-    await expect(findAvailablePort(55000, "invalid.host.name.that.does.not.exist")).rejects.toThrow();
+    await expect(
+      findAvailablePort(55000, "invalid.host.name.that.does.not.exist"),
+    ).rejects.toThrow();
   });
 
   it("confirm WebSocket events reset idle timer", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
-    const ws = new WebSocket(`ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`);
+    const ws = new WebSocket(
+      `ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`,
+    );
 
     await new Promise<void>((resolve, reject) => {
       ws.on("open", resolve);
@@ -221,24 +291,40 @@ describe("createCompanionServer", () => {
     // Spy on resetIdleTimer
     const spy = vi.spyOn(manager, "resetIdleTimer");
 
-    ws.send(JSON.stringify({ type: "confirm", text: "Selected", timestamp: Date.now() }));
+    ws.send(
+      JSON.stringify({
+        type: "confirm",
+        text: "Selected",
+        timestamp: Date.now(),
+      }),
+    );
 
     await new Promise((r) => setTimeout(r, 300));
 
     // Should be called once by appendEvent (which calls resetIdleTimer for confirm)
     // and again by the WS handler itself
     expect(spy).toHaveBeenCalled();
-    
+
     ws.close();
     await manager.destroy(session.id);
   });
 
   it("does not broadcast reload for different session id", async () => {
-    const { session: serverSession } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session: serverSession } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
     // Create another session manually (not via companion server, so no WS broadcast hook for it)
-    const otherSession = manager.create(9999, "http://localhost:9999", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const otherSession = manager.create(
+      9999,
+      "http://localhost:9999",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
 
-    const ws = new WebSocket(`ws://localhost:${serverSession.port}/?key=${encodeURIComponent(serverSession.key)}`);
+    const ws = new WebSocket(
+      `ws://localhost:${serverSession.port}/?key=${encodeURIComponent(serverSession.key)}`,
+    );
     await new Promise<void>((resolve, reject) => {
       ws.on("open", resolve);
       ws.on("error", reject);
@@ -262,9 +348,14 @@ describe("createCompanionServer", () => {
   });
 
   it("does not broadcast reload to non-open clients", async () => {
-    const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
+    const { session } = await createCompanionServer(manager, {
+      host: "127.0.0.1",
+      urlHost: "localhost",
+    });
 
-    const ws = new WebSocket(`ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`);
+    const ws = new WebSocket(
+      `ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`,
+    );
     await new Promise<void>((resolve, reject) => {
       ws.on("open", resolve);
       ws.on("error", reject);
@@ -326,7 +417,12 @@ describe("handleRequest", () => {
   it("returns 404 on non-matching paths", () => {
     const { session } = (() => {
       // Create a session inside manager
-      const s = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+      const s = manager.create(
+        8080,
+        "http://localhost:8080",
+        { close: vi.fn((cb: any) => cb?.()) } as any,
+        { close: vi.fn(), clients: new Set() } as any,
+      );
       return { session: s };
     })();
 
@@ -340,20 +436,32 @@ describe("handleRequest", () => {
   });
 
   it("serves waiting page when no active screen", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
 
     const req = mockReq("GET", "/", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
 
-    expect(res.writeHead).toHaveBeenCalledWith(200, { "Content-Type": "text/html; charset=utf-8" });
+    expect(res.writeHead).toHaveBeenCalledWith(200, {
+      "Content-Type": "text/html; charset=utf-8",
+    });
     const endArg = (res.end as any).mock.calls[0][0] as string;
     expect(endArg).toContain("Waiting for the agent");
   });
 
   it("serves active screen wrapped in frame", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
     manager.updateScreen(session.id, "main", "<h1>Hello</h1>");
 
     const req = mockReq("GET", "/", session.key);
@@ -367,8 +475,17 @@ describe("handleRequest", () => {
   });
 
   it("serves full documents without wrapping", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
-    manager.updateScreen(session.id, "full", "<!DOCTYPE html><html><body><h1>Full</h1></body></html>");
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
+    manager.updateScreen(
+      session.id,
+      "full",
+      "<!DOCTYPE html><html><body><h1>Full</h1></body></html>",
+    );
 
     const req = mockReq("GET", "/", session.key);
     const res = mockRes();
@@ -381,7 +498,12 @@ describe("handleRequest", () => {
   });
 
   it("injects helper script without </body> tag", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
     manager.updateScreen(session.id, "nobody", "<h1>No body</h1>");
 
     const req = mockReq("GET", "/", session.key);
@@ -395,8 +517,17 @@ describe("handleRequest", () => {
   });
 
   it("injects helper script for full doc without </body>", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
-    manager.updateScreen(session.id, "nobodyclose", "<!DOCTYPE html><html><body><h1>No close");
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
+    manager.updateScreen(
+      session.id,
+      "nobodyclose",
+      "<!DOCTYPE html><html><body><h1>No close",
+    );
 
     const req = mockReq("GET", "/", session.key);
     const res = mockRes();
@@ -409,20 +540,32 @@ describe("handleRequest", () => {
   });
 
   it("serves helper.js", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
 
     const req = mockReq("GET", "/helper.js", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
 
-    expect(res.writeHead).toHaveBeenCalledWith(200, { "Content-Type": "application/javascript; charset=utf-8" });
+    expect(res.writeHead).toHaveBeenCalledWith(200, {
+      "Content-Type": "application/javascript; charset=utf-8",
+    });
     const endArg = (res.end as any).mock.calls[0][0] as string;
     expect(endArg).toContain("WS_URL");
   });
 
   it("serves screen files via /files/ route", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
     manager.updateScreen(session.id, "popup", "<div>Popup content</div>");
 
     const req = mockReq("GET", "/files/popup", session.key);
@@ -430,12 +573,19 @@ describe("handleRequest", () => {
 
     handleRequest(req, res, manager, session.id);
 
-    expect(res.writeHead).toHaveBeenCalledWith(200, { "Content-Type": "text/html; charset=utf-8" });
+    expect(res.writeHead).toHaveBeenCalledWith(200, {
+      "Content-Type": "text/html; charset=utf-8",
+    });
     expect(res.end).toHaveBeenCalledWith("<div>Popup content</div>");
   });
 
   it("returns 404 for unknown /files/ path", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
 
     const req = mockReq("GET", "/files/unknown", session.key);
     const res = mockRes();
@@ -465,7 +615,10 @@ describe("createHttpHandler", () => {
     } as unknown as import("node:http").ServerResponse;
 
     handler(
-      { method: "GET", url: "/" } as unknown as import("node:http").IncomingMessage,
+      {
+        method: "GET",
+        url: "/",
+      } as unknown as import("node:http").IncomingMessage,
       res,
     );
 
@@ -474,7 +627,12 @@ describe("createHttpHandler", () => {
   });
 
   it("delegates to handleRequest when sessionId is set", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
     const handler = createHttpHandler(manager, () => session.id);
     const res = {
       writeHead: vi.fn(),
@@ -483,25 +641,30 @@ describe("createHttpHandler", () => {
     } as unknown as import("node:http").ServerResponse;
 
     handler(
-      { method: "GET", url: "/", headers: { cookie: `vc_key=${session.key}` } } as unknown as import("node:http").IncomingMessage,
+      {
+        method: "GET",
+        url: "/",
+        headers: { cookie: `vc_key=${session.key}` },
+      } as unknown as import("node:http").IncomingMessage,
       res,
     );
 
     // Should serve the waiting page
-    expect(res.writeHead).toHaveBeenCalledWith(200, { "Content-Type": "text/html; charset=utf-8" });
-    expect((res.end as any).mock.calls[0][0]).toContain("Waiting for the agent");
+    expect(res.writeHead).toHaveBeenCalledWith(200, {
+      "Content-Type": "text/html; charset=utf-8",
+    });
+    expect((res.end as any).mock.calls[0][0]).toContain(
+      "Waiting for the agent",
+    );
   });
 });
 
 describe("createUpdateScreenHook", () => {
   it("calls original updateScreen", () => {
     const original = vi.fn();
-    const hook = createUpdateScreenHook(
-      {} as any,
-      original,
-      "session-1",
-      { clients: new Set() } as any,
-    );
+    const hook = createUpdateScreenHook({} as any, original, "session-1", {
+      clients: new Set(),
+    } as any);
 
     hook("session-1", "test", "<h1>Hi</h1>");
 
@@ -511,12 +674,9 @@ describe("createUpdateScreenHook", () => {
   it("broadcasts to WebSocket clients when id matches sessionId", () => {
     const mockSend = vi.fn();
     const mockClient = { readyState: WebSocket.OPEN, send: mockSend };
-    const hook = createUpdateScreenHook(
-      {} as any,
-      vi.fn(),
-      "session-1",
-      { clients: new Set([mockClient]) } as any,
-    );
+    const hook = createUpdateScreenHook({} as any, vi.fn(), "session-1", {
+      clients: new Set([mockClient]),
+    } as any);
 
     hook("session-1", "test", "<h1>Hi</h1>");
 
@@ -526,12 +686,9 @@ describe("createUpdateScreenHook", () => {
   it("skips broadcast when id does not match sessionId", () => {
     const mockSend = vi.fn();
     const mockClient = { readyState: WebSocket.OPEN, send: mockSend };
-    const hook = createUpdateScreenHook(
-      {} as any,
-      vi.fn(),
-      "session-1",
-      { clients: new Set([mockClient]) } as any,
-    );
+    const hook = createUpdateScreenHook({} as any, vi.fn(), "session-1", {
+      clients: new Set([mockClient]),
+    } as any);
 
     hook("session-2", "test", "<h1>Hi</h1>");
 
@@ -541,12 +698,9 @@ describe("createUpdateScreenHook", () => {
   it("skips non-open clients when broadcasting", () => {
     const mockSend = vi.fn();
     const mockClosedClient = { readyState: WebSocket.CLOSED, send: mockSend };
-    const hook = createUpdateScreenHook(
-      {} as any,
-      vi.fn(),
-      "session-1",
-      { clients: new Set([mockClosedClient]) } as any,
-    );
+    const hook = createUpdateScreenHook({} as any, vi.fn(), "session-1", {
+      clients: new Set([mockClosedClient]),
+    } as any);
 
     hook("session-1", "test", "<h1>Hi</h1>");
 
@@ -575,17 +729,30 @@ describe("createWsMessageHandler", () => {
   });
 
   it("appends event to session", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
     const spy = vi.spyOn(manager, "appendEvent");
     const handler = createWsMessageHandler(manager, () => session.id);
 
     handler(JSON.stringify({ type: "click", text: "hello", timestamp: 123 }));
 
-    expect(spy).toHaveBeenCalledWith(session.id, expect.objectContaining({ type: "click", text: "hello" }));
+    expect(spy).toHaveBeenCalledWith(
+      session.id,
+      expect.objectContaining({ type: "click", text: "hello" }),
+    );
   });
 
   it("defaults timestamp to Date.now() when missing", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
     const spy = vi.spyOn(manager, "appendEvent");
     const handler = createWsMessageHandler(manager, () => session.id);
 
@@ -598,7 +765,12 @@ describe("createWsMessageHandler", () => {
   });
 
   it("calls resetIdleTimer on confirm events", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
     const spy = vi.spyOn(manager, "resetIdleTimer");
     const handler = createWsMessageHandler(manager, () => session.id);
 
@@ -608,7 +780,12 @@ describe("createWsMessageHandler", () => {
   });
 
   it("ignores malformed JSON", () => {
-    const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
     const spy = vi.spyOn(manager, "appendEvent");
     const handler = createWsMessageHandler(manager, () => session.id);
 

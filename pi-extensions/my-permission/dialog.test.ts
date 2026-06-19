@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  type DialogResult,
-  askPermission,
-} from "./dialog.js";
+import { type DialogResult, askPermission } from "./dialog.js";
 import type { CheckResult } from "./checker.js";
 
 function makeCheckResult(overrides: Partial<CheckResult> = {}): CheckResult {
@@ -61,7 +58,9 @@ describe("askPermission", () => {
     const ui = makeMockUI(["Deny with reason", "sensitive data"]);
     const result = await askPermission(makeCheckResult(), ui as any);
     expect(result.kind).toBe("deny-with-reason");
-    expect((result as DialogResult & { reason: string }).reason).toBe("sensitive data");
+    expect((result as DialogResult & { reason: string }).reason).toBe(
+      "sensitive data",
+    );
   });
 
   it("returns deny when deny-with-reason is cancelled", async () => {

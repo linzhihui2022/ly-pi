@@ -7,7 +7,10 @@ export interface APIOptions {
   urlHost: string;
 }
 
-export function createVisualCompanionAPI(manager: SessionManager, options: APIOptions) {
+export function createVisualCompanionAPI(
+  manager: SessionManager,
+  options: APIOptions,
+) {
   return {
     async start(): Promise<SessionInfo> {
       const { session } = await createCompanionServer(manager, options);
@@ -19,7 +22,11 @@ export function createVisualCompanionAPI(manager: SessionManager, options: APIOp
       };
     },
 
-    async show(sessionId: string, name: string, html: string): Promise<{ url: string }> {
+    async show(
+      sessionId: string,
+      name: string,
+      html: string,
+    ): Promise<{ url: string }> {
       const session = manager.get(sessionId);
       if (!session) throw new Error("Session not found");
       manager.updateScreen(sessionId, name, html);

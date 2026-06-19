@@ -1,4 +1,8 @@
-import type { ExtensionContext, ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionContext,
+  ToolCallEvent,
+  ToolCallEventResult,
+} from "@earendil-works/pi-coding-agent";
 import type { PermissionChecker } from "../checker.js";
 import type { MergedConfig } from "../config.js";
 import type { DialogResult, DialogUI } from "../dialog.js";
@@ -9,8 +13,14 @@ import type { SubagentPolicyManager } from "../subagent-policy.js";
 export interface ToolCallDependencies {
   loadConfig(): MergedConfig;
   sessionState: SessionState;
-  checkerFactory(config: MergedConfig, sessionState: SessionState): PermissionChecker;
-  dialog(check: ReturnType<PermissionChecker["check"]>, ui: DialogUI): Promise<DialogResult>;
+  checkerFactory(
+    config: MergedConfig,
+    sessionState: SessionState,
+  ): PermissionChecker;
+  dialog(
+    check: ReturnType<PermissionChecker["check"]>,
+    ui: DialogUI,
+  ): Promise<DialogResult>;
   logger: Logger;
   subagentPolicy: SubagentPolicyManager;
   saveProjectRule?(cwd: string, surface: string, pattern: string): void;
@@ -20,13 +30,16 @@ function getToolInput(event: ToolCallEvent): Record<string, unknown> {
   return event.input as Record<string, unknown>;
 }
 
-function buildCheckInput(event: ToolCallEvent): import("../checker.js").CheckInput {
+function buildCheckInput(
+  event: ToolCallEvent,
+): import("../checker.js").CheckInput {
   const input = getToolInput(event);
   return {
     toolName: event.toolName,
     command: typeof input.command === "string" ? input.command : undefined,
     path: typeof input.path === "string" ? input.path : undefined,
-    skillName: typeof input.skillName === "string" ? input.skillName : undefined,
+    skillName:
+      typeof input.skillName === "string" ? input.skillName : undefined,
   };
 }
 
@@ -43,15 +56,30 @@ export function createToolCallHandler(deps: ToolCallDependencies) {
     let finalCheck = check;
 
     if (check.state === "deny") {
-      result = { block: true, reason: `Permission denied: ${check.surface} "${check.value}"` };
+      result = {
+        block: true,
+        reason: `Permission denied: ${check.surface} "${check.value}"`,
+      };
     } else if (check.state === "ask") {
       if (!ctx.hasUI) {
-        result = { block: true, reason: `Permission denied: ${check.surface} "${check.value}" (no UI)` };
+        result = {
+          block: true,
+          reason: `Permission denied: ${check.surface} "${check.value}" (no UI)`,
+        };
       } else {
         const dialogResult = await deps.dialog(check, ctx.ui as DialogUI);
-        finalCheck = applyDialogResult(dialogResult, check, deps.sessionState, deps.saveProjectRule, ctx.cwd);
+        finalCheck = applyDialogResult(
+          dialogResult,
+          check,
+          deps.sessionState,
+          deps.saveProjectRule,
+          ctx.cwd,
+        );
         if (finalCheck.state !== "allow") {
-          result = { block: true, reason: `Permission denied: ${finalCheck.surface} "${finalCheck.value}"` };
+          result = {
+            block: true,
+            reason: `Permission denied: ${finalCheck.surface} "${finalCheck.value}"`,
+          };
         }
       }
     }
@@ -71,7 +99,13 @@ export function createToolCallHandler(deps: ToolCallDependencies) {
     }
 
     if (event.toolName === "subagent") {
-      injectSubagentPolicy(event, config, deps.sessionState, deps.subagentPolicy, ctx.sessionManager.getSessionId());
+      injectSubagentPolicy(
+        event,
+        config,
+        deps.sessionState,
+        deps.subagentPolicy,
+        ctx.sessionManager.getSessionId(),
+      );
     }
 
     deps.logger.logReview({
@@ -93,14 +127,20 @@ function applyDialogResult(
   dialogResult: DialogResult,
   check: import("../checker.js").CheckResult,
   sessionState: SessionState,
-  saveProjectRule: ((cwd: string, surface: string, pattern: string) => void) | undefined,
+  saveProjectRule:
+    | ((cwd: string, surface: string, pattern: string) => void)
+    | undefined,
   cwd: string,
 ): import("../checker.js").CheckResult {
   switch (dialogResult.kind) {
     case "allow-once":
       return { ...check, state: "allow", origin: "session" };
     case "allow-session": {
-      sessionState.addSessionRule({ surface: check.surface, pattern: check.value, action: "allow" });
+      sessionState.addSessionRule({
+        surface: check.surface,
+        pattern: check.value,
+        action: "allow",
+      });
       return { ...check, state: "allow", origin: "session" };
     }
     case "allow-project": {
@@ -122,11 +162,15 @@ function injectSubagentPolicy(
   parentSessionId: string,
 ): void {
   const policy = subagentPolicy.getDefaultPolicy(sessionState.yoloAllSub);
-  const snapshotPath = subagentPolicy.writePolicySnapshot(policy, {
-    config,
-    sessionRules: [],
-    yolo: sessionState.yolo,
-  }, parentSessionId);
+  const snapshotPath = subagentPolicy.writePolicySnapshot(
+    policy,
+    {
+      config,
+      sessionRules: [],
+      yolo: sessionState.yolo,
+    },
+    parentSessionId,
+  );
 
   const input = getToolInput(event);
   input.MY_PERMISSION_SUBAGENT_POLICY_FILE = snapshotPath;

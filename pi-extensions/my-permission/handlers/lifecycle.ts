@@ -1,4 +1,8 @@
-import type { ExtensionContext, SessionStartEvent, SessionShutdownEvent } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionContext,
+  SessionStartEvent,
+  SessionShutdownEvent,
+} from "@earendil-works/pi-coding-agent";
 import type { MergedConfig } from "../config.js";
 import type { Logger } from "../logger.js";
 import type { SessionRule, SessionState } from "../session-state.js";
@@ -11,10 +15,7 @@ export interface LifecycleDependencies {
 
 export function createLifecycleHandler(deps: LifecycleDependencies) {
   return {
-    handleSessionStart(
-      event: SessionStartEvent,
-      ctx: ExtensionContext,
-    ): void {
+    handleSessionStart(event: SessionStartEvent, ctx: ExtensionContext): void {
       const config = deps.loadConfig();
       deps.logger.setDebugEnabled(config.log.debug ?? false);
 

@@ -18,7 +18,11 @@ export interface SubagentPolicySnapshot {
 
 export interface SubagentPolicyManager {
   getDefaultPolicy(yoloAllSub: boolean): SubagentPolicy;
-  writePolicySnapshot(policy: SubagentPolicy, inherited: InheritedRules, parentSessionId: string): string;
+  writePolicySnapshot(
+    policy: SubagentPolicy,
+    inherited: InheritedRules,
+    parentSessionId: string,
+  ): string;
   readPolicySnapshot(filePath: string): SubagentPolicySnapshot | undefined;
   deletePolicySnapshot(filePath: string): void;
   isSubagentProcess(env: Record<string, string | undefined>): boolean;
@@ -36,7 +40,11 @@ export function createSubagentPolicyManager(
       return yoloAllSub ? "yolo" : "inherit-parent";
     },
 
-    writePolicySnapshot(policy: SubagentPolicy, inherited: InheritedRules, parentSessionId: string): string {
+    writePolicySnapshot(
+      policy: SubagentPolicy,
+      inherited: InheritedRules,
+      parentSessionId: string,
+    ): string {
       fs.mkdirSync(options.snapshotsDir, { recursive: true });
 
       const snapshot: SubagentPolicySnapshot =

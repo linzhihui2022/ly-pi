@@ -1,10 +1,19 @@
 import type { Goal, GoalEntry, GoalStatus, SessionEntry } from "./types";
 
-const VALID_GOAL_STATUSES: GoalStatus[] = ["idle", "active", "paused", "completed", "blocked"];
+const VALID_GOAL_STATUSES: GoalStatus[] = [
+  "idle",
+  "active",
+  "paused",
+  "completed",
+  "blocked",
+];
 const VALID_EVALUATE_STATUSES: GoalStatus[] = ["active", "paused", "blocked"];
 
 function isValidGoalStatus(value: unknown): value is GoalStatus {
-  return typeof value === "string" && (VALID_GOAL_STATUSES as string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (VALID_GOAL_STATUSES as string[]).includes(value)
+  );
 }
 
 function isValidGoal(value: unknown): value is Goal {
@@ -15,7 +24,8 @@ function isValidGoal(value: unknown): value is Goal {
   if (typeof obj.iterationCount !== "number") return false;
   if (typeof obj.lastEvidence !== "string") return false;
   if (typeof obj.nextAction !== "string") return false;
-  if (obj.blocker !== undefined && typeof obj.blocker !== "string") return false;
+  if (obj.blocker !== undefined && typeof obj.blocker !== "string")
+    return false;
   return true;
 }
 
@@ -91,7 +101,11 @@ export class GoalState {
     this.entries = [];
   }
 
-  evaluate(lastEvidence?: string, nextAction?: string, status?: GoalStatus): Goal {
+  evaluate(
+    lastEvidence?: string,
+    nextAction?: string,
+    status?: GoalStatus,
+  ): Goal {
     if (!this.goal) throw new Error("No active goal");
     if (lastEvidence !== undefined) this.goal.lastEvidence = lastEvidence;
     if (nextAction !== undefined) this.goal.nextAction = nextAction;
@@ -162,7 +176,11 @@ export class GoalState {
       if (entry.type !== "message") continue;
       if (entry.message?.role !== "toolResult") continue;
       if (entry.message.toolName !== "goal") continue;
-      if (typeof entry.message.details !== "object" || entry.message.details === null) continue;
+      if (
+        typeof entry.message.details !== "object" ||
+        entry.message.details === null
+      )
+        continue;
       const details = entry.message.details as Record<string, unknown>;
       if (!isValidGoal(details.goal)) continue;
       state.goal = deepCopyGoal(details.goal as Goal);

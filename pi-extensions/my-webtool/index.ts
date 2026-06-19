@@ -33,13 +33,11 @@ export default function myWebtool(pi: ExtensionAPI): void {
   const providerStatus = {
     tavily: { enabled: false, message: "", checking: true },
   };
-  tavily
-    .check()
-    .then((check) => {
-      providerStatus.tavily.enabled = check.enabled;
-      providerStatus.tavily.message = check.message;
-      providerStatus.tavily.checking = false;
-    })
+  tavily.check().then((check) => {
+    providerStatus.tavily.enabled = check.enabled;
+    providerStatus.tavily.message = check.message;
+    providerStatus.tavily.checking = false;
+  });
   pi.registerTool({
     name: "web_search",
     label: "Web Search",
@@ -64,7 +62,7 @@ export default function myWebtool(pi: ExtensionAPI): void {
           default: DEFAULT_SEARCH_RESULTS,
           minimum: MIN_SEARCH_RESULTS,
           maximum: MAX_SEARCH_RESULTS,
-        })
+        }),
       ),
     }),
 
@@ -73,7 +71,7 @@ export default function myWebtool(pi: ExtensionAPI): void {
         return buildEmptyResultsEnvelope(
           params.query,
           tavily.label,
-          providerStatus.tavily.message || "Tavily is not enabled"
+          providerStatus.tavily.message || "Tavily is not enabled",
         );
       }
 
@@ -95,14 +93,14 @@ export default function myWebtool(pi: ExtensionAPI): void {
           JSON.stringify(
             { response, api: process.env.KIMI_SEARCH_API },
             null,
-            2
-          )
+            2,
+          ),
         );
 
         return buildEmptyResultsEnvelope(
           params.query,
           tavily.label,
-          response.error
+          response.error,
         );
       }
 
@@ -138,7 +136,7 @@ export default function myWebtool(pi: ExtensionAPI): void {
       const count = details?.resultCount ?? 0;
       let text = theme.fg(
         "success",
-        `✓ ${count} result${count !== 1 ? "s" : ""}`
+        `✓ ${count} result${count !== 1 ? "s" : ""}`,
       );
       if (expanded && details?.results) {
         text += renderSearchResultsPreview(details.results, theme);
@@ -170,7 +168,7 @@ export default function myWebtool(pi: ExtensionAPI): void {
           description:
             "If true, return the raw HTML instead of extracted text. Default: false.",
           default: false,
-        })
+        }),
       ),
     }),
 

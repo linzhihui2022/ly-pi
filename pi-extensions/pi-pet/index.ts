@@ -6,7 +6,10 @@
  * - Optional notice when the cat needs attention.
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { PetStateManager } from "./state";
 import { selectFrame, renderStatus } from "./art";
 import { EVENT_IMPACTS } from "./events";
@@ -43,7 +46,8 @@ export default function piPet(pi: ExtensionAPI): void {
   function maybeNotify(ctx: ExtensionContext, state: PetState): void {
     if (!config?.notices.enabled) return;
     const now = Date.now();
-    if (now - lastNoticeMs < config.notices.minIntervalMinutes * 60 * 1000) return;
+    if (now - lastNoticeMs < config.notices.minIntervalMinutes * 60 * 1000)
+      return;
     if (!needsAttention(state)) return;
     const msg = getAttentionMsg(state);
     if (msg) {

@@ -7,8 +7,6 @@ vi.mock("node:fs", () => ({
   writeFileSync: vi.fn(),
 }));
 
-
-
 vi.mock("./player", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./player")>();
   return {
@@ -149,7 +147,9 @@ describe("my-bt extension", () => {
       "info",
     );
     expect(writeFileSync).toHaveBeenCalledOnce();
-    const saved = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
+    const saved = JSON.parse(
+      vi.mocked(writeFileSync).mock.calls[0][1] as string,
+    );
     expect(saved.enabled).toBe(false);
   });
 
@@ -168,7 +168,9 @@ describe("my-bt extension", () => {
       "info",
     );
     expect(writeFileSync).toHaveBeenCalledOnce();
-    const saved = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
+    const saved = JSON.parse(
+      vi.mocked(writeFileSync).mock.calls[0][1] as string,
+    );
     expect(saved.enabled).toBe(true);
   });
 
@@ -398,7 +400,9 @@ describe("my-bt extension", () => {
         "permissions:ui_prompt": "warning",
       },
     };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithPermission));
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify(configWithPermission),
+    );
     const mod = await loadModule();
     mod.default(mockPi as any);
     expect(mockEvents.on).toHaveBeenCalledWith(
@@ -414,15 +418,29 @@ describe("my-bt extension", () => {
         "permissions:ui_prompt": "warning",
       },
       overlayTextMap: {
-        permissions_ui_prompt: { type: "WARNING", title: "侦测到危险操作", subtitle: "铁御，请确认权限" },
+        permissions_ui_prompt: {
+          type: "WARNING",
+          title: "侦测到危险操作",
+          subtitle: "铁御，请确认权限",
+        },
       },
     };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithPermission));
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify(configWithPermission),
+    );
     const mod = await loadModule();
     mod.default(mockPi as any);
 
     const handler = registeredPermissionEvents.get("permissions:ui_prompt");
-    handler?.({ requestId: "req-1", source: "tool_call", surface: "bash", value: "rm -rf *", message: "Dangerous command", agentName: null, forwarding: null });
+    handler?.({
+      requestId: "req-1",
+      source: "tool_call",
+      surface: "bash",
+      value: "rm -rf *",
+      message: "Dangerous command",
+      agentName: null,
+      forwarding: null,
+    });
 
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ permissionEventMap: expect.any(Object) }),
@@ -443,12 +461,22 @@ describe("my-bt extension", () => {
         "permissions:ui_prompt": "warning",
       },
     };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithPermission));
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify(configWithPermission),
+    );
     const mod = await loadModule();
     mod.default(mockPi as any);
 
     const handler = registeredPermissionEvents.get("permissions:ui_prompt");
-    handler?.({ requestId: "req-1", source: "tool_call", surface: "bash", value: "rm -rf *", message: "Dangerous command", agentName: null, forwarding: null });
+    handler?.({
+      requestId: "req-1",
+      source: "tool_call",
+      surface: "bash",
+      value: "rm -rf *",
+      message: "Dangerous command",
+      agentName: null,
+      forwarding: null,
+    });
 
     expect(playCategory).not.toHaveBeenCalled();
     expect(playOverlay).not.toHaveBeenCalled();
@@ -460,7 +488,15 @@ describe("my-bt extension", () => {
     mod.default(mockPi as any);
 
     const handler = registeredPermissionEvents.get("permissions:ui_prompt");
-    handler?.({ requestId: "req-1", source: "tool_call", surface: "bash", value: "rm -rf *", message: "Dangerous command", agentName: null, forwarding: null });
+    handler?.({
+      requestId: "req-1",
+      source: "tool_call",
+      surface: "bash",
+      value: "rm -rf *",
+      message: "Dangerous command",
+      agentName: null,
+      forwarding: null,
+    });
 
     expect(playCategory).not.toHaveBeenCalled();
     expect(playOverlay).not.toHaveBeenCalled();

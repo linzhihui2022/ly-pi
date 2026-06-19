@@ -25,10 +25,7 @@ function makeGoal(partial: Partial<Goal> = {}): Goal {
 describe("renderGoalOverlay", () => {
   it("renders active goal without evidence", () => {
     const result = renderGoalOverlay(makeGoal());
-    expect(result).toEqual([
-      "Goal [active]",
-      "Refactor auth",
-    ]);
+    expect(result).toEqual(["Goal [active]", "Refactor auth"]);
   });
 
   it("renders iterations when > 0", () => {
@@ -65,7 +62,9 @@ describe("renderGoalOverlay", () => {
   });
 
   it("renders blocked status with blocker", () => {
-    const result = renderGoalOverlay(makeGoal({ status: "blocked", blocker: "API down" }));
+    const result = renderGoalOverlay(
+      makeGoal({ status: "blocked", blocker: "API down" }),
+    );
     expect(result[0]).toBe("Goal [blocked]");
     expect(result).toContain("Blocker: API down");
   });
@@ -73,7 +72,10 @@ describe("renderGoalOverlay", () => {
   it("styles title with theme", () => {
     renderGoalOverlay(makeGoal(), mockTheme);
     expect(mockTheme.bold).toHaveBeenCalledWith("Goal [active]");
-    expect(mockTheme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("Goal [active]"));
+    expect(mockTheme.fg).toHaveBeenCalledWith(
+      "accent",
+      expect.stringContaining("Goal [active]"),
+    );
   });
 
   it("styles iterations with theme", () => {
@@ -87,7 +89,10 @@ describe("renderGoalOverlay", () => {
   });
 
   it("styles blocker with theme", () => {
-    renderGoalOverlay(makeGoal({ status: "blocked", blocker: "API down" }), mockTheme);
+    renderGoalOverlay(
+      makeGoal({ status: "blocked", blocker: "API down" }),
+      mockTheme,
+    );
     expect(mockTheme.fg).toHaveBeenCalledWith("error", "Blocker: API down");
   });
 });

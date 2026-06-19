@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { parseGitStatus, getGitStatus } from "./git";
 
-
-
 describe("parseGitStatus", () => {
   it("returns clean for repo with no changes", () => {
     const status = parseGitStatus("# branch.oid abc\n# branch.head main\n", "");
@@ -21,7 +19,7 @@ describe("parseGitStatus", () => {
   it("parses ahead count", () => {
     const status = parseGitStatus(
       "# branch.oid abc\n# branch.head main\n# branch.ab +2 -0\n",
-      ""
+      "",
     );
     expect(status.ahead).toBe(2);
     expect(status.behind).toBe(0);
@@ -31,7 +29,7 @@ describe("parseGitStatus", () => {
   it("parses behind count", () => {
     const status = parseGitStatus(
       "# branch.oid abc\n# branch.head main\n# branch.ab +0 -3\n",
-      ""
+      "",
     );
     expect(status.behind).toBe(3);
     expect(status.isClean).toBe(false);
@@ -40,7 +38,7 @@ describe("parseGitStatus", () => {
   it("parses diverged", () => {
     const status = parseGitStatus(
       "# branch.oid abc\n# branch.head main\n# branch.ab +2 -3\n",
-      ""
+      "",
     );
     expect(status.ahead).toBe(2);
     expect(status.behind).toBe(3);
@@ -51,8 +49,8 @@ describe("parseGitStatus", () => {
     const output = [
       "# branch.oid abc",
       "# branch.head main",
-      '1 M. N... 100644 100644 100644 abc def path1',
-      '1 A. N... 100644 100644 100644 abc def path2',
+      "1 M. N... 100644 100644 100644 abc def path1",
+      "1 A. N... 100644 100644 100644 abc def path2",
     ].join("\n");
     const status = parseGitStatus(output, "");
     expect(status.staged).toBe(2);
@@ -63,8 +61,8 @@ describe("parseGitStatus", () => {
     const output = [
       "# branch.oid abc",
       "# branch.head main",
-      '1 UU N... 100644 100644 100644 abc def path1',
-      '1 .U N... 100644 100644 100644 abc def path2',
+      "1 UU N... 100644 100644 100644 abc def path1",
+      "1 .U N... 100644 100644 100644 abc def path2",
     ].join("\n");
     const status = parseGitStatus(output, "");
     expect(status.conflicted).toBe(2);
@@ -75,7 +73,7 @@ describe("parseGitStatus", () => {
     const output = [
       "# branch.oid abc",
       "# branch.head main",
-      '1 AU N... 100644 100644 100644 abc def path1',
+      "1 AU N... 100644 100644 100644 abc def path1",
     ].join("\n");
     const status = parseGitStatus(output, "");
     expect(status.conflicted).toBe(1);
@@ -98,7 +96,7 @@ describe("parseGitStatus", () => {
   it("counts stashes", () => {
     const status = parseGitStatus(
       "# branch.oid abc\n# branch.head main\n",
-      "stash@{0}\nstash@{1}"
+      "stash@{0}\nstash@{1}",
     );
     expect(status.stashed).toBe(2);
     expect(status.isClean).toBe(false);
@@ -108,7 +106,7 @@ describe("parseGitStatus", () => {
     const output = [
       "# branch.oid abc",
       "# branch.head main",
-      '2 R. N... 100644 100644 100644 abc def path1\tpath2',
+      "2 R. N... 100644 100644 100644 abc def path1\tpath2",
     ].join("\n");
     const status = parseGitStatus(output, "");
     expect(status.staged).toBe(1);
@@ -117,7 +115,7 @@ describe("parseGitStatus", () => {
   it("ignores malformed branch.ab lines", () => {
     const status = parseGitStatus(
       "# branch.oid abc\n# branch.head main\n# branch.ab malformed\n",
-      ""
+      "",
     );
     expect(status.ahead).toBe(0);
     expect(status.behind).toBe(0);
@@ -127,8 +125,8 @@ describe("parseGitStatus", () => {
     const output = [
       "# branch.oid abc",
       "# branch.head main",
-      '1 .M N... 100644 100644 100644 abc def path1',
-      '1 .D N... 100644 100644 100644 abc def path2',
+      "1 .M N... 100644 100644 100644 abc def path1",
+      "1 .D N... 100644 100644 100644 abc def path2",
     ].join("\n");
     const status = parseGitStatus(output, "");
     expect(status.unstaged).toBe(2);
@@ -140,7 +138,7 @@ describe("parseGitStatus", () => {
     const output = [
       "# branch.oid abc",
       "# branch.head main",
-      '1 MM N... 100644 100644 100644 abc def path1',
+      "1 MM N... 100644 100644 100644 abc def path1",
     ].join("\n");
     const status = parseGitStatus(output, "");
     expect(status.staged).toBe(1);

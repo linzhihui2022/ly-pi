@@ -44,14 +44,17 @@ export function loadConfig(): PetConfig {
       enabled: user.enabled ?? DEFAULTS.enabled,
       petName: user.petName ?? DEFAULTS.petName,
       decay: {
-        hungerPerHour: user.decay?.hungerPerHour ?? DEFAULTS.decay.hungerPerHour,
+        hungerPerHour:
+          user.decay?.hungerPerHour ?? DEFAULTS.decay.hungerPerHour,
         moodPerHour: user.decay?.moodPerHour ?? DEFAULTS.decay.moodPerHour,
-        energyPerHour: user.decay?.energyPerHour ?? DEFAULTS.decay.energyPerHour,
+        energyPerHour:
+          user.decay?.energyPerHour ?? DEFAULTS.decay.energyPerHour,
       },
       notices: {
         enabled: user.notices?.enabled ?? DEFAULTS.notices.enabled,
         minIntervalMinutes:
-          user.notices?.minIntervalMinutes ?? DEFAULTS.notices.minIntervalMinutes,
+          user.notices?.minIntervalMinutes ??
+          DEFAULTS.notices.minIntervalMinutes,
       },
     };
   } catch {

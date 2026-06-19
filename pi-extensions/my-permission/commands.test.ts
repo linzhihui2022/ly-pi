@@ -7,11 +7,19 @@ function makeSessionState(initial: Partial<SessionState> = {}): SessionState {
   let yolo = initial.yolo ?? false;
   let yoloAllSub = initial.yoloAllSub ?? false;
   return {
-    get yolo() { return yolo; },
-    get yoloAllSub() { return yoloAllSub; },
+    get yolo() {
+      return yolo;
+    },
+    get yoloAllSub() {
+      return yoloAllSub;
+    },
     sessionRules: rules,
-    toggleYolo: () => { yolo = !yolo; },
-    toggleYoloAllSub: () => { yoloAllSub = !yoloAllSub; },
+    toggleYolo: () => {
+      yolo = !yolo;
+    },
+    toggleYoloAllSub: () => {
+      yoloAllSub = !yoloAllSub;
+    },
     addSessionRule: (rule) => rules.push(rule),
     restoreSessionRules: (rs) => {
       rules.length = 0;
@@ -26,7 +34,8 @@ function makeSessionState(initial: Partial<SessionState> = {}): SessionState {
 }
 
 function makeMockPi() {
-  const commands: Record<string, (args: string, ctx: any) => Promise<void>> = {};
+  const commands: Record<string, (args: string, ctx: any) => Promise<void>> =
+    {};
   const notifications: Array<{ message: string; type?: string }> = [];
   const ctx = {
     ui: {
@@ -40,7 +49,10 @@ function makeMockPi() {
     commands,
     notifications,
     ctx,
-    registerCommand: (name: string, options: { handler: (args: string, ctx: any) => Promise<void> }) => {
+    registerCommand: (
+      name: string,
+      options: { handler: (args: string, ctx: any) => Promise<void> },
+    ) => {
       commands[name] = options.handler;
     },
   };
@@ -56,7 +68,11 @@ describe("registerPermissionCommands", () => {
 
   it("/yolo toggles yolo on and reports state", async () => {
     const pi = makeMockPi();
-    const state = makeSessionState({ toggleYolo: () => { state.yolo = true; } });
+    const state = makeSessionState({
+      toggleYolo: () => {
+        state.yolo = true;
+      },
+    });
     registerPermissionCommands(pi as any, state);
 
     await pi.commands["yolo"]("", pi.ctx);
@@ -66,7 +82,12 @@ describe("registerPermissionCommands", () => {
 
   it("/yolo toggles yolo off and reports state", async () => {
     const pi = makeMockPi();
-    const state = makeSessionState({ yolo: true, toggleYolo: () => { state.yolo = false; } });
+    const state = makeSessionState({
+      yolo: true,
+      toggleYolo: () => {
+        state.yolo = false;
+      },
+    });
     registerPermissionCommands(pi as any, state);
 
     await pi.commands["yolo"]("", pi.ctx);
@@ -76,7 +97,11 @@ describe("registerPermissionCommands", () => {
 
   it("/yolo-all-sub toggles yoloAllSub on and reports state", async () => {
     const pi = makeMockPi();
-    const state = makeSessionState({ toggleYoloAllSub: () => { state.yoloAllSub = true; } });
+    const state = makeSessionState({
+      toggleYoloAllSub: () => {
+        state.yoloAllSub = true;
+      },
+    });
     registerPermissionCommands(pi as any, state);
 
     await pi.commands["yolo-all-sub"]("", pi.ctx);
@@ -86,7 +111,12 @@ describe("registerPermissionCommands", () => {
 
   it("/yolo-all-sub toggles yoloAllSub off and reports state", async () => {
     const pi = makeMockPi();
-    const state = makeSessionState({ yoloAllSub: true, toggleYoloAllSub: () => { state.yoloAllSub = false; } });
+    const state = makeSessionState({
+      yoloAllSub: true,
+      toggleYoloAllSub: () => {
+        state.yoloAllSub = false;
+      },
+    });
     registerPermissionCommands(pi as any, state);
 
     await pi.commands["yolo-all-sub"]("", pi.ctx);

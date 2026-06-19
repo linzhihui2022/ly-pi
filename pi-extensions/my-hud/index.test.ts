@@ -14,7 +14,7 @@ vi.mock("./git", () => ({
       stashed: 0,
       conflicted: 0,
       isClean: true,
-    })
+    }),
   ),
 }));
 
@@ -150,7 +150,10 @@ describe("contextColored", () => {
     const { contextColored } = await loadModule();
     const theme = createMockTheme();
     expect(contextColored(theme, 50, 0)).toContain("50%");
-    expect(theme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("50%"));
+    expect(theme.fg).toHaveBeenCalledWith(
+      "accent",
+      expect.stringContaining("50%"),
+    );
   });
 
   describe("small context window (<= 500k)", () => {
@@ -159,7 +162,10 @@ describe("contextColored", () => {
       const theme = createMockTheme();
       expect(contextColored(theme, 0, 128000)).toContain("0%");
       expect(contextColored(theme, 70, 128000)).toContain("70%");
-      expect(theme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("70%"));
+      expect(theme.fg).toHaveBeenCalledWith(
+        "accent",
+        expect.stringContaining("70%"),
+      );
     });
 
     it("returns warning for 71-90%", async () => {
@@ -167,7 +173,10 @@ describe("contextColored", () => {
       const theme = createMockTheme();
       expect(contextColored(theme, 71, 128000)).toContain("71%");
       expect(contextColored(theme, 90, 128000)).toContain("90%");
-      expect(theme.fg).toHaveBeenCalledWith("warning", expect.stringContaining("90%"));
+      expect(theme.fg).toHaveBeenCalledWith(
+        "warning",
+        expect.stringContaining("90%"),
+      );
     });
 
     it("returns error for > 90%", async () => {
@@ -175,7 +184,10 @@ describe("contextColored", () => {
       const theme = createMockTheme();
       expect(contextColored(theme, 91, 128000)).toContain("91%");
       expect(contextColored(theme, 100, 128000)).toContain("100%");
-      expect(theme.fg).toHaveBeenCalledWith("error", expect.stringContaining("100%"));
+      expect(theme.fg).toHaveBeenCalledWith(
+        "error",
+        expect.stringContaining("100%"),
+      );
     });
   });
 
@@ -185,7 +197,10 @@ describe("contextColored", () => {
       const theme = createMockTheme();
       expect(contextColored(theme, 0, 600000)).toContain("0%");
       expect(contextColored(theme, 20, 600000)).toContain("20%");
-      expect(theme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("20%"));
+      expect(theme.fg).toHaveBeenCalledWith(
+        "accent",
+        expect.stringContaining("20%"),
+      );
     });
 
     it("returns warning for 21-50%", async () => {
@@ -193,14 +208,20 @@ describe("contextColored", () => {
       const theme = createMockTheme();
       expect(contextColored(theme, 21, 600000)).toContain("21%");
       expect(contextColored(theme, 50, 600000)).toContain("50%");
-      expect(theme.fg).toHaveBeenCalledWith("warning", expect.stringContaining("50%"));
+      expect(theme.fg).toHaveBeenCalledWith(
+        "warning",
+        expect.stringContaining("50%"),
+      );
     });
 
     it("returns error for > 50%", async () => {
       const { contextColored } = await loadModule();
       const theme = createMockTheme();
       expect(contextColored(theme, 51, 600000)).toContain("51%");
-      expect(theme.fg).toHaveBeenCalledWith("error", expect.stringContaining("51%"));
+      expect(theme.fg).toHaveBeenCalledWith(
+        "error",
+        expect.stringContaining("51%"),
+      );
     });
   });
 });
@@ -249,7 +270,19 @@ describe("aggregateSessionUsage", () => {
     const { aggregateSessionUsage } = await loadModule();
     const entries = [
       { type: "other" },
-      { type: "message", message: { role: "user", usage: { input: 100, output: 50, cacheRead: 10, cacheWrite: 5, cost: { total: 0.01 } } } },
+      {
+        type: "message",
+        message: {
+          role: "user",
+          usage: {
+            input: 100,
+            output: 50,
+            cacheRead: 10,
+            cacheWrite: 5,
+            cost: { total: 0.01 },
+          },
+        },
+      },
     ];
     expect(aggregateSessionUsage(entries as any)).toEqual({
       input: 0,
@@ -268,7 +301,13 @@ describe("aggregateSessionUsage", () => {
         type: "message",
         message: {
           role: "assistant",
-          usage: { input: 100, output: 50, cacheRead: 10, cacheWrite: 5, cost: { total: 0.01 } },
+          usage: {
+            input: 100,
+            output: 50,
+            cacheRead: 10,
+            cacheWrite: 5,
+            cost: { total: 0.01 },
+          },
         },
       },
     ];
@@ -288,14 +327,26 @@ describe("aggregateSessionUsage", () => {
         type: "message",
         message: {
           role: "assistant",
-          usage: { input: 1500, output: 800, cacheRead: 100, cacheWrite: 50, cost: { total: 0.005 } },
+          usage: {
+            input: 1500,
+            output: 800,
+            cacheRead: 100,
+            cacheWrite: 50,
+            cost: { total: 0.005 },
+          },
         },
       },
       {
         type: "message",
         message: {
           role: "assistant",
-          usage: { input: 2500, output: 1200, cacheRead: 200, cacheWrite: 100, cost: { total: 0.007 } },
+          usage: {
+            input: 2500,
+            output: 1200,
+            cacheRead: 200,
+            cacheWrite: 100,
+            cost: { total: 0.007 },
+          },
         },
       },
     ];
@@ -424,9 +475,7 @@ describe("getLastUserMessage", () => {
 
   it("skips entries with undefined message", async () => {
     const { getLastUserMessage } = await loadModule();
-    const entries = [
-      { type: "message", message: undefined },
-    ];
+    const entries = [{ type: "message", message: undefined }];
     expect(getLastUserMessage(entries as any)).toBeNull();
   });
 
@@ -451,7 +500,8 @@ describe("getLastUserMessage", () => {
         type: "message",
         message: {
           role: "user",
-          content: '<skill name="x" location="/path">\n  <rule>abc</rule>\n</skill>\nuser text',
+          content:
+            '<skill name="x" location="/path">\n  <rule>abc</rule>\n</skill>\nuser text',
         },
       },
     ];
@@ -496,10 +546,7 @@ describe("getLastUserMessage", () => {
         type: "message",
         message: {
           role: "user",
-          content: [
-            '<skill name="x">body</skill>',
-            " raw string",
-          ],
+          content: ['<skill name="x">body</skill>', " raw string"],
         },
       },
     ];
@@ -531,9 +578,7 @@ describe("getLastUserMessage", () => {
         type: "message",
         message: {
           role: "user",
-          content: [
-            { type: "text", text: '<skill name="x">body</skill>' },
-          ],
+          content: [{ type: "text", text: '<skill name="x">body</skill>' }],
         },
       },
     ];
@@ -551,61 +596,151 @@ describe("formatGitStatus", () => {
 
   it("returns empty for clean status", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: true };
+    const status = {
+      ahead: 0,
+      behind: 0,
+      staged: 0,
+      unstaged: 0,
+      untracked: 0,
+      stashed: 0,
+      conflicted: 0,
+      isClean: true,
+    };
     expect(formatGitStatus(createMockTheme(), status)).toBe("");
   });
 
   it("formats ahead only", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 2, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
+    const status = {
+      ahead: 2,
+      behind: 0,
+      staged: 0,
+      unstaged: 0,
+      untracked: 0,
+      stashed: 0,
+      conflicted: 0,
+      isClean: false,
+    };
     expect(formatGitStatus(createMockTheme(), status)).toBe("⇡2");
   });
 
   it("formats behind only", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 3, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
+    const status = {
+      ahead: 0,
+      behind: 3,
+      staged: 0,
+      unstaged: 0,
+      untracked: 0,
+      stashed: 0,
+      conflicted: 0,
+      isClean: false,
+    };
     expect(formatGitStatus(createMockTheme(), status)).toContain("⇣3");
   });
 
   it("formats diverged", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 3, behind: 2, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
+    const status = {
+      ahead: 3,
+      behind: 2,
+      staged: 0,
+      unstaged: 0,
+      untracked: 0,
+      stashed: 0,
+      conflicted: 0,
+      isClean: false,
+    };
     expect(formatGitStatus(createMockTheme(), status)).toContain("⇕⇡3⇣2");
   });
 
   it("formats staged", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 0, staged: 3, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
+    const status = {
+      ahead: 0,
+      behind: 0,
+      staged: 3,
+      unstaged: 0,
+      untracked: 0,
+      stashed: 0,
+      conflicted: 0,
+      isClean: false,
+    };
     expect(formatGitStatus(createMockTheme(), status)).toContain("++3|");
   });
 
   it("formats stashed", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 1, conflicted: 0, isClean: false };
+    const status = {
+      ahead: 0,
+      behind: 0,
+      staged: 0,
+      unstaged: 0,
+      untracked: 0,
+      stashed: 1,
+      conflicted: 0,
+      isClean: false,
+    };
     expect(formatGitStatus(createMockTheme(), status)).toContain("*1|");
   });
 
   it("formats conflicted", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 2, isClean: false };
+    const status = {
+      ahead: 0,
+      behind: 0,
+      staged: 0,
+      unstaged: 0,
+      untracked: 0,
+      stashed: 0,
+      conflicted: 2,
+      isClean: false,
+    };
     expect(formatGitStatus(createMockTheme(), status)).toContain("!!2|");
   });
 
   it("formats unstaged", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 0, staged: 0, unstaged: 3, untracked: 0, stashed: 0, conflicted: 0, isClean: false };
+    const status = {
+      ahead: 0,
+      behind: 0,
+      staged: 0,
+      unstaged: 3,
+      untracked: 0,
+      stashed: 0,
+      conflicted: 0,
+      isClean: false,
+    };
     expect(formatGitStatus(createMockTheme(), status)).toContain("~3|");
   });
 
   it("formats untracked", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 0, behind: 0, staged: 0, unstaged: 0, untracked: 2, stashed: 0, conflicted: 0, isClean: false };
+    const status = {
+      ahead: 0,
+      behind: 0,
+      staged: 0,
+      unstaged: 0,
+      untracked: 2,
+      stashed: 0,
+      conflicted: 0,
+      isClean: false,
+    };
     expect(formatGitStatus(createMockTheme(), status)).toContain("?2|");
   });
 
   it("combines multiple statuses", async () => {
     const { formatGitStatus } = await loadModule();
-    const status = { ahead: 1, behind: 0, staged: 2, unstaged: 0, untracked: 0, stashed: 1, conflicted: 0, isClean: false };
+    const status = {
+      ahead: 1,
+      behind: 0,
+      staged: 2,
+      unstaged: 0,
+      untracked: 0,
+      stashed: 1,
+      conflicted: 0,
+      isClean: false,
+    };
     const result = formatGitStatus(createMockTheme(), status);
     expect(result).toContain("++2|");
     expect(result).toContain("*1|");
@@ -622,7 +757,13 @@ describe("buildStatusLine", () => {
       modelName: "gpt-4",
       branch: "main",
       ctxColored: "42%",
-      usage: { input: 1000, output: 500, cacheRead: 100, cacheWrite: 0, cost: 0.35 },
+      usage: {
+        input: 1000,
+        output: 500,
+        cacheRead: 100,
+        cacheWrite: 0,
+        cost: 0.35,
+      },
     });
     expect(line).toContain("my-project");
     expect(line).toContain("gpt-4");
@@ -670,8 +811,23 @@ describe("buildStatusLine", () => {
       modelName: "gpt-4",
       branch: "main",
       ctxColored: "42%",
-      usage: { input: 1000, output: 500, cacheRead: 100, cacheWrite: 0, cost: 0.35 },
-      gitStatus: { ahead: 2, behind: 0, staged: 3, unstaged: 0, untracked: 0, stashed: 1, conflicted: 0, isClean: false },
+      usage: {
+        input: 1000,
+        output: 500,
+        cacheRead: 100,
+        cacheWrite: 0,
+        cost: 0.35,
+      },
+      gitStatus: {
+        ahead: 2,
+        behind: 0,
+        staged: 3,
+        unstaged: 0,
+        untracked: 0,
+        stashed: 1,
+        conflicted: 0,
+        isClean: false,
+      },
     });
     expect(line).toContain("main");
     expect(line).toContain("⇡2");
@@ -690,11 +846,9 @@ describe("Bar", () => {
     bar.setUICtx(uiCtx);
     bar.update();
 
-    expect(setWidget).toHaveBeenCalledWith(
-      "my-hud-bar",
-      expect.any(Function),
-      { placement: "aboveEditor" },
-    );
+    expect(setWidget).toHaveBeenCalledWith("my-hud-bar", expect.any(Function), {
+      placement: "aboveEditor",
+    });
   });
 
   it("updates branch and renders it", async () => {
@@ -999,9 +1153,25 @@ describe("Bar", () => {
   });
 
   it("does not trigger duplicate fetches while one is pending", async () => {
-    vi.mocked(getGitStatus).mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve({
-      ahead: 1, behind: 0, staged: 0, unstaged: 0, untracked: 0, stashed: 0, conflicted: 0, isClean: false,
-    }), 100)));
+    vi.mocked(getGitStatus).mockImplementationOnce(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                ahead: 1,
+                behind: 0,
+                staged: 0,
+                unstaged: 0,
+                untracked: 0,
+                stashed: 0,
+                conflicted: 0,
+                isClean: false,
+              }),
+            100,
+          ),
+        ),
+    );
     const { Bar } = await loadModule();
     const bar = new Bar();
     const setWidget = vi.fn();
@@ -1052,7 +1222,9 @@ describe("working", () => {
   it("pickRandomMessage can return different messages across calls", async () => {
     const { pickRandomMessage } = await loadModule();
     // Call many times; with 12 messages this statistically covers >1
-    const results = new Set(Array.from({ length: 100 }, () => pickRandomMessage()));
+    const results = new Set(
+      Array.from({ length: 100 }, () => pickRandomMessage()),
+    );
     expect(results.size).toBeGreaterThan(1);
   });
 });
@@ -1139,7 +1311,10 @@ describe("my-hud extension", () => {
       hasUI: true,
       sessionManager: {
         getEntries: vi.fn(() => [
-          { type: "message", message: { role: "user", content: "hello world" } },
+          {
+            type: "message",
+            message: { role: "user", content: "hello world" },
+          },
         ]),
       },
     };
@@ -1163,7 +1338,13 @@ describe("my-hud extension", () => {
       hasUI: true,
       sessionManager: {
         getEntries: vi.fn(() => [
-          { type: "message", message: { role: "user", content: "first line\nsecond line\nthird" } },
+          {
+            type: "message",
+            message: {
+              role: "user",
+              content: "first line\nsecond line\nthird",
+            },
+          },
         ]),
       },
     };
@@ -1318,7 +1499,10 @@ describe("my-hud extension", () => {
     const turnStartHandler = registeredEvents.get("turn_start")!;
     mockTui.requestRender.mockClear();
     const theme = createMockTheme();
-    turnStartHandler({}, { ui: { setWorkingMessage: vi.fn(), getTheme: vi.fn(() => theme) } });
+    turnStartHandler(
+      {},
+      { ui: { setWorkingMessage: vi.fn(), getTheme: vi.fn(() => theme) } },
+    );
 
     expect(mockTui.requestRender).toHaveBeenCalled();
   });
@@ -1328,7 +1512,9 @@ describe("my-hud extension", () => {
     mod.default(mockPi as any);
 
     const turnStartHandler = registeredEvents.get("turn_start")!;
-    const setWorkingMessage = vi.fn(() => { throw new Error("ui fail"); });
+    const setWorkingMessage = vi.fn(() => {
+      throw new Error("ui fail");
+    });
     const theme = createMockTheme();
     const ctx = { ui: { setWorkingMessage, getTheme: vi.fn(() => theme) } };
 

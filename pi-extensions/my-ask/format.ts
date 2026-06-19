@@ -1,8 +1,13 @@
-import type { QuestionAnswer, QuestionParams, QuestionnaireResult } from "./types";
+import type {
+  QuestionAnswer,
+  QuestionParams,
+  QuestionnaireResult,
+} from "./types";
 
 export const DECLINE_MESSAGE = "User declined to answer questions";
 export const ENVELOPE_PREFIX = "User has answered your questions:";
-export const ENVELOPE_SUFFIX = "You can now continue with the user's answers in mind.";
+export const ENVELOPE_SUFFIX =
+  "You can now continue with the user's answers in mind.";
 
 export const CHAT_CONTINUATION_MESSAGE =
   "User wants to chat about this. Continue the conversation to help them decide.";
@@ -15,12 +20,19 @@ export type FormatAnswerVariant = "summary" | "envelope";
  * Render a single answer to its scalar text form.
  * The `chat` branch changes between the LLM-facing envelope and the on-screen summary.
  */
-export function formatAnswerScalar(a: QuestionAnswer, variant: FormatAnswerVariant): string {
+export function formatAnswerScalar(
+  a: QuestionAnswer,
+  variant: FormatAnswerVariant,
+): string {
   switch (a.kind) {
     case "chat":
-      return variant === "envelope" ? CHAT_CONTINUATION_MESSAGE : CHAT_SUMMARY_MESSAGE;
+      return variant === "envelope"
+        ? CHAT_CONTINUATION_MESSAGE
+        : CHAT_SUMMARY_MESSAGE;
     case "multi":
-      return a.selected && a.selected.length > 0 ? a.selected.join(", ") : NO_INPUT_PLACEHOLDER;
+      return a.selected && a.selected.length > 0
+        ? a.selected.join(", ")
+        : NO_INPUT_PLACEHOLDER;
     case "custom":
       return a.answer && a.answer.length > 0 ? a.answer : NO_INPUT_PLACEHOLDER;
     case "option":
@@ -32,8 +44,11 @@ export function formatAnswerScalar(a: QuestionAnswer, variant: FormatAnswerVaria
  * Build one `"Q"="A"` segment, optionally appending preview metadata.
  */
 export function buildAnswerSegment(a: QuestionAnswer): string {
-  const parts: string[] = [`"${a.question}"="${formatAnswerScalar(a, "envelope")}"`];
-  if (a.preview && a.preview.length > 0) parts.push(`selected preview: ${a.preview}`);
+  const parts: string[] = [
+    `"${a.question}"="${formatAnswerScalar(a, "envelope")}"`,
+  ];
+  if (a.preview && a.preview.length > 0)
+    parts.push(`selected preview: ${a.preview}`);
   return `${parts.join(". ")}.`;
 }
 
@@ -68,8 +83,14 @@ export function buildQuestionnaireResponse(
   }
 
   if (segments.length === 0) {
-    return buildToolResult(DECLINE_MESSAGE, { answers: result.answers, cancelled: true });
+    return buildToolResult(DECLINE_MESSAGE, {
+      answers: result.answers,
+      cancelled: true,
+    });
   }
 
-  return buildToolResult(`${ENVELOPE_PREFIX} ${segments.join(" ")} ${ENVELOPE_SUFFIX}`, result);
+  return buildToolResult(
+    `${ENVELOPE_PREFIX} ${segments.join(" ")} ${ENVELOPE_SUFFIX}`,
+    result,
+  );
 }

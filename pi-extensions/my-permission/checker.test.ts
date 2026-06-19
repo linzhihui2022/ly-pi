@@ -57,16 +57,22 @@ describe("normalizeBashCommand", () => {
   });
 
   it("preserves quoted strings", () => {
-    expect(normalizeBashCommand('echo "hello world"')).toBe('echo "hello world"');
+    expect(normalizeBashCommand('echo "hello world"')).toBe(
+      'echo "hello world"',
+    );
   });
 
   it("handles nested quotes of different kinds", () => {
-    expect(normalizeBashCommand("echo 'hello' \"world\"")).toBe("echo 'hello' \"world\"");
+    expect(normalizeBashCommand("echo 'hello' \"world\"")).toBe(
+      "echo 'hello' \"world\"",
+    );
   });
 
   it("strips leading environment variable assignments", () => {
     expect(normalizeBashCommand("FOO=bar git status")).toBe("git status");
-    expect(normalizeBashCommand("A=1 B=2 git status --short")).toBe("git status --short");
+    expect(normalizeBashCommand("A=1 B=2 git status --short")).toBe(
+      "git status --short",
+    );
   });
 
   it("returns undefined for empty commands", () => {
@@ -94,7 +100,10 @@ describe("isExternal", () => {
     expect(
       isExternal(
         "/project",
-        path.join(os.homedir(), ".pi/agent/extensions/my-permission/config.json"),
+        path.join(
+          os.homedir(),
+          ".pi/agent/extensions/my-permission/config.json",
+        ),
       ),
     ).toBe(false);
   });
@@ -112,7 +121,10 @@ describe("isExternal", () => {
 
 describe("check tool permissions", () => {
   it("falls back to default when no rules match", () => {
-    const checker = createPermissionChecker(makeConfig({ default: "ask" }), makeSessionState());
+    const checker = createPermissionChecker(
+      makeConfig({ default: "ask" }),
+      makeSessionState(),
+    );
     const result = checker.check({ toolName: "unknown" });
     expect(result.state).toBe("ask");
     expect(result.origin).toBe("default");
@@ -130,8 +142,15 @@ describe("check tool permissions", () => {
 
   it("session rules take priority over config.tools", () => {
     const state = makeSessionState();
-    state.addSessionRule({ surface: "tools", pattern: "bash", action: "allow" });
-    const checker = createPermissionChecker(makeConfig({ tools: { bash: "deny" } }), state);
+    state.addSessionRule({
+      surface: "tools",
+      pattern: "bash",
+      action: "allow",
+    });
+    const checker = createPermissionChecker(
+      makeConfig({ tools: { bash: "deny" } }),
+      state,
+    );
     const result = checker.check({ toolName: "bash" });
     expect(result.state).toBe("allow");
     expect(result.origin).toBe("session");
@@ -160,8 +179,15 @@ describe("check bash permissions", () => {
 
   it("session rules override bash config", () => {
     const state = makeSessionState();
-    state.addSessionRule({ surface: "bash", pattern: "npm test", action: "allow" });
-    const checker = createPermissionChecker(makeConfig({ bash: { "npm test": "deny" } }), state);
+    state.addSessionRule({
+      surface: "bash",
+      pattern: "npm test",
+      action: "allow",
+    });
+    const checker = createPermissionChecker(
+      makeConfig({ bash: { "npm test": "deny" } }),
+      state,
+    );
     const result = checker.check({ toolName: "bash", command: "npm test" });
     expect(result.state).toBe("allow");
   });
@@ -221,7 +247,10 @@ describe("check skill permissions", () => {
       makeConfig({ skills: { "my-*": "allow" } }),
       makeSessionState(),
     );
-    const result = checker.check({ toolName: "load_skill", skillName: "my-tool" });
+    const result = checker.check({
+      toolName: "load_skill",
+      skillName: "my-tool",
+    });
     expect(result.state).toBe("allow");
   });
 });
@@ -260,7 +289,10 @@ describe("result fields", () => {
   });
 
   it("includes default fallback fields", () => {
-    const checker = createPermissionChecker(makeConfig({ default: "ask" }), makeSessionState());
+    const checker = createPermissionChecker(
+      makeConfig({ default: "ask" }),
+      makeSessionState(),
+    );
     const result = checker.check({ toolName: "unknown" });
     expect(result.surface).toBe("default");
     expect(result.value).toBe("*");

@@ -1,4 +1,8 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
@@ -33,7 +37,10 @@ function wrapInFrame(content: string): string {
   return FRAME_TEMPLATE.replace("<!-- CONTENT -->", content);
 }
 
-export function parseUrl(url: string): { pathname: string; searchParams: URLSearchParams } {
+export function parseUrl(url: string): {
+  pathname: string;
+  searchParams: URLSearchParams;
+} {
   // node:http req.url only has path + query, so prepend a dummy origin.
   const parsed = new URL(url, "http://localhost");
   return { pathname: parsed.pathname, searchParams: parsed.searchParams };
@@ -42,23 +49,38 @@ export function parseUrl(url: string): { pathname: string; searchParams: URLSear
 function validateKey(req: IncomingMessage, session: Session): boolean {
   const { searchParams } = parseUrl(req.url || "/");
   const cookieHeader = req.headers?.cookie || "";
-  const cookieKey = cookieHeader.split(";").find((c) => c.trim().startsWith("vc_key="));
-  const cookieValue = cookieKey ? decodeURIComponent(cookieKey.split("=")[1]) : undefined;
+  const cookieKey = cookieHeader
+    .split(";")
+    .find((c) => c.trim().startsWith("vc_key="));
+  const cookieValue = cookieKey
+    ? decodeURIComponent(cookieKey.split("=")[1])
+    : undefined;
   const key = searchParams.get("key") || cookieValue;
   return key === session.key;
 }
 
 function setKeyCookie(res: ServerResponse, key: string): void {
-  res.setHeader("Set-Cookie", `vc_key=${encodeURIComponent(key)}; Path=/; SameSite=Strict`);
+  res.setHeader(
+    "Set-Cookie",
+    `vc_key=${encodeURIComponent(key)}; Path=/; SameSite=Strict`,
+  );
 }
 
-export async function findAvailablePort(startPort: number, host: string, maxAttempts = 100): Promise<number> {
+export async function findAvailablePort(
+  startPort: number,
+  host: string,
+  maxAttempts = 100,
+): Promise<number> {
   return new Promise((resolve, reject) => {
     let currentPort = startPort;
 
     function tryPort() {
       if (currentPort >= startPort + maxAttempts) {
-        reject(new Error(`No available port found in range ${startPort}-${startPort + maxAttempts}`));
+        reject(
+          new Error(
+            `No available port found in range ${startPort}-${startPort + maxAttempts}`,
+          ),
+        );
         return;
       }
 
@@ -142,7 +164,7 @@ export function createUpdateScreenHook(
 
 export async function createCompanionServer(
   manager: SessionManager,
-  options: ServerOptions
+  options: ServerOptions,
 ): Promise<{ session: Session }> {
   const startPort = 49152 + Math.floor(Math.random() * 16383);
   const port = await findAvailablePort(startPort, options.host);
@@ -164,8 +186,12 @@ export async function createCompanionServer(
     }
     const { searchParams } = parseUrl(request.url || "/");
     const cookieHeader = request.headers.cookie || "";
-    const cookieKey = cookieHeader.split(";").find((c) => c.trim().startsWith("vc_key="));
-    const cookieValue = cookieKey ? decodeURIComponent(cookieKey.split("=")[1]) : undefined;
+    const cookieKey = cookieHeader
+      .split(";")
+      .find((c) => c.trim().startsWith("vc_key="));
+    const cookieValue = cookieKey
+      ? decodeURIComponent(cookieKey.split("=")[1])
+      : undefined;
     const key = searchParams.get("key") || cookieValue;
     if (key !== session.key) {
       socket.destroy();
@@ -177,10 +203,15 @@ export async function createCompanionServer(
   });
 
   wss.on("connection", (ws) => {
-    ws.on("message", createWsMessageHandler(manager, () => sessionId));
+    ws.on(
+      "message",
+      createWsMessageHandler(manager, () => sessionId),
+    );
   });
 
-  await new Promise<void>((resolve) => httpServer.listen(port, options.host, resolve));
+  await new Promise<void>((resolve) =>
+    httpServer.listen(port, options.host, resolve),
+  );
 
   const session = manager.create(port, "", httpServer, wss);
   sessionId = session.id;
@@ -201,7 +232,7 @@ export function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   manager: SessionManager,
-  sessionId: string
+  sessionId: string,
 ): void {
   const session = manager.get(sessionId);
   if (!session) {
@@ -215,7 +246,8 @@ export function handleRequest(
   // Allow helper.js and the current screen asset through when the key is
   // supplied via cookie (the browser loads these without query params after
   // the first validated page load). Other paths still require key validation.
-  const keyRequired = pathname !== "/helper.js" && !pathname.startsWith("/files/");
+  const keyRequired =
+    pathname !== "/helper.js" && !pathname.startsWith("/files/");
   if (keyRequired && !validateKey(req, session)) {
     res.writeHead(403);
     res.end("Forbidden");
@@ -225,8 +257,12 @@ export function handleRequest(
   // For /helper.js and /files/*, still enforce the key if no cookie was set.
   if (!keyRequired) {
     const cookieHeader = req.headers?.cookie || "";
-    const cookieKey = cookieHeader.split(";").find((c) => c.trim().startsWith("vc_key="));
-    const cookieValue = cookieKey ? decodeURIComponent(cookieKey.split("=")[1]) : undefined;
+    const cookieKey = cookieHeader
+      .split(";")
+      .find((c) => c.trim().startsWith("vc_key="));
+    const cookieValue = cookieKey
+      ? decodeURIComponent(cookieKey.split("=")[1])
+      : undefined;
     const key = searchParams.get("key") || cookieValue;
     if (key !== session.key) {
       res.writeHead(403);
@@ -239,7 +275,9 @@ export function handleRequest(
     let html: string;
     if (session.activeScreen && session.screens.has(session.activeScreen)) {
       const screen = session.screens.get(session.activeScreen)!;
-      html = isFullDocument(screen.html) ? screen.html : wrapInFrame(screen.html);
+      html = isFullDocument(screen.html)
+        ? screen.html
+        : wrapInFrame(screen.html);
     } else {
       html = WAITING_PAGE;
     }
@@ -254,7 +292,9 @@ export function handleRequest(
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(html);
   } else if (req.method === "GET" && pathname === "/helper.js") {
-    res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
+    res.writeHead(200, {
+      "Content-Type": "application/javascript; charset=utf-8",
+    });
     res.end(HELPER_SCRIPT);
   } else if (req.method === "GET" && pathname?.startsWith("/files/")) {
     const fileName = pathname.slice(7);

@@ -57,7 +57,7 @@ export class Bar {
           },
         };
       },
-      { placement: "aboveEditor" }
+      { placement: "aboveEditor" },
     );
   }
 
@@ -103,7 +103,7 @@ export class Bar {
     const ctxColored = contextColored(
       theme,
       cu?.percent ?? null,
-      cu?.contextWindow ?? null
+      cu?.contextWindow ?? null,
     );
 
     const modelName = this.ctx.model?.id ?? "no-model";

@@ -104,7 +104,11 @@ describe("loadConfig", () => {
 
     const cwd = "/project";
     const a = loader.loadConfig(cwd);
-    fs.writeFileSync(globalConfigPath, JSON.stringify({ default: "deny" }), "utf-8");
+    fs.writeFileSync(
+      globalConfigPath,
+      JSON.stringify({ default: "deny" }),
+      "utf-8",
+    );
     const b = loader.loadConfig(cwd);
 
     expect(a.default).toBe("allow");
@@ -121,7 +125,11 @@ describe("loadConfig", () => {
 
     const cwd = "/project";
     const a = loader.loadConfig(cwd);
-    fs.writeFileSync(globalConfigPath, JSON.stringify({ default: "deny" }), "utf-8");
+    fs.writeFileSync(
+      globalConfigPath,
+      JSON.stringify({ default: "deny" }),
+      "utf-8",
+    );
     loader.invalidateCache();
     const b = loader.loadConfig(cwd);
 

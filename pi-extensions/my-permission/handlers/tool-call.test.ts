@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { ToolCallEvent } from "@earendil-works/pi-coding-agent";
 import type { MergedConfig } from "../config.js";
 import type { CheckResult } from "../checker.js";
-import { createToolCallHandler, type ToolCallDependencies } from "./tool-call.js";
+import {
+  createToolCallHandler,
+  type ToolCallDependencies,
+} from "./tool-call.js";
 
 function makeConfig(overrides: Partial<MergedConfig> = {}): MergedConfig {
   return {
@@ -22,22 +25,37 @@ function makeSessionState(overrides: Partial<any> = {}) {
   let yolo = overrides.yolo ?? false;
   let yoloAllSub = overrides.yoloAllSub ?? false;
   return {
-    get yolo() { return yolo; },
-    get yoloAllSub() { return yoloAllSub; },
+    get yolo() {
+      return yolo;
+    },
+    get yoloAllSub() {
+      return yoloAllSub;
+    },
     sessionRules: rules,
-    toggleYolo: () => { yolo = !yolo; },
-    toggleYoloAllSub: () => { yoloAllSub = !yoloAllSub; },
+    toggleYolo: () => {
+      yolo = !yolo;
+    },
+    toggleYoloAllSub: () => {
+      yoloAllSub = !yoloAllSub;
+    },
     addSessionRule: (rule: any) => rules.push(rule),
-    restoreSessionRules: (rs: any[]) => { rules.length = 0; rules.push(...rs); },
+    restoreSessionRules: (rs: any[]) => {
+      rules.length = 0;
+      rules.push(...rs);
+    },
     findSessionRule: (surface: string, pattern: string) =>
       rules.find((r) => r.surface === surface && r.pattern === pattern),
     forEachSessionRuleEntry: (cb: (rule: any) => void) => rules.forEach(cb),
-    clear: () => { rules.length = 0; },
+    clear: () => {
+      rules.length = 0;
+    },
     ...overrides,
   };
 }
 
-function makeDeps(overrides: Partial<ToolCallDependencies> = {}): ToolCallDependencies {
+function makeDeps(
+  overrides: Partial<ToolCallDependencies> = {},
+): ToolCallDependencies {
   const config = makeConfig(overrides.configOverrides ?? {});
   const sessionState = makeSessionState(overrides.sessionOverrides ?? {});
 
@@ -51,9 +69,21 @@ function makeDeps(overrides: Partial<ToolCallDependencies> = {}): ToolCallDepend
       check: (input) => {
         const toolAction = cfg.tools[input.toolName];
         if (toolAction) {
-          return { state: toolAction, origin: "global", surface: "tools", value: input.toolName, matchedPattern: input.toolName };
+          return {
+            state: toolAction,
+            origin: "global",
+            surface: "tools",
+            value: input.toolName,
+            matchedPattern: input.toolName,
+          };
         }
-        const result: CheckResult = { state: cfg.default, origin: "default", surface: "tools", value: input.toolName, matchedPattern: "*" };
+        const result: CheckResult = {
+          state: cfg.default,
+          origin: "default",
+          surface: "tools",
+          value: input.toolName,
+          matchedPattern: "*",
+        };
         if (state.yolo && result.state === "ask") {
           return { ...result, state: "allow", origin: "yolo" };
         }
@@ -68,7 +98,8 @@ function makeDeps(overrides: Partial<ToolCallDependencies> = {}): ToolCallDepend
       flush: () => {},
     },
     subagentPolicy: {
-      getDefaultPolicy: (yoloAllSub) => yoloAllSub ? "yolo" : "inherit-parent",
+      getDefaultPolicy: (yoloAllSub) =>
+        yoloAllSub ? "yolo" : "inherit-parent",
       writePolicySnapshot: () => "/tmp/snapshot.json",
       readPolicySnapshot: () => undefined,
       deletePolicySnapshot: () => {},
@@ -108,9 +139,21 @@ describe("createToolCallHandler", () => {
       checkerFactory: (cfg) => ({
         check: (input) => {
           if (input.skillName && cfg.skills[input.skillName]) {
-            return { state: cfg.skills[input.skillName], origin: "global", surface: "skills", value: input.skillName, matchedPattern: input.skillName };
+            return {
+              state: cfg.skills[input.skillName],
+              origin: "global",
+              surface: "skills",
+              value: input.skillName,
+              matchedPattern: input.skillName,
+            };
           }
-          return { state: "ask", origin: "default", surface: "skills", value: "*", matchedPattern: "*" };
+          return {
+            state: "ask",
+            origin: "default",
+            surface: "skills",
+            value: "*",
+            matchedPattern: "*",
+          };
         },
       }),
     });
@@ -126,7 +169,10 @@ describe("createToolCallHandler", () => {
   it("allows a tool configured as allow without prompting", async () => {
     const deps = makeDeps({ configOverrides: { tools: { read: "allow" } } });
     const handler = createToolCallHandler(deps);
-    const result = await handler(makeEvent("read", { path: "file.txt" }), makeCtx());
+    const result = await handler(
+      makeEvent("read", { path: "file.txt" }),
+      makeCtx(),
+    );
     expect(result).toBeUndefined();
     expect(deps.reviewEntries).toHaveLength(1);
     expect(deps.reviewEntries[0].state).toBe("allow");
@@ -135,15 +181,24 @@ describe("createToolCallHandler", () => {
   it("blocks a tool configured as deny", async () => {
     const deps = makeDeps({ configOverrides: { tools: { bash: "deny" } } });
     const handler = createToolCallHandler(deps);
-    const result = await handler(makeEvent("bash", { command: "date" }), makeCtx());
-    expect(result).toEqual({ block: true, reason: "Permission denied: tools \"bash\"" });
+    const result = await handler(
+      makeEvent("bash", { command: "date" }),
+      makeCtx(),
+    );
+    expect(result).toEqual({
+      block: true,
+      reason: 'Permission denied: tools "bash"',
+    });
     expect(deps.reviewEntries[0].state).toBe("deny");
   });
 
   it("prompts for an ask decision and allows once", async () => {
     const deps = makeDeps({ dialog: async () => ({ kind: "allow-once" }) });
     const handler = createToolCallHandler(deps);
-    const result = await handler(makeEvent("bash", { command: "date" }), makeCtx());
+    const result = await handler(
+      makeEvent("bash", { command: "date" }),
+      makeCtx(),
+    );
     expect(result).toBeUndefined();
     expect(deps.reviewEntries[0].state).toBe("allow");
   });
@@ -151,39 +206,63 @@ describe("createToolCallHandler", () => {
   it("prompts for an ask decision and denies", async () => {
     const deps = makeDeps({ dialog: async () => ({ kind: "deny" }) });
     const handler = createToolCallHandler(deps);
-    const result = await handler(makeEvent("bash", { command: "date" }), makeCtx());
-    expect(result).toEqual({ block: true, reason: "Permission denied: tools \"bash\"" });
+    const result = await handler(
+      makeEvent("bash", { command: "date" }),
+      makeCtx(),
+    );
+    expect(result).toEqual({
+      block: true,
+      reason: 'Permission denied: tools "bash"',
+    });
   });
 
   it("prompts for an ask decision and denies with reason", async () => {
-    const deps = makeDeps({ dialog: async () => ({ kind: "deny-with-reason", reason: "sensitive" }) });
+    const deps = makeDeps({
+      dialog: async () => ({ kind: "deny-with-reason", reason: "sensitive" }),
+    });
     const handler = createToolCallHandler(deps);
-    const result = await handler(makeEvent("bash", { command: "date" }), makeCtx());
-    expect(result).toEqual({ block: true, reason: "Permission denied: tools \"bash\"" });
+    const result = await handler(
+      makeEvent("bash", { command: "date" }),
+      makeCtx(),
+    );
+    expect(result).toEqual({
+      block: true,
+      reason: 'Permission denied: tools "bash"',
+    });
   });
 
   it("adds a session rule on allow-session", async () => {
     const deps = makeDeps({ dialog: async () => ({ kind: "allow-session" }) });
     const handler = createToolCallHandler(deps);
     await handler(makeEvent("bash", { command: "date" }), makeCtx());
-    expect(deps.sessionState.findSessionRule("tools", "bash")).toEqual({ surface: "tools", pattern: "bash", action: "allow" });
+    expect(deps.sessionState.findSessionRule("tools", "bash")).toEqual({
+      surface: "tools",
+      pattern: "bash",
+      action: "allow",
+    });
   });
 
   it("writes a project rule on allow-project", async () => {
     const projectRules: any[] = [];
     const deps = makeDeps({
       dialog: async () => ({ kind: "allow-project" }),
-      saveProjectRule: (cwd, surface, pattern) => projectRules.push({ cwd, surface, pattern }),
+      saveProjectRule: (cwd, surface, pattern) =>
+        projectRules.push({ cwd, surface, pattern }),
     });
     const handler = createToolCallHandler(deps);
     await handler(makeEvent("bash", { command: "date" }), makeCtx());
-    expect(projectRules).toEqual([{ cwd: "/project", surface: "tools", pattern: "bash" }]);
+    expect(projectRules).toEqual([
+      { cwd: "/project", surface: "tools", pattern: "bash" },
+    ]);
   });
 
   it("auto-allows when yolo is enabled", async () => {
     const deps = makeDeps({ sessionOverrides: { yolo: true } });
     const handler = createToolCallHandler(deps);
-    const result = await handler(makeEvent("bash", { command: "date" }), makeCtx());
+    const result = await handler(
+      makeEvent("bash", { command: "date" }),
+      makeCtx(),
+    );
     expect(result).toBeUndefined();
     expect(deps.reviewEntries[0].origin).toBe("yolo");
   });
@@ -194,16 +273,28 @@ describe("createToolCallHandler", () => {
       sessionOverrides: { yolo: true },
     });
     const handler = createToolCallHandler(deps);
-    const result = await handler(makeEvent("bash", { command: "date" }), makeCtx());
-    expect(result).toEqual({ block: true, reason: "Permission denied: tools \"bash\"" });
+    const result = await handler(
+      makeEvent("bash", { command: "date" }),
+      makeCtx(),
+    );
+    expect(result).toEqual({
+      block: true,
+      reason: 'Permission denied: tools "bash"',
+    });
   });
 
   it("does not prompt when UI is unavailable", async () => {
     const dialog = async () => ({ kind: "allow-once" });
     const deps = makeDeps({ dialog });
     const handler = createToolCallHandler(deps);
-    const result = await handler(makeEvent("bash", { command: "date" }), makeCtx(false));
-    expect(result).toEqual({ block: true, reason: "Permission denied: tools \"bash\" (no UI)" });
+    const result = await handler(
+      makeEvent("bash", { command: "date" }),
+      makeCtx(false),
+    );
+    expect(result).toEqual({
+      block: true,
+      reason: 'Permission denied: tools "bash" (no UI)',
+    });
   });
 
   it("injects subagent policy snapshot for subagent tool calls", async () => {
@@ -211,7 +302,10 @@ describe("createToolCallHandler", () => {
     const deps = makeDeps({
       subagentPolicy: {
         getDefaultPolicy: () => "inherit-parent",
-        writePolicySnapshot: () => { snapshotPath = "/tmp/snapshot.json"; return snapshotPath; },
+        writePolicySnapshot: () => {
+          snapshotPath = "/tmp/snapshot.json";
+          return snapshotPath;
+        },
         readPolicySnapshot: () => undefined,
         deletePolicySnapshot: () => {},
         isSubagentProcess: () => false,
@@ -223,7 +317,9 @@ describe("createToolCallHandler", () => {
     const result = await handler(event, makeCtx());
     expect(result).toBeUndefined();
     expect(snapshotPath).toBe("/tmp/snapshot.json");
-    expect(event.input.MY_PERMISSION_SUBAGENT_POLICY_FILE).toBe("/tmp/snapshot.json");
+    expect(event.input.MY_PERMISSION_SUBAGENT_POLICY_FILE).toBe(
+      "/tmp/snapshot.json",
+    );
   });
 
   it("uses yolo default for subagent when yoloAllSub is enabled", async () => {
@@ -231,7 +327,10 @@ describe("createToolCallHandler", () => {
     const deps = makeDeps({
       sessionOverrides: { yoloAllSub: true },
       subagentPolicy: {
-        getDefaultPolicy: (yoloAllSub) => { chosenPolicy = yoloAllSub ? "yolo" : "inherit-parent"; return chosenPolicy; },
+        getDefaultPolicy: (yoloAllSub) => {
+          chosenPolicy = yoloAllSub ? "yolo" : "inherit-parent";
+          return chosenPolicy;
+        },
         writePolicySnapshot: () => "/tmp/snapshot.json",
         readPolicySnapshot: () => undefined,
         deletePolicySnapshot: () => {},
@@ -239,7 +338,10 @@ describe("createToolCallHandler", () => {
       },
     });
     const handler = createToolCallHandler(deps);
-    await handler(makeEvent("subagent", { agent: "scout", task: "find auth" }), makeCtx());
+    await handler(
+      makeEvent("subagent", { agent: "scout", task: "find auth" }),
+      makeCtx(),
+    );
     expect(chosenPolicy).toBe("yolo");
   });
 
@@ -248,14 +350,22 @@ describe("createToolCallHandler", () => {
       configOverrides: { tools: { subagent: "deny" } },
       subagentPolicy: {
         getDefaultPolicy: () => "inherit-parent",
-        writePolicySnapshot: () => { throw new Error("should not be called"); },
+        writePolicySnapshot: () => {
+          throw new Error("should not be called");
+        },
         readPolicySnapshot: () => undefined,
         deletePolicySnapshot: () => {},
         isSubagentProcess: () => false,
       },
     });
     const handler = createToolCallHandler(deps);
-    const result = await handler(makeEvent("subagent", { agent: "scout", task: "find auth" }), makeCtx());
-    expect(result).toEqual({ block: true, reason: "Permission denied: tools \"subagent\"" });
+    const result = await handler(
+      makeEvent("subagent", { agent: "scout", task: "find auth" }),
+      makeCtx(),
+    );
+    expect(result).toEqual({
+      block: true,
+      reason: 'Permission denied: tools "subagent"',
+    });
   });
 });

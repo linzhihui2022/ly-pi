@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
-import { renderMarkdownToHtml, stripMarkdown, buildHtmlDocument, extractAssistantText, loadCss, ansiToHtml, wrapCodeBlocks } from "./render";
+import {
+  renderMarkdownToHtml,
+  stripMarkdown,
+  buildHtmlDocument,
+  extractAssistantText,
+  loadCss,
+  ansiToHtml,
+  wrapCodeBlocks,
+} from "./render";
 
 describe("renderMarkdownToHtml", () => {
   it("renders heading and paragraph", () => {
@@ -38,7 +46,9 @@ describe("loadCss", () => {
     const result = loadCss("/nonexistent/path");
     expect(result.github).toBe("");
     expect(result.highlight).toContain("Catppuccin Mocha");
-    expect(result.highlight).toContain('.markdown-body .hljs-keyword { color: #cba6f7; }');
+    expect(result.highlight).toContain(
+      ".markdown-body .hljs-keyword { color: #cba6f7; }",
+    );
   });
 });
 
@@ -92,21 +102,26 @@ describe("buildHtmlDocument", () => {
   });
 
   it("renders ANSI colors in thinking block as HTML spans", () => {
-    const thinking = "\x1b[38;2;203;166;247mThinking:\x1b[39m \x1b[38;2;166;173;200m部署完成\x1b[0m";
+    const thinking =
+      "\x1b[38;2;203;166;247mThinking:\x1b[39m \x1b[38;2;166;173;200m部署完成\x1b[0m";
     const doc = buildHtmlDocument("<p>hello</p>", thinking);
-    expect(doc).toContain('<span style="color:rgb(203,166,247)">Thinking:</span>');
-    expect(doc).toContain('<span style="color:rgb(166,173,200)">部署完成</span>');
+    expect(doc).toContain(
+      '<span style="color:rgb(203,166,247)">Thinking:</span>',
+    );
+    expect(doc).toContain(
+      '<span style="color:rgb(166,173,200)">部署完成</span>',
+    );
   });
 
   it("uses catppuccin-mocha syntax highlighting", () => {
     const doc = buildHtmlDocument("<p>hello</p>");
-    expect(doc).toContain('background: #1e1e2e');
-    expect(doc).toContain('color: #cdd6f4');
+    expect(doc).toContain("background: #1e1e2e");
+    expect(doc).toContain("color: #cdd6f4");
     // catppuccin-mocha highlight.js colors with .markdown-body prefix for specificity
-    expect(doc).toContain('.markdown-body .hljs-keyword { color: #cba6f7; }');
-    expect(doc).toContain('.markdown-body .hljs-string { color: #a6e3a1; }');
-    expect(doc).toContain('.markdown-body .hljs-comment { color: #9399b2; }');
-    expect(doc).toContain('.markdown-body .hljs-number { color: #fab387; }');
+    expect(doc).toContain(".markdown-body .hljs-keyword { color: #cba6f7; }");
+    expect(doc).toContain(".markdown-body .hljs-string { color: #a6e3a1; }");
+    expect(doc).toContain(".markdown-body .hljs-comment { color: #9399b2; }");
+    expect(doc).toContain(".markdown-body .hljs-number { color: #fab387; }");
   });
 
   it("includes custom ctp-layout CSS rules", () => {
@@ -179,7 +194,8 @@ describe("buildHtmlDocument", () => {
   });
 
   it("wraps code blocks in output", () => {
-    const body = '<pre><code class="hljs language-ts">const x = 1;</code></pre>';
+    const body =
+      '<pre><code class="hljs language-ts">const x = 1;</code></pre>';
     const doc = buildHtmlDocument(body);
     expect(doc).toContain('<div class="code-block-wrapper">');
     expect(doc).toContain('<div class="code-block-header">');
@@ -231,31 +247,37 @@ describe("buildHtmlDocument", () => {
 
 describe("wrapCodeBlocks", () => {
   it("wraps code block with language header and copy button", () => {
-    const input = '<pre><code class="hljs language-typescript">const x = 1;</code></pre>';
+    const input =
+      '<pre><code class="hljs language-typescript">const x = 1;</code></pre>';
     const result = wrapCodeBlocks(input);
     expect(result).toContain('<div class="code-block-wrapper">');
     expect(result).toContain('<div class="code-block-header">');
     expect(result).toContain("<span>typescript</span>");
     expect(result).toContain("📋 复制");
-    expect(result).toContain('<pre><code class="hljs language-typescript">const x = 1;</code></pre>');
+    expect(result).toContain(
+      '<pre><code class="hljs language-typescript">const x = 1;</code></pre>',
+    );
   });
 
   it("does not wrap non-code content", () => {
-    const input = '<p>hello</p><pre><code class="hljs language-ts">code</code></pre>';
+    const input =
+      '<p>hello</p><pre><code class="hljs language-ts">code</code></pre>';
     const result = wrapCodeBlocks(input);
     expect(result).toContain("<p>hello</p>");
     expect(result).toContain("code-block-wrapper");
   });
 
   it("handles multiple code blocks", () => {
-    const input = '<pre><code class="hljs language-ts">a</code></pre><p>text</p><pre><code class="hljs language-py">b</code></pre>';
+    const input =
+      '<pre><code class="hljs language-ts">a</code></pre><p>text</p><pre><code class="hljs language-py">b</code></pre>';
     const result = wrapCodeBlocks(input);
     const matches = result.match(/code-block-wrapper/g);
     expect(matches).toHaveLength(2);
   });
 
   it("handles code block with plaintext language", () => {
-    const input = '<pre><code class="hljs language-plaintext">text</code></pre>';
+    const input =
+      '<pre><code class="hljs language-plaintext">text</code></pre>';
     const result = wrapCodeBlocks(input);
     expect(result).toContain("<span>plaintext</span>");
   });
@@ -264,12 +286,16 @@ describe("wrapCodeBlocks", () => {
 describe("ansiToHtml", () => {
   it("converts true-color ANSI to HTML spans", () => {
     const input = "\x1b[38;2;255;0;0mred\x1b[39m";
-    expect(ansiToHtml(input)).toBe('<span style="color:rgb(255,0,0)">red</span>');
+    expect(ansiToHtml(input)).toBe(
+      '<span style="color:rgb(255,0,0)">red</span>',
+    );
   });
 
   it("handles reset code (0)", () => {
     const input = "\x1b[38;2;255;0;0mred\x1b[0mnormal";
-    expect(ansiToHtml(input)).toBe('<span style="color:rgb(255,0,0)">red</span>normal');
+    expect(ansiToHtml(input)).toBe(
+      '<span style="color:rgb(255,0,0)">red</span>normal',
+    );
   });
 
   it("escapes HTML in non-ANSI text", () => {
@@ -287,15 +313,18 @@ describe("ansiToHtml", () => {
 
   it("closes remaining spans at end of string", () => {
     const input = "\x1b[38;2;100;100;100mgray";
-    expect(ansiToHtml(input)).toBe('<span style="color:rgb(100,100,100)">gray</span>');
+    expect(ansiToHtml(input)).toBe(
+      '<span style="color:rgb(100,100,100)">gray</span>',
+    );
   });
 
   it("handles adjacent color spans", () => {
-    const input = "\x1b[38;2;255;0;0mr\x1b[38;2;0;255;0mg\x1b[38;2;0;0;255mb\x1b[0m";
+    const input =
+      "\x1b[38;2;255;0;0mr\x1b[38;2;0;255;0mg\x1b[38;2;0;0;255mb\x1b[0m";
     expect(ansiToHtml(input)).toBe(
       '<span style="color:rgb(255,0,0)">r</span>' +
-      '<span style="color:rgb(0,255,0)">g</span>' +
-      '<span style="color:rgb(0,0,255)">b</span>'
+        '<span style="color:rgb(0,255,0)">g</span>' +
+        '<span style="color:rgb(0,0,255)">b</span>',
     );
   });
 
@@ -312,21 +341,21 @@ describe("ansiToHtml", () => {
   it("handles bare bracket color sequences (pi thinking format)", () => {
     const input = "[38;2;203;166;247mThinking:[39m [38;2;166;173;200mdone[39m";
     expect(ansiToHtml(input)).toBe(
-      '<span style="color:rgb(203,166,247)">Thinking:</span> <span style="color:rgb(166,173,200)">done</span>'
+      '<span style="color:rgb(203,166,247)">Thinking:</span> <span style="color:rgb(166,173,200)">done</span>',
     );
   });
 
   it("handles text ending with reset code", () => {
     const input = "\x1b[38;2;255;0;0mred\x1b[0m";
     expect(ansiToHtml(input)).toBe(
-      '<span style="color:rgb(255,0,0)">red</span>'
+      '<span style="color:rgb(255,0,0)">red</span>',
     );
   });
 
   it("handles color code at end with no trailing text", () => {
     const input = "\x1b[38;2;100;100;100m";
     expect(ansiToHtml(input)).toBe(
-      '<span style="color:rgb(100,100,100)"></span>'
+      '<span style="color:rgb(100,100,100)"></span>',
     );
   });
 

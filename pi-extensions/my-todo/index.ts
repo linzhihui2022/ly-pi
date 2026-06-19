@@ -1,9 +1,16 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Key } from "@earendil-works/pi-tui";
 import { TaskState } from "./state";
-import { renderActiveOverlay, renderCompletedOverlay, renderPlanOverlay } from "./overlay";
+import {
+  renderActiveOverlay,
+  renderCompletedOverlay,
+  renderPlanOverlay,
+} from "./overlay";
 import { GoalState } from "./goal-state";
 import { renderGoalOverlay } from "./goal-overlay";
 import type { Task, TaskStatus, PlanPhase, GoalStatus } from "./types";
@@ -32,7 +39,9 @@ export default function myTodo(pi: ExtensionAPI): void {
 
     if (planMode) {
       // In plan mode, use a single plan overlay widget
-      const active = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
+      const active = tasks.filter(
+        (t) => t.status === "pending" || t.status === "in_progress",
+      );
       if (active.length === 0) {
         ctx.ui.setWidget("my-todo", undefined);
       } else {
@@ -45,7 +54,9 @@ export default function myTodo(pi: ExtensionAPI): void {
       return;
     }
 
-    const active = tasks.filter((t) => t.status === "pending" || t.status === "in_progress");
+    const active = tasks.filter(
+      (t) => t.status === "pending" || t.status === "in_progress",
+    );
     const completed = tasks.filter((t) => t.status === "completed");
 
     if (active.length === 0) {
@@ -104,7 +115,8 @@ export default function myTodo(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "todo",
     label: "Todo",
-    description: "Manage a task list for tracking multi-step progress. Actions: create, update, list, get, delete, clear.",
+    description:
+      "Manage a task list for tracking multi-step progress. Actions: create, update, list, get, delete, clear.",
     promptSnippet: "Manage tasks and track progress",
     promptGuidelines: [
       "Use todo when tracking multi-step work like research, design, and implementation.",
@@ -112,11 +124,20 @@ export default function myTodo(pi: ExtensionAPI): void {
       "Mark tasks completed only when fully done.",
     ],
     parameters: Type.Object({
-      action: StringEnum(["create", "update", "list", "get", "delete", "clear"] as const),
+      action: StringEnum([
+        "create",
+        "update",
+        "list",
+        "get",
+        "delete",
+        "clear",
+      ] as const),
       subject: Type.Optional(Type.String()),
       description: Type.Optional(Type.String()),
       id: Type.Optional(Type.Number()),
-      status: Type.Optional(StringEnum(["pending", "in_progress", "completed", "deleted"] as const)),
+      status: Type.Optional(
+        StringEnum(["pending", "in_progress", "completed", "deleted"] as const),
+      ),
       includeDeleted: Type.Optional(Type.Boolean({ default: false })),
     }),
 
@@ -124,54 +145,120 @@ export default function myTodo(pi: ExtensionAPI): void {
       try {
         switch (params.action) {
           case "create": {
-            if (!params.subject) throw new Error("subject is required for create");
+            if (!params.subject)
+              throw new Error("subject is required for create");
             const task = state.create(params.subject, params.description);
             refreshWidgets(ctx);
             return {
-              content: [{ type: "text", text: `Created task #${task.id}: ${task.subject}` }],
-              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
+              content: [
+                {
+                  type: "text",
+                  text: `Created task #${task.id}: ${task.subject}`,
+                },
+              ],
+              details: {
+                action: params.action,
+                params,
+                tasks: state.list(),
+                nextId: state.getNextId(),
+                planMode: state.getPlanMode(),
+                planPhase: state.getPlanPhase(),
+              },
             };
           }
           case "update": {
-            if (params.id === undefined) throw new Error("id is required for update");
-            const updates: Partial<{ subject: string; description: string; status: TaskStatus }> = {};
+            if (params.id === undefined)
+              throw new Error("id is required for update");
+            const updates: Partial<{
+              subject: string;
+              description: string;
+              status: TaskStatus;
+            }> = {};
             if (params.subject !== undefined) updates.subject = params.subject;
-            if (params.description !== undefined) updates.description = params.description;
+            if (params.description !== undefined)
+              updates.description = params.description;
             if (params.status !== undefined) updates.status = params.status;
             const task = state.update(params.id, updates);
             refreshWidgets(ctx);
             return {
-              content: [{ type: "text", text: `Updated task #${task.id}: ${task.subject}` }],
-              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
+              content: [
+                {
+                  type: "text",
+                  text: `Updated task #${task.id}: ${task.subject}`,
+                },
+              ],
+              details: {
+                action: params.action,
+                params,
+                tasks: state.list(),
+                nextId: state.getNextId(),
+                planMode: state.getPlanMode(),
+                planPhase: state.getPlanPhase(),
+              },
             };
           }
           case "list": {
             const tasks = state.list(params.includeDeleted ?? false);
             const lines = tasks.map(formatTaskLine);
             return {
-              content: [{ type: "text", text: tasks.length > 0 ? lines.join("\n") : "No tasks." }],
-              details: { action: params.action, params, tasks, nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
+              content: [
+                {
+                  type: "text",
+                  text: tasks.length > 0 ? lines.join("\n") : "No tasks.",
+                },
+              ],
+              details: {
+                action: params.action,
+                params,
+                tasks,
+                nextId: state.getNextId(),
+                planMode: state.getPlanMode(),
+                planPhase: state.getPlanPhase(),
+              },
             };
           }
           case "get": {
-            if (params.id === undefined) throw new Error("id is required for get");
+            if (params.id === undefined)
+              throw new Error("id is required for get");
             const task = state.get(params.id);
             if (!task) throw new Error(`Task ${params.id} not found`);
             return {
-              content: [{
-                type: "text",
-                text: `#${task.id} [${task.status}] ${task.subject}${task.description ? "\n" + task.description : ""}`,
-              }],
-              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
+              content: [
+                {
+                  type: "text",
+                  text: `#${task.id} [${task.status}] ${task.subject}${task.description ? "\n" + task.description : ""}`,
+                },
+              ],
+              details: {
+                action: params.action,
+                params,
+                tasks: state.list(),
+                nextId: state.getNextId(),
+                planMode: state.getPlanMode(),
+                planPhase: state.getPlanPhase(),
+              },
             };
           }
           case "delete": {
-            if (params.id === undefined) throw new Error("id is required for delete");
+            if (params.id === undefined)
+              throw new Error("id is required for delete");
             const task = state.delete(params.id);
             refreshWidgets(ctx);
             return {
-              content: [{ type: "text", text: `Deleted task #${task.id}: ${task.subject}` }],
-              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
+              content: [
+                {
+                  type: "text",
+                  text: `Deleted task #${task.id}: ${task.subject}`,
+                },
+              ],
+              details: {
+                action: params.action,
+                params,
+                tasks: state.list(),
+                nextId: state.getNextId(),
+                planMode: state.getPlanMode(),
+                planPhase: state.getPlanPhase(),
+              },
             };
           }
           case "clear": {
@@ -179,7 +266,14 @@ export default function myTodo(pi: ExtensionAPI): void {
             refreshWidgets(ctx);
             return {
               content: [{ type: "text", text: "All tasks cleared." }],
-              details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase() },
+              details: {
+                action: params.action,
+                params,
+                tasks: state.list(),
+                nextId: state.getNextId(),
+                planMode: state.getPlanMode(),
+                planPhase: state.getPlanPhase(),
+              },
             };
           }
           default: {
@@ -191,7 +285,15 @@ export default function myTodo(pi: ExtensionAPI): void {
         const message = err instanceof Error ? err.message : String(err);
         return {
           content: [{ type: "text", text: `Error: ${message}` }],
-          details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase(), error: message },
+          details: {
+            action: params.action,
+            params,
+            tasks: state.list(),
+            nextId: state.getNextId(),
+            planMode: state.getPlanMode(),
+            planPhase: state.getPlanPhase(),
+            error: message,
+          },
           isError: true,
         };
       }
@@ -201,7 +303,8 @@ export default function myTodo(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "goal",
     label: "Goal",
-    description: "Track long-horizon objectives and autonomous progress. Actions: evaluate, mark_complete, mark_blocked.",
+    description:
+      "Track long-horizon objectives and autonomous progress. Actions: evaluate, mark_complete, mark_blocked.",
     promptSnippet: "Track long-term goals and evidence of completion",
     promptGuidelines: [
       "Use the goal tool to record evidence, update the next step, and mark the goal complete only when verified.",
@@ -209,10 +312,16 @@ export default function myTodo(pi: ExtensionAPI): void {
       "Call mark_blocked when no valid path remains and explain why.",
     ],
     parameters: Type.Object({
-      action: StringEnum(["evaluate", "mark_complete", "mark_blocked"] as const),
+      action: StringEnum([
+        "evaluate",
+        "mark_complete",
+        "mark_blocked",
+      ] as const),
       lastEvidence: Type.Optional(Type.String()),
       nextAction: Type.Optional(Type.String()),
-      status: Type.Optional(StringEnum(["active", "paused", "blocked"] as const)),
+      status: Type.Optional(
+        StringEnum(["active", "paused", "blocked"] as const),
+      ),
       evidence: Type.Optional(Type.String()),
       reason: Type.Optional(Type.String()),
       nextInputNeeded: Type.Optional(Type.Boolean()),
@@ -222,10 +331,19 @@ export default function myTodo(pi: ExtensionAPI): void {
       try {
         switch (params.action) {
           case "evaluate": {
-            const goal = goalState.evaluate(params.lastEvidence, params.nextAction, params.status as GoalStatus | undefined);
+            const goal = goalState.evaluate(
+              params.lastEvidence,
+              params.nextAction,
+              params.status as GoalStatus | undefined,
+            );
             refreshWidgets(ctx);
             return {
-              content: [{ type: "text", text: `Goal updated. Status: ${goal.status}, evidence: ${goal.lastEvidence || "(none)"}, next: ${goal.nextAction || "(none)"}` }],
+              content: [
+                {
+                  type: "text",
+                  text: `Goal updated. Status: ${goal.status}, evidence: ${goal.lastEvidence || "(none)"}, next: ${goal.nextAction || "(none)"}`,
+                },
+              ],
               details: { goal: goalState.snapshot() },
             };
           }
@@ -233,15 +351,22 @@ export default function myTodo(pi: ExtensionAPI): void {
             const goal = goalState.markComplete(params.evidence ?? "");
             refreshWidgets(ctx);
             return {
-              content: [{ type: "text", text: `Goal completed: ${goal.objective}` }],
+              content: [
+                { type: "text", text: `Goal completed: ${goal.objective}` },
+              ],
               details: { goal: goalState.snapshot() },
             };
           }
           case "mark_blocked": {
-            const goal = goalState.markBlocked(params.reason ?? "", params.nextInputNeeded);
+            const goal = goalState.markBlocked(
+              params.reason ?? "",
+              params.nextInputNeeded,
+            );
             refreshWidgets(ctx);
             return {
-              content: [{ type: "text", text: `Goal blocked: ${goal.blocker}` }],
+              content: [
+                { type: "text", text: `Goal blocked: ${goal.blocker}` },
+              ],
               details: { goal: goalState.snapshot() },
             };
           }
@@ -262,7 +387,8 @@ export default function myTodo(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("todos", {
-    description: "Manage tasks: /todos [list|done|start|delete|clear|add|plan|execute|reset] [args]",
+    description:
+      "Manage tasks: /todos [list|done|start|delete|clear|add|plan|execute|reset] [args]",
     getArgumentCompletions: (prefix: string) => {
       const trimmed = prefix.trimStart();
       const parts = trimmed.split(/\s+/);
@@ -270,19 +396,39 @@ export default function myTodo(pi: ExtensionAPI): void {
       if (parts.length <= 1) {
         const subs: { value: string; label: string; description: string }[] = [
           { value: "list", label: "list", description: "List all tasks" },
-          { value: "done", label: "done", description: "Mark a task as completed" },
-          { value: "start", label: "start", description: "Mark a task as in progress" },
+          {
+            value: "done",
+            label: "done",
+            description: "Mark a task as completed",
+          },
+          {
+            value: "start",
+            label: "start",
+            description: "Mark a task as in progress",
+          },
           { value: "delete", label: "delete", description: "Delete a task" },
           { value: "clear", label: "clear", description: "Clear all tasks" },
           { value: "add", label: "add", description: "Add a new task" },
           { value: "plan", label: "plan", description: "Enter plan mode" },
-          { value: "execute", label: "execute", description: "Start executing the plan" },
-          { value: "reset", label: "reset", description: "Clear all tasks and exit plan mode" },
+          {
+            value: "execute",
+            label: "execute",
+            description: "Start executing the plan",
+          },
+          {
+            value: "reset",
+            label: "reset",
+            description: "Clear all tasks and exit plan mode",
+          },
         ];
         const p = parts[0] ?? "";
         const filtered = subs
           .filter((s) => s.value.startsWith(p))
-          .map((s) => ({ value: s.value, label: s.label, description: s.description }));
+          .map((s) => ({
+            value: s.value,
+            label: s.label,
+            description: s.description,
+          }));
         return filtered.length > 0 ? filtered : null;
       }
 
@@ -309,7 +455,10 @@ export default function myTodo(pi: ExtensionAPI): void {
       const listAll = () => {
         const tasks = state.list();
         const lines = tasks.map(formatTaskLine);
-        ctx.ui.notify(tasks.length > 0 ? lines.join("\n") : "No tasks.", "info");
+        ctx.ui.notify(
+          tasks.length > 0 ? lines.join("\n") : "No tasks.",
+          "info",
+        );
       };
 
       // No args or "list" → show all
@@ -344,7 +493,10 @@ export default function myTodo(pi: ExtensionAPI): void {
         }
         state.setPlanMode(true, "planning");
         refreshWidgets(ctx);
-        ctx.ui.notify("Plan mode enabled. Only planning tools are available.", "info");
+        ctx.ui.notify(
+          "Plan mode enabled. Only planning tools are available.",
+          "info",
+        );
         return;
       }
 
@@ -369,7 +521,10 @@ export default function myTodo(pi: ExtensionAPI): void {
 
       const validMutations = ["done", "start", "delete"] as const;
       if (!validMutations.includes(sub as (typeof validMutations)[number])) {
-        ctx.ui.notify(`Unknown subcommand: ${sub}\nUsage: /todos [list|done|start|delete|clear|add]`, "warning");
+        ctx.ui.notify(
+          `Unknown subcommand: ${sub}\nUsage: /todos [list|done|start|delete|clear|add]`,
+          "warning",
+        );
         return;
       }
 
@@ -391,7 +546,10 @@ export default function myTodo(pi: ExtensionAPI): void {
           refreshWidgets(ctx);
           ctx.ui.notify(`Completed task #${task.id}: ${task.subject}`, "info");
         } catch (err) {
-          ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+          ctx.ui.notify(
+            err instanceof Error ? err.message : String(err),
+            "error",
+          );
         }
         return;
       }
@@ -402,7 +560,10 @@ export default function myTodo(pi: ExtensionAPI): void {
           refreshWidgets(ctx);
           ctx.ui.notify(`Started task #${task.id}: ${task.subject}`, "info");
         } catch (err) {
-          ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+          ctx.ui.notify(
+            err instanceof Error ? err.message : String(err),
+            "error",
+          );
         }
         return;
       }
@@ -413,7 +574,10 @@ export default function myTodo(pi: ExtensionAPI): void {
           refreshWidgets(ctx);
           ctx.ui.notify(`Deleted task #${task.id}: ${task.subject}`, "info");
         } catch (err) {
-          ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+          ctx.ui.notify(
+            err instanceof Error ? err.message : String(err),
+            "error",
+          );
         }
         return;
       }
@@ -421,14 +585,18 @@ export default function myTodo(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("goal", {
-    description: "Set or manage a long-term objective: /goal [objective|pause|resume|clear]",
+    description:
+      "Set or manage a long-term objective: /goal [objective|pause|resume|clear]",
     handler: async (args, ctx) => {
       const raw = args ?? "";
       const trimmed = raw.trim();
 
       if (trimmed === "") {
         if (raw.length > 0) {
-          ctx.ui.notify("Usage: /goal [objective|pause|resume|clear]", "warning");
+          ctx.ui.notify(
+            "Usage: /goal [objective|pause|resume|clear]",
+            "warning",
+          );
           return;
         }
         const goal = goalState.get();
@@ -470,7 +638,10 @@ export default function myTodo(pi: ExtensionAPI): void {
           refreshWidgets(ctx);
           ctx.ui.notify("Goal resumed.", "info");
         } catch (err) {
-          ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+          ctx.ui.notify(
+            err instanceof Error ? err.message : String(err),
+            "error",
+          );
         }
         return;
       }
@@ -503,7 +674,10 @@ export default function myTodo(pi: ExtensionAPI): void {
       } else {
         state.setPlanMode(true, "planning");
         refreshWidgets(ctx);
-        ctx.ui.notify("Plan mode enabled. Only planning tools are available.", "info");
+        ctx.ui.notify(
+          "Plan mode enabled. Only planning tools are available.",
+          "info",
+        );
       }
     },
   });
@@ -541,7 +715,8 @@ export default function myTodo(pi: ExtensionAPI): void {
         return {
           message: {
             customType: "hidden",
-            content: "You are in plan mode. You can only use the following planning tools: read, bash (note: bash can execute commands, including destructive ones, so use it carefully), grep, find, ls, ask_user_question, web_search, web_fetch. Use the todo tool to create a task list for the plan. Do not modify any files. Do not use edit, write, or any other modifying tools. Ask the user questions with ask_user_question if you need clarification.",
+            content:
+              "You are in plan mode. You can only use the following planning tools: read, bash (note: bash can execute commands, including destructive ones, so use it carefully), grep, find, ls, ask_user_question, web_search, web_fetch. Use the todo tool to create a task list for the plan. Do not modify any files. Do not use edit, write, or any other modifying tools. Ask the user questions with ask_user_question if you need clarification.",
             display: false,
           },
         };
@@ -549,7 +724,9 @@ export default function myTodo(pi: ExtensionAPI): void {
 
       if (state.getPlanPhase() === "executing") {
         const tasks = state.list();
-        const taskList = tasks.map((t) => `#${t.id} [${t.status}] ${t.subject}`).join("\n");
+        const taskList = tasks
+          .map((t) => `#${t.id} [${t.status}] ${t.subject}`)
+          .join("\n");
         return {
           message: {
             customType: "hidden",
@@ -591,10 +768,11 @@ export default function myTodo(pi: ExtensionAPI): void {
       const tasks = state.list();
       if (tasks.length === 0) return;
 
-      const choice = await ctx.ui.select(
-        "Plan Complete",
-        ["Execute plan", "Continue planning", "Discard plan"],
-      );
+      const choice = await ctx.ui.select("Plan Complete", [
+        "Execute plan",
+        "Continue planning",
+        "Discard plan",
+      ]);
 
       if (choice === "Execute plan") {
         state.setPlanMode(true, "executing");
@@ -617,8 +795,9 @@ export default function myTodo(pi: ExtensionAPI): void {
 
     let progressBlock = "";
     if (entries.length > 0) {
-      const lines = entries.map((e) =>
-        `- [iteration ${e.iteration}] ${e.status}: ${e.evidence || "(no evidence)"} → ${e.nextAction || "(no next action)"}`
+      const lines = entries.map(
+        (e) =>
+          `- [iteration ${e.iteration}] ${e.status}: ${e.evidence || "(no evidence)"} → ${e.nextAction || "(no next action)"}`,
       );
       progressBlock = `\n\nProgress so far:\n${lines.join("\n")}`;
     }
@@ -629,5 +808,4 @@ export default function myTodo(pi: ExtensionAPI): void {
 
     pi.sendUserMessage(baseMessage, { deliverAs: "followUp" });
   });
-
 }

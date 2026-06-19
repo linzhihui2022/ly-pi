@@ -1,4 +1,11 @@
-import { Editor, Key, matchesKey, truncateToWidth, visibleWidth, type TUI as FullTUI } from "@earendil-works/pi-tui";
+import {
+  Editor,
+  Key,
+  matchesKey,
+  truncateToWidth,
+  visibleWidth,
+  type TUI as FullTUI,
+} from "@earendil-works/pi-tui";
 import type {
   OptionData,
   QuestionAnswer,
@@ -29,7 +36,9 @@ const CHAT_LABEL = "Chat about this";
 const OTHER_LABEL = "Type something.";
 
 function hasPreview(question: QuestionData): boolean {
-  return question.options.some((o) => typeof o.preview === "string" && o.preview.length > 0);
+  return question.options.some(
+    (o) => typeof o.preview === "string" && o.preview.length > 0,
+  );
 }
 
 export function createQuestionnaire(
@@ -66,7 +75,11 @@ export function createQuestionnaire(
   }
 
   function buildRows(question: QuestionData, questionIndex: number): Row[] {
-    const rows: Row[] = question.options.map((o, i) => ({ kind: "option", option: o, index: i }));
+    const rows: Row[] = question.options.map((o, i) => ({
+      kind: "option",
+      option: o,
+      index: i,
+    }));
     const customs = customOptions.get(questionIndex) ?? new Set<string>();
     for (const value of customs) {
       rows.push({ kind: "custom", value });
@@ -162,7 +175,9 @@ export function createQuestionnaire(
 
   function buildResult(cancelled: boolean): QuestionnaireResult {
     return {
-      answers: Array.from(answers.values()).sort((a, b) => a.questionIndex - b.questionIndex),
+      answers: Array.from(answers.values()).sort(
+        (a, b) => a.questionIndex - b.questionIndex,
+      ),
       cancelled,
     };
   }
@@ -262,7 +277,9 @@ export function createQuestionnaire(
     /* istanbul ignore next -- only invoked from multi-select branch */
     if (!q.multiSelect) return;
     const rows = currentRows();
-    const selectable = rows.filter((r) => r.kind === "option" || r.kind === "custom");
+    const selectable = rows.filter(
+      (r) => r.kind === "option" || r.kind === "custom",
+    );
     const set = getSelections(currentTab);
     const allSelected = selectable.every((r) =>
       set.has(r.kind === "custom" ? r.value : r.option.label),
@@ -390,7 +407,10 @@ export function createQuestionnaire(
     add(theme.fg("muted", " Preview:"));
     add(theme.fg("border", `┌─${"─".repeat(innerWidth)}─┐`));
     for (const raw of preview.split("\n")) {
-      const content = padToDisplayWidth(truncateToWidth(raw, innerWidth, ""), innerWidth);
+      const content = padToDisplayWidth(
+        truncateToWidth(raw, innerWidth, ""),
+        innerWidth,
+      );
       add(
         theme.fg("border", "│ ") +
           theme.fg("text", content) +
@@ -413,26 +433,37 @@ export function createQuestionnaire(
       const prefix = selected ? theme.fg("accent", "> ") : "  ";
 
       if (row.kind === "other") {
-        add(prefix + theme.fg(selected ? "accent" : "text", `${i + 1}. ${OTHER_LABEL}`));
+        add(
+          prefix +
+            theme.fg(selected ? "accent" : "text", `${i + 1}. ${OTHER_LABEL}`),
+        );
         continue;
       }
 
       if (row.kind === "chat") {
-        add(prefix + theme.fg(selected ? "accent" : "text", `${i + 1}. ${CHAT_LABEL}`));
+        add(
+          prefix +
+            theme.fg(selected ? "accent" : "text", `${i + 1}. ${CHAT_LABEL}`),
+        );
         continue;
       }
 
       if (row.kind === "custom") {
         const label = `${row.value} (custom)`;
-        const checked = q.multiSelect && getSelections(currentTab).has(row.value);
+        const checked =
+          q.multiSelect && getSelections(currentTab).has(row.value);
         const box = q.multiSelect ? (checked ? "●" : "○") : `${i + 1}.`;
         add(prefix + theme.fg(selected ? "accent" : "text", `${box} ${label}`));
         continue;
       }
 
-      const checked = q.multiSelect && getSelections(currentTab).has(row.option.label);
+      const checked =
+        q.multiSelect && getSelections(currentTab).has(row.option.label);
       const box = q.multiSelect ? (checked ? "●" : "○") : `${i + 1}.`;
-      add(prefix + theme.fg(selected ? "accent" : "text", `${box} ${row.option.label}`));
+      add(
+        prefix +
+          theme.fg(selected ? "accent" : "text", `${box} ${row.option.label}`),
+      );
       if (row.option.description) {
         add(`     ${theme.fg("muted", row.option.description)}`);
       }
@@ -484,7 +515,9 @@ export function createQuestionnaire(
         } else {
           switch (answer.kind) {
             case "multi":
-              value = answer.selected?.length ? answer.selected.join(", ") : "(no input)";
+              value = answer.selected?.length
+                ? answer.selected.join(", ")
+                : "(no input)";
               break;
             case "custom":
               /* istanbul ignore next -- custom answers submitted through the UI are never empty */
@@ -497,7 +530,9 @@ export function createQuestionnaire(
               value = answer.answer || "(no input)";
           }
         }
-        add(`${theme.fg("muted", ` ${questions[i].header}: `)}${theme.fg("text", value)}`);
+        add(
+          `${theme.fg("muted", ` ${questions[i].header}: `)}${theme.fg("text", value)}`,
+        );
       }
       lines.push("");
       if (allAnswered()) {
@@ -532,7 +567,11 @@ export function createQuestionnaire(
 
       const rows = currentRows();
       const focused = rows[optionIndex];
-      if (!q!.multiSelect && focused.kind === "option" && focused.option.preview) {
+      if (
+        !q!.multiSelect &&
+        focused.kind === "option" &&
+        focused.option.preview
+      ) {
         lines.push("");
         lines.push(...renderPreview(focused.option.preview, width));
       }

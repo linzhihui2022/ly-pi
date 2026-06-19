@@ -71,7 +71,10 @@ function makeParams(questions: QuestionParams["questions"]): QuestionParams {
   return { questions };
 }
 
-function addCustomOption(q: ReturnType<typeof createQuestionnaire>, value: string) {
+function addCustomOption(
+  q: ReturnType<typeof createQuestionnaire>,
+  value: string,
+) {
   q.handleInput("down");
   q.handleInput("down");
   q.handleInput("enter");
@@ -125,7 +128,14 @@ describe("createQuestionnaire", () => {
     q.handleInput("enter");
 
     expect(done).toHaveBeenCalledWith({
-      answers: [{ questionIndex: 0, question: "Which color?", kind: "option", answer: "Red" }],
+      answers: [
+        {
+          questionIndex: 0,
+          question: "Which color?",
+          kind: "option",
+          answer: "Red",
+        },
+      ],
       cancelled: false,
     });
   });
@@ -148,7 +158,14 @@ describe("createQuestionnaire", () => {
     q.handleInput("enter");
 
     expect(done).toHaveBeenCalledWith({
-      answers: [{ questionIndex: 0, question: "Which color?", kind: "option", answer: "Blue" }],
+      answers: [
+        {
+          questionIndex: 0,
+          question: "Which color?",
+          kind: "option",
+          answer: "Blue",
+        },
+      ],
       cancelled: false,
     });
   });
@@ -173,7 +190,14 @@ describe("createQuestionnaire", () => {
     q.handleInput("enter");
 
     expect(done).toHaveBeenCalledWith({
-      answers: [{ questionIndex: 0, question: "Which color?", kind: "chat", answer: "Chat about this" }],
+      answers: [
+        {
+          questionIndex: 0,
+          question: "Which color?",
+          kind: "chat",
+          answer: "Chat about this",
+        },
+      ],
       cancelled: false,
     });
   });
@@ -203,7 +227,11 @@ describe("createQuestionnaire", () => {
         question: "Which layout?",
         header: "Layout",
         options: [
-          { label: "Vertical", description: "Top/bottom", preview: "# Vertical\nA\nB" },
+          {
+            label: "Vertical",
+            description: "Top/bottom",
+            preview: "# Vertical\nA\nB",
+          },
           { label: "Side", description: "Left/right", preview: "# Side\nC\nD" },
         ],
       },
@@ -227,7 +255,11 @@ describe("createQuestionnaire", () => {
         question: "Which layout?",
         header: "Layout",
         options: [
-          { label: "Vertical", description: "Top/bottom", preview: "line1\nline2" },
+          {
+            label: "Vertical",
+            description: "Top/bottom",
+            preview: "line1\nline2",
+          },
         ],
       },
     ]);
@@ -296,7 +328,11 @@ describe("createQuestionnaire", () => {
         question: "Which layout?",
         header: "Layout",
         options: [
-          { label: "Vertical", description: "Top/bottom", preview: "# Vertical" },
+          {
+            label: "Vertical",
+            description: "Top/bottom",
+            preview: "# Vertical",
+          },
           { label: "Side", description: "Left/right" },
         ],
       },
@@ -568,13 +604,22 @@ describe("createQuestionnaire", () => {
 
     expect(done).toHaveBeenCalledWith({
       answers: [
-        { questionIndex: 0, question: "Q1?", kind: "multi", answer: null, selected: ["A1"] },
+        {
+          questionIndex: 0,
+          question: "Q1?",
+          kind: "multi",
+          answer: null,
+          selected: ["A1"],
+        },
       ],
       cancelled: false,
     });
   });
 
-  it.each(["backspace", "delete"] as const)("removes a custom row with %s and moves focus up", (key) => {
+  it.each([
+    "backspace",
+    "delete",
+  ] as const)("removes a custom row with %s and moves focus up", (key) => {
     const params = makeParams([
       {
         question: "Which color?",
@@ -637,14 +682,22 @@ describe("createQuestionnaire", () => {
     addCustomOption(q, "custom");
 
     const beforeDelete = q.render(80);
-    expect(beforeDelete.some((l) => l.includes("● custom (custom)"))).toBe(true);
+    expect(beforeDelete.some((l) => l.includes("● custom (custom)"))).toBe(
+      true,
+    );
 
     q.handleInput("delete");
     q.handleInput("enter");
 
     expect(done).toHaveBeenCalledWith({
       answers: [
-        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: [] },
+        {
+          questionIndex: 0,
+          question: "Which features?",
+          kind: "multi",
+          answer: null,
+          selected: [],
+        },
       ],
       cancelled: false,
     });
@@ -678,10 +731,14 @@ describe("createQuestionnaire", () => {
     }
 
     const lines = q.render(80);
-    expect(lines.some((l) => l.includes("Maximum 8 custom options reached."))).toBe(true);
+    expect(
+      lines.some((l) => l.includes("Maximum 8 custom options reached.")),
+    ).toBe(true);
 
     const questionIndex = lines.findIndex((l) => l.includes("Which color?"));
-    const noticeIndex = lines.findIndex((l) => l.includes("Maximum 8 custom options reached."));
+    const noticeIndex = lines.findIndex((l) =>
+      l.includes("Maximum 8 custom options reached."),
+    );
     const firstOptionIndex = lines.findIndex((l) => l.includes("1. Red"));
     expect(questionIndex).toBeGreaterThan(-1);
     expect(noticeIndex).toBeGreaterThan(-1);
@@ -692,7 +749,9 @@ describe("createQuestionnaire", () => {
     // Pressing another key clears the transient notice.
     q.handleInput("up");
     const cleared = q.render(80);
-    expect(cleared.some((l) => l.includes("Maximum 8 custom options reached."))).toBe(false);
+    expect(
+      cleared.some((l) => l.includes("Maximum 8 custom options reached.")),
+    ).toBe(false);
   });
 
   it("focuses an existing custom row instead of adding a duplicate", () => {
@@ -921,7 +980,13 @@ describe("createQuestionnaire", () => {
 
     expect(done).toHaveBeenCalledWith({
       answers: [
-        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: ["A", "B"] },
+        {
+          questionIndex: 0,
+          question: "Which features?",
+          kind: "multi",
+          answer: null,
+          selected: ["A", "B"],
+        },
       ],
       cancelled: false,
     });
@@ -948,7 +1013,13 @@ describe("createQuestionnaire", () => {
 
     expect(done).toHaveBeenCalledWith({
       answers: [
-        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: [] },
+        {
+          questionIndex: 0,
+          question: "Which features?",
+          kind: "multi",
+          answer: null,
+          selected: [],
+        },
       ],
       cancelled: false,
     });
@@ -982,7 +1053,13 @@ describe("createQuestionnaire", () => {
 
     expect(done).toHaveBeenCalledWith({
       answers: [
-        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: [] },
+        {
+          questionIndex: 0,
+          question: "Which features?",
+          kind: "multi",
+          answer: null,
+          selected: [],
+        },
       ],
       cancelled: false,
     });
@@ -1039,7 +1116,11 @@ describe("createQuestionnaire", () => {
         question: "Which layout?",
         header: "Layout",
         options: [
-          { label: "Vertical", description: "Top/bottom", preview: "a".repeat(100) },
+          {
+            label: "Vertical",
+            description: "Top/bottom",
+            preview: "a".repeat(100),
+          },
           { label: "Side", description: "Left/right" },
         ],
       },
@@ -1090,7 +1171,13 @@ describe("createQuestionnaire", () => {
 
     expect(done).toHaveBeenCalledWith({
       answers: [
-        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: [] },
+        {
+          questionIndex: 0,
+          question: "Which features?",
+          kind: "multi",
+          answer: null,
+          selected: [],
+        },
       ],
       cancelled: false,
     });
@@ -1120,7 +1207,12 @@ describe("createQuestionnaire", () => {
 
     expect(done).toHaveBeenCalledWith({
       answers: [
-        { questionIndex: 0, question: "Which features?", kind: "chat", answer: "Chat about this" },
+        {
+          questionIndex: 0,
+          question: "Which features?",
+          kind: "chat",
+          answer: "Chat about this",
+        },
       ],
       cancelled: false,
     });
@@ -1242,9 +1334,25 @@ describe("createQuestionnaire", () => {
     q.handleInput("enter");
     expect(done).toHaveBeenCalledWith({
       answers: [
-        { questionIndex: 0, question: "Which features?", kind: "multi", answer: null, selected: ["A"] },
-        { questionIndex: 1, question: "Which color?", kind: "custom", answer: "pink" },
-        { questionIndex: 2, question: "Talk?", kind: "chat", answer: "Chat about this" },
+        {
+          questionIndex: 0,
+          question: "Which features?",
+          kind: "multi",
+          answer: null,
+          selected: ["A"],
+        },
+        {
+          questionIndex: 1,
+          question: "Which color?",
+          kind: "custom",
+          answer: "pink",
+        },
+        {
+          questionIndex: 2,
+          question: "Talk?",
+          kind: "chat",
+          answer: "Chat about this",
+        },
       ],
       cancelled: false,
     });

@@ -36,7 +36,15 @@ describe("getDefaultPolicy", () => {
 describe("writePolicySnapshot", () => {
   it("writes a yolo snapshot without inherited rules", () => {
     const snapshotPath = manager.writePolicySnapshot("yolo", {
-      config: { default: "ask", external: "ask", log: { debug: false, review: true }, tools: {}, bash: {}, paths: {}, skills: {} },
+      config: {
+        default: "ask",
+        external: "ask",
+        log: { debug: false, review: true },
+        tools: {},
+        bash: {},
+        paths: {},
+        skills: {},
+      },
       sessionRules: [],
       yolo: false,
     });
@@ -49,11 +57,23 @@ describe("writePolicySnapshot", () => {
 
   it("writes an inherit-parent snapshot with inherited rules", () => {
     const inherited = {
-      config: { default: "ask", external: "ask", log: { debug: false, review: true }, tools: {}, bash: {}, paths: {}, skills: {} },
+      config: {
+        default: "ask",
+        external: "ask",
+        log: { debug: false, review: true },
+        tools: {},
+        bash: {},
+        paths: {},
+        skills: {},
+      },
       sessionRules: [{ surface: "tools", pattern: "bash", action: "allow" }],
       yolo: true,
     };
-    const snapshotPath = manager.writePolicySnapshot("inherit-parent", inherited, "session-123");
+    const snapshotPath = manager.writePolicySnapshot(
+      "inherit-parent",
+      inherited,
+      "session-123",
+    );
 
     const parsed = JSON.parse(fs.readFileSync(snapshotPath, "utf-8"));
     expect(parsed.policy).toBe("inherit-parent");
@@ -63,7 +83,15 @@ describe("writePolicySnapshot", () => {
   it("creates the snapshots directory if missing", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     manager.writePolicySnapshot("read-only", {
-      config: { default: "ask", external: "ask", log: { debug: false, review: true }, tools: {}, bash: {}, paths: {}, skills: {} },
+      config: {
+        default: "ask",
+        external: "ask",
+        log: { debug: false, review: true },
+        tools: {},
+        bash: {},
+        paths: {},
+        skills: {},
+      },
       sessionRules: [],
       yolo: false,
     });
@@ -73,12 +101,22 @@ describe("writePolicySnapshot", () => {
 
 describe("readPolicySnapshot", () => {
   it("returns undefined when the file does not exist", () => {
-    expect(manager.readPolicySnapshot("/nonexistent/snapshot.json")).toBeUndefined();
+    expect(
+      manager.readPolicySnapshot("/nonexistent/snapshot.json"),
+    ).toBeUndefined();
   });
 
   it("returns the parsed snapshot", () => {
     const snapshotPath = manager.writePolicySnapshot("yolo", {
-      config: { default: "ask", external: "ask", log: { debug: false, review: true }, tools: {}, bash: {}, paths: {}, skills: {} },
+      config: {
+        default: "ask",
+        external: "ask",
+        log: { debug: false, review: true },
+        tools: {},
+        bash: {},
+        paths: {},
+        skills: {},
+      },
       sessionRules: [],
       yolo: false,
     });
@@ -97,7 +135,15 @@ describe("readPolicySnapshot", () => {
 describe("deletePolicySnapshot", () => {
   it("removes an existing snapshot", () => {
     const snapshotPath = manager.writePolicySnapshot("yolo", {
-      config: { default: "ask", external: "ask", log: { debug: false, review: true }, tools: {}, bash: {}, paths: {}, skills: {} },
+      config: {
+        default: "ask",
+        external: "ask",
+        log: { debug: false, review: true },
+        tools: {},
+        bash: {},
+        paths: {},
+        skills: {},
+      },
       sessionRules: [],
       yolo: false,
     });
@@ -107,14 +153,24 @@ describe("deletePolicySnapshot", () => {
   });
 
   it("does not throw when the file does not exist", () => {
-    expect(() => manager.deletePolicySnapshot("/nonexistent/snapshot.json")).not.toThrow();
+    expect(() =>
+      manager.deletePolicySnapshot("/nonexistent/snapshot.json"),
+    ).not.toThrow();
   });
 });
 
 describe("isSubagentProcess", () => {
   it("returns true when MY_PERMISSION_SUBAGENT_POLICY_FILE is set", () => {
     const filePath = manager.writePolicySnapshot("yolo", {
-      config: { default: "ask", external: "ask", log: { debug: false, review: true }, tools: {}, bash: {}, paths: {}, skills: {} },
+      config: {
+        default: "ask",
+        external: "ask",
+        log: { debug: false, review: true },
+        tools: {},
+        bash: {},
+        paths: {},
+        skills: {},
+      },
       sessionRules: [],
       yolo: false,
     });

@@ -1,4 +1,7 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +11,11 @@ import type { BtConfig } from "./types";
 // Resolve extension directory — prefer __dirname, fall back to CWD-relative
 const EXT_DIR = (() => {
   if (typeof __dirname !== "undefined") return __dirname;
-  try { return dirname(fileURLToPath(import.meta.url)); } catch { /* not ESM */ }
+  try {
+    return dirname(fileURLToPath(import.meta.url));
+  } catch {
+    /* not ESM */
+  }
   return process.cwd();
 })();
 
@@ -39,8 +46,14 @@ export default function myBt(pi: ExtensionAPI): void {
   // ── Event-driven playback ──
 
   const VALID_EVENTS = new Set([
-    "session_start", "session_shutdown", "agent_start", "agent_end",
-    "turn_start", "turn_end", "tool_call", "tool_result",
+    "session_start",
+    "session_shutdown",
+    "agent_start",
+    "agent_end",
+    "turn_start",
+    "turn_end",
+    "tool_call",
+    "tool_result",
   ]);
 
   for (const [eventName, category] of Object.entries(config.eventMap)) {

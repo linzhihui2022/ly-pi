@@ -26,9 +26,9 @@ describe("classifyEvent", () => {
   });
 
   it("returns positive-large for build/deploy success", () => {
-    expect(
-      classifyEvent("tool_result", { build: { status: "success" } }),
-    ).toBe("positive-large");
+    expect(classifyEvent("tool_result", { build: { status: "success" } })).toBe(
+      "positive-large",
+    );
     expect(
       classifyEvent("tool_result", { deploy: { status: "success" } }),
     ).toBe("positive-large");
@@ -44,9 +44,9 @@ describe("classifyEvent", () => {
   });
 
   it("returns negative-large for build failure", () => {
-    expect(
-      classifyEvent("tool_result", { build: { status: "failure" } }),
-    ).toBe("negative-large");
+    expect(classifyEvent("tool_result", { build: { status: "failure" } })).toBe(
+      "negative-large",
+    );
   });
 
   it("returns positive-small for git push", () => {

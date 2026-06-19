@@ -17,7 +17,11 @@ const mockTheme: Theme = {
 
 describe("buildEmptyResultsEnvelope", () => {
   it("returns empty results with error message", () => {
-    const result = buildEmptyResultsEnvelope("test query", "Tavily", "API error");
+    const result = buildEmptyResultsEnvelope(
+      "test query",
+      "Tavily",
+      "API error",
+    );
     expect(result.content[0].text).toContain("No results found");
     expect(result.content[0].text).toContain("API error");
     expect(result.details.resultCount).toBe(0);
@@ -36,8 +40,16 @@ describe("formatSearchResultsBody", () => {
     const response = {
       query: "test",
       results: [
-        { title: "Title 1", url: "https://example.com/1", snippet: "Snippet 1" },
-        { title: "Title 2", url: "https://example.com/2", snippet: "Snippet 2" },
+        {
+          title: "Title 1",
+          url: "https://example.com/1",
+          snippet: "Snippet 1",
+        },
+        {
+          title: "Title 2",
+          url: "https://example.com/2",
+          snippet: "Snippet 2",
+        },
       ],
     };
     const body = formatSearchResultsBody(response);
@@ -126,7 +138,9 @@ describe("renderFetchedContentPreview", () => {
   });
 
   it("truncates long content", () => {
-    const content = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n");
+    const content = Array.from({ length: 20 }, (_, i) => `line ${i}`).join(
+      "\n",
+    );
     const text = renderFetchedContentPreview(content, mockTheme);
     expect(text).toContain("line 0");
     expect(text).toContain("... (use read tool to see full content)");
@@ -144,7 +158,7 @@ describe("formatUsageNotify", () => {
     };
     const text = formatUsageNotify(response, "Tavily");
     expect(text).toBe(
-      "Tavily: key 45/100 used (55 remaining); plan 30/200 used (170 remaining)"
+      "Tavily: key 45/100 used (55 remaining); plan 30/200 used (170 remaining)",
     );
   });
 

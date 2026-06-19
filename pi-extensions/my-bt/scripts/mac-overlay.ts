@@ -140,9 +140,7 @@ function createOverlay(
   }
 
   // ── Gradient bar (bottom accent line) ──
-  var barView: $ = $.NSView.alloc.initWithFrame(
-    $.NSMakeRect(0, 0, winW, 2),
-  );
+  var barView: $ = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, winW, 2));
   barView.setWantsLayer(true);
   barView.layer.setBackgroundColor(
     $.NSColor.colorWithSRGBRedGreenBlueAlpha(accentR, accentG, accentB, 0.8)
@@ -181,7 +179,7 @@ function run(argv: string[]): void {
   // The block receives the event and returns it (or null to suppress).
   $.NSEvent.addLocalMonitorForEventsMatchingMaskHandler(
     1 << 1, // NSEventMaskLeftMouseDown
-    function(event: $) {
+    function (event: $) {
       var clickWin: $ = event.window;
       if (clickWin) {
         for (var j: number = 0; j < gOverlayWindows.length; j++) {

@@ -1,13 +1,19 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import type { TextContent } from "@earendil-works/pi-ai";
 import { SessionManager } from "./session";
 import { createTools } from "./tools";
 import type { VisualCompanionConfig } from "./types";
 
 function formatContent(content: (TextContent | { type: "image" })[]): string {
-  return content.filter((c): c is TextContent => c.type === "text").map((c) => c.text).join("\n");
+  return content
+    .filter((c): c is TextContent => c.type === "text")
+    .map((c) => c.text)
+    .join("\n");
 }
 
 export function resolveExtDir(): string {
@@ -24,7 +30,10 @@ function loadConfig(): VisualCompanionConfig {
 export default function myVisualCompanion(pi: ExtensionAPI): void {
   const config = loadConfig();
   const idleTimeoutMs = (config.idleTimeoutMinutes || 30) * 60 * 1000;
-  const manager = new SessionManager({ idleTimeoutMs, focusApp: config.focusApp });
+  const manager = new SessionManager({
+    idleTimeoutMs,
+    focusApp: config.focusApp,
+  });
   const tools = createTools(manager, {
     host: config.defaultHost || "127.0.0.1",
     urlHost: config.defaultUrlHost || "localhost",
@@ -40,13 +49,20 @@ export default function myVisualCompanion(pi: ExtensionAPI): void {
     description: "Start a Visual Companion browser session",
     handler: async (_args, ctx: ExtensionContext) => {
       const tool = tools.find((t) => t.name === "visual_companion_start")!;
-      const result = await tool.execute("cmd-start", {}, undefined, undefined, ctx);
+      const result = await tool.execute(
+        "cmd-start",
+        {},
+        undefined,
+        undefined,
+        ctx,
+      );
       ctx.ui.notify(formatContent(result.content), "info");
     },
   });
 
   pi.registerCommand("vc-show", {
-    description: "Show an HTML screen in Visual Companion (args: session_id name html)",
+    description:
+      "Show an HTML screen in Visual Companion (args: session_id name html)",
     handler: async (args, ctx: ExtensionContext) => {
       if (!args) {
         ctx.ui.notify("Usage: /vc-show <session_id> <name> <html>", "warning");
@@ -57,13 +73,25 @@ export default function myVisualCompanion(pi: ExtensionAPI): void {
       const name = parts[1] || "screen";
       const html = parts.slice(2).join(" ");
       const tool = tools.find((t) => t.name === "visual_companion_show")!;
-      const result = await tool.execute("cmd-show", { session_id: sessionId, name, html }, undefined, undefined, ctx);
-      ctx.ui.notify(formatContent(result.content), (result.details as { error?: string } | undefined)?.error ? "error" : "info");
+      const result = await tool.execute(
+        "cmd-show",
+        { session_id: sessionId, name, html },
+        undefined,
+        undefined,
+        ctx,
+      );
+      ctx.ui.notify(
+        formatContent(result.content),
+        (result.details as { error?: string } | undefined)?.error
+          ? "error"
+          : "info",
+      );
     },
   });
 
   pi.registerCommand("vc-wait", {
-    description: "Wait for user confirmation in Visual Companion (args: session_id)",
+    description:
+      "Wait for user confirmation in Visual Companion (args: session_id)",
     handler: async (args, ctx: ExtensionContext) => {
       const sessionId = args?.trim() || "";
       if (!sessionId) {
@@ -71,8 +99,19 @@ export default function myVisualCompanion(pi: ExtensionAPI): void {
         return;
       }
       const tool = tools.find((t) => t.name === "visual_companion_wait")!;
-      const result = await tool.execute("cmd-wait", { session_id: sessionId, timeout_ms: 300000 }, undefined, undefined, ctx);
-      ctx.ui.notify(formatContent(result.content), (result.details as { error?: string } | undefined)?.error ? "error" : "info");
+      const result = await tool.execute(
+        "cmd-wait",
+        { session_id: sessionId, timeout_ms: 300000 },
+        undefined,
+        undefined,
+        ctx,
+      );
+      ctx.ui.notify(
+        formatContent(result.content),
+        (result.details as { error?: string } | undefined)?.error
+          ? "error"
+          : "info",
+      );
     },
   });
 
@@ -84,8 +123,16 @@ export default function myVisualCompanion(pi: ExtensionAPI): void {
         ctx.ui.notify("Usage: /vc-events <session_id>", "warning");
         return;
       }
-      const tool = tools.find((t) => t.name === "visual_companion_read_events")!;
-      const result = await tool.execute("cmd-events", { session_id: sessionId }, undefined, undefined, ctx);
+      const tool = tools.find(
+        (t) => t.name === "visual_companion_read_events",
+      )!;
+      const result = await tool.execute(
+        "cmd-events",
+        { session_id: sessionId },
+        undefined,
+        undefined,
+        ctx,
+      );
       ctx.ui.notify(formatContent(result.content), "info");
     },
   });
@@ -99,7 +146,13 @@ export default function myVisualCompanion(pi: ExtensionAPI): void {
         return;
       }
       const tool = tools.find((t) => t.name === "visual_companion_stop")!;
-      await tool.execute("cmd-stop", { session_id: sessionId }, undefined, undefined, ctx);
+      await tool.execute(
+        "cmd-stop",
+        { session_id: sessionId },
+        undefined,
+        undefined,
+        ctx,
+      );
       ctx.ui.notify("Visual Companion session stopped.", "info");
     },
   });

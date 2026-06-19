@@ -15,7 +15,10 @@ export type DialogResult =
   | { kind: "deny-with-reason"; reason: string };
 
 export interface DialogUI {
-  select(title: string, options: DialogOption[]): Promise<DialogOption | undefined>;
+  select(
+    title: string,
+    options: DialogOption[],
+  ): Promise<DialogOption | undefined>;
   input(title: string, placeholder?: string): Promise<string | undefined>;
 }
 

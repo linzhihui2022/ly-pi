@@ -11,9 +11,10 @@ beforeEach(() => {
   fs.mkdirSync(TEST_DIR, { recursive: true });
 });
 
-function createClock(
-  initialTime = 1_000_000,
-): { now: () => number; advance: (ms: number) => void } {
+function createClock(initialTime = 1_000_000): {
+  now: () => number;
+  advance: (ms: number) => void;
+} {
   let t = initialTime;
   return {
     now: () => t,
@@ -45,9 +46,7 @@ describe("PetStateManager", () => {
   });
 
   it("uses default path in home directory", () => {
-    const homedirSpy = vi
-      .spyOn(os, "homedir")
-      .mockReturnValue(TEST_DIR);
+    const homedirSpy = vi.spyOn(os, "homedir").mockReturnValue(TEST_DIR);
     try {
       const clock = createClock();
       const manager = new PetStateManager({ now: clock.now });

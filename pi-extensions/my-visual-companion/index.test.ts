@@ -6,7 +6,9 @@ const mockManager = { destroyAll: vi.fn() };
 let mockToolExecute: ReturnType<typeof vi.fn>;
 
 vi.mock("node:fs", () => ({
-  readFileSync: vi.fn().mockReturnValue(JSON.stringify({ idleTimeoutMinutes: 30 })),
+  readFileSync: vi
+    .fn()
+    .mockReturnValue(JSON.stringify({ idleTimeoutMinutes: 30 })),
 }));
 
 vi.mock("./session", () => ({
@@ -67,8 +69,14 @@ describe("my-visual-companion extension", () => {
     expect(registeredCommands.has("vc-wait")).toBe(true);
     expect(registeredCommands.has("vc-events")).toBe(true);
     expect(registeredCommands.has("vc-stop")).toBe(true);
-    expect(mockPi.on).toHaveBeenCalledWith("session_start", expect.any(Function));
-    expect(mockPi.on).toHaveBeenCalledWith("session_shutdown", expect.any(Function));
+    expect(mockPi.on).toHaveBeenCalledWith(
+      "session_start",
+      expect.any(Function),
+    );
+    expect(mockPi.on).toHaveBeenCalledWith(
+      "session_shutdown",
+      expect.any(Function),
+    );
   });
 
   it("resolveExtDir returns __dirname", async () => {
@@ -78,7 +86,13 @@ describe("my-visual-companion extension", () => {
   });
 
   it("uses default idle timeout when config value is zero", async () => {
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ idleTimeoutMinutes: 0, defaultHost: "127.0.0.1", defaultUrlHost: "localhost" }));
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify({
+        idleTimeoutMinutes: 0,
+        defaultHost: "127.0.0.1",
+        defaultUrlHost: "localhost",
+      }),
+    );
     await loadAndRegister();
     expect(mockPi.registerCommand).toHaveBeenCalled();
   });
@@ -89,7 +103,6 @@ describe("my-visual-companion extension", () => {
     await shutdownHandler?.({ type: "session_shutdown", reason: "quit" });
     expect(mockManager.destroyAll).toHaveBeenCalled();
   });
-
 });
 
 describe("command handlers", () => {
@@ -120,7 +133,12 @@ describe("command handlers", () => {
     it("executes start tool and notifies", async () => {
       const cmd = await loadAndGetCommand("vc-start");
       mockToolExecute.mockResolvedValue({
-        content: [{ type: "text", text: "Started at http://localhost:6000 (session: abc123)" }],
+        content: [
+          {
+            type: "text",
+            text: "Started at http://localhost:6000 (session: abc123)",
+          },
+        ],
         details: {},
       });
 
@@ -151,7 +169,9 @@ describe("command handlers", () => {
         details: {},
       });
 
-      await cmd.handler("session1 layout <h1>Hello</h1>", { ui: { notify: mockNotify } });
+      await cmd.handler("session1 layout <h1>Hello</h1>", {
+        ui: { notify: mockNotify },
+      });
 
       expect(mockToolExecute).toHaveBeenCalledWith(
         "cmd-show",
@@ -190,7 +210,10 @@ describe("command handlers", () => {
 
       await cmd.handler("bad session html", { ui: { notify: mockNotify } });
 
-      expect(mockNotify).toHaveBeenCalledWith("Error: something went wrong", "error");
+      expect(mockNotify).toHaveBeenCalledWith(
+        "Error: something went wrong",
+        "error",
+      );
     });
   });
 
@@ -198,13 +221,19 @@ describe("command handlers", () => {
     it("notifies usage when no session_id", async () => {
       const cmd = await loadAndGetCommand("vc-wait");
       await cmd.handler("", { ui: { notify: mockNotify } });
-      expect(mockNotify).toHaveBeenCalledWith("Usage: /vc-wait <session_id>", "warning");
+      expect(mockNotify).toHaveBeenCalledWith(
+        "Usage: /vc-wait <session_id>",
+        "warning",
+      );
     });
 
     it("notifies usage when only whitespace", async () => {
       const cmd = await loadAndGetCommand("vc-wait");
       await cmd.handler("   ", { ui: { notify: mockNotify } });
-      expect(mockNotify).toHaveBeenCalledWith("Usage: /vc-wait <session_id>", "warning");
+      expect(mockNotify).toHaveBeenCalledWith(
+        "Usage: /vc-wait <session_id>",
+        "warning",
+      );
     });
 
     it("executes wait tool and notifies on success", async () => {
@@ -243,7 +272,10 @@ describe("command handlers", () => {
     it("notifies usage when no session_id", async () => {
       const cmd = await loadAndGetCommand("vc-events");
       await cmd.handler("", { ui: { notify: mockNotify } });
-      expect(mockNotify).toHaveBeenCalledWith("Usage: /vc-events <session_id>", "warning");
+      expect(mockNotify).toHaveBeenCalledWith(
+        "Usage: /vc-events <session_id>",
+        "warning",
+      );
     });
 
     it("executes read_events tool and notifies result", async () => {
@@ -262,7 +294,10 @@ describe("command handlers", () => {
         undefined,
         expect.anything(),
       );
-      expect(mockNotify).toHaveBeenCalledWith("Events:\n- click: button1", "info");
+      expect(mockNotify).toHaveBeenCalledWith(
+        "Events:\n- click: button1",
+        "info",
+      );
     });
   });
 
@@ -270,7 +305,10 @@ describe("command handlers", () => {
     it("notifies usage when no session_id", async () => {
       const cmd = await loadAndGetCommand("vc-stop");
       await cmd.handler("", { ui: { notify: mockNotify } });
-      expect(mockNotify).toHaveBeenCalledWith("Usage: /vc-stop <session_id>", "warning");
+      expect(mockNotify).toHaveBeenCalledWith(
+        "Usage: /vc-stop <session_id>",
+        "warning",
+      );
     });
 
     it("executes stop tool and notifies", async () => {
@@ -289,7 +327,10 @@ describe("command handlers", () => {
         undefined,
         expect.anything(),
       );
-      expect(mockNotify).toHaveBeenCalledWith("Visual Companion session stopped.", "info");
+      expect(mockNotify).toHaveBeenCalledWith(
+        "Visual Companion session stopped.",
+        "info",
+      );
     });
   });
 });

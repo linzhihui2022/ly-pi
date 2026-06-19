@@ -13,10 +13,11 @@ export function clampSearchResultCount(requested: number | undefined): number {
   const value = requested ?? DEFAULT_SEARCH_RESULTS;
   return Math.min(Math.max(value, MIN_SEARCH_RESULTS), MAX_SEARCH_RESULTS);
 }
-export async function spillFullContentToTempFile(content: string): Promise<string> {
+export async function spillFullContentToTempFile(
+  content: string,
+): Promise<string> {
   const tempDir = await mkdtemp(join(tmpdir(), FETCH_TEMP_DIR_PREFIX));
   const tempFile = join(tempDir, FETCH_TEMP_FILE_NAME);
   await writeFile(tempFile, content, "utf8");
   return tempFile;
 }
-

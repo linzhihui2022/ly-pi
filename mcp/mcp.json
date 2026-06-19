@@ -8,9 +8,7 @@
     },
     "chrome-devtools": {
       "command": "npx",
-      "args": [
-        "chrome-devtools-mcp@latest"
-      ]
+      "args": ["chrome-devtools-mcp@latest"]
     },
     "Notion": {
       "url": "https://mcp.notion.com/mcp",

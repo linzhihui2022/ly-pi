@@ -27,7 +27,10 @@ export async function getGitStatus(cwd: string): Promise<GitStatus | null> {
 /**
  * Parse git status --porcelain=v2 --branch output.
  */
-export function parseGitStatus(statusOutput: string, stashOutput: string): GitStatus {
+export function parseGitStatus(
+  statusOutput: string,
+  stashOutput: string,
+): GitStatus {
   const lines = statusOutput.split("\n");
 
   let ahead = 0;
@@ -64,9 +67,26 @@ export function parseGitStatus(statusOutput: string, stashOutput: string): GitSt
     }
   }
 
-  const stashed = stashOutput.trim() ? stashOutput.trim().split("\n").length : 0;
+  const stashed = stashOutput.trim()
+    ? stashOutput.trim().split("\n").length
+    : 0;
   const isClean =
-    ahead === 0 && behind === 0 && staged === 0 && unstaged === 0 && untracked === 0 && stashed === 0 && conflicted === 0;
+    ahead === 0 &&
+    behind === 0 &&
+    staged === 0 &&
+    unstaged === 0 &&
+    untracked === 0 &&
+    stashed === 0 &&
+    conflicted === 0;
 
-  return { ahead, behind, staged, unstaged, untracked, stashed, conflicted, isClean };
+  return {
+    ahead,
+    behind,
+    staged,
+    unstaged,
+    untracked,
+    stashed,
+    conflicted,
+    isClean,
+  };
 }

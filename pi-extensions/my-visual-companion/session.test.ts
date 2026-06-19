@@ -18,7 +18,12 @@ describe("SessionManager", () => {
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
 
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     expect(session.id).toBeTruthy();
     expect(session.port).toBe(8080);
@@ -29,7 +34,12 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     const id = session.id;
     // Verify session exists before destroying
@@ -46,7 +56,12 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     session.events.push({ type: "click", text: "old", timestamp: Date.now() });
     manager.updateScreen(session.id, "layout", "<h1>Hello</h1>");
@@ -60,9 +75,18 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
-    manager.appendEvent(session.id, { type: "click", text: "hi", timestamp: 1 });
+    manager.appendEvent(session.id, {
+      type: "click",
+      text: "hi",
+      timestamp: 1,
+    });
 
     expect(session.events).toHaveLength(1);
     expect(session.events[0].text).toBe("hi");
@@ -72,7 +96,12 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 5000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     vi.advanceTimersByTime(6000);
 
@@ -84,7 +113,12 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 5000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     vi.advanceTimersByTime(3000);
     manager.resetIdleTimer(session.id);
@@ -102,7 +136,9 @@ describe("SessionManager", () => {
     for (let i = 0; i < 3; i++) {
       const s = { close: vi.fn((cb) => cb?.()) } as any;
       const w = { close: vi.fn(), clients: new Set() } as any;
-      sessions.push(manager.create(8080 + i, `http://localhost:${8080 + i}`, s, w));
+      sessions.push(
+        manager.create(8080 + i, `http://localhost:${8080 + i}`, s, w),
+      );
     }
 
     manager.destroyAll();
@@ -121,7 +157,11 @@ describe("SessionManager", () => {
   it("appendEvent silently ignores unknown session", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     // Should not throw
-    manager.appendEvent("nonexistent", { type: "click", text: "hi", timestamp: 1 });
+    manager.appendEvent("nonexistent", {
+      type: "click",
+      text: "hi",
+      timestamp: 1,
+    });
   });
 
   it("updateScreen silently ignores unknown session", () => {
@@ -134,10 +174,19 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     const promise = manager.waitForConfirm(session.id, 5000);
-    manager.appendEvent(session.id, { type: "confirm", text: "yes", timestamp: 1 });
+    manager.appendEvent(session.id, {
+      type: "confirm",
+      text: "yes",
+      timestamp: 1,
+    });
 
     const result = await promise;
     expect(result.type).toBe("confirm");
@@ -148,7 +197,12 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     const promise = manager.waitForConfirm(session.id, 1000);
     vi.advanceTimersByTime(1500);
@@ -160,9 +214,18 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
-    manager.appendEvent(session.id, { type: "confirm", text: "already", timestamp: 1 });
+    manager.appendEvent(session.id, {
+      type: "confirm",
+      text: "already",
+      timestamp: 1,
+    });
     const result = await manager.waitForConfirm(session.id, 5000);
 
     expect(result.type).toBe("confirm");
@@ -173,7 +236,12 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     const promise = manager.waitForConfirm(session.id, 5000);
     manager.destroy(session.id);
@@ -185,7 +253,12 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     manager.waitForConfirm(session.id, 5000);
     const second = manager.waitForConfirm(session.id, 5000);
@@ -195,15 +268,27 @@ describe("SessionManager", () => {
 
   it("waitForConfirm rejects for unknown session", async () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
-    await expect(manager.waitForConfirm("bad-id", 5000)).rejects.toThrow("Session not found");
+    await expect(manager.waitForConfirm("bad-id", 5000)).rejects.toThrow(
+      "Session not found",
+    );
   });
 
   it("getAll returns all sessions", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const s1 = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
-    const s2 = manager.create(8081, "http://localhost:8081", mockServer, mockWss);
+    const s1 = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
+    const s2 = manager.create(
+      8081,
+      "http://localhost:8081",
+      mockServer,
+      mockWss,
+    );
 
     const all = manager.getAll();
     expect(all).toHaveLength(2);
@@ -215,7 +300,12 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     // Hit the defensive false branch of if (session.idleTimer) in destroy
     session.idleTimer = null;
@@ -235,7 +325,12 @@ describe("SessionManager", () => {
       clients: new Set([mockClient]),
     } as any;
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     manager.destroy(session.id);
 
@@ -246,7 +341,12 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     manager.destroy(session.id);
     // Should not throw
@@ -256,31 +356,59 @@ describe("SessionManager", () => {
 
   it("focusApplication calls osascript when focusApp is set on confirm", async () => {
     const { execSync } = await import("node:child_process");
-    const manager = new SessionManager({ idleTimeoutMs: 30_000, focusApp: "Terminal" });
+    const manager = new SessionManager({
+      idleTimeoutMs: 30_000,
+      focusApp: "Terminal",
+    });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
-    manager.appendEvent(session.id, { type: "confirm", text: "yes", timestamp: 1 });
+    manager.appendEvent(session.id, {
+      type: "confirm",
+      text: "yes",
+      timestamp: 1,
+    });
 
     expect(execSync).toHaveBeenCalledWith(
       `osascript -e 'tell application "Terminal" to activate'`,
-      { timeout: 5000 }
+      { timeout: 5000 },
     );
   });
 
   it("focusApplication silently ignores osascript errors", async () => {
     const { execSync } = await import("node:child_process");
     const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-    mockExecSync.mockImplementation(() => { throw new Error("OS error"); });
+    mockExecSync.mockImplementation(() => {
+      throw new Error("OS error");
+    });
 
-    const manager = new SessionManager({ idleTimeoutMs: 30_000, focusApp: "Terminal" });
+    const manager = new SessionManager({
+      idleTimeoutMs: 30_000,
+      focusApp: "Terminal",
+    });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
     // Should not throw
-    expect(() => manager.appendEvent(session.id, { type: "confirm", text: "yes", timestamp: 1 })).not.toThrow();
+    expect(() =>
+      manager.appendEvent(session.id, {
+        type: "confirm",
+        text: "yes",
+        timestamp: 1,
+      }),
+    ).not.toThrow();
   });
 
   it("focusApplication does nothing when focusApp is not set", async () => {
@@ -288,12 +416,21 @@ describe("SessionManager", () => {
     const manager = new SessionManager({ idleTimeoutMs: 30_000 });
     const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
     const mockWss = { close: vi.fn(), clients: new Set() } as any;
-    const session = manager.create(8080, "http://localhost:8080", mockServer, mockWss);
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
 
-    manager.appendEvent(session.id, { type: "confirm", text: "yes", timestamp: 1 });
+    manager.appendEvent(session.id, {
+      type: "confirm",
+      text: "yes",
+      timestamp: 1,
+    });
 
     const focusCalls = (execSync as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (call) => String(call[0]).includes("activate")
+      (call) => String(call[0]).includes("activate"),
     );
     expect(focusCalls).toHaveLength(0);
   });

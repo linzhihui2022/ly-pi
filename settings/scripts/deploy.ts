@@ -16,13 +16,19 @@ try {
 
 await Bun.write(destPath, `${JSON.stringify(merged, null, 2)}\n`);
 
-function deepMerge(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> {
+function deepMerge(
+  base: Record<string, unknown>,
+  overlay: Record<string, unknown>,
+): Record<string, unknown> {
   const result = { ...base };
   for (const key of Object.keys(overlay)) {
     const baseVal = result[key];
     const overlayVal = overlay[key];
     if (isObject(baseVal) && isObject(overlayVal)) {
-      result[key] = deepMerge(baseVal as Record<string, unknown>, overlayVal as Record<string, unknown>);
+      result[key] = deepMerge(
+        baseVal as Record<string, unknown>,
+        overlayVal as Record<string, unknown>,
+      );
     } else {
       result[key] = overlayVal;
     }

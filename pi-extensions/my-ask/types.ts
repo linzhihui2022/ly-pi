@@ -54,7 +54,7 @@ export const QuestionSchema = Type.Object({
   header: Type.String({
     maxLength: MAX_HEADER_LENGTH,
     description:
-      "MAX 16 CHARACTERS — hard limit, requests over the limit are rejected. Very short chip/tag shown next to the question. Examples: \"Auth method\", \"Library\", \"Approach\".",
+      'MAX 16 CHARACTERS — hard limit, requests over the limit are rejected. Very short chip/tag shown next to the question. Examples: "Auth method", "Library", "Approach".',
   }),
   options: Type.Array(OptionSchema, {
     minItems: MIN_OPTIONS,
@@ -109,7 +109,9 @@ export interface QuestionnaireResult {
   error?: QuestionnaireError;
 }
 
-export function isQuestionnaireResult(value: unknown): value is QuestionnaireResult {
+export function isQuestionnaireResult(
+  value: unknown,
+): value is QuestionnaireResult {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   return Array.isArray(v.answers) && typeof v.cancelled === "boolean";
