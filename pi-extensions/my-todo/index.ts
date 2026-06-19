@@ -4,7 +4,9 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Key } from "@earendil-works/pi-tui";
 import { TaskState } from "./state";
 import { renderActiveOverlay, renderCompletedOverlay, renderPlanOverlay } from "./overlay";
-import type { Task, TaskStatus, PlanPhase } from "./types";
+import { GoalState } from "./goal-state";
+import { renderGoalOverlay } from "./goal-overlay";
+import type { Task, TaskStatus, PlanPhase, GoalStatus } from "./types";
 
 const STATUS_SYMBOLS: Record<Task["status"], string> = {
   pending: "○",
@@ -19,6 +21,7 @@ function formatTaskLine(task: Task): string {
 
 export default function myTodo(pi: ExtensionAPI): void {
   let state = new TaskState();
+  let goalState = new GoalState();
 
   function refreshWidgets(ctx: ExtensionContext): void {
     if (!ctx.hasUI) return;
@@ -61,6 +64,16 @@ export default function myTodo(pi: ExtensionAPI): void {
         render: () => renderCompletedOverlay(completed, theme),
         invalidate: () => {},
       }));
+    }
+
+    const goal = goalState.get();
+    if (goal) {
+      ctx.ui.setWidget("my-goal", (_tui, theme) => ({
+        render: () => renderGoalOverlay(goal, theme),
+        invalidate: () => {},
+      }));
+    } else {
+      ctx.ui.setWidget("my-goal", undefined);
     }
   }
 
@@ -178,6 +191,69 @@ export default function myTodo(pi: ExtensionAPI): void {
         return {
           content: [{ type: "text", text: `Error: ${message}` }],
           details: { action: params.action, params, tasks: state.list(), nextId: state.getNextId(), planMode: state.getPlanMode(), planPhase: state.getPlanPhase(), error: message },
+          isError: true,
+        };
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "goal",
+    label: "Goal",
+    description: "Track long-horizon objectives and autonomous progress. Actions: evaluate, mark_complete, mark_blocked.",
+    promptSnippet: "Track long-term goals and evidence of completion",
+    promptGuidelines: [
+      "Use the goal tool to record evidence, update the next step, and mark the goal complete only when verified.",
+      "Call mark_complete only when you have concrete evidence the objective is satisfied.",
+      "Call mark_blocked when no valid path remains and explain why.",
+    ],
+    parameters: Type.Object({
+      action: StringEnum(["evaluate", "mark_complete", "mark_blocked"] as const),
+      lastEvidence: Type.Optional(Type.String()),
+      nextAction: Type.Optional(Type.String()),
+      status: Type.Optional(StringEnum(["active", "paused", "blocked"] as const)),
+      evidence: Type.Optional(Type.String()),
+      reason: Type.Optional(Type.String()),
+      nextInputNeeded: Type.Optional(Type.Boolean()),
+    }),
+
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      try {
+        switch (params.action) {
+          case "evaluate": {
+            const goal = goalState.evaluate(params.lastEvidence, params.nextAction, params.status as GoalStatus | undefined);
+            refreshWidgets(ctx);
+            return {
+              content: [{ type: "text", text: `Goal updated. Status: ${goal.status}, evidence: ${goal.lastEvidence || "(none)"}, next: ${goal.nextAction || "(none)"}` }],
+              details: { goal: goalState.snapshot() },
+            };
+          }
+          case "mark_complete": {
+            const goal = goalState.markComplete(params.evidence ?? "");
+            refreshWidgets(ctx);
+            return {
+              content: [{ type: "text", text: `Goal completed: ${goal.objective}` }],
+              details: { goal: goalState.snapshot() },
+            };
+          }
+          case "mark_blocked": {
+            const goal = goalState.markBlocked(params.reason ?? "", params.nextInputNeeded);
+            refreshWidgets(ctx);
+            return {
+              content: [{ type: "text", text: `Goal blocked: ${goal.blocker}` }],
+              details: { goal: goalState.snapshot() },
+            };
+          }
+          default: {
+            const _exhaustive: never = params.action;
+            throw new Error(`Unknown action: ${_exhaustive}`);
+          }
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [{ type: "text", text: `Error: ${message}` }],
+          details: { goal: goalState.snapshot() },
           isError: true,
         };
       }
@@ -340,6 +416,78 @@ export default function myTodo(pi: ExtensionAPI): void {
         }
         return;
       }
+    },
+  });
+
+  pi.registerCommand("goal", {
+    description: "Set or manage a long-term objective: /goal [objective|pause|resume|clear]",
+    handler: async (args, ctx) => {
+      const raw = args ?? "";
+      const trimmed = raw.trim();
+
+      if (trimmed === "") {
+        if (raw.length > 0) {
+          ctx.ui.notify("Usage: /goal [objective|pause|resume|clear]", "warning");
+          return;
+        }
+        const goal = goalState.get();
+        if (!goal) {
+          ctx.ui.notify("No active goal.", "info");
+          return;
+        }
+        const lines = [
+          `Goal [${goal.status}]: ${goal.objective}`,
+          `Iterations: ${goal.iterationCount}`,
+          `Evidence: ${goal.lastEvidence || "(none)"}`,
+        ];
+        if (goal.blocker) lines.push(`Blocker: ${goal.blocker}`);
+        ctx.ui.notify(lines.join("\n"), "info");
+        return;
+      }
+
+      const [first, ...rest] = trimmed.split(/\s+/);
+      const restJoined = rest.join(" ").trim();
+
+      if (first === "pause" && restJoined === "") {
+        if (!goalState.get()) {
+          ctx.ui.notify("No active goal to pause.", "warning");
+          return;
+        }
+        goalState.pause();
+        refreshWidgets(ctx);
+        ctx.ui.notify("Goal paused.", "info");
+        return;
+      }
+
+      if (first === "resume" && restJoined === "") {
+        if (!goalState.get()) {
+          ctx.ui.notify("No active goal to resume.", "warning");
+          return;
+        }
+        try {
+          goalState.resume();
+          refreshWidgets(ctx);
+          ctx.ui.notify("Goal resumed.", "info");
+        } catch (err) {
+          ctx.ui.notify(err instanceof Error ? err.message : String(err), "error");
+        }
+        return;
+      }
+
+      if (first === "clear" && restJoined === "") {
+        if (!goalState.get()) {
+          ctx.ui.notify("No goal to clear.", "info");
+          return;
+        }
+        goalState.clear();
+        refreshWidgets(ctx);
+        ctx.ui.notify("Goal cleared.", "info");
+        return;
+      }
+
+      goalState.set(trimmed);
+      refreshWidgets(ctx);
+      ctx.ui.notify(`Goal set: ${trimmed}`, "info");
     },
   });
 

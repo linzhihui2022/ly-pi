@@ -17,6 +17,7 @@ const mockPi = {
     registeredCommands.set(name, options);
   }),
   registerShortcut: vi.fn((_key: any, _options: any) => {}),
+  sendUserMessage: vi.fn(),
 };
 
 const createMockCtx = (entries: any[] = []) => ({
@@ -31,6 +32,8 @@ const createMockCtx = (entries: any[] = []) => ({
   sessionManager: {
     getEntries: vi.fn(() => entries),
   },
+  isIdle: vi.fn(() => true),
+  hasPendingMessages: vi.fn(() => false),
 });
 
 beforeEach(() => {
@@ -220,7 +223,7 @@ describe("my-todo extension", () => {
     // Now trigger turn_start
     const turnHandler = registeredEvents.get("turn_start")!;
     await turnHandler({}, ctx);
-    expect(ctx.ui.setWidget).toHaveBeenCalledTimes(setWidgetCalls + 2);
+    expect(ctx.ui.setWidget).toHaveBeenCalledTimes(setWidgetCalls + 3);
   });
 
   it("turn_end refreshes overlay", async () => {
@@ -1016,6 +1019,153 @@ describe("my-todo extension", () => {
       const handler = registeredEvents.get("agent_end")!;
       await handler({}, ctx);
       expect(ctx.ui.select).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("/goal command", () => {
+    it("registers goal tool", async () => {
+      await initExtension();
+      expect(mockPi.registerTool).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "goal" })
+      );
+    });
+
+    it("registers /goal command", async () => {
+      await initExtension();
+      expect(mockPi.registerCommand).toHaveBeenCalledWith(
+        "goal",
+        expect.any(Object)
+      );
+    });
+
+    it("sets goal", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("Goal set"),
+        "info"
+      );
+    });
+
+    it("rejects empty objective", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("   ", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("Usage"),
+        "warning"
+      );
+    });
+
+    it("shows status", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+      ctx.ui.notify.mockClear();
+      await cmd.handler("", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("Refactor auth"),
+        "info"
+      );
+    });
+
+    it("pauses and resumes", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+      await cmd.handler("pause", ctx);
+      ctx.ui.notify.mockClear();
+      await cmd.handler("", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("paused"),
+        "info"
+      );
+      await cmd.handler("resume", ctx);
+      ctx.ui.notify.mockClear();
+      await cmd.handler("", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("active"),
+        "info"
+      );
+    });
+
+    it("clears goal", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+      await cmd.handler("clear", ctx);
+      ctx.ui.notify.mockClear();
+      await cmd.handler("", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        "No active goal.",
+        "info"
+      );
+    });
+  });
+
+  describe("goal tool", () => {
+    async function getGoalTool() {
+      await initExtension();
+      return registeredTools.find((t) => t.name === "goal")!;
+    }
+
+    it("evaluate updates evidence", async () => {
+      const tool = await getGoalTool();
+      const ctx = createMockCtx();
+      const cmd = registeredCommands.get("goal")!;
+      await cmd.handler("Refactor auth", ctx);
+
+      const result = await tool.execute("tc-1", { action: "evaluate", lastEvidence: "Tests pass", nextAction: "Deploy" }, undefined, undefined, ctx);
+      expect(result.content[0].text).toContain("Tests pass");
+      expect(result.details.goal.lastEvidence).toBe("Tests pass");
+    });
+
+    it("mark_complete requires evidence", async () => {
+      const tool = await getGoalTool();
+      const ctx = createMockCtx();
+      const cmd = registeredCommands.get("goal")!;
+      await cmd.handler("Refactor auth", ctx);
+
+      const result = await tool.execute("tc-1", { action: "mark_complete" }, undefined, undefined, ctx);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Evidence is required");
+    });
+
+    it("mark_complete completes goal", async () => {
+      const tool = await getGoalTool();
+      const ctx = createMockCtx();
+      const cmd = registeredCommands.get("goal")!;
+      await cmd.handler("Refactor auth", ctx);
+
+      const result = await tool.execute("tc-1", { action: "mark_complete", evidence: "CI green" }, undefined, undefined, ctx);
+      expect(result.details.goal.status).toBe("completed");
+    });
+
+    it("mark_blocked requires reason", async () => {
+      const tool = await getGoalTool();
+      const ctx = createMockCtx();
+      const cmd = registeredCommands.get("goal")!;
+      await cmd.handler("Refactor auth", ctx);
+
+      const result = await tool.execute("tc-1", { action: "mark_blocked" }, undefined, undefined, ctx);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Reason is required");
+    });
+
+    it("mark_blocked blocks goal", async () => {
+      const tool = await getGoalTool();
+      const ctx = createMockCtx();
+      const cmd = registeredCommands.get("goal")!;
+      await cmd.handler("Refactor auth", ctx);
+
+      const result = await tool.execute("tc-1", { action: "mark_blocked", reason: "API down" }, undefined, undefined, ctx);
+      expect(result.details.goal.status).toBe("blocked");
     });
   });
 });
