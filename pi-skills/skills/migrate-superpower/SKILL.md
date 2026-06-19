@@ -785,6 +785,8 @@ Invoke `subagent-driven-development`
 | **Quick Reference** | 4 行选项表 | 5 行选项表，所有选项重新命名 |
 | **Common Mistakes** | "Deleting branch before confirming merge success" | 改为 "Single giant commit instead of batch commits" |
 | **Red Flags** | 包含 "Merge without verifying tests on result" | 移除（已无 merge 操作） |
+| **远程仓库检测** | 未检测 remote，无远程时仍会展示 push/PR 选项 | Step 2 检测 `git remote`；无远程时隐藏 push/PR 选项，仅展示本地可用菜单 |
+| **分支 × 远程 菜单矩阵** | 仅按分支状态分 2 类菜单 | 按 `named/detached × has-remote/no-remote` 分 4 类菜单 |
 
 **重新迁移时的操作步骤：**
 
@@ -794,6 +796,7 @@ Invoke `subagent-driven-development`
    - 删除 "Merge Locally" 选项及其所有引用
    - 将 "Discard" 改为 "Rollback uncommitted changes"（不删除分支）
    - 确保 Quick Reference 表格和 Common Mistakes 与本地一致
+   - 保留无远程仓库时跳过 push/PR 选项的逻辑
 4. 更新 `skill-sha.json` 中的 SHA
 5. 运行 `./install.sh` 部署
 
