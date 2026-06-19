@@ -620,11 +620,4 @@ export default function myTodo(pi: ExtensionAPI): void {
     pi.sendUserMessage(message, { deliverAs: "followUp" });
   });
 
-  pi.on("input", async (event, _ctx) => {
-    if (event.source !== "interactive" && event.source !== "rpc") return;
-    if (event.text.trim().startsWith("/goal")) return;
-    if (goalState.isActive()) {
-      goalState.pause();
-    }
-  });
 }
