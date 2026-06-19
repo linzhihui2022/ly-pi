@@ -1315,4 +1315,62 @@ describe("my-todo extension", () => {
       expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
     });
   });
+
+  describe("goal input pause", () => {
+    it("pauses active goal on ordinary user input", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+
+      const handler = registeredEvents.get("input")!;
+      const result = await handler({ type: "input", text: "What about this?", source: "interactive" }, ctx);
+      expect(result).toBeUndefined();
+
+      const status = registeredCommands.get("goal")!;
+      ctx.ui.notify.mockClear();
+      await status.handler("", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("paused"),
+        "info"
+      );
+    });
+
+    it("does not pause on /goal input", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+
+      const handler = registeredEvents.get("input")!;
+      await handler({ type: "input", text: "/goal check", source: "interactive" }, ctx);
+
+      ctx.ui.notify.mockClear();
+      await cmd.handler("", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("active"),
+        "info"
+      );
+    });
+  });
+
+  describe("goal widget", () => {
+    it("renders goal widget after set", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+      expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-goal", expect.any(Function));
+    });
+
+    it("clears goal widget after clear", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+      ctx.ui.setWidget.mockClear();
+      await cmd.handler("clear", ctx);
+      expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-goal", undefined);
+    });
+  });
 });
