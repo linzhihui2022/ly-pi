@@ -1,0 +1,171 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import { mkdirSync, rmSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { PetStateManager } from "./state";
+
+const TEST_DIR = join(tmpdir(), "pi-pet-test");
+
+beforeEach(() => {
+  rmSync(TEST_DIR, { recursive: true, force: true });
+  mkdirSync(TEST_DIR, { recursive: true });
+});
+
+function createClock(
+  initialTime = 1_000_000,
+): { now: () => number; advance: (ms: number) => void } {
+  let t = initialTime;
+  return {
+    now: () => t,
+    advance: (ms: number) => {
+      t += ms;
+    },
+  };
+}
+
+describe("PetStateManager", () => {
+  it("creates default state when file is missing", () => {
+    const clock = createClock();
+    const path = join(TEST_DIR, "missing.json");
+
+    const manager = new PetStateManager({ path, now: clock.now });
+
+    expect(manager.getState()).toEqual({
+      name: "Mochi",
+      species: "cat",
+      stage: "baby",
+      hunger: 80,
+      mood: 80,
+      energy: 80,
+      lastUpdatedAt: clock.now(),
+    });
+  });
+
+  it("uses default path in home directory", () => {
+    const originalHome = process.env.HOME;
+    process.env.HOME = TEST_DIR;
+    try {
+      const clock = createClock();
+      const manager = new PetStateManager({ now: clock.now });
+
+      expect(manager.getState().name).toBe("Mochi");
+      expect(existsSync(join(TEST_DIR, ".pi", "pet-state.json"))).toBe(true);
+    } finally {
+      process.env.HOME = originalHome;
+    }
+  });
+
+  it("uses real time by default", () => {
+    const before = Date.now();
+    const path = join(TEST_DIR, "realtime.json");
+
+    const manager = new PetStateManager({ path });
+
+    const after = Date.now();
+    expect(manager.getState().lastUpdatedAt).toBeGreaterThanOrEqual(before);
+    expect(manager.getState().lastUpdatedAt).toBeLessThanOrEqual(after);
+  });
+
+  it("applies decay over elapsed time", () => {
+    const clock = createClock();
+    const path = join(TEST_DIR, "decay.json");
+
+    new PetStateManager({ path, now: clock.now });
+    clock.advance(60 * 60 * 1000);
+    const manager = new PetStateManager({ path, now: clock.now });
+
+    expect(manager.getState()).toEqual({
+      name: "Mochi",
+      species: "cat",
+      stage: "baby",
+      hunger: 82,
+      mood: 79,
+      energy: 78.5,
+      lastUpdatedAt: clock.now(),
+    });
+  });
+
+  it("clamps decayed values to [0, 100]", () => {
+    const clock = createClock();
+    const path = join(TEST_DIR, "clamp.json");
+
+    new PetStateManager({ path, now: clock.now });
+    clock.advance(100 * 60 * 60 * 1000);
+    const manager = new PetStateManager({ path, now: clock.now });
+
+    const state = manager.getState();
+    expect(state.hunger).toBe(100);
+    expect(state.mood).toBe(0);
+    expect(state.energy).toBe(0);
+  });
+
+  it("applies feed effects", () => {
+    const clock = createClock();
+    const path = join(TEST_DIR, "feed.json");
+
+    const manager = new PetStateManager({ path, now: clock.now });
+    manager.feed();
+
+    const state = manager.getState();
+    expect(state.hunger).toBe(50);
+    expect(state.energy).toBe(78);
+    expect(state.mood).toBe(80);
+  });
+
+  it("applies play effects", () => {
+    const clock = createClock();
+    const path = join(TEST_DIR, "play.json");
+
+    const manager = new PetStateManager({ path, now: clock.now });
+    manager.play();
+
+    const state = manager.getState();
+    expect(state.mood).toBe(100);
+    expect(state.energy).toBe(70);
+    expect(state.hunger).toBe(85);
+  });
+
+  it("applies sleep effects", () => {
+    const clock = createClock();
+    const path = join(TEST_DIR, "sleep.json");
+
+    const manager = new PetStateManager({ path, now: clock.now });
+    manager.sleep();
+
+    const state = manager.getState();
+    expect(state.energy).toBe(100);
+    expect(state.hunger).toBe(85);
+    expect(state.mood).toBe(80);
+  });
+
+  it("clamps action impacts to [0, 100]", () => {
+    const clock = createClock();
+    const path = join(TEST_DIR, "clamp-action.json");
+
+    const manager = new PetStateManager({ path, now: clock.now });
+    manager.feed();
+    manager.feed();
+    manager.feed();
+
+    const state = manager.getState();
+    expect(state.hunger).toBe(0);
+    expect(state.energy).toBe(74);
+  });
+
+  it("persists state across manager instances", () => {
+    const clock = createClock();
+    const path = join(TEST_DIR, "roundtrip.json");
+
+    const manager = new PetStateManager({ path, now: clock.now });
+    manager.feed();
+
+    clock.advance(30 * 60 * 1000);
+    const reloaded = new PetStateManager({ path, now: clock.now });
+
+    const state = reloaded.getState();
+    expect(state.hunger).toBe(51);
+    expect(state.energy).toBe(77.25);
+    expect(state.mood).toBe(79.5);
+    expect(state.lastUpdatedAt).toBe(clock.now());
+  });
+});
