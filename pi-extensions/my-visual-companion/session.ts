@@ -1,10 +1,33 @@
 import { execSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { appendFileSync, existsSync, mkdirSync, writeFileSync, truncateSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Server } from "node:http";
 import type { WebSocketServer } from "ws";
-import type { Session, Screen, CompanionEvent } from "./types";
+import type { Session, CompanionEvent } from "./types";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function generateKey(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function resolveWorkspaceDir(sessionId: string): string {
+  try {
+    const root = execSync("git rev-parse --show-toplevel", { encoding: "utf-8" }).trim();
+    return join(root, ".lychee", "visual-companion", sessionId);
+  } catch {
+    return join(tmpdir(), ".lychee", "visual-companion", sessionId);
+  }
+}
+
+function ensureWorkspace(dir: string): void {
+  if (existsSync(dir)) return;
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, ".gitignore"), "*\n");
 }
 
 export interface SessionManagerOptions {
@@ -27,17 +50,24 @@ export class SessionManager {
   }
 
   create(port: number, url: string, server: Server, wss: WebSocketServer): Session {
+    const id = generateId();
+    const key = generateKey();
+    const workspaceDir = resolveWorkspaceDir(id);
+    ensureWorkspace(workspaceDir);
+
     const session: Session = {
-      id: generateId(),
+      id,
+      key,
       port,
       url,
       server,
       wss,
-      screens: new Map<string, Screen>(),
+      screens: new Map<string, typeof session.screens extends Map<string, infer T> ? T : never>(),
       events: [],
       activeScreen: null,
       lastActivity: Date.now(),
       idleTimer: null,
+      workspaceDir,
     };
     this.sessions.set(session.id, session);
     this.resetIdleTimer(session.id);
@@ -56,6 +86,11 @@ export class SessionManager {
     session.events = [];
     session.lastActivity = Date.now();
     this.resetIdleTimer(id);
+
+    const eventsFile = join(session.workspaceDir, "events.jsonl");
+    if (existsSync(eventsFile)) {
+      truncateSync(eventsFile, 0);
+    }
   }
 
   appendEvent(id: string, event: CompanionEvent): void {
@@ -64,6 +99,9 @@ export class SessionManager {
     session.events.push(event);
     session.lastActivity = Date.now();
     this.resetIdleTimer(id);
+
+    const eventsFile = join(session.workspaceDir, "events.jsonl");
+    appendFileSync(eventsFile, JSON.stringify(event) + "\n");
 
     if (event.type === "confirm") {
       const resolver = this.waitResolvers.get(id);

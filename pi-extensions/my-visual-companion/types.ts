@@ -21,6 +21,7 @@ export interface CompanionEvent {
 
 export interface Session {
   id: string;
+  key: string;
   port: number;
   url: string;
   server: Server;
@@ -30,10 +31,12 @@ export interface Session {
   activeScreen: string | null;
   lastActivity: number;
   idleTimer: NodeJS.Timeout | null;
+  workspaceDir: string;
 }
 
 export interface SessionInfo {
   sessionId: string;
+  key: string;
   port: number;
   url: string;
 }

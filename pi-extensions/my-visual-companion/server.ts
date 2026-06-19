@@ -33,6 +33,25 @@ function wrapInFrame(content: string): string {
   return FRAME_TEMPLATE.replace("<!-- CONTENT -->", content);
 }
 
+export function parseUrl(url: string): { pathname: string; searchParams: URLSearchParams } {
+  // node:http req.url only has path + query, so prepend a dummy origin.
+  const parsed = new URL(url, "http://localhost");
+  return { pathname: parsed.pathname, searchParams: parsed.searchParams };
+}
+
+function validateKey(req: IncomingMessage, session: Session): boolean {
+  const { searchParams } = parseUrl(req.url || "/");
+  const cookieHeader = req.headers?.cookie || "";
+  const cookieKey = cookieHeader.split(";").find((c) => c.trim().startsWith("vc_key="));
+  const cookieValue = cookieKey ? decodeURIComponent(cookieKey.split("=")[1]) : undefined;
+  const key = searchParams.get("key") || cookieValue;
+  return key === session.key;
+}
+
+function setKeyCookie(res: ServerResponse, key: string): void {
+  res.setHeader("Set-Cookie", `vc_key=${encodeURIComponent(key)}; Path=/; SameSite=Strict`);
+}
+
 export async function findAvailablePort(startPort: number, host: string, maxAttempts = 100): Promise<number> {
   return new Promise((resolve, reject) => {
     let currentPort = startPort;
@@ -127,7 +146,6 @@ export async function createCompanionServer(
 ): Promise<{ session: Session }> {
   const startPort = 49152 + Math.floor(Math.random() * 16383);
   const port = await findAvailablePort(startPort, options.host);
-  const url = `http://${options.urlHost}:${port}`;
 
   let sessionId: string | null = null;
 
@@ -135,6 +153,24 @@ export async function createCompanionServer(
   const httpServer = createServer(createHttpHandler(manager, () => sessionId));
 
   httpServer.on("upgrade", (request, socket, head) => {
+    if (!sessionId) {
+      socket.destroy();
+      return;
+    }
+    const session = manager.get(sessionId);
+    if (!session) {
+      socket.destroy();
+      return;
+    }
+    const { searchParams } = parseUrl(request.url || "/");
+    const cookieHeader = request.headers.cookie || "";
+    const cookieKey = cookieHeader.split(";").find((c) => c.trim().startsWith("vc_key="));
+    const cookieValue = cookieKey ? decodeURIComponent(cookieKey.split("=")[1]) : undefined;
+    const key = searchParams.get("key") || cookieValue;
+    if (key !== session.key) {
+      socket.destroy();
+      return;
+    }
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit("connection", ws, request);
     });
@@ -146,8 +182,9 @@ export async function createCompanionServer(
 
   await new Promise<void>((resolve) => httpServer.listen(port, options.host, resolve));
 
-  const session = manager.create(port, url, httpServer, wss);
+  const session = manager.create(port, "", httpServer, wss);
   sessionId = session.id;
+  session.url = `http://${options.urlHost}:${port}/?key=${encodeURIComponent(session.key)}`;
 
   // Hook updateScreen to broadcast reload
   manager.updateScreen = createUpdateScreenHook(
@@ -173,7 +210,32 @@ export function handleRequest(
     return;
   }
 
-  if (req.method === "GET" && req.url === "/") {
+  const { pathname, searchParams } = parseUrl(req.url || "/");
+
+  // Allow helper.js and the current screen asset through when the key is
+  // supplied via cookie (the browser loads these without query params after
+  // the first validated page load). Other paths still require key validation.
+  const keyRequired = pathname !== "/helper.js" && !pathname.startsWith("/files/");
+  if (keyRequired && !validateKey(req, session)) {
+    res.writeHead(403);
+    res.end("Forbidden");
+    return;
+  }
+
+  // For /helper.js and /files/*, still enforce the key if no cookie was set.
+  if (!keyRequired) {
+    const cookieHeader = req.headers?.cookie || "";
+    const cookieKey = cookieHeader.split(";").find((c) => c.trim().startsWith("vc_key="));
+    const cookieValue = cookieKey ? decodeURIComponent(cookieKey.split("=")[1]) : undefined;
+    const key = searchParams.get("key") || cookieValue;
+    if (key !== session.key) {
+      res.writeHead(403);
+      res.end("Forbidden");
+      return;
+    }
+  }
+
+  if (req.method === "GET" && pathname === "/") {
     let html: string;
     if (session.activeScreen && session.screens.has(session.activeScreen)) {
       const screen = session.screens.get(session.activeScreen)!;
@@ -188,13 +250,14 @@ export function handleRequest(
       html += HELPER_INJECTION;
     }
 
+    setKeyCookie(res, session.key);
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(html);
-  } else if (req.method === "GET" && req.url === "/helper.js") {
+  } else if (req.method === "GET" && pathname === "/helper.js") {
     res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
     res.end(HELPER_SCRIPT);
-  } else if (req.method === "GET" && req.url?.startsWith("/files/")) {
-    const fileName = req.url.slice(7);
+  } else if (req.method === "GET" && pathname?.startsWith("/files/")) {
+    const fileName = pathname.slice(7);
     if (session.screens.has(fileName)) {
       const screen = session.screens.get(fileName)!;
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });

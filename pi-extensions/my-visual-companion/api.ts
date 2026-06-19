@@ -13,6 +13,7 @@ export function createVisualCompanionAPI(manager: SessionManager, options: APIOp
       const { session } = await createCompanionServer(manager, options);
       return {
         sessionId: session.id,
+        key: session.key,
         port: session.port,
         url: session.url,
       };

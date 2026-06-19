@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SessionManager } from "./session";
 
 vi.mock("node:child_process", () => ({
-  execSync: vi.fn(),
+  execSync: vi.fn().mockImplementation(() => {
+    throw new Error("not a git repo");
+  }),
 }));
 
 describe("SessionManager", () => {
@@ -290,6 +292,9 @@ describe("SessionManager", () => {
 
     manager.appendEvent(session.id, { type: "confirm", text: "yes", timestamp: 1 });
 
-    expect(execSync).not.toHaveBeenCalled();
+    const focusCalls = (execSync as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => String(call[0]).includes("activate")
+    );
+    expect(focusCalls).toHaveLength(0);
   });
 });

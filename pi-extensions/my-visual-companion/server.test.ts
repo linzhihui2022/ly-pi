@@ -94,7 +94,7 @@ describe("createCompanionServer", () => {
   it("returns 404 for unknown files", async () => {
     const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
 
-    const res = await fetch(`${session.url}/files/nonexistent.png`);
+    const res = await fetch(`${session.url.replace(/\/?\?.*$/, "")}/files/nonexistent.png?key=${encodeURIComponent(session.key)}`);
     expect(res.status).toBe(404);
 
     await manager.destroy(session.id);
@@ -103,7 +103,7 @@ describe("createCompanionServer", () => {
   it("serves helper.js route", async () => {
     const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
 
-    const res = await fetch(`${session.url}/helper.js`);
+    const res = await fetch(`${session.url.replace(/\/?\?.*$/, "")}/helper.js?key=${encodeURIComponent(session.key)}`);
     const text = await res.text();
 
     expect(res.status).toBe(200);
@@ -138,7 +138,7 @@ describe("createCompanionServer", () => {
   it("broadcasts reload via WebSocket when screen updates", async () => {
     const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
 
-    const ws = new WebSocket(`ws://localhost:${session.port}`);
+    const ws = new WebSocket(`ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`);
     const messages: any[] = [];
 
     await new Promise<void>((resolve, reject) => {
@@ -162,7 +162,7 @@ describe("createCompanionServer", () => {
   it("receives click events and appends to session", async () => {
     const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
 
-    const ws = new WebSocket(`ws://localhost:${session.port}`);
+    const ws = new WebSocket(`ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`);
 
     await new Promise<void>((resolve, reject) => {
       ws.on("open", resolve);
@@ -185,7 +185,7 @@ describe("createCompanionServer", () => {
   it("ignores malformed WebSocket messages", async () => {
     const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
 
-    const ws = new WebSocket(`ws://localhost:${session.port}`);
+    const ws = new WebSocket(`ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`);
 
     await new Promise<void>((resolve, reject) => {
       ws.on("open", resolve);
@@ -210,7 +210,7 @@ describe("createCompanionServer", () => {
   it("confirm WebSocket events reset idle timer", async () => {
     const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
 
-    const ws = new WebSocket(`ws://localhost:${session.port}`);
+    const ws = new WebSocket(`ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`);
 
     await new Promise<void>((resolve, reject) => {
       ws.on("open", resolve);
@@ -238,7 +238,7 @@ describe("createCompanionServer", () => {
     // Create another session manually (not via companion server, so no WS broadcast hook for it)
     const otherSession = manager.create(9999, "http://localhost:9999", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
 
-    const ws = new WebSocket(`ws://localhost:${serverSession.port}`);
+    const ws = new WebSocket(`ws://localhost:${serverSession.port}/?key=${encodeURIComponent(serverSession.key)}`);
     await new Promise<void>((resolve, reject) => {
       ws.on("open", resolve);
       ws.on("error", reject);
@@ -264,7 +264,7 @@ describe("createCompanionServer", () => {
   it("does not broadcast reload to non-open clients", async () => {
     const { session } = await createCompanionServer(manager, { host: "127.0.0.1", urlHost: "localhost" });
 
-    const ws = new WebSocket(`ws://localhost:${session.port}`);
+    const ws = new WebSocket(`ws://localhost:${session.port}/?key=${encodeURIComponent(session.key)}`);
     await new Promise<void>((resolve, reject) => {
       ws.on("open", resolve);
       ws.on("error", reject);
@@ -302,12 +302,15 @@ describe("handleRequest", () => {
     const res = {
       writeHead: vi.fn(),
       end: vi.fn(),
+      setHeader: vi.fn(),
     } as unknown as ServerResponse;
     return res;
   }
 
-  function mockReq(method = "GET", url = "/"): IncomingMessage {
-    return { method, url } as unknown as IncomingMessage;
+  function mockReq(method = "GET", url = "/", key?: string): IncomingMessage {
+    const headers: Record<string, string> = {};
+    if (key) headers.cookie = `vc_key=${encodeURIComponent(key)}`;
+    return { method, url, headers } as unknown as IncomingMessage;
   }
 
   it("returns 503 when session not found", () => {
@@ -327,7 +330,7 @@ describe("handleRequest", () => {
       return { session: s };
     })();
 
-    const req = mockReq("POST", "/");
+    const req = mockReq("POST", "/", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
@@ -339,7 +342,7 @@ describe("handleRequest", () => {
   it("serves waiting page when no active screen", () => {
     const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
 
-    const req = mockReq("GET", "/");
+    const req = mockReq("GET", "/", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
@@ -353,7 +356,7 @@ describe("handleRequest", () => {
     const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
     manager.updateScreen(session.id, "main", "<h1>Hello</h1>");
 
-    const req = mockReq("GET", "/");
+    const req = mockReq("GET", "/", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
@@ -367,7 +370,7 @@ describe("handleRequest", () => {
     const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
     manager.updateScreen(session.id, "full", "<!DOCTYPE html><html><body><h1>Full</h1></body></html>");
 
-    const req = mockReq("GET", "/");
+    const req = mockReq("GET", "/", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
@@ -381,7 +384,7 @@ describe("handleRequest", () => {
     const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
     manager.updateScreen(session.id, "nobody", "<h1>No body</h1>");
 
-    const req = mockReq("GET", "/");
+    const req = mockReq("GET", "/", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
@@ -395,7 +398,7 @@ describe("handleRequest", () => {
     const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
     manager.updateScreen(session.id, "nobodyclose", "<!DOCTYPE html><html><body><h1>No close");
 
-    const req = mockReq("GET", "/");
+    const req = mockReq("GET", "/", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
@@ -408,7 +411,7 @@ describe("handleRequest", () => {
   it("serves helper.js", () => {
     const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
 
-    const req = mockReq("GET", "/helper.js");
+    const req = mockReq("GET", "/helper.js", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
@@ -422,7 +425,7 @@ describe("handleRequest", () => {
     const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
     manager.updateScreen(session.id, "popup", "<div>Popup content</div>");
 
-    const req = mockReq("GET", "/files/popup");
+    const req = mockReq("GET", "/files/popup", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
@@ -434,7 +437,7 @@ describe("handleRequest", () => {
   it("returns 404 for unknown /files/ path", () => {
     const session = manager.create(8080, "http://localhost:8080", { close: vi.fn((cb: any) => cb?.()) } as any, { close: vi.fn(), clients: new Set() } as any);
 
-    const req = mockReq("GET", "/files/unknown");
+    const req = mockReq("GET", "/files/unknown", session.key);
     const res = mockRes();
 
     handleRequest(req, res, manager, session.id);
@@ -476,10 +479,11 @@ describe("createHttpHandler", () => {
     const res = {
       writeHead: vi.fn(),
       end: vi.fn(),
+      setHeader: vi.fn(),
     } as unknown as import("node:http").ServerResponse;
 
     handler(
-      { method: "GET", url: "/" } as unknown as import("node:http").IncomingMessage,
+      { method: "GET", url: "/", headers: { cookie: `vc_key=${session.key}` } } as unknown as import("node:http").IncomingMessage,
       res,
     );
 
