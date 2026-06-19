@@ -1,57 +1,50 @@
 /**
- * ASCII cat art for pi-pet.
+ * ASCII cat art for pi-pet — 3-line compact frames.
  *
- * Five emotional states with distinct frames:
+ * Five emotional states with distinct 3-line frames:
  *   - happy   (mood > 60 && energy > 40)
  *   - neutral (default)
  *   - hungry  (hunger > 70, overrides unless energy < 15)
  *   - tired   (energy < 15, takes priority over hungry)
  *   - sad     (mood < 30)
+ *
+ * Each frame is exactly 3 strings of equal visual width.
  */
 
 import type { PetState } from "./types";
 
-// ── Frames ──────────────────────────────────────────────────────
+// ── 3-line frames ───────────────────────────────────────────────
+// Line 1: ears + head top    Line 2: eyes + face    Line 3: mouth + body
 
 const FRAMES: Record<string, string[]> = {
   happy: [
-    "  /\\_/\\ ",
-    " ( o.o )",
-    "  > ^ < ",
-    " /|   |\\",
-    "(_|   |_)",
+    "  /\\_/\\  ",
+    " ( ^w^ ) ",
+    "  > ^ <  ",
   ],
 
   neutral: [
-    "  /\\_/\\ ",
-    " ( ^_^ )",
-    "  >   < ",
-    "  |   | ",
-    " (_   _)",
+    "  /\\_/\\  ",
+    " ( -_- ) ",
+    "  |   |  ",
   ],
 
   hungry: [
-    "  /\\_/\\ ",
-    " ( > < )",
-    "  >   < ",
-    "  |   | ",
-    " ( --- )",
+    "  /\\_/\\  ",
+    " ( >_< ) ",
+    "  o   o  ",
   ],
 
   sad: [
-    "  /\\_/\\ ",
-    " ( ;.; )",
-    "  >   < ",
-    "  |   | ",
-    " ( ~ ~ )",
+    "  /\\_/\\  ",
+    " ( ;_; ) ",
+    "  ~ ~ ~  ",
   ],
 
   tired: [
-    "  /\\_/\\ ",
-    " ( -.- )",
-    "  >   < ",
-    "  z   z ",
-    " (  _  )",
+    "  /\\_/\\  ",
+    " ( -.- ) ",
+    "  z   z  ",
   ],
 };
 
@@ -69,7 +62,7 @@ export function selectFrame(state: PetState): string[] {
   return FRAMES.neutral;
 }
 
-// ── Status bar ──────────────────────────────────────────────────
+// ── Status bar (compact for 3-line cat) ─────────────────────────
 
 function bar(name: string, value: number, width = 10): string {
   const filled = Math.round((value / 100) * width);
