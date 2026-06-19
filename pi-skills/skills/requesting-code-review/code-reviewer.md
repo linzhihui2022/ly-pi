@@ -14,21 +14,25 @@ subagent({ subagent_type: "reviewer",
 
     ## What Was Implemented
 
-    {DESCRIPTION}
+    [DESCRIPTION]
 
     ## Requirements / Plan
 
-    {PLAN_OR_REQUIREMENTS}
+    [PLAN_OR_REQUIREMENTS]
 
     ## Diff to Review
 
-    The git diff from {BASE_SHA} to {HEAD_SHA} is provided below (or in the attached diff.txt).
+    The git diff from [BASE_SHA] to [HEAD_SHA] is provided below (or in the attached diff.txt).
 
     ```bash
-    git diff --stat {BASE_SHA}..{HEAD_SHA}
+    git diff --stat [BASE_SHA]..[HEAD_SHA]
     ```
 
     Review the full diff for code quality, plan alignment, and correctness.
+
+    ## Read-Only Review
+
+    Your review is read-only on this checkout. Do not mutate the working tree, the index, HEAD, or branch state in any way. Use tools like `git show`, `git diff`, and `git log` to inspect history. If you need a working copy of a different revision, check it out into a separate temporary directory (e.g. `git worktree add /tmp/review-[SHA] [SHA]`) — never move HEAD on this checkout.
 
     ## What to Check
 
@@ -122,10 +126,10 @@ subagent({ subagent_type: "reviewer",
 ```
 
 **Placeholders:**
-- `{DESCRIPTION}` — brief summary of what was built
-- `{PLAN_OR_REQUIREMENTS}` — what it should do (plan file path, task text, or requirements)
-- `{BASE_SHA}` — starting commit
-- `{HEAD_SHA}` — ending commit
+- `[DESCRIPTION]` — brief summary of what was built
+- `[PLAN_OR_REQUIREMENTS]` — what it should do (plan file path, task text, or requirements)
+- `[BASE_SHA]` — starting commit
+- `[HEAD_SHA]` — ending commit
 
 **Reviewer returns:** Strengths, Issues (Critical / Important / Minor), Recommendations, Assessment
 
