@@ -75,4 +75,19 @@ describe("renderGoalOverlay", () => {
     expect(mockTheme.bold).toHaveBeenCalledWith("Goal [active]");
     expect(mockTheme.fg).toHaveBeenCalledWith("accent", expect.stringContaining("Goal [active]"));
   });
+
+  it("styles iterations with theme", () => {
+    renderGoalOverlay(makeGoal({ iterationCount: 3 }), mockTheme);
+    expect(mockTheme.fg).toHaveBeenCalledWith("dim", "Iterations: 3");
+  });
+
+  it("styles evidence with theme", () => {
+    renderGoalOverlay(makeGoal({ lastEvidence: "Tests pass" }), mockTheme);
+    expect(mockTheme.fg).toHaveBeenCalledWith("dim", "Evidence: Tests pass");
+  });
+
+  it("styles blocker with theme", () => {
+    renderGoalOverlay(makeGoal({ status: "blocked", blocker: "API down" }), mockTheme);
+    expect(mockTheme.fg).toHaveBeenCalledWith("error", "Blocker: API down");
+  });
 });

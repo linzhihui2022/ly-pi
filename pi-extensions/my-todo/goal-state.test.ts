@@ -91,11 +91,30 @@ describe("GoalState", () => {
     expect(goal.nextAction).toBe("Deploy");
   });
 
+  it("evaluate updates only nextAction when evidence omitted", () => {
+    const state = new GoalState();
+    state.set("X");
+    state.evaluate("Initial", "");
+    const goal = state.evaluate(undefined, "Deploy");
+    expect(goal.lastEvidence).toBe("Initial");
+    expect(goal.nextAction).toBe("Deploy");
+  });
+
   it("evaluate can update status", () => {
     const state = new GoalState();
     state.set("X");
     state.evaluate("Stuck", "", "blocked");
     expect(state.getStatus()).toBe("blocked");
+  });
+
+  it("evaluate can update only status", () => {
+    const state = new GoalState();
+    state.set("X");
+    state.evaluate("Evidence", "Next");
+    const goal = state.evaluate(undefined, undefined, "paused");
+    expect(goal.status).toBe("paused");
+    expect(goal.lastEvidence).toBe("Evidence");
+    expect(goal.nextAction).toBe("Next");
   });
 
   it("evaluate rejects invalid status values", () => {
@@ -189,6 +208,16 @@ describe("GoalState", () => {
     expect(state.get()?.objective).toBe("X");
   });
 
+  it("snapshot returns null when idle", () => {
+    const state = new GoalState();
+    expect(state.snapshot()).toBeNull();
+  });
+
+  it("rejects blocked when idle", () => {
+    const state = new GoalState();
+    expect(() => state.markBlocked("Reason")).toThrow("No active goal");
+  });
+
   describe("fromSession", () => {
     it("restores from valid goal tool result", () => {
       const entries: SessionEntry[] = [
@@ -255,6 +284,90 @@ describe("GoalState", () => {
       const state = GoalState.fromSession(entries);
       expect(state.get()?.objective).toBe("New");
       expect(state.getStatus()).toBe("paused");
+    });
+
+    it("skips non-message entries", () => {
+      const entries: SessionEntry[] = [
+        { type: "system", message: { role: "toolResult", toolName: "goal", details: { goal: { objective: "X", status: "active", iterationCount: 0, lastEvidence: "", nextAction: "" } } } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips entries without toolResult role", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "assistant", toolName: "goal", details: { goal: { objective: "X", status: "active", iterationCount: 0, lastEvidence: "", nextAction: "" } } } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips null details", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "toolResult", toolName: "goal", details: null } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips non-object details", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "toolResult", toolName: "goal", details: "bad" } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips goal that is not an object", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "toolResult", toolName: "goal", details: { goal: 123 } } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips goal that is null", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "toolResult", toolName: "goal", details: { goal: null } } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips goal with non-string objective", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "toolResult", toolName: "goal", details: { goal: { objective: 1, status: "active", iterationCount: 0, lastEvidence: "", nextAction: "" } } } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips goal with invalid status", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "toolResult", toolName: "goal", details: { goal: { objective: "X", status: "unknown", iterationCount: 0, lastEvidence: "", nextAction: "" } } } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips goal with non-number iterationCount", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "toolResult", toolName: "goal", details: { goal: { objective: "X", status: "active", iterationCount: "0", lastEvidence: "", nextAction: "" } } } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips goal with non-string lastEvidence", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "toolResult", toolName: "goal", details: { goal: { objective: "X", status: "active", iterationCount: 0, lastEvidence: 1, nextAction: "" } } } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips goal with non-string nextAction", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "toolResult", toolName: "goal", details: { goal: { objective: "X", status: "active", iterationCount: 0, lastEvidence: "", nextAction: 1 } } } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
+    });
+
+    it("skips goal with non-string blocker", () => {
+      const entries: SessionEntry[] = [
+        { type: "message", message: { role: "toolResult", toolName: "goal", details: { goal: { objective: "X", status: "blocked", iterationCount: 0, lastEvidence: "", nextAction: "", blocker: 1 } } } },
+      ];
+      expect(GoalState.fromSession(entries).get()).toBeNull();
     });
   });
 });
