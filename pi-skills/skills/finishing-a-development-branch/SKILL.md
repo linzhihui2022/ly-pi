@@ -60,14 +60,19 @@ Stop. Don't proceed to Step 2.
 ```bash
 # Check if we're on a detached HEAD
 git symbolic-ref -q HEAD >/dev/null 2>&1 && echo "named" || echo "detached"
+
+# Check if a remote is configured
+git remote -v >/dev/null 2>&1 && git remote | head -n1 | grep -q . && echo "has-remote" || echo "no-remote"
 ```
 
 This determines which menu to show:
 
-| State | Menu |
-|-------|------|
-| Named branch | Standard 5 options |
-| Detached HEAD | Reduced 3 options (no merge) |
+| Branch state | Remote state | Menu |
+|--------------|--------------|------|
+| Named branch | Has remote | Standard 5 options |
+| Named branch | No remote | Local-only 4 options (no push/PR) |
+| Detached HEAD | Has remote | Reduced 3 options (can push as new branch) |
+| Detached HEAD | No remote | Local-only 2 options (keep or discard) |
 
 ---
 
@@ -86,7 +91,7 @@ Or ask: "This branch split from main - is that correct?"
 
 **Use `ask_user_question` for structured option presentation.**
 
-**Named branch — present exactly these 5 options:**
+**Named branch with remote — present exactly these 5 options:**
 
 ```
 ask_user_question:
@@ -104,7 +109,21 @@ ask_user_question:
       description: "Discard all uncommitted changes in the working tree. Requires confirmation."
 ```
 
-**Detached HEAD — present exactly these 3 options:**
+**Named branch without remote — present exactly these 3 options:**
+
+```
+ask_user_question:
+  question: "Implementation complete. No remote is configured. What would you like to do?"
+  options:
+    - label: "Batch commit only"
+      description: "Split changes into logical commits, keep local. No push, no PR."
+    - label: "Do nothing"
+      description: "Leave the working tree untouched — no commit, push, or PR."
+    - label: "Rollback uncommitted changes"
+      description: "Discard all uncommitted changes in the working tree. Requires confirmation."
+```
+
+**Detached HEAD with remote — present exactly these 3 options:**
 
 ```
 ask_user_question:
@@ -112,6 +131,18 @@ ask_user_question:
   options:
     - label: "Push as new branch and create a Pull Request"
       description: "Create a new branch from detached HEAD, push, and open a PR."
+    - label: "Keep as-is (I'll handle it later)"
+      description: "Leave the detached HEAD state as-is."
+    - label: "Discard this work"
+      description: "Abandon the current state. Requires confirmation."
+```
+
+**Detached HEAD without remote — present exactly these 2 options:**
+
+```
+ask_user_question:
+  question: "Implementation complete. You're on a detached HEAD and no remote is configured."
+  options:
     - label: "Keep as-is (I'll handle it later)"
       description: "Leave the detached HEAD state as-is."
     - label: "Discard this work"
