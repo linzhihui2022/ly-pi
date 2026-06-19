@@ -151,6 +151,15 @@ Not every `✅ Migrated` skill needs an entry in `skill-sha.json`. Exclude from 
 
 **Rule of thumb:** 如果一个技能在上游更新后，重新迁移时不需要（或无法）重新应用任何 Pi 迁移规则，就不需要追踪 SHA。
 
+### 3.2. Non-Superpowers Skills
+
+The migration rules in this skill are not limited to the Superpowers repository. When migrating a skill from another ecosystem (e.g., Matt Pocock's `grill-me`, community Codex/Claude Code skills):
+
+1. Keep the original skill name and core workflow.
+2. Apply the same Pi adaptation rules: paths → `.lychee/`, tool casing → lowercase, `todo`/`ask_user_question`/`subagent` integration, branding neutralization.
+3. Record the migration in `skill-mapping.md` under the **Other Migrated Skills** section.
+4. Do NOT add it to `skill-sha.json` unless there is a stable upstream git repository you intend to monitor for updates.
+
 ---
 
 ## 4. Tool & API Differences

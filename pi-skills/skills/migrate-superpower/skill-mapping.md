@@ -103,6 +103,16 @@ When you complete a migration:
 
 ---
 
+## Other Migrated Skills
+
+The migration standards in this tracker are also applied to high-quality skills from other ecosystems (e.g., Matt Pocock's skills, Codex/Claude Code community skills). These are not from the Superpowers upstream, so they are tracked separately here.
+
+| # | Skill | Source | Status | Notes |
+|---|-------|--------|--------|-------|
+| 1 | `grill-me` | [mattpocock/skills](https://github.com/mattpocock/skills/tree/main/skills/productivity/grill-me) | ✅ Migrated | Adapted to Pi: added hard gate, `todo` tracking, `ask_user_question` guidance, codebase-first exploration, and handoff to `writing-plans`/`executing-plans`. Kept original name and core interviewing loop. |
+
+---
+
 ## Current Blockers
 
 None. Skills can be migrated in any order. However, if Skill A's workflow invokes Skill B, consider migrating B first so A's references are valid.
