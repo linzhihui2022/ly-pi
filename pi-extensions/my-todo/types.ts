@@ -19,3 +19,18 @@ export interface SessionEntry {
     details?: unknown;
   };
 }
+
+export type GoalStatus = "idle" | "active" | "paused" | "completed" | "blocked";
+
+export interface Goal {
+  objective: string;
+  status: GoalStatus;
+  iterationCount: number;
+  lastEvidence: string;
+  nextAction: string;
+  blocker?: string;
+}
+
+export interface GoalDetails {
+  goal: Goal;
+}
