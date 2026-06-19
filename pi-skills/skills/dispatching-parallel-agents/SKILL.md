@@ -65,7 +65,7 @@ Each agent gets:
 
 ### 3. Dispatch in Parallel
 
-Use the `subagent` tool with `run_in_background: true` to dispatch multiple agents concurrently:
+Use the `subagent` tool with `run_in_background: true` to dispatch multiple agents concurrently. Issue all dispatches in the same response — they run in parallel. One dispatch per response runs sequentially.
 
 ```typescript
 subagent({
