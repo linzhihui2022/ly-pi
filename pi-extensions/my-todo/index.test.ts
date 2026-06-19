@@ -1168,4 +1168,42 @@ describe("my-todo extension", () => {
       expect(result.details.goal.status).toBe("blocked");
     });
   });
+
+  describe("before_agent_start goal prompt", () => {
+    it("injects active goal context", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+
+      const handler = registeredEvents.get("before_agent_start")!;
+      const result = await handler({}, ctx);
+      expect(result).toBeDefined();
+      expect(result.message.display).toBe(false);
+      expect(result.message.content).toContain("Refactor auth");
+      expect(result.message.content).toContain("Use the goal tool");
+    });
+
+    it("does not inject when goal is idle", async () => {
+      await initExtension();
+      const handler = registeredEvents.get("before_agent_start")!;
+      const ctx = createMockCtx();
+      const result = await handler({}, ctx);
+      expect(result).toBeUndefined();
+    });
+
+    it("injects summary prompt for completed goal", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+      const tool = registeredTools.find((t) => t.name === "goal")!;
+      await tool.execute("tc-1", { action: "mark_complete", evidence: "Done" }, undefined, undefined, ctx);
+
+      const handler = registeredEvents.get("before_agent_start")!;
+      const result = await handler({}, ctx);
+      expect(result.message.content).toContain("completed");
+      expect(result.message.content).toContain("Key evidence");
+    });
+  });
 });

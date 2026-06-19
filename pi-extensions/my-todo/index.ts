@@ -535,25 +535,48 @@ export default function myTodo(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", async (_event, _ctx) => {
-    if (!state.getPlanMode()) return;
+    if (state.getPlanMode()) {
+      if (state.getPlanPhase() === "planning") {
+        return {
+          message: {
+            customType: "hidden",
+            content: "You are in plan mode. You can only use the following planning tools: read, bash (note: bash can execute commands, including destructive ones, so use it carefully), grep, find, ls, ask_user_question, web_search, web_fetch. Use the todo tool to create a task list for the plan. Do not modify any files. Do not use edit, write, or any other modifying tools. Ask the user questions with ask_user_question if you need clarification.",
+            display: false,
+          },
+        };
+      }
 
-    if (state.getPlanPhase() === "planning") {
+      if (state.getPlanPhase() === "executing") {
+        const tasks = state.list();
+        const taskList = tasks.map((t) => `#${t.id} [${t.status}] ${t.subject}`).join("\n");
+        return {
+          message: {
+            customType: "hidden",
+            content: `You are now executing the plan. Work through each task in order using the todo tool to mark progress. Mark tasks in_progress before beginning work on them. Mark tasks completed only when fully done.\n\nCurrent tasks:\n${taskList || "(none)"}`,
+            display: false,
+          },
+        };
+      }
+    }
+
+    const goal = goalState.get();
+    if (!goal) return;
+
+    if (goal.status === "active") {
       return {
         message: {
           customType: "hidden",
-          content: "You are in plan mode. You can only use the following planning tools: read, bash (note: bash can execute commands, including destructive ones, so use it carefully), grep, find, ls, ask_user_question, web_search, web_fetch. Use the todo tool to create a task list for the plan. Do not modify any files. Do not use edit, write, or any other modifying tools. Ask the user questions with ask_user_question if you need clarification.",
+          content: `You are working toward a goal:\n${goal.objective}\n\nCurrent status: ${goal.status}\nIterations so far: ${goal.iterationCount}\nLast evidence: ${goal.lastEvidence || "(none)"}\n\nWhat "done" means and how to verify it should be inferred from the goal text and the conversation so far. Use the goal tool to evaluate progress, record evidence, update the next step, mark complete when verified, or mark blocked when no valid path remains.`,
           display: false,
         },
       };
     }
 
-    if (state.getPlanPhase() === "executing") {
-      const tasks = state.list();
-      const taskList = tasks.map((t) => `#${t.id} [${t.status}] ${t.subject}`).join("\n");
+    if (goal.status === "completed" || goal.status === "blocked") {
       return {
         message: {
           customType: "hidden",
-          content: `You are now executing the plan. Work through each task in order using the todo tool to mark progress. Mark tasks in_progress before beginning work on them. Mark tasks completed only when fully done.\n\nCurrent tasks:\n${taskList || "(none)"}`,
+          content: `The goal has reached status: ${goal.status}.\n\nPlease summarize in your final response:\n- Whether the goal was achieved\n- Key evidence\n- Summary of changes made\n${goal.status === "blocked" ? `- Blocker: ${goal.blocker || "(unknown)"}` : ""}`,
           display: false,
         },
       };
