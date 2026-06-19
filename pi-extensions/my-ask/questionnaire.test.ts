@@ -36,7 +36,8 @@ vi.mock("@earendil-works/pi-tui", () => {
   }
 
   return {
-    truncateToWidth: (text: string, _width: number) => text,
+    truncateToWidth: (text: string, _width: number, _ellipsis?: string) => text,
+    visibleWidth: (text: string) => text.length,
     matchesKey: (data: string, keyId: string) => data === keyId,
     Key: {
       up: "up",
@@ -218,6 +219,75 @@ describe("createQuestionnaire", () => {
     q.handleInput("down");
     const lines2 = q.render(80);
     expect(lines2.some((l) => l.includes("# Side"))).toBe(true);
+  });
+
+  it("renders preview box borders with uniform width", () => {
+    const params = makeParams([
+      {
+        question: "Which layout?",
+        header: "Layout",
+        options: [
+          { label: "Vertical", description: "Top/bottom", preview: "line1\nline2" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+    const lines = q.render(30);
+
+    const boxLines = lines.filter(
+      (l) => l.includes("┌") || l.includes("│") || l.includes("└"),
+    );
+    expect(boxLines.length).toBeGreaterThan(0);
+    const widths = new Set(boxLines.map((l) => l.length));
+    expect(widths.size).toBe(1);
+  });
+
+  it("renders preview borders with the same color", () => {
+    const params = makeParams([
+      {
+        question: "Which layout?",
+        header: "Layout",
+        options: [
+          { label: "Vertical", description: "Top/bottom", preview: "x" },
+        ],
+      },
+    ]);
+    const trackingTheme = {
+      fg: (color: string, text: string) => `[${color}:${text}]`,
+      bg: (_c: string, text: string) => text,
+      bold: (text: string) => text,
+    };
+    const q = createQuestionnaire(params, mockTui, trackingTheme, vi.fn());
+    const lines = q.render(20);
+
+    const top = lines.find((l) => l.includes("┌"))!;
+    const bottom = lines.find((l) => l.includes("└"))!;
+    const side = lines.find((l) => l.includes("│"))!;
+    expect(top.startsWith("[border:")).toBe(true);
+    expect(bottom.startsWith("[border:")).toBe(true);
+    expect(side.startsWith("[border:")).toBe(true);
+    expect(side).toContain("[text:x");
+  });
+
+  it("pads preview content to display width using visibleWidth", () => {
+    const wideParams = makeParams([
+      {
+        question: "Which layout?",
+        header: "Layout",
+        options: [
+          { label: "Vertical", description: "Top/bottom", preview: "ab" },
+        ],
+      },
+    ]);
+    // The default mock visibleWidth is text.length, so a two-char preview has display width 2.
+    // innerWidth = 30 - 4 = 26. Content should be padded to 26 chars, so the line between
+    // the borders is "ab" + 24 spaces, giving a total rendered line length of 30.
+    const q = createQuestionnaire(wideParams, mockTui, mockTheme, vi.fn());
+    const lines = q.render(30);
+
+    const side = lines.find((l) => l.includes("│") && l.includes("ab"))!;
+    expect(side.length).toBe(30);
+    expect(side).toBe("│ ab                         │");
   });
 
   it("selects option with preview and includes preview in answer", () => {

@@ -1,4 +1,4 @@
-import { Editor, Key, matchesKey, truncateToWidth, type TUI as FullTUI } from "@earendil-works/pi-tui";
+import { Editor, Key, matchesKey, truncateToWidth, visibleWidth, type TUI as FullTUI } from "@earendil-works/pi-tui";
 import type {
   OptionData,
   QuestionAnswer,
@@ -376,18 +376,28 @@ export function createQuestionnaire(
     }
   }
 
+  function padToDisplayWidth(text: string, targetWidth: number): string {
+    const displayWidth = visibleWidth(text);
+    if (displayWidth >= targetWidth) return text;
+    return text + " ".repeat(targetWidth - displayWidth);
+  }
+
   function renderPreview(preview: string, width: number): string[] {
     const lines: string[] = [];
     const innerWidth = Math.max(0, width - 4);
     const add = (s: string) => lines.push(truncateToWidth(s, width));
 
     add(theme.fg("muted", " Preview:"));
-    add(theme.fg("border", `┌${"─".repeat(innerWidth)}┐`));
+    add(theme.fg("border", `┌─${"─".repeat(innerWidth)}─┐`));
     for (const raw of preview.split("\n")) {
-      const content = raw.length > innerWidth ? raw.slice(0, innerWidth) : raw;
-      add(theme.fg("text", `│ ${content.padEnd(innerWidth)}│`));
+      const content = padToDisplayWidth(truncateToWidth(raw, innerWidth, ""), innerWidth);
+      add(
+        theme.fg("border", "│ ") +
+          theme.fg("text", content) +
+          theme.fg("border", " │"),
+      );
     }
-    add(theme.fg("border", `└${"─".repeat(innerWidth)}┘`));
+    add(theme.fg("border", `└─${"─".repeat(innerWidth)}─┘`));
     return lines;
   }
 
