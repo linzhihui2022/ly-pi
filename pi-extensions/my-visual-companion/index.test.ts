@@ -71,6 +71,18 @@ describe("my-visual-companion extension", () => {
     expect(mockPi.on).toHaveBeenCalledWith("session_shutdown", expect.any(Function));
   });
 
+  it("resolveExtDir returns __dirname", async () => {
+    vi.resetModules();
+    const mod = await import("./index");
+    expect(mod.resolveExtDir()).toBe(__dirname);
+  });
+
+  it("uses default idle timeout when config value is zero", async () => {
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ idleTimeoutMinutes: 0, defaultHost: "127.0.0.1", defaultUrlHost: "localhost" }));
+    await loadAndRegister();
+    expect(mockPi.registerCommand).toHaveBeenCalled();
+  });
+
   it("session_shutdown calls manager.destroyAll", async () => {
     await loadAndRegister();
     const shutdownHandler = registeredEvents.get("session_shutdown");
@@ -108,7 +120,7 @@ describe("command handlers", () => {
     it("executes start tool and notifies", async () => {
       const cmd = await loadAndGetCommand("vc-start");
       mockToolExecute.mockResolvedValue({
-        content: [{ text: "Started at http://localhost:6000 (session: abc123)" }],
+        content: [{ type: "text", text: "Started at http://localhost:6000 (session: abc123)" }],
         details: {},
       });
 
@@ -135,7 +147,7 @@ describe("command handlers", () => {
     it("executes show tool with parsed args", async () => {
       const cmd = await loadAndGetCommand("vc-show");
       mockToolExecute.mockResolvedValue({
-        content: [{ text: "Screen shown" }],
+        content: [{ type: "text", text: "Screen shown" }],
         details: {},
       });
 
@@ -154,7 +166,7 @@ describe("command handlers", () => {
     it("uses default name when only session_id is provided", async () => {
       const cmd = await loadAndGetCommand("vc-show");
       mockToolExecute.mockResolvedValue({
-        content: [{ text: "Screen shown" }],
+        content: [{ type: "text", text: "Screen shown" }],
         details: {},
       });
 
@@ -172,7 +184,7 @@ describe("command handlers", () => {
     it("notifies as error when tool returns error details", async () => {
       const cmd = await loadAndGetCommand("vc-show");
       mockToolExecute.mockResolvedValue({
-        content: [{ text: "Error: something went wrong" }],
+        content: [{ type: "text", text: "Error: something went wrong" }],
         details: { error: "something went wrong" },
       });
 
@@ -198,7 +210,7 @@ describe("command handlers", () => {
     it("executes wait tool and notifies on success", async () => {
       const cmd = await loadAndGetCommand("vc-wait");
       mockToolExecute.mockResolvedValue({
-        content: [{ text: "Confirmed: option-a" }],
+        content: [{ type: "text", text: "Confirmed: option-a" }],
         details: {},
       });
 
@@ -217,7 +229,7 @@ describe("command handlers", () => {
     it("notifies as error when wait times out", async () => {
       const cmd = await loadAndGetCommand("vc-wait");
       mockToolExecute.mockResolvedValue({
-        content: [{ text: "Error: timeout" }],
+        content: [{ type: "text", text: "Error: timeout" }],
         details: { error: "timeout" },
       });
 
@@ -237,7 +249,7 @@ describe("command handlers", () => {
     it("executes read_events tool and notifies result", async () => {
       const cmd = await loadAndGetCommand("vc-events");
       mockToolExecute.mockResolvedValue({
-        content: [{ text: "Events:\n- click: button1" }],
+        content: [{ type: "text", text: "Events:\n- click: button1" }],
         details: {},
       });
 
@@ -264,7 +276,7 @@ describe("command handlers", () => {
     it("executes stop tool and notifies", async () => {
       const cmd = await loadAndGetCommand("vc-stop");
       mockToolExecute.mockResolvedValue({
-        content: [{ text: "Visual Companion session stopped." }],
+        content: [{ type: "text", text: "Visual Companion session stopped." }],
         details: {},
       });
 

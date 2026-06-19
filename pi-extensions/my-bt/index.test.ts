@@ -242,7 +242,7 @@ describe("my-bt extension", () => {
     expect(playCategory).not.toHaveBeenCalled();
     expect(mockNotify).toHaveBeenCalledWith(
       expect.stringContaining("已关闭"),
-      "warn",
+      "warning",
     );
   });
 
@@ -272,7 +272,7 @@ describe("my-bt extension", () => {
     expect(playCategory).not.toHaveBeenCalled();
     expect(mockNotify).toHaveBeenCalledWith(
       expect.stringContaining("未知分类"),
-      "warn",
+      "warning",
     );
   });
 

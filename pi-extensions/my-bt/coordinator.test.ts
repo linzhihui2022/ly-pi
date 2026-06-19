@@ -2,13 +2,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync, writeFileSync, mkdirSync, rmdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { spawnSoundProcess, spawnOverlayProcess, acquireGlobalLock, releaseGlobalLock, killPlayingProcesses, recordPids, ensureGlobalDir } from "./coordinator";
+import { spawnSoundProcess, spawnOverlayProcess, acquireGlobalLock, releaseGlobalLock, killPlayingProcesses, recordPids, ensureGlobalDir, withGlobalLock, onExecDone } from "./coordinator";
 import { exec } from "node:child_process";
 
+type ExecCallback = (err: Error | null, stdout: string, stderr: string) => void;
+
+const mockPid = () => Math.floor(Math.random() * 100000) + 1000;
+
 vi.mock("node:child_process", () => ({
-  exec: vi.fn((cmd: string, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
-    const child = { pid: Math.floor(Math.random() * 100000) + 1000 };
-    cb(null, "", "");
+  exec: vi.fn((
+    _cmd: string,
+    _options: import("node:child_process").ExecOptions | undefined | null,
+    cb?: ExecCallback,
+  ): import("node:child_process").ChildProcess => {
+    const child = { pid: mockPid() } as import("node:child_process").ChildProcess;
+    cb?.(null, "", "");
     return child;
   }),
 }));
@@ -31,6 +39,15 @@ afterEach(() => {
   try {
     // cleanup test files only
   } catch {}
+});
+
+describe("withGlobalLock", () => {
+  it("executes function and releases lock", () => {
+    const lockDir = join(TEST_DIR, "with-lock");
+    const result = withGlobalLock(() => 42, lockDir);
+    expect(result).toBe(42);
+    expect(existsSync(lockDir)).toBe(false);
+  });
 });
 
 describe("ensureGlobalDir", () => {
@@ -125,8 +142,8 @@ describe("spawnSoundProcess", () => {
 
   it("records pid when child has no pid is a no-op", () => {
     const config = { soundDir: "/fake/sounds" } as any;
-    vi.mocked(exec).mockImplementationOnce((cmd, cb) => {
-      cb(null, "", "");
+    vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
+      cb?.(null, "", "");
       return { pid: undefined } as any;
     });
     const result = spawnSoundProcess(config, "startup.wav", TEST_DIR);
@@ -135,8 +152,8 @@ describe("spawnSoundProcess", () => {
 
   it("invokes error callback when exec returns an error", () => {
     const config = { soundDir: "/fake/sounds" } as any;
-    vi.mocked(exec).mockImplementationOnce((cmd, cb) => {
-      cb(new Error("killed"), "", "");
+    vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
+      cb?.(new Error("killed"), "", "");
       return { pid: 7777 } as any;
     });
     expect(() => spawnSoundProcess(config, "startup.wav", TEST_DIR)).not.toThrow();
@@ -144,13 +161,28 @@ describe("spawnSoundProcess", () => {
 
   it("covers sound exec callback without error", () => {
     const config = { soundDir: "/fake/sounds" } as any;
-    let savedCb: ((err: Error | null, stdout: string, stderr: string) => void) | undefined;
-    vi.mocked(exec).mockImplementationOnce((cmd, cb) => {
-      savedCb = cb as any;
+    let savedCb: ExecCallback | undefined;
+    vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
+      savedCb = cb;
       return { pid: 7778 } as any;
     });
     spawnSoundProcess(config, "startup.wav", TEST_DIR);
     savedCb?.(null, "", "");
+  });
+
+  it("covers sound exec callback with error", () => {
+    const config = { soundDir: "/fake/sounds" } as any;
+    let savedCb: ExecCallback | undefined;
+    vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
+      savedCb = cb;
+      return { pid: 7779 } as any;
+    });
+    spawnSoundProcess(config, "startup.wav", TEST_DIR);
+    savedCb?.(new Error("killed"), "", "");
+  });
+
+  it("invokes sound onExecDone directly", () => {
+    expect(() => onExecDone()).not.toThrow();
   });
 });
 
@@ -175,8 +207,8 @@ describe("spawnOverlayProcess", () => {
   });
 
   it("records pid when child has no pid is a no-op", () => {
-    vi.mocked(exec).mockImplementationOnce((cmd, cb) => {
-      cb(null, "", "");
+    vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
+      cb?.(null, "", "");
       return { pid: undefined } as any;
     });
     const result = spawnOverlayProcess(
@@ -194,8 +226,8 @@ describe("spawnOverlayProcess", () => {
   });
 
   it("invokes error callback when exec returns an error", () => {
-    vi.mocked(exec).mockImplementationOnce((cmd, cb) => {
-      cb(new Error("killed"), "", "");
+    vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
+      cb?.(new Error("killed"), "", "");
       return { pid: 8888 } as any;
     });
     expect(() =>
@@ -213,10 +245,34 @@ describe("spawnOverlayProcess", () => {
     ).not.toThrow();
   });
 
+  it("covers overlay exec callback with error", () => {
+    let savedCb: ExecCallback | undefined;
+    vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
+      savedCb = cb;
+      return { pid: 8890 } as any;
+    });
+    spawnOverlayProcess(
+      "/fake/ext",
+      "SESSION START",
+      "BT-7274",
+      "subtitle",
+      5,
+      "blue",
+      0,
+      "WezTerm",
+      TEST_DIR,
+    );
+    savedCb?.(new Error("killed"), "", "");
+  });
+
+  it("invokes overlay onExecDone directly", () => {
+    expect(() => onExecDone()).not.toThrow();
+  });
+
   it("covers overlay exec callback without error", () => {
-    let savedCb: ((err: Error | null, stdout: string, stderr: string) => void) | undefined;
-    vi.mocked(exec).mockImplementationOnce((cmd, cb) => {
-      savedCb = cb as any;
+    let savedCb: ExecCallback | undefined;
+    vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
+      savedCb = cb;
       return { pid: 8889 } as any;
     });
     spawnOverlayProcess(

@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { TextContent } from "@earendil-works/pi-ai";
 import { createTools } from "./tools";
 import { SessionManager } from "./session";
+
+function textOf(result: { content: ({ type: "text"; text: string } | { type: "image" })[] }): string {
+  return result.content
+    .filter((c): c is TextContent => c.type === "text")
+    .map((c) => c.text)
+    .join("\n");
+}
 
 describe("createTools", () => {
   let manager: SessionManager;
@@ -73,7 +81,7 @@ describe("createTools", () => {
 
     const result = await readTool.execute("tc-3b", { session_id: sessionId }, undefined, undefined, {} as any);
     expect((result.details as any).events).toHaveLength(1);
-    expect(result.content[0].text).toContain("option-c");
+    expect(textOf(result)).toContain("option-c");
   });
 
   it("read_events tool returns events with no text or choice", async () => {
@@ -87,7 +95,7 @@ describe("createTools", () => {
 
     const result = await readTool.execute("tc-3c", { session_id: sessionId }, undefined, undefined, {} as any);
     expect((result.details as any).events).toHaveLength(1);
-    expect(result.content[0].text).toContain("- click: ");
+    expect(textOf(result)).toContain("- click: ");
   });
 
   it("read_events tool returns empty when no events", async () => {
@@ -98,7 +106,7 @@ describe("createTools", () => {
     const sessionId = (startResult.details as any).sessionId;
 
     const result = await readTool.execute("tc-3", { session_id: sessionId }, undefined, undefined, {} as any);
-    expect(result.content[0].text).toBe("No events yet.");
+    expect(textOf(result)).toBe("No events yet.");
     expect((result.details as any).events).toHaveLength(0);
   });
 
@@ -120,7 +128,7 @@ describe("createTools", () => {
     const result = await waitTool.execute("tc-5", { session_id: sessionId, timeout_ms: 5000 }, undefined, undefined, {} as any);
     expect((result.details as any).confirmed).toBe(true);
     expect((result.details as any).event.text).toBe("choice-a");
-    expect(result.content[0].text).toContain("Confirmed: choice-a");
+    expect(textOf(result)).toContain("Confirmed: choice-a");
   });
 
   it("wait tool supports events with choice field", async () => {
@@ -134,7 +142,7 @@ describe("createTools", () => {
 
     const result = await waitTool.execute("tc-5b", { session_id: sessionId, timeout_ms: 5000 }, undefined, undefined, {} as any);
     expect((result.details as any).confirmed).toBe(true);
-    expect(result.content[0].text).toContain("Confirmed: option-b");
+    expect(textOf(result)).toContain("Confirmed: option-b");
   });
 
   it("wait tool handles event with no text or choice", async () => {
@@ -148,7 +156,7 @@ describe("createTools", () => {
 
     const result = await waitTool.execute("tc-5c", { session_id: sessionId, timeout_ms: 5000 }, undefined, undefined, {} as any);
     expect((result.details as any).confirmed).toBe(true);
-    expect(result.content[0].text).toBe("Confirmed: ");
+    expect(textOf(result)).toBe("Confirmed: ");
   });
 
   it("wait tool returns error for bad session", async () => {

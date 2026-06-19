@@ -1,9 +1,14 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { TextContent } from "@earendil-works/pi-ai";
 import { SessionManager } from "./session";
 import { createTools } from "./tools";
 import type { VisualCompanionConfig } from "./types";
+
+function formatContent(content: (TextContent | { type: "image" })[]): string {
+  return content.filter((c): c is TextContent => c.type === "text").map((c) => c.text).join("\n");
+}
 
 export function resolveExtDir(): string {
   return __dirname;
@@ -36,7 +41,7 @@ export default function myVisualCompanion(pi: ExtensionAPI): void {
     handler: async (_args, ctx: ExtensionContext) => {
       const tool = tools.find((t) => t.name === "visual_companion_start")!;
       const result = await tool.execute("cmd-start", {}, undefined, undefined, ctx);
-      ctx.ui.notify(result.content.map((c) => c.text).join("\n"), "info");
+      ctx.ui.notify(formatContent(result.content), "info");
     },
   });
 
@@ -53,7 +58,7 @@ export default function myVisualCompanion(pi: ExtensionAPI): void {
       const html = parts.slice(2).join(" ");
       const tool = tools.find((t) => t.name === "visual_companion_show")!;
       const result = await tool.execute("cmd-show", { session_id: sessionId, name, html }, undefined, undefined, ctx);
-      ctx.ui.notify(result.content.map((c) => c.text).join("\n"), result.details?.error ? "error" : "info");
+      ctx.ui.notify(formatContent(result.content), (result.details as { error?: string } | undefined)?.error ? "error" : "info");
     },
   });
 
@@ -67,7 +72,7 @@ export default function myVisualCompanion(pi: ExtensionAPI): void {
       }
       const tool = tools.find((t) => t.name === "visual_companion_wait")!;
       const result = await tool.execute("cmd-wait", { session_id: sessionId, timeout_ms: 300000 }, undefined, undefined, ctx);
-      ctx.ui.notify(result.content.map((c) => c.text).join("\n"), result.details?.error ? "error" : "info");
+      ctx.ui.notify(formatContent(result.content), (result.details as { error?: string } | undefined)?.error ? "error" : "info");
     },
   });
 
@@ -81,7 +86,7 @@ export default function myVisualCompanion(pi: ExtensionAPI): void {
       }
       const tool = tools.find((t) => t.name === "visual_companion_read_events")!;
       const result = await tool.execute("cmd-events", { session_id: sessionId }, undefined, undefined, ctx);
-      ctx.ui.notify(result.content.map((c) => c.text).join("\n"), "info");
+      ctx.ui.notify(formatContent(result.content), "info");
     },
   });
 

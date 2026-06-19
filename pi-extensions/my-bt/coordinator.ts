@@ -1,4 +1,8 @@
 import { exec, type ChildProcess } from "node:child_process";
+
+export function onExecDone(): void {
+  // exec callback; errors ignored because process may have been killed intentionally
+}
 import { existsSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -48,7 +52,7 @@ export function releaseGlobalLock(lockDir: string = DEFAULT_LOCK_DIR): void {
   try {
     rmdirSync(lockDir);
   } catch {
-    // ignore
+    // intentionally ignored
   }
 }
 
@@ -79,7 +83,7 @@ export function killPlayingProcesses(
       try {
         process.kill(pid, "SIGTERM");
       } catch {
-        // already dead or not ours
+        // already dead or not ours; intentionally ignored
       }
     }
   }, lockDir);
@@ -109,10 +113,7 @@ export function spawnSoundProcess(
   const pidFile = join(runtimeDir, "playing.json");
   const lockDir = join(runtimeDir, ".lock");
   killPlayingProcesses(pidFile, lockDir);
-  const child = exec(`afplay "${filePath}"`, (error) => {
-    if (!error) return;
-    // ignore - process may have been killed intentionally
-  });
+  const child = exec(`afplay "${filePath}"`, onExecDone);
   if (child.pid) {
     recordPids([child.pid], pidFile, lockDir);
   }
@@ -138,10 +139,7 @@ export function spawnOverlayProcess(
     `osascript -l JavaScript "${scriptPath}" ` +
       `"${type}" "${title}" "${subtitle ?? ""}" ` +
       `${duration} "${color}" ${slot} "${terminalApp}"`,
-    (error) => {
-      if (!error) return;
-      // ignore - process may have been killed intentionally
-    },
+    onExecDone,
   );
   if (child.pid) {
     recordPids([child.pid], pidFile, lockDir);

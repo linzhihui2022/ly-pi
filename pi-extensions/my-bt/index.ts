@@ -108,7 +108,7 @@ export default function myBt(pi: ExtensionAPI): void {
 
       if (args === "all") {
         if (!config.enabled) {
-          ctx.ui.notify("🎙️  BT-7274: 已关闭，用 /bt on 开启", "warn");
+          ctx.ui.notify("🎙️  BT-7274: 已关闭，用 /bt on 开启", "warning");
           return;
         }
         // Play all categories sequentially (fire-and-forget, non-blocking)
@@ -127,7 +127,7 @@ export default function myBt(pi: ExtensionAPI): void {
 
       // Play specific category
       if (!config.enabled) {
-        ctx.ui.notify("🎙️  BT-7274: 已关闭，用 /bt on 开启", "warn");
+        ctx.ui.notify("🎙️  BT-7274: 已关闭，用 /bt on 开启", "warning");
         return;
       }
 
@@ -140,7 +140,7 @@ export default function myBt(pi: ExtensionAPI): void {
       } else {
         ctx.ui.notify(
           `BT-7274: 未知分类 "${args}"。用 /bt 查看可用分类。`,
-          "warn",
+          "warning",
         );
       }
     },

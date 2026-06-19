@@ -109,7 +109,9 @@ describe("pickSoundFile", () => {
     // Run multiple times to verify it's deterministic (not random)
     const results = new Set<string>();
     for (let i = 0; i < 20; i++) {
-      results.add(pickSoundFile(mockConfig, "affirmative"));
+      const file = pickSoundFile(mockConfig, "affirmative");
+      expect(file).toBeDefined();
+      results.add(file!);
     }
     // With 2 files, both should appear over 20 runs
     expect(results.has("affirm_1.mp3")).toBe(true);
