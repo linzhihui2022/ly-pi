@@ -54,23 +54,11 @@ export default function piPet(pi: ExtensionAPI): void {
 
   // ── Lifecycle ──────────────────────────────────────────────────
 
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", async (_event, _ctx) => {
     config = loadConfig();
     if (!config.enabled) return;
 
     manager = new PetStateManager();
-
-    if (ctx.hasUI) {
-      ctx.ui.setFooter((_tui) => ({
-        render(): string[] {
-          if (!manager) return [];
-          const s = manager.getState();
-          return needsAttention(s) ? [" 😺 " + s.name] : [" 😺"];
-        },
-        invalidate() {},
-        dispose() {},
-      }));
-    }
   });
 
   pi.on("agent_end", async (_event, ctx) => {
