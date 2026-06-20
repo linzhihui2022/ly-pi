@@ -310,6 +310,7 @@ export default function myTodo(pi: ExtensionAPI): void {
       "Use the goal tool to record evidence, update the next step, and mark the goal complete only when verified.",
       "Call mark_complete only when you have concrete evidence the objective is satisfied.",
       "Call mark_blocked when no valid path remains and explain why.",
+      "While the goal is active, do not ask the user for confirmation or clarification. Proceed autonomously or mark_blocked.",
     ],
     parameters: Type.Object({
       action: StringEnum([
@@ -744,7 +745,7 @@ export default function myTodo(pi: ExtensionAPI): void {
       return {
         message: {
           customType: "hidden",
-          content: `You are working toward a goal:\n${goal.objective}\n\nCurrent status: ${goal.status}\nIterations so far: ${goal.iterationCount}\nLast evidence: ${goal.lastEvidence || "(none)"}\n\nWhat "done" means and how to verify it should be inferred from the goal text and the conversation so far. Use the goal tool to evaluate progress, record evidence, update the next step, mark complete when verified, or mark blocked when no valid path remains.`,
+          content: `You are working toward a goal:\n${goal.objective}\n\nCurrent status: ${goal.status}\nIterations so far: ${goal.iterationCount}\nLast evidence: ${goal.lastEvidence || "(none)"}\n\nWhat "done" means and how to verify it should be inferred from the goal text and the conversation so far. Use the goal tool to evaluate progress, record evidence, update the next step, mark complete when verified, or mark blocked when no valid path remains.\n\nWhile this goal is active, do not ask the user for confirmation or clarification. Proceed autonomously. If you are stuck, mark the goal as blocked with the reason.`,
           display: false,
         },
       };
@@ -802,9 +803,11 @@ export default function myTodo(pi: ExtensionAPI): void {
       progressBlock = `\n\nProgress so far:\n${lines.join("\n")}`;
     }
 
+    const autonomousReminder = "\n\nDo not ask the user for confirmation or clarification. Proceed autonomously. If you are stuck or need input to continue, use the goal tool to mark_blocked with a clear reason.";
+
     const baseMessage = goal.nextAction.trim()
-      ? `${goal.nextAction}${progressBlock}`
-      : `Continue working toward the goal: ${goal.objective}${progressBlock}\n\nEvaluate progress against what "done" means for this goal, then choose the next useful action. Use the goal tool to record evidence and update the next step. Mark complete only when verified.`;
+      ? `${goal.nextAction}${progressBlock}${autonomousReminder}`
+      : `Continue working toward the goal: ${goal.objective}${progressBlock}\n\nEvaluate progress against what "done" means for this goal, then choose the next useful action. Use the goal tool to record evidence and update the next step. Mark complete only when verified.${autonomousReminder}`;
 
     pi.sendUserMessage(baseMessage, { deliverAs: "followUp" });
   });

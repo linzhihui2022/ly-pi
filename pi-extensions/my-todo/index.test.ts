@@ -1324,6 +1324,14 @@ describe("my-todo extension", () => {
       return registeredTools.find((t) => t.name === "goal")!;
     }
 
+    it("guidelines forbid asking the user for confirmation while active", async () => {
+      await initExtension();
+      const tool = registeredTools.find((t) => t.name === "goal")!;
+      const guidelines = tool.promptGuidelines.join(" ");
+      expect(guidelines).toMatch(/do not ask.*user/i);
+      expect(guidelines).toMatch(/confirmation|confirm/i);
+    });
+
     it("evaluate updates evidence", async () => {
       const tool = await getGoalTool();
       const ctx = createMockCtx();
@@ -1427,6 +1435,19 @@ describe("my-todo extension", () => {
       expect(result.message.content).toContain("Use the goal tool");
     });
 
+    it("active goal prompt forbids asking the user", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+
+      const handler = registeredEvents.get("before_agent_start")!;
+      const result = await handler({}, ctx);
+      expect(result.message.content).toMatch(/do not ask.*user/i);
+      expect(result.message.content).toMatch(/confirmation|confirm/i);
+      expect(result.message.content).toMatch(/blocked/i);
+    });
+
     it("does not inject when goal is idle", async () => {
       await initExtension();
       const handler = registeredEvents.get("before_agent_start")!;
@@ -1489,6 +1510,19 @@ describe("my-todo extension", () => {
         expect.stringContaining("Continue working toward the goal"),
         { deliverAs: "followUp" },
       );
+    });
+
+    it("follow-up message forbids asking the user for confirmation", async () => {
+      const ctx = await setupActiveGoal();
+      await fireTurnEnd(ctx, 1);
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler({ type: "agent_end", messages: [] }, ctx);
+
+      const message = mockPi.sendUserMessage.mock.calls[0][0];
+      expect(message).toMatch(/do not ask.*user/i);
+      expect(message).toMatch(/confirmation|confirm/i);
+      expect(message).toMatch(/mark_blocked/i);
     });
 
     it("includes progress entries in follow-up", async () => {
