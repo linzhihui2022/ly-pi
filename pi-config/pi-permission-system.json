@@ -1,4 +1,8 @@
 {
+  "$schema": "https://raw.githubusercontent.com/gotgenes/pi-permission-system/main/schemas/permissions.schema.json",
+  "debugLog": false,
+  "permissionReviewLog": true,
+  "yoloMode": false,
   "permission": {
     "*": "allow",
     "bash": {
@@ -37,14 +41,12 @@
       "*.env.*": "deny",
       "*.env.example": "allow"
     },
-    "tool:": {
-      "ask_user_question": "allow",
-      "ctx_execute": "allow",
-      "todo": "allow",
-      "visual_companion_read_events": "allow",
-      "visual_companion_show": "allow",
-      "visual_companion_start": "allow",
-      "visual_companion_stop": "allow"
-    }
+    "ask_user_question": "allow",
+    "ctx_execute": "allow",
+    "todo": "allow",
+    "visual_companion_read_events": "allow",
+    "visual_companion_show": "allow",
+    "visual_companion_start": "allow",
+    "visual_companion_stop": "allow"
   }
 }
