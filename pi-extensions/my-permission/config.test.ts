@@ -2,7 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
-import { writeFileSync, mkdirSync, rmSync } from "node:fs";
+import {
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  existsSync,
+  readdirSync,
+} from "node:fs";
 import { loadConfig, resolveConfigPath } from "./config";
 
 function tempDir() {
@@ -32,10 +38,21 @@ describe("loadConfig", () => {
       ".pi/agent/extensions/my-permission/config.json",
     );
     const dir = dirname(deployed);
+    const existed = existsSync(dir);
+    const previousFiles = existed ? readdirSync(dir) : [];
     mkdirSync(dir, { recursive: true });
     writeFileSync(deployed, JSON.stringify({ deny: ["bash"] }), "utf-8");
     expect(resolveConfigPath()).toBe(deployed);
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(deployed, { force: true });
+    if (!existed) {
+      rmSync(dir, { recursive: true, force: true });
+    } else {
+      for (const file of readdirSync(dir)) {
+        if (!previousFiles.includes(file)) {
+          rmSync(join(dir, file), { recursive: true, force: true });
+        }
+      }
+    }
   });
 
   it("returns empty list and notifies on invalid JSON", () => {
