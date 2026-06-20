@@ -1,4 +1,4 @@
-import type { Goal, GoalStatus } from "./types";
+import type { ActiveGoal, GoalStatus } from "./types";
 
 interface ThemeLike {
   fg(color: string, text: string): string;
@@ -6,11 +6,9 @@ interface ThemeLike {
 }
 
 const STATUS_COLORS: Record<GoalStatus, string> = {
-  idle: "dim",
   active: "accent",
   paused: "muted",
-  completed: "muted",
-  blocked: "error",
+  complete: "muted",
 };
 
 function truncate(text: string, max = 40): string {
@@ -18,33 +16,26 @@ function truncate(text: string, max = 40): string {
   return text.slice(0, max - 3) + "...";
 }
 
-export function renderGoalOverlay(goal: Goal, theme?: ThemeLike): string[] {
+export function renderGoalOverlay(
+  goal: ActiveGoal,
+  theme?: ThemeLike,
+): string[] {
   const lines: string[] = [];
   const title = `Goal [${goal.status}]`;
-  const titleText = theme
-    ? theme.fg(STATUS_COLORS[goal.status], theme.bold(title))
-    : title;
-  lines.push(titleText);
+  lines.push(
+    theme ? theme.fg(STATUS_COLORS[goal.status], theme.bold(title)) : title,
+  );
+  lines.push(
+    theme ? theme.fg("dim", truncate(goal.text)) : truncate(goal.text),
+  );
   lines.push(
     theme
-      ? theme.fg("dim", truncate(goal.objective))
-      : truncate(goal.objective),
+      ? theme.fg("dim", `Iterations: ${goal.iteration}`)
+      : `Iterations: ${goal.iteration}`,
   );
-
-  if (goal.iterationCount > 0) {
-    const it = `Iterations: ${goal.iterationCount}`;
-    lines.push(theme ? theme.fg("dim", it) : it);
-  }
-
-  if (goal.lastEvidence.trim()) {
-    const ev = `Evidence: ${truncate(goal.lastEvidence)}`;
-    lines.push(theme ? theme.fg("dim", ev) : ev);
-  }
-
   if (goal.blocker) {
-    const block = `Blocker: ${truncate(goal.blocker)}`;
+    const block = `Paused: ${truncate(goal.blocker)}`;
     lines.push(theme ? theme.fg("error", block) : block);
   }
-
   return lines;
 }
