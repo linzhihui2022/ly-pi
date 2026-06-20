@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@earendil-works/pi-tui", () => ({
-  truncateToWidth: (text: string, _width: number) => text,
+  truncateToWidth: (text: string, _width: number, _ellipsis?: string) => text,
+  visibleWidth: (text: string) => text.length,
   matchesKey: (data: string, keyId: string) => data === keyId,
   Key: {
     up: "up",
@@ -13,6 +14,24 @@ vi.mock("@earendil-works/pi-tui", () => ({
     enter: "enter",
     escape: "escape",
     space: "space",
+  },
+  wrapTextWithAnsi: (text: string, width: number) => {
+    const lines: string[] = [];
+    for (const paragraph of text.split("\n")) {
+      const words = paragraph.split(" ");
+      let current = "";
+      for (const word of words) {
+        const nextLength = current.length + word.length + (current ? 1 : 0);
+        if (nextLength > width) {
+          if (current) lines.push(current);
+          current = word;
+        } else {
+          current = current ? `${current} ${word}` : word;
+        }
+      }
+      if (current) lines.push(current);
+    }
+    return lines.length ? lines : [""];
   },
   Editor: class {
     text = "";
@@ -203,6 +222,16 @@ describe("my-ask extension", () => {
     );
     expect(typeof component.render).toBe("function");
     expect(typeof component.handleInput).toBe("function");
+
+    const lines = component.render(80);
+    expect(
+      lines.some((l: string) => l.includes(params.questions[0].question)),
+    ).toBe(true);
+    expect(
+      lines.some((l: string) =>
+        l.includes(params.questions[0].options[0].label),
+      ),
+    ).toBe(true);
   });
 });
 

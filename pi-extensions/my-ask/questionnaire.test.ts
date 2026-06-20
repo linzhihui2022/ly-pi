@@ -37,6 +37,7 @@ vi.mock("@earendil-works/pi-tui", () => {
 
   return {
     truncateToWidth: (text: string, _width: number, _ellipsis?: string) => text,
+    // Tests assert on raw string lengths; mock ANSI-aware width as plain length.
     visibleWidth: (text: string) => text.length,
     matchesKey: (data: string, keyId: string) => data === keyId,
     Key: {
@@ -70,12 +71,11 @@ vi.mock("@earendil-works/pi-tui", () => {
       }
       return lines.length ? lines : [""];
     },
-    // Tests assert on raw string lengths; mock ANSI-aware width as plain length.
-    visibleWidth: (text: string) => text.length,
     Editor,
   };
 });
 
+import { Editor } from "@earendil-works/pi-tui";
 import { createQuestionnaire } from "./questionnaire";
 import type { QuestionParams } from "./types";
 
@@ -913,6 +913,7 @@ describe("createQuestionnaire", () => {
   });
 
   it("delegates invalidate to the editor", () => {
+    const invalidateSpy = vi.spyOn(Editor.prototype, "invalidate");
     const params = makeParams([
       {
         question: "Q1?",
@@ -924,7 +925,11 @@ describe("createQuestionnaire", () => {
       },
     ]);
     const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
-    expect(() => q.invalidate()).not.toThrow();
+
+    q.invalidate();
+
+    expect(invalidateSpy).toHaveBeenCalled();
+    invalidateSpy.mockRestore();
   });
 
   it("navigates up and clamps at the first row", () => {
