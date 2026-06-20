@@ -19,6 +19,8 @@ export type PlanPhase = "idle" | "planning" | "executing";
 
 export interface SessionEntry {
   type: string;
+  customType?: string;
+  data?: unknown;
   message?: {
     role: string;
     toolName?: string;
@@ -26,7 +28,19 @@ export interface SessionEntry {
   };
 }
 
-export type GoalStatus = "idle" | "active" | "paused" | "completed" | "blocked";
+export type GoalStatus = "active" | "paused" | "complete";
+
+export interface ActiveGoal {
+  id: string;
+  text: string;
+  status: GoalStatus;
+  startedAt: number;
+  updatedAt: number;
+  iteration: number;
+  tokensUsed: number;
+  timeUsedSeconds: number;
+  blocker?: string;
+}
 
 export interface GoalEntry {
   iteration: number;
@@ -35,16 +49,6 @@ export interface GoalEntry {
   status: GoalStatus;
 }
 
-export interface Goal {
-  objective: string;
-  status: GoalStatus;
-  iterationCount: number;
-  lastEvidence: string;
-  nextAction: string;
-  blocker?: string;
-  entries?: GoalEntry[];
-}
-
-export interface GoalDetails {
-  goal: Goal;
+export interface GoalStateEntryData {
+  goal?: ActiveGoal | null;
 }
