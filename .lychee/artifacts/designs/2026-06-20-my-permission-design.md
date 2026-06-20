@@ -53,7 +53,7 @@ pi-extensions/my-permission/
 1. **启动/Reload**
    - `session_start` 触发。
    - 读取 `pi-config/my-permission.json`，得到默认 `deny`。
-   - 扫描 session entries 中 `customType === "my-permission"` 的最近 entry，恢复运行时覆盖。
+   - 扫描 session entries 中 `customType === "my-permission"` 的 entry，取最后一个（最新）entry 恢复运行时覆盖。
    - 若存在运行时覆盖，覆盖配置文件默认值。
 
 2. **运行时命令**
@@ -61,13 +61,14 @@ pi-extensions/my-permission/
    - `/permission allow <tool>`：从 deny 列表移除并持久化。
    - `/permission list`：显示当前 deny 列表。
    - `/permission reset`：清空运行时覆盖，恢复配置文件默认值，持久化。
+   - 无参数或子命令未知时，显示用法提示。
 
 3. **工具拦截**
    - `tool_call` 事件触发时检查 toolName。
    - 命中则返回 `{ block: true, reason: "Tool '<tool>' is denied by my-permission" }`。
 
 4. **LLM 感知（默认开启）**
-   - `before_agent_start` 注入 hidden message：
+   - `before_agent_start` 注入一条 `display: false` 的 hidden message：
      > "The following tools are currently denied and cannot be used: edit, write, bash."
 
 ## 命令设计
