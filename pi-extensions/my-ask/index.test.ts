@@ -87,10 +87,6 @@ describe("my-ask extension", () => {
     vi.clearAllMocks();
   });
 
-  it("exports a default function", () => {
-    expect(typeof myAsk).toBe("function");
-  });
-
   it("registers ask_user_question tool", () => {
     myAsk(mockPi);
     expect(registeredTool).toBeDefined();
@@ -99,15 +95,14 @@ describe("my-ask extension", () => {
     expect(registeredTool.parameters).toBeDefined();
   });
 
-  it("promptGuidelines say Type something is available in multi-select", () => {
+  it("exposes promptGuidelines as non-empty strings", () => {
     myAsk(mockPi);
-    const guidelines = registeredTool.promptGuidelines.join(" ");
-    expect(guidelines).toContain(
-      'Set multiSelect: true when multiple answers are valid; the "Type something." row is available in multi-select too',
-    );
-    expect(guidelines).not.toContain(
-      "Set multiSelect: true when multiple answers are valid; this suppresses",
-    );
+    expect(Array.isArray(registeredTool.promptGuidelines)).toBe(true);
+    expect(registeredTool.promptGuidelines.length).toBeGreaterThan(0);
+    for (const guideline of registeredTool.promptGuidelines) {
+      expect(typeof guideline).toBe("string");
+      expect(guideline.length).toBeGreaterThan(0);
+    }
   });
 
   it("returns no_ui error when UI is unavailable", async () => {

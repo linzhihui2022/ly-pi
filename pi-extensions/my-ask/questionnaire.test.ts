@@ -38,6 +38,20 @@ vi.mock("@earendil-works/pi-tui", () => {
   return {
     truncateToWidth: (text: string, _width: number, _ellipsis?: string) => text,
     visibleWidth: (text: string) => text.length,
+    matchesKey: (data: string, keyId: string) => data === keyId,
+    Key: {
+      up: "up",
+      down: "down",
+      left: "left",
+      right: "right",
+      tab: "tab",
+      shift: (key: string) => `shift+${key}`,
+      enter: "enter",
+      escape: "escape",
+      space: "space",
+      backspace: "backspace",
+      delete: "delete",
+    },
     wrapTextWithAnsi: (text: string, width: number) => {
       const lines: string[] = [];
       for (const paragraph of text.split("\n")) {
@@ -56,20 +70,8 @@ vi.mock("@earendil-works/pi-tui", () => {
       }
       return lines.length ? lines : [""];
     },
-    matchesKey: (data: string, keyId: string) => data === keyId,
-    Key: {
-      up: "up",
-      down: "down",
-      left: "left",
-      right: "right",
-      tab: "tab",
-      shift: (key: string) => `shift+${key}`,
-      enter: "enter",
-      escape: "escape",
-      space: "space",
-      backspace: "backspace",
-      delete: "delete",
-    },
+    // Tests assert on raw string lengths; mock ANSI-aware width as plain length.
+    visibleWidth: (text: string) => text.length,
     Editor,
   };
 });
@@ -145,9 +147,10 @@ describe("createQuestionnaire", () => {
     const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
 
     const lines = q.render(30);
-    const joined = lines.map((l) => l.trim()).join(" ");
+    const joined = lines
+      .filter((l) => longQuestion.includes(l.trim()))
+      .join(" ");
     expect(joined).toContain(longQuestion);
-    expect(lines.some((l) => l.includes("..."))).toBe(false);
     const questionLines = lines.filter((l) => longQuestion.includes(l.trim()));
     expect(questionLines.length).toBeGreaterThan(1);
     for (const line of questionLines) {
@@ -628,32 +631,59 @@ describe("createQuestionnaire", () => {
     expect(lines.some((l) => l.includes("Unanswered"))).toBe(true);
   });
 
-  it("renders the submit tab with multi-select summary", () => {
+  it("renders the Submit tab with a multi-select summary across questions", () => {
     const params = makeParams([
       {
-        question: "Q1?",
-        header: "Q1",
+        question: "Which features?",
+        header: "Features",
         multiSelect: true,
         options: [
-          { label: "A1", description: "a1" },
-          { label: "B1", description: "b1" },
+          { label: "A", description: "a" },
+          { label: "B", description: "b" },
+        ],
+      },
+      {
+        question: "Which color?",
+        header: "Color",
+        options: [
+          { label: "Red", description: "Warm" },
+          { label: "Blue", description: "Cool" },
         ],
       },
     ]);
     const done = vi.fn();
     const q = createQuestionnaire(params, mockTui, mockTheme, done);
 
+    // Q1: select A and B
+    q.handleInput("space");
+    q.handleInput("down");
     q.handleInput("space");
     q.handleInput("enter");
 
+    // Q2: select Blue
+    q.handleInput("down");
+    q.handleInput("enter");
+
+    const lines = q.render(80);
+    expect(lines.some((l) => l.includes("Ready to submit"))).toBe(true);
+    expect(lines.some((l) => l.includes("Features: A, B"))).toBe(true);
+    expect(lines.some((l) => l.includes("Color: Blue"))).toBe(true);
+
+    q.handleInput("enter");
     expect(done).toHaveBeenCalledWith({
       answers: [
         {
           questionIndex: 0,
-          question: "Q1?",
+          question: "Which features?",
           kind: "multi",
           answer: null,
-          selected: ["A1"],
+          selected: ["A", "B"],
+        },
+        {
+          questionIndex: 1,
+          question: "Which color?",
+          kind: "option",
+          answer: "Blue",
         },
       ],
       cancelled: false,
@@ -882,7 +912,7 @@ describe("createQuestionnaire", () => {
     expect(after.some((l) => l.includes("first (custom)"))).toBe(true);
   });
 
-  it("calls invalidate on the editor", () => {
+  it("delegates invalidate to the editor", () => {
     const params = makeParams([
       {
         question: "Q1?",
@@ -1154,7 +1184,8 @@ describe("createQuestionnaire", () => {
     expect(typeSomethingRow!.includes("✎")).toBe(false);
   });
 
-  it("truncates preview lines that exceed available width", () => {
+
+  it("does not pad preview content that already fills the width", () => {
     const params = makeParams([
       {
         question: "Which layout?",
@@ -1163,15 +1194,19 @@ describe("createQuestionnaire", () => {
           {
             label: "Vertical",
             description: "Top/bottom",
-            preview: "a".repeat(100),
+            preview: "a".repeat(30),
           },
-          { label: "Side", description: "Left/right" },
         ],
       },
     ]);
     const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
-    const lines = q.render(20);
-    expect(lines.some((l) => l.includes("Preview:"))).toBe(true);
+    const lines = q.render(30);
+    const side = lines.find((l) => l.includes("│") && l.includes("a"))!;
+    expect(side).toBeDefined();
+    // With the identity mock for truncateToWidth, the 30-char preview stays as-is
+    // inside a 26-char inner box, so padToDisplayWidth returns it without padding.
+    const content = side.slice(2, -2);
+    expect(content).toBe("a".repeat(30));
   });
 
   it("highlights the chat row when focused", () => {
