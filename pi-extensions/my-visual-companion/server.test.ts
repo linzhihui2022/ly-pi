@@ -1,17 +1,18 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import WebSocket from "ws";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { createServer } from "node:http";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import WebSocket, { WebSocketServer } from "ws";
 import {
   createCompanionServer,
-  findAvailablePort,
-  isFullDocument,
-  handleRequest,
   createHttpHandler,
-  createWsMessageHandler,
   createUpdateScreenHook,
+  createUpgradeHandler,
+  createWsMessageHandler,
+  findAvailablePort,
+  handleRequest,
+  isFullDocument,
 } from "./server";
 import { SessionManager } from "./session";
-import { createServer } from "node:http";
-import type { IncomingMessage, ServerResponse } from "node:http";
 
 describe("isFullDocument", () => {
   it("returns true for full HTML documents", () => {
@@ -594,6 +595,87 @@ describe("handleRequest", () => {
 
     expect(res.writeHead).toHaveBeenCalledWith(404);
   });
+
+  it("returns 403 when key is missing on a protected route", () => {
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
+
+    const req = mockReq("GET", "/");
+    const res = mockRes();
+
+    handleRequest(req, res, manager, session.id);
+
+    expect(res.writeHead).toHaveBeenCalledWith(403);
+    expect(res.end).toHaveBeenCalledWith("Forbidden");
+  });
+
+  it("returns 403 when key is missing on helper.js", () => {
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
+
+    const req = mockReq("GET", "/helper.js");
+    const res = mockRes();
+
+    handleRequest(req, res, manager, session.id);
+
+    expect(res.writeHead).toHaveBeenCalledWith(403);
+    expect(res.end).toHaveBeenCalledWith("Forbidden");
+  });
+
+  it("authenticates via cookie when no query key is provided", () => {
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
+
+    const req = {
+      method: "GET",
+      url: "/",
+      headers: { cookie: `vc_key=${encodeURIComponent(session.key)}` },
+    } as unknown as IncomingMessage;
+    const res = mockRes();
+
+    handleRequest(req, res, manager, session.id);
+
+    expect(res.writeHead).toHaveBeenCalledWith(200, {
+      "Content-Type": "text/html; charset=utf-8",
+    });
+    expect((res.end as any).mock.calls[0][0]).toContain(
+      "Waiting for the agent",
+    );
+  });
+
+  it("handles requests with an undefined url", () => {
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
+
+    const req = {
+      method: "GET",
+      url: undefined,
+      headers: { cookie: `vc_key=${encodeURIComponent(session.key)}` },
+    } as unknown as IncomingMessage;
+    const res = mockRes();
+
+    handleRequest(req, res, manager, session.id);
+
+    expect(res.writeHead).toHaveBeenCalledWith(200, {
+      "Content-Type": "text/html; charset=utf-8",
+    });
+  });
 });
 
 describe("createHttpHandler", () => {
@@ -792,5 +874,173 @@ describe("createWsMessageHandler", () => {
     handler("not valid json");
 
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("createUpgradeHandler", () => {
+  let manager: SessionManager;
+
+  beforeEach(() => {
+    manager = new SessionManager({ idleTimeoutMs: 30_000 });
+  });
+
+  afterEach(async () => {
+    await manager.destroyAll();
+  });
+
+  function mockSocket() {
+    return { destroy: vi.fn() } as any;
+  }
+
+  function mockWss() {
+    return new WebSocketServer({ noServer: true });
+  }
+
+  it("destroys socket when sessionId is not set", () => {
+    const wss = mockWss();
+    const handler = createUpgradeHandler(manager, () => null, wss);
+    const socket = mockSocket();
+
+    handler({ headers: {} } as IncomingMessage, socket, Buffer.from(""));
+
+    expect(socket.destroy).toHaveBeenCalled();
+    wss.close();
+  });
+
+  it("destroys socket when session is not found", () => {
+    const wss = mockWss();
+    const handler = createUpgradeHandler(manager, () => "missing-id", wss);
+    const socket = mockSocket();
+
+    handler({ headers: {} } as IncomingMessage, socket, Buffer.from(""));
+
+    expect(socket.destroy).toHaveBeenCalled();
+    wss.close();
+  });
+
+  it("destroys socket when key is invalid", () => {
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
+    const wss = mockWss();
+    const handler = createUpgradeHandler(manager, () => session.id, wss);
+    const socket = mockSocket();
+
+    handler(
+      { url: "/?key=wrong", headers: {} } as IncomingMessage,
+      socket,
+      Buffer.from(""),
+    );
+
+    expect(socket.destroy).toHaveBeenCalled();
+    wss.close();
+  });
+
+  it("upgrades connection when authenticated via cookie", () => {
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
+    const wss = mockWss();
+    const handler = createUpgradeHandler(manager, () => session.id, wss);
+    const socket = mockSocket();
+    const mockWs = {} as any;
+
+    const handleUpgradeSpy = vi
+      .spyOn(wss, "handleUpgrade")
+      .mockImplementation((request, _socket, _head, callback) => {
+        callback(mockWs, request as IncomingMessage);
+      });
+    const emitSpy = vi.spyOn(wss, "emit");
+
+    handler(
+      {
+        url: "/",
+        headers: {
+          cookie: `vc_key=${encodeURIComponent(session.key)}`,
+        },
+      } as IncomingMessage,
+      socket,
+      Buffer.from(""),
+    );
+
+    expect(socket.destroy).not.toHaveBeenCalled();
+    expect(handleUpgradeSpy).toHaveBeenCalled();
+    expect(emitSpy).toHaveBeenCalledWith("connection", mockWs, {
+      url: "/",
+      headers: { cookie: `vc_key=${encodeURIComponent(session.key)}` },
+    });
+    wss.close();
+  });
+
+  it("falls back to root path when request url is missing", () => {
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
+    const wss = mockWss();
+    const handler = createUpgradeHandler(manager, () => session.id, wss);
+    const socket = mockSocket();
+    const mockWs = {} as any;
+
+    const handleUpgradeSpy = vi
+      .spyOn(wss, "handleUpgrade")
+      .mockImplementation((request, _socket, _head, callback) => {
+        callback(mockWs, request as IncomingMessage);
+      });
+
+    handler(
+      {
+        url: undefined,
+        headers: {
+          cookie: `vc_key=${encodeURIComponent(session.key)}`,
+        },
+      } as unknown as IncomingMessage,
+      socket,
+      Buffer.from(""),
+    );
+
+    expect(socket.destroy).not.toHaveBeenCalled();
+    expect(handleUpgradeSpy).toHaveBeenCalled();
+    wss.close();
+  });
+
+  it("upgrades connection when key is provided via query string", () => {
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      { close: vi.fn((cb: any) => cb?.()) } as any,
+      { close: vi.fn(), clients: new Set() } as any,
+    );
+    const wss = mockWss();
+    const handler = createUpgradeHandler(manager, () => session.id, wss);
+    const socket = mockSocket();
+    const mockWs = {} as any;
+
+    const handleUpgradeSpy = vi
+      .spyOn(wss, "handleUpgrade")
+      .mockImplementation((request, _socket, _head, callback) => {
+        callback(mockWs, request as IncomingMessage);
+      });
+
+    handler(
+      {
+        url: `/?key=${encodeURIComponent(session.key)}`,
+        headers: {},
+      } as IncomingMessage,
+      socket,
+      Buffer.from(""),
+    );
+
+    expect(socket.destroy).not.toHaveBeenCalled();
+    expect(handleUpgradeSpy).toHaveBeenCalled();
+    wss.close();
   });
 });

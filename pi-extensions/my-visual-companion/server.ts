@@ -1,13 +1,14 @@
+import { readFileSync } from "node:fs";
 import {
   createServer,
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { WebSocketServer, WebSocket } from "ws";
+import type { Duplex } from "node:stream";
+import { WebSocket, WebSocketServer } from "ws";
 import type { SessionManager } from "./session";
-import type { Session, CompanionEvent } from "./types";
+import type { CompanionEvent, Session } from "./types";
 
 export function resolveExtDir(): string {
   return __dirname;
@@ -143,6 +144,41 @@ export function createWsMessageHandler(
   };
 }
 
+export function createUpgradeHandler(
+  manager: SessionManager,
+  getSessionId: () => string | null,
+  wss: WebSocketServer,
+) {
+  return (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const sessionId = getSessionId();
+    if (!sessionId) {
+      socket.destroy();
+      return;
+    }
+    const session = manager.get(sessionId);
+    if (!session) {
+      socket.destroy();
+      return;
+    }
+    const { searchParams } = parseUrl(request.url || "/");
+    const cookieHeader = request.headers.cookie || "";
+    const cookieKey = cookieHeader
+      .split(";")
+      .find((c) => c.trim().startsWith("vc_key="));
+    const cookieValue = cookieKey
+      ? decodeURIComponent(cookieKey.split("=")[1])
+      : undefined;
+    const key = searchParams.get("key") || cookieValue;
+    if (key !== session.key) {
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit("connection", ws, request);
+    });
+  };
+}
+
 export function createUpdateScreenHook(
   manager: SessionManager,
   originalUpdateScreen: (id: string, name: string, html: string) => void,
@@ -174,33 +210,10 @@ export async function createCompanionServer(
   const wss = new WebSocketServer({ noServer: true });
   const httpServer = createServer(createHttpHandler(manager, () => sessionId));
 
-  httpServer.on("upgrade", (request, socket, head) => {
-    if (!sessionId) {
-      socket.destroy();
-      return;
-    }
-    const session = manager.get(sessionId);
-    if (!session) {
-      socket.destroy();
-      return;
-    }
-    const { searchParams } = parseUrl(request.url || "/");
-    const cookieHeader = request.headers.cookie || "";
-    const cookieKey = cookieHeader
-      .split(";")
-      .find((c) => c.trim().startsWith("vc_key="));
-    const cookieValue = cookieKey
-      ? decodeURIComponent(cookieKey.split("=")[1])
-      : undefined;
-    const key = searchParams.get("key") || cookieValue;
-    if (key !== session.key) {
-      socket.destroy();
-      return;
-    }
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit("connection", ws, request);
-    });
-  });
+  httpServer.on(
+    "upgrade",
+    createUpgradeHandler(manager, () => sessionId, wss),
+  );
 
   wss.on("connection", (ws) => {
     ws.on(

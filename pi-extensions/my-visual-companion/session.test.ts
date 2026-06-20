@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionManager } from "./session";
 
 vi.mock("node:child_process", () => ({
@@ -433,5 +436,62 @@ describe("SessionManager", () => {
       (call) => String(call[0]).includes("activate"),
     );
     expect(focusCalls).toHaveLength(0);
+  });
+
+  it("returns early when workspace directory already exists", () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1234567890123);
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.123456789);
+    const expectedId = `${1234567890123}-${(0.123456789).toString(36).slice(2, 9)}`;
+    const workspaceDir = join(
+      tmpdir(),
+      ".lychee",
+      "visual-companion",
+      expectedId,
+    );
+    mkdirSync(workspaceDir, { recursive: true });
+
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
+
+    expect(session.workspaceDir).toBe(workspaceDir);
+
+    manager.destroy(session.id);
+    rmSync(workspaceDir, { recursive: true, force: true });
+    nowSpy.mockRestore();
+    randomSpy.mockRestore();
+  });
+
+  it("updateScreen truncates an existing events file", () => {
+    const manager = new SessionManager({ idleTimeoutMs: 30_000 });
+    const mockServer = { close: vi.fn((cb) => cb?.()) } as any;
+    const mockWss = { close: vi.fn(), clients: new Set() } as any;
+    const session = manager.create(
+      8080,
+      "http://localhost:8080",
+      mockServer,
+      mockWss,
+    );
+
+    manager.appendEvent(session.id, {
+      type: "click",
+      text: "old",
+      timestamp: 1,
+    });
+
+    const eventsFile = join(session.workspaceDir, "events.jsonl");
+    expect(existsSync(eventsFile)).toBe(true);
+
+    manager.updateScreen(session.id, "layout", "<h1>Hi</h1>");
+
+    expect(readFileSync(eventsFile, "utf-8")).toBe("");
+
+    manager.destroy(session.id);
   });
 });
