@@ -1,0 +1,13 @@
+{
+  "permission": {
+    "path": [
+      { "key": "**/.env", "value": "deny" },
+      { "key": "**/.ssh/*", "value": "ask" }
+    ],
+    "bash": [
+      { "key": "\\.env", "value": "deny" },
+      { "key": "curl", "value": "ask" }
+    ],
+    "tool": []
+  }
+}
