@@ -40,6 +40,8 @@ export interface ActiveGoal {
   tokensUsed: number;
   timeUsedSeconds: number;
   blocker?: string;
+  lastEvidence?: string;
+  nextAction?: string;
 }
 
 export interface GoalEntry {

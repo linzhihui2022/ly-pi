@@ -1,59 +1,44 @@
-import type { Goal, GoalEntry, GoalStatus, SessionEntry } from "./types";
+import type { ActiveGoal, GoalEntry, GoalStatus, SessionEntry } from "./types";
 
-const VALID_GOAL_STATUSES: GoalStatus[] = [
-  "idle",
-  "active",
-  "paused",
-  "completed",
-  "blocked",
-];
-const VALID_EVALUATE_STATUSES: GoalStatus[] = ["active", "paused", "blocked"];
+const MAX_OBJECTIVE_LENGTH = 4000;
+const VALID_GOAL_STATUSES: GoalStatus[] = ["active", "paused", "complete"];
+const VALID_EVALUATE_STATUSES: GoalStatus[] = ["active", "paused"];
 
 function isValidGoalStatus(value: unknown): value is GoalStatus {
-  return (
-    typeof value === "string" &&
-    (VALID_GOAL_STATUSES as string[]).includes(value)
-  );
+  return typeof value === "string" && (VALID_GOAL_STATUSES as string[]).includes(value);
 }
 
-function isValidGoal(value: unknown): value is Goal {
+function isValidActiveGoal(value: unknown): value is ActiveGoal {
   if (typeof value !== "object" || value === null) return false;
   const obj = value as Record<string, unknown>;
-  if (typeof obj.objective !== "string") return false;
+  if (typeof obj.id !== "string") return false;
+  if (typeof obj.text !== "string") return false;
   if (!isValidGoalStatus(obj.status)) return false;
-  if (typeof obj.iterationCount !== "number") return false;
-  if (typeof obj.lastEvidence !== "string") return false;
-  if (typeof obj.nextAction !== "string") return false;
-  if (obj.blocker !== undefined && typeof obj.blocker !== "string")
-    return false;
+  if (typeof obj.startedAt !== "number") return false;
+  if (typeof obj.updatedAt !== "number") return false;
+  if (typeof obj.iteration !== "number") return false;
+  if (typeof obj.tokensUsed !== "number") return false;
+  if (typeof obj.timeUsedSeconds !== "number") return false;
+  if (obj.blocker !== undefined && typeof obj.blocker !== "string") return false;
+  if (obj.lastEvidence !== undefined && typeof obj.lastEvidence !== "string") return false;
+  if (obj.nextAction !== undefined && typeof obj.nextAction !== "string") return false;
   return true;
 }
 
-function deepCopyGoal(goal: Goal): Goal {
-  return {
-    objective: goal.objective,
-    status: goal.status,
-    iterationCount: goal.iterationCount,
-    lastEvidence: goal.lastEvidence,
-    nextAction: goal.nextAction,
-    blocker: goal.blocker,
-    entries: goal.entries ? [...goal.entries] : undefined,
-  };
+function deepCopyGoal(goal: ActiveGoal): ActiveGoal {
+  return { ...goal };
 }
 
 export class GoalState {
-  private goal: Goal | null = null;
-  private hadUsefulWork = false;
+  private goal: ActiveGoal | null = null;
   private entries: GoalEntry[] = [];
 
-  get(): Goal | null {
+  get(): ActiveGoal | null {
     if (!this.goal) return null;
-    const copy = deepCopyGoal(this.goal);
-    copy.entries = this.getEntries();
-    return copy;
+    return deepCopyGoal(this.goal);
   }
 
-  getStatus(): GoalStatus {
+  getStatus(): GoalStatus | "idle" {
     return this.goal?.status ?? "idle";
   }
 
@@ -62,130 +47,139 @@ export class GoalState {
   }
 
   canAutoContinue(): boolean {
-    return this.isActive() && this.hadUsefulWork;
+    return this.isActive();
   }
 
-  set(objective: string): Goal {
-    const trimmed = objective.trim();
-    if (trimmed === "") {
-      throw new Error("Objective is required");
+  set(text: string): ActiveGoal {
+    const trimmed = text.trim();
+    if (trimmed === "") throw new Error("Objective is required");
+    if (trimmed.length > MAX_OBJECTIVE_LENGTH) {
+      throw new Error(`Goal objective is too long (${trimmed.length}/${MAX_OBJECTIVE_LENGTH} characters)`);
     }
     this.entries = [];
+    const now = Date.now();
     this.goal = {
-      objective: trimmed,
+      id: crypto.randomUUID(),
+      text: trimmed,
       status: "active",
-      iterationCount: 0,
-      lastEvidence: "",
-      nextAction: "",
+      startedAt: now,
+      updatedAt: now,
+      iteration: 0,
+      tokensUsed: 0,
+      timeUsedSeconds: 0,
     };
-    this.hadUsefulWork = true;
+    return deepCopyGoal(this.goal);
+  }
+
+  edit(text: string): ActiveGoal {
+    if (!this.goal) throw new Error("No active goal");
+    if (this.goal.status === "complete") throw new Error("Cannot edit a completed goal");
+    const trimmed = text.trim();
+    if (trimmed === "") throw new Error("Objective is required");
+    if (trimmed.length > MAX_OBJECTIVE_LENGTH) {
+      throw new Error(`Goal objective is too long (${trimmed.length}/${MAX_OBJECTIVE_LENGTH} characters)`);
+    }
+    this.goal.text = trimmed;
+    this.goal.updatedAt = Date.now();
     return deepCopyGoal(this.goal);
   }
 
   pause(): void {
     if (!this.goal) return;
+    if (this.goal.status !== "active") return;
     this.goal.status = "paused";
+    this.goal.updatedAt = Date.now();
   }
 
   resume(): void {
     if (!this.goal) return;
-    if (this.goal.status === "completed" || this.goal.status === "blocked") {
-      throw new Error("Cannot resume a completed or blocked goal");
-    }
+    if (this.goal.status === "complete") throw new Error("Cannot resume a completed goal");
+    if (this.goal.status === "active") return;
     this.goal.status = "active";
+    this.goal.blocker = undefined;
+    this.goal.updatedAt = Date.now();
   }
 
   clear(): void {
     this.goal = null;
-    this.hadUsefulWork = false;
     this.entries = [];
   }
 
-  evaluate(
-    lastEvidence?: string,
-    nextAction?: string,
-    status?: GoalStatus,
-  ): Goal {
+  evaluate(lastEvidence?: string, nextAction?: string, status?: GoalStatus): ActiveGoal {
     if (!this.goal) throw new Error("No active goal");
-    if (lastEvidence !== undefined) this.goal.lastEvidence = lastEvidence;
+    if (this.goal.status === "complete") throw new Error("Cannot evaluate a completed goal");
+    const previousStatus = this.goal.status;
+    if (lastEvidence !== undefined) {
+      this.recordEntry(previousStatus, lastEvidence, this.goal.nextAction ?? "");
+      this.goal.lastEvidence = lastEvidence;
+    }
     if (nextAction !== undefined) this.goal.nextAction = nextAction;
     if (status !== undefined) {
-      if (!VALID_EVALUATE_STATUSES.includes(status)) {
-        throw new Error(`Invalid evaluate status: ${status}`);
-      }
+      if (!VALID_EVALUATE_STATUSES.includes(status)) throw new Error(`Invalid evaluate status: ${status}`);
       this.goal.status = status;
+      if (status === "paused" && !this.goal.blocker) {
+        this.goal.blocker = previousStatus === "active" ? "Paused by evaluate" : undefined;
+      }
+      if (status === "active") {
+        this.goal.blocker = undefined;
+      }
     }
-    this.recordEntry();
+    this.goal.updatedAt = Date.now();
     return deepCopyGoal(this.goal);
   }
 
-  markComplete(evidence: string): Goal {
+  markBlocked(reason: string): ActiveGoal {
+    if (!this.goal) throw new Error("No active goal");
+    if (this.goal.status === "complete") throw new Error("Cannot block a completed goal");
+    if (reason.trim() === "") throw new Error("Reason is required");
+    this.recordEntry(this.goal.status, this.goal.lastEvidence ?? "", this.goal.nextAction ?? "");
+    this.goal.status = "paused";
+    this.goal.blocker = reason;
+    this.goal.updatedAt = Date.now();
+    return deepCopyGoal(this.goal);
+  }
+
+  markComplete(evidence: string): ActiveGoal {
     if (!this.goal) throw new Error("No active goal");
     if (evidence.trim() === "") throw new Error("Evidence is required");
-    this.goal.status = "completed";
-    this.goal.lastEvidence = evidence;
-    this.goal.nextAction = "";
-    this.recordEntry();
+    this.recordEntry("complete", evidence, "");
+    this.goal.status = "complete";
+    this.goal.updatedAt = Date.now();
     return deepCopyGoal(this.goal);
   }
 
-  markBlocked(reason: string, nextInputNeeded?: boolean): Goal {
-    if (!this.goal) throw new Error("No active goal");
-    if (reason.trim() === "") throw new Error("Reason is required");
-    this.goal.status = "blocked";
-    this.goal.blocker = reason;
-    this.goal.nextAction = nextInputNeeded ? "Waiting for user input" : "";
-    this.recordEntry();
-    return deepCopyGoal(this.goal);
+  recordIteration(): void {
+    if (!this.goal) return;
+    this.goal.iteration += 1;
+    this.goal.updatedAt = Date.now();
   }
 
-  private recordEntry(): void {
-    const g = this.goal!;
-    this.entries.push({
-      iteration: g.iterationCount,
-      evidence: g.lastEvidence,
-      nextAction: g.nextAction,
-      status: g.status,
-    });
+  updateUsage(tokensUsed: number, timeUsedMs: number): void {
+    if (!this.goal) return;
+    this.goal.tokensUsed = tokensUsed;
+    this.goal.timeUsedSeconds = Math.floor(timeUsedMs / 1000);
+    this.goal.updatedAt = Date.now();
   }
 
   getEntries(): GoalEntry[] {
     return this.entries.map((e) => ({ ...e }));
   }
 
-  recordIteration(): void {
-    if (!this.goal) return;
-    this.goal.iterationCount += 1;
-  }
-
-  setHadUsefulWork(value: boolean): void {
-    this.hadUsefulWork = value;
-  }
-
-  snapshot(): Goal | null {
-    if (!this.goal) return null;
-    const copy = deepCopyGoal(this.goal);
-    copy.entries = this.getEntries();
-    return copy;
+  private recordEntry(status: GoalStatus, evidence: string, nextAction: string): void {
+    const g = this.goal!;
+    this.entries.push({ iteration: g.iteration, evidence, nextAction, status });
   }
 
   static fromSession(entries: SessionEntry[]): GoalState {
     const state = new GoalState();
-    for (let i = entries.length - 1; i >= 0; i--) {
-      const entry = entries[i];
-      if (entry.type !== "message") continue;
-      if (entry.message?.role !== "toolResult") continue;
-      if (entry.message.toolName !== "goal") continue;
-      if (
-        typeof entry.message.details !== "object" ||
-        entry.message.details === null
+    const goalEntry = entries
+      .filter((e): e is SessionEntry & { type: "custom"; customType: "goal-state"; data: { goal?: unknown } } =>
+        e.type === "custom" && e.customType === "goal-state" && typeof e.data === "object" && e.data !== null
       )
-        continue;
-      const details = entry.message.details as Record<string, unknown>;
-      if (!isValidGoal(details.goal)) continue;
-      state.goal = deepCopyGoal(details.goal as Goal);
-      if (state.goal.entries) state.entries = [...state.goal.entries];
-      break;
+      .pop();
+    const goal = goalEntry?.data?.goal;
+    if (isValidActiveGoal(goal) && goal.status !== "complete") {
+      state.goal = deepCopyGoal(goal);
     }
     return state;
   }
