@@ -4,6 +4,7 @@ import {
   matchesKey,
   truncateToWidth,
   visibleWidth,
+  wrapTextWithAnsi,
   type TUI as FullTUI,
 } from "@earendil-works/pi-tui";
 import type {
@@ -546,7 +547,9 @@ export function createQuestionnaire(
       }
     } else if (inputMode) {
       const q = questions[inputQuestionIndex!];
-      add(theme.fg("text", ` ${q.question}`));
+      for (const line of wrapTextWithAnsi(theme.fg("text", ` ${q.question}`), width)) {
+        add(line);
+      }
       lines.push("");
       lines.push(...renderRows(width));
       lines.push("");
@@ -557,7 +560,9 @@ export function createQuestionnaire(
       lines.push("");
       add(theme.fg("dim", " Enter to submit • Esc to go back"));
     } else {
-      add(theme.fg("text", ` ${q!.question}`));
+      for (const line of wrapTextWithAnsi(theme.fg("text", ` ${q!.question}`), width)) {
+        add(line);
+      }
       lines.push("");
       if (transientNotice) {
         add(theme.fg("warning", ` ${transientNotice}`));

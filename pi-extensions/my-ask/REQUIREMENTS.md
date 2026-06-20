@@ -16,6 +16,7 @@ Build a local Pi extension (`pi-extensions/my-ask`) that registers the tool `ask
 - Reserved option labels blocked at validation:
   - `Other`, `Type something.`, `Chat about this`, `Next`
 - UI behaviors:
+  - question text wraps to multiple lines instead of being truncated with an ellipsis when it exceeds the available width
   - single-select option list
   - automatic "Type something." row on questions without preview
   - inline editor when "Type something." is selected

@@ -38,6 +38,24 @@ vi.mock("@earendil-works/pi-tui", () => {
   return {
     truncateToWidth: (text: string, _width: number, _ellipsis?: string) => text,
     visibleWidth: (text: string) => text.length,
+    wrapTextWithAnsi: (text: string, width: number) => {
+      const lines: string[] = [];
+      for (const paragraph of text.split("\n")) {
+        const words = paragraph.split(" ");
+        let current = "";
+        for (const word of words) {
+          const nextLength = current.length + word.length + (current ? 1 : 0);
+          if (nextLength > width) {
+            if (current) lines.push(current);
+            current = word;
+          } else {
+            current = current ? `${current} ${word}` : word;
+          }
+        }
+        if (current) lines.push(current);
+      }
+      return lines.length ? lines : [""];
+    },
     matchesKey: (data: string, keyId: string) => data === keyId,
     Key: {
       up: "up",
@@ -109,6 +127,32 @@ describe("createQuestionnaire", () => {
     expect(lines.some((l) => l.includes("2. Blue"))).toBe(true);
     expect(lines.some((l) => l.includes("3. Type something."))).toBe(true);
     expect(lines.some((l) => l.includes("4. Chat about this"))).toBe(true);
+  });
+
+  it("wraps long question text instead of truncating", () => {
+    const longQuestion =
+      "This is a very long question that should wrap onto multiple lines instead of being hidden behind an ellipsis";
+    const params = makeParams([
+      {
+        question: longQuestion,
+        header: "Long",
+        options: [
+          { label: "Yes", description: "y" },
+          { label: "No", description: "n" },
+        ],
+      },
+    ]);
+    const q = createQuestionnaire(params, mockTui, mockTheme, vi.fn());
+
+    const lines = q.render(30);
+    const joined = lines.map((l) => l.trim()).join(" ");
+    expect(joined).toContain(longQuestion);
+    expect(lines.some((l) => l.includes("..."))).toBe(false);
+    const questionLines = lines.filter((l) => longQuestion.includes(l.trim()));
+    expect(questionLines.length).toBeGreaterThan(1);
+    for (const line of questionLines) {
+      expect(line.length).toBeLessThanOrEqual(30);
+    }
   });
 
   it("selects an option and submits for a single question", () => {
