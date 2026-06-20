@@ -1,84 +1,68 @@
-import type {
-  PermissionConfig,
-  PermissionEntry,
-  PermissionStateSnapshot,
-  PermissionSource,
-} from "./types";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import picomatch from "picomatch";
+import type { PermissionConfig, PermissionRuleItem } from "./types";
 
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((v) => typeof v === "string");
+export type ActionFrom = "config" | "runtime";
+
+export interface AskAction {
+  action: "ask";
+  rule: string;
+  from: ActionFrom;
 }
 
-function isValidSnapshot(value: unknown): value is PermissionStateSnapshot {
-  if (typeof value !== "object" || value === null) return false;
-  const obj = value as Record<string, unknown>;
-  return isStringArray(obj.deny);
+export interface DenyAction {
+  action: "deny";
+  rule: string;
+  from: ActionFrom;
 }
+
+export interface AllowAction {
+  action: "allow";
+}
+
+export type Action = AskAction | DenyAction | AllowAction;
 
 export class PermissionState {
-  private configDeny: string[] = [];
-  private runtimeDeny: string[] | null = null;
+  public config: PermissionConfig | null = null;
+  public runtimeConfig: Pick<PermissionConfig["permission"], "path" | "bash"> = {
+    path: [],
+    bash: [],
+  };
 
-  deny(tool: string): void {
-    const current = this.effectiveDeny();
-    if (current.includes(tool)) return;
-    if (this.runtimeDeny === null) {
-      this.runtimeDeny = [...current];
-    }
-    this.runtimeDeny.push(tool);
+  init(config: PermissionConfig): void {
+    this.config = config;
   }
 
-  allow(tool: string): void {
-    const current = this.effectiveDeny();
-    if (!current.includes(tool)) return;
-    if (this.runtimeDeny === null) {
-      this.runtimeDeny = [...current];
+  buildAction(from: ActionFrom, rule?: PermissionRuleItem): Action {
+    if (rule?.value === "deny") {
+      return { action: "deny", rule: rule.key, from };
     }
-    this.runtimeDeny = this.runtimeDeny.filter((t) => t !== tool);
+    if (rule?.value === "allow") {
+      return { action: "allow" };
+    }
+    return { action: "ask", rule: rule?.key ?? "default", from };
   }
 
-  list(): PermissionEntry[] {
-    const tools = this.effectiveDeny();
-    return tools.map((tool) => {
-      const source: PermissionSource = this.configDeny.includes(tool)
-        ? "config"
-        : "runtime";
-      return { tool, source };
+  matchPathRules(
+    key: string,
+    rules?: PermissionRuleItem[],
+  ): PermissionRuleItem | undefined {
+    const targetRules = rules ?? this.config?.permission.path ?? [];
+    const matches = targetRules.filter((rule) => picomatch.isMatch(key, rule.key));
+    return matches.at(-1);
+  }
+
+  matchBashRules(
+    command: string,
+    rules?: PermissionRuleItem[],
+  ): PermissionRuleItem | undefined {
+    const targetRules = rules ?? this.config?.permission.bash ?? [];
+    const matches = targetRules.filter((rule) => {
+      try {
+        return new RegExp(rule.key).test(command);
+      } catch {
+        return false;
+      }
     });
-  }
-
-  reset(): void {
-    this.runtimeDeny = null;
-  }
-
-  snapshot(): PermissionStateSnapshot {
-    return { deny: this.effectiveDeny() };
-  }
-
-  static fromConfig(config: PermissionConfig): PermissionState {
-    const state = new PermissionState();
-    state.configDeny = [...config.deny];
-    return state;
-  }
-
-  static fromEntries(
-    entries: SessionEntry[],
-    config: PermissionConfig,
-  ): PermissionState {
-    const state = PermissionState.fromConfig(config);
-    for (let i = entries.length - 1; i >= 0; i--) {
-      const entry = entries[i];
-      if (entry.type !== "custom") continue;
-      if (entry.customType !== "my-permission") continue;
-      if (!isValidSnapshot(entry.data)) continue;
-      state.runtimeDeny = [...entry.data.deny];
-      break;
-    }
-    return state;
-  }
-
-  private effectiveDeny(): string[] {
-    return this.runtimeDeny ?? this.configDeny;
+    return matches.at(-1);
   }
 }

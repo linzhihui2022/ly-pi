@@ -1,190 +1,119 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { PermissionState } from "./state";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { PermissionConfig } from "./types";
 
 describe("PermissionState", () => {
-  it("creates empty state", () => {
-    const state = new PermissionState();
-    expect(state.list()).toEqual([]);
-  });
+  let state: PermissionState;
 
-  it("loads from config", () => {
-    const state = PermissionState.fromConfig({ deny: ["edit", "write"] });
-    expect(state.list()).toEqual([
-      { tool: "edit", source: "config" },
-      { tool: "write", source: "config" },
-    ]);
-  });
-
-  it("denies a tool and marks it runtime", () => {
-    const state = PermissionState.fromConfig({ deny: ["edit"] });
-    state.deny("bash");
-    expect(state.list()).toEqual([
-      { tool: "edit", source: "config" },
-      { tool: "bash", source: "runtime" },
-    ]);
-  });
-
-  it("deny is idempotent", () => {
-    const state = PermissionState.fromConfig({ deny: ["edit"] });
-    state.deny("edit");
-    expect(state.list()).toEqual([{ tool: "edit", source: "config" }]);
-  });
-
-  it("deny is idempotent for runtime entries", () => {
-    const state = PermissionState.fromConfig({ deny: ["edit"] });
-    state.deny("bash");
-    state.deny("bash");
-    expect(state.list()).toEqual([
-      { tool: "edit", source: "config" },
-      { tool: "bash", source: "runtime" },
-    ]);
-  });
-
-  it("denies multiple runtime tools without re-copying config", () => {
-    const state = PermissionState.fromConfig({ deny: ["edit"] });
-    state.deny("bash");
-    state.deny("write");
-    expect(state.list()).toEqual([
-      { tool: "edit", source: "config" },
-      { tool: "bash", source: "runtime" },
-      { tool: "write", source: "runtime" },
-    ]);
-  });
-
-  it("allow removes a runtime-denied tool", () => {
-    const state = PermissionState.fromConfig({ deny: ["edit", "bash"] });
-    state.deny("bash");
-    state.allow("bash");
-    expect(state.list()).toEqual([{ tool: "edit", source: "config" }]);
-  });
-
-  it("allow removes a config-denied tool", () => {
-    const state = PermissionState.fromConfig({ deny: ["edit", "bash"] });
-    state.allow("edit");
-    expect(state.list()).toEqual([{ tool: "bash", source: "config" }]);
-  });
-
-  it("allow is idempotent", () => {
-    const state = PermissionState.fromConfig({ deny: ["edit"] });
-    state.allow("edit");
-    state.allow("edit");
-    expect(state.list()).toEqual([]);
-  });
-
-  it("reset restores config defaults", () => {
-    const state = PermissionState.fromConfig({ deny: ["edit"] });
-    state.deny("bash");
-    state.allow("edit");
-    state.reset();
-    expect(state.list()).toEqual([{ tool: "edit", source: "config" }]);
-  });
-
-  it("snapshot returns current deny list", () => {
-    const state = PermissionState.fromConfig({ deny: ["edit"] });
-    state.deny("bash");
-    expect(state.snapshot()).toEqual({ deny: ["edit", "bash"] });
-  });
-
-  it("restores from session entries", () => {
-    const entries: SessionEntry[] = [
-      {
-        type: "custom",
-        customType: "my-permission",
-        data: { deny: ["write", "bash"] },
+  beforeEach(() => {
+    state = new PermissionState();
+    state.init({
+      permission: {
+        path: [
+          { key: "/etc/*", value: "ask" },
+          { key: "/etc/passwd", value: "deny" },
+          { key: "*.env", value: "allow" },
+        ],
+        bash: [
+          { key: "\\.env", value: "deny" },
+          { key: "curl", value: "ask" },
+        ],
+        tool: [],
       },
-    ];
-    const state = PermissionState.fromEntries(entries, { deny: ["edit"] });
-    expect(state.list()).toEqual([
-      { tool: "write", source: "runtime" },
-      { tool: "bash", source: "runtime" },
-    ]);
+    });
   });
 
-  it("uses config when no matching entries", () => {
-    const state = PermissionState.fromEntries([], { deny: ["edit"] });
-    expect(state.list()).toEqual([{ tool: "edit", source: "config" }]);
+  it("buildAction returns allow for allow rule", () => {
+    expect(state.buildAction("config", { key: "*.env", value: "allow" })).toEqual({
+      action: "allow",
+    });
   });
 
-  it("uses latest matching entry", () => {
-    const entries: SessionEntry[] = [
-      {
-        type: "custom",
-        customType: "my-permission",
-        data: { deny: ["write"] },
-      },
-      {
-        type: "custom",
-        customType: "other",
-        data: { deny: ["bash"] },
-      },
-      {
-        type: "custom",
-        customType: "my-permission",
-        data: { deny: ["bash"] },
-      },
-    ];
-    const state = PermissionState.fromEntries(entries, { deny: ["edit"] });
-    expect(state.list()).toEqual([{ tool: "bash", source: "runtime" }]);
+  it("buildAction returns deny for deny rule", () => {
+    expect(state.buildAction("config", { key: "/etc/passwd", value: "deny" })).toEqual({
+      action: "deny",
+      rule: "/etc/passwd",
+      from: "config",
+    });
   });
 
-  it("skips non-custom entries", () => {
-    const entries: SessionEntry[] = [
-      {
-        type: "tool_result",
-        customType: "my-permission",
-        data: { deny: ["bash"] },
-      },
-    ];
-    const state = PermissionState.fromEntries(entries, { deny: ["edit"] });
-    expect(state.list()).toEqual([{ tool: "edit", source: "config" }]);
+  it("buildAction returns ask when no rule", () => {
+    expect(state.buildAction("config")).toEqual({
+      action: "ask",
+      rule: "default",
+      from: "config",
+    });
   });
 
-  it("skips entries with other customType", () => {
-    const entries: SessionEntry[] = [
-      {
-        type: "custom",
-        customType: "other",
-        data: { deny: ["bash"] },
-      },
-    ];
-    const state = PermissionState.fromEntries(entries, { deny: ["edit"] });
-    expect(state.list()).toEqual([{ tool: "edit", source: "config" }]);
+  it("buildAction returns ask when rule value is ask", () => {
+    expect(state.buildAction("config", { key: "/etc/*", value: "ask" })).toEqual({
+      action: "ask",
+      rule: "/etc/*",
+      from: "config",
+    });
   });
 
-  it("ignores entries with invalid data shape", () => {
-    const entries: SessionEntry[] = [
-      {
-        type: "custom",
-        customType: "my-permission",
-        data: { deny: "edit" },
-      },
-    ];
-    const state = PermissionState.fromEntries(entries, { deny: ["edit"] });
-    expect(state.list()).toEqual([{ tool: "edit", source: "config" }]);
+  it("matchPathRules uses glob and last match wins", () => {
+    expect(state.matchPathRules("/etc/hosts")).toEqual({ key: "/etc/*", value: "ask" });
+    expect(state.matchPathRules("/etc/passwd")).toEqual({
+      key: "/etc/passwd",
+      value: "deny",
+    });
+    expect(state.matchPathRules("/etc")).toBeUndefined();
+    expect(state.matchPathRules("app.env")).toEqual({ key: "*.env", value: "allow" });
+    expect(state.matchPathRules("/nested/dir/config.env")).toBeUndefined();
   });
 
-  it("ignores entries with null data", () => {
-    const entries: SessionEntry[] = [
-      {
-        type: "custom",
-        customType: "my-permission",
-        data: null,
-      },
-    ];
-    const state = PermissionState.fromEntries(entries, { deny: ["edit"] });
-    expect(state.list()).toEqual([{ tool: "edit", source: "config" }]);
+  it("matchPathRules accepts explicit rules", () => {
+    expect(
+      state.matchPathRules("/tmp/file", [{ key: "/tmp/*", value: "allow" }]),
+    ).toEqual({ key: "/tmp/*", value: "allow" });
   });
 
-  it("ignores entries with non-object data", () => {
-    const entries: SessionEntry[] = [
-      {
-        type: "custom",
-        customType: "my-permission",
-        data: "edit",
-      },
-    ];
-    const state = PermissionState.fromEntries(entries, { deny: ["edit"] });
-    expect(state.list()).toEqual([{ tool: "edit", source: "config" }]);
+  it("matchPathRules returns undefined when no config is loaded", () => {
+    const emptyState = new PermissionState();
+    expect(emptyState.matchPathRules("/anything")).toBeUndefined();
+  });
+
+  it("matchPathRules supports ** for any depth", () => {
+    state.config!.permission.path.push({ key: "**/*.env", value: "deny" });
+    expect(state.matchPathRules("/nested/dir/config.env")).toEqual({
+      key: "**/*.env",
+      value: "deny",
+    });
+  });
+
+  it("matchBashRules uses regex and last match wins", () => {
+    expect(state.matchBashRules("cat .env")).toEqual({ key: "\\.env", value: "deny" });
+    expect(state.matchBashRules("grep secret .env")).toEqual({
+      key: "\\.env",
+      value: "deny",
+    });
+    expect(state.matchBashRules("curl https://example.com")).toEqual({
+      key: "curl",
+      value: "ask",
+    });
+    expect(state.matchBashRules("ls -la")).toBeUndefined();
+  });
+
+  it("matchBashRules accepts explicit rules", () => {
+    expect(
+      state.matchBashRules("echo hello", [{ key: "echo", value: "allow" }]),
+    ).toEqual({ key: "echo", value: "allow" });
+  });
+
+  it("matchBashRules returns undefined when no config is loaded", () => {
+    const emptyState = new PermissionState();
+    expect(emptyState.matchBashRules("anything")).toBeUndefined();
+  });
+
+  it("matchBashRules returns undefined for invalid regex", () => {
+    state.config!.permission.bash.push({ key: "[invalid", value: "deny" });
+    expect(state.matchBashRules("anything")).toBeUndefined();
+  });
+
+  it("matchBashRules skips rules with malformed regex", () => {
+    state.config!.permission.bash.push({ key: "[", value: "deny" });
+    expect(state.matchBashRules("anything")).toBeUndefined();
   });
 });
