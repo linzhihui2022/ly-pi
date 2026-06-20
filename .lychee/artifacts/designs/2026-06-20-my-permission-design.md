@@ -20,6 +20,8 @@
 - 不拦截用户手动执行的 `!bash` 命令（`user_bash` 事件）。
 - 不修改 system prompt 中的可用工具列表（用户选择“仅拦截”）。
 - 不对工具参数做内容级过滤（如禁止 `rm -rf /` 但允许其他 bash 命令）。
+- 工具名匹配采用**精确匹配**，不支持通配符或前缀匹配。
+- 拦截行为**完全静默**，不通过 UI 通知用户，仅向 LLM 返回 block reason。
 
 ## 架构
 
@@ -40,11 +42,11 @@ pi-extensions/my-permission/
 
 ### 组件职责
 
-- `config.ts`：启动时读取 `pi-config/my-permission.json`，解析 `deny` 数组。文件不存在或格式错误时回退到空列表并通知用户。
+- `config.ts`：启动时读取 `pi-config/my-permission.json`，解析 `deny` 数组。文件不存在时静默回退到空列表；格式错误时回退到空列表并通过 `ctx.ui.notify` 提示中文错误。
 - `state.ts`：维护运行时 deny 列表，提供 `deny(tool)`、`allow(tool)`、`list()`、`reset()`、`fromConfig(config)`、`fromEntries(entries)` 方法。
 - `index.ts`：
   - `session_start`：从配置文件初始化 state，并尝试从 session entries 恢复运行时覆盖。
-  - `registerCommand("permission", ...)`：提供 `/permission deny|allow|list|reset` 命令。
+  - `registerCommand("permission", ...)`：提供 `/permission deny|allow|list|reset` 命令，并为 `deny`/`allow` 提供当前工具名的 tab 自动补全。
   - `on("tool_call", ...)`：检查 `event.toolName` 是否在 deny 列表，命中则 block。
   - `on("before_agent_start", ...)`：注入 hidden message，告知 LLM 当前被禁工具。
 
@@ -68,7 +70,7 @@ pi-extensions/my-permission/
    - 命中则返回 `{ block: true, reason: "Tool '<tool>' is denied by my-permission" }`。
 
 4. **LLM 感知（默认开启）**
-   - `before_agent_start` 注入一条 `display: false` 的 hidden message：
+   - 仅当 deny 列表非空时，`before_agent_start` 才注入一条 `display: false` 的 hidden message：
      > "The following tools are currently denied and cannot be used: edit, write, bash."
 
 ## 命令设计
@@ -95,12 +97,12 @@ pi-extensions/my-permission/
 
 ## 错误处理
 
-1. **配置文件不存在**：默认空列表，通知用户。
-2. **配置文件格式错误**：通知用户具体错误，回退到空列表。
+1. **配置文件不存在**：默认空列表，静默处理。
+2. **配置文件格式错误**：使用 typebox 严格校验；校验失败时通过中文通知用户具体错误，并回退到空列表。
 3. **重复 deny/allow**：幂等，无错误。
 4. **未知工具名**：允许加入 deny 列表，不校验工具是否存在。
 5. **拦截范围**：只拦截 LLM 发起的 `tool_call`，不拦截 `user_bash`。
-6. **reload 行为**：重新读取配置文件并重新应用 session entries 中的运行时覆盖。
+6. **reload 行为**：重新读取配置文件并重新应用 session entries 中的运行时覆盖（保留运行时命令覆盖）。
 
 ## 测试策略
 
