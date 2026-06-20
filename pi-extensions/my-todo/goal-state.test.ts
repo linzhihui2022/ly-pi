@@ -349,6 +349,8 @@ describe("GoalState", () => {
       expect(GoalState.fromSession([{ type: "custom", customType: "goal-state", data: { goal: { ...base, tokensUsed: "0" } } }]).get()).toBeNull();
       expect(GoalState.fromSession([{ type: "custom", customType: "goal-state", data: { goal: { ...base, timeUsedSeconds: "0" } } }]).get()).toBeNull();
       expect(GoalState.fromSession([{ type: "custom", customType: "goal-state", data: { goal: { ...base, blocker: 1 } } }]).get()).toBeNull();
+      expect(GoalState.fromSession([{ type: "custom", customType: "goal-state", data: { goal: { ...base, lastEvidence: 1 } } }]).get()).toBeNull();
+      expect(GoalState.fromSession([{ type: "custom", customType: "goal-state", data: { goal: { ...base, nextAction: 1 } } }]).get()).toBeNull();
     });
 
     it("evaluate updates nextAction only", () => {

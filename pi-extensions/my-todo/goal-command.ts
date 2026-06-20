@@ -12,9 +12,9 @@ export function parseGoalCommand(args: string): CommandResult | string {
   const [first, ...rest] = trimmed.split(/\s+/);
   const restJoined = rest.join(" ").trim();
 
-  if (first === "pause" && restJoined === "") return { kind: "pause" };
-  if (first === "resume" && restJoined === "") return { kind: "resume" };
-  if (first === "clear" && restJoined === "") return { kind: "clear" };
+  if (first === "pause") return restJoined === "" ? { kind: "pause" } : "Usage: /goal pause";
+  if (first === "resume") return restJoined === "" ? { kind: "resume" } : "Usage: /goal resume";
+  if (first === "clear") return restJoined === "" ? { kind: "clear" } : "Usage: /goal clear";
   if (first === "edit") {
     const objective = restJoined.trim();
     if (!objective) return "Usage: /goal edit <objective>";

@@ -1,7 +1,9 @@
 import type {
+  AgentEndEvent,
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Key } from "@earendil-works/pi-tui";
@@ -13,7 +15,21 @@ import {
 } from "./overlay";
 import { GoalState } from "./goal-state";
 import { renderGoalOverlay } from "./goal-overlay";
-import type { Task, TaskStatus, PlanPhase, GoalStatus } from "./types";
+import { parseGoalCommand } from "./goal-command";
+import { createGoalCompleteTool } from "./goal-complete";
+import {
+  MAX_CONTINUATIONS,
+  buildGoalSystemPrompt,
+  buildGoalPrompt,
+  buildObjectiveUpdatedPrompt,
+  buildResumePrompt,
+  buildContinuePrompt,
+  continuationMarker,
+  extractContinuationMarker,
+  formatStatus,
+  goalSummary,
+} from "./goal-logic";
+import type { ActiveGoal, Task, TaskStatus } from "./types";
 
 const STATUS_SYMBOLS: Record<Task["status"], string> = {
   pending: "○",
@@ -29,6 +45,99 @@ function formatTaskLine(task: Task): string {
 export default function myTodo(pi: ExtensionAPI): void {
   let state = new TaskState();
   let goalState = new GoalState();
+
+  let continuationPending:
+    | { goalId: string; marker: string }
+    | undefined;
+  let continuationDelivered:
+    | { goalId: string; marker: string }
+    | undefined;
+  const cancelledContinuationMarkers = new Set<string>();
+
+  function persistGoal(goal: ActiveGoal | null): void {
+    pi.appendEntry("goal-state", { goal });
+  }
+
+  function updateStatus(ctx: ExtensionContext, goal: ActiveGoal | null): void {
+    ctx.ui.setStatus("my-todo-goal", formatStatus(goal ?? undefined));
+  }
+
+  function clearStatus(ctx: ExtensionContext): void {
+    ctx.ui.setStatus("my-todo-goal", "complete");
+    setTimeout(() => {
+      ctx.ui.setStatus("my-todo-goal", undefined);
+    }, 8000);
+  }
+
+  function clearContinuationTracking(): void {
+    continuationPending = undefined;
+    continuationDelivered = undefined;
+    cancelledContinuationMarkers.clear();
+  }
+
+  function cancelContinuationPending(): void {
+    if (continuationPending) {
+      cancelledContinuationMarkers.add(continuationPending.marker);
+      continuationPending = undefined;
+    }
+  }
+
+  function isCancelledContinuationPrompt(prompt: string): boolean {
+    const marker = extractContinuationMarker(prompt);
+    if (!marker) return false;
+    return cancelledContinuationMarkers.has(marker);
+  }
+
+  function consumeCancelledContinuationPrompt(text: string): boolean {
+    const marker = extractContinuationMarker(text);
+    if (!marker) return false;
+    if (cancelledContinuationMarkers.has(marker)) {
+      cancelledContinuationMarkers.delete(marker);
+      return true;
+    }
+    return false;
+  }
+
+  function markContinuationDelivered(prompt: string): void {
+    const marker = extractContinuationMarker(prompt);
+    if (!continuationPending) return;
+    if (marker === continuationPending.marker) {
+      continuationDelivered = continuationPending;
+    } else {
+      // A different prompt started before the pending continuation was
+      // delivered; suppress the stale follow-up if it ever arrives.
+      cancelledContinuationMarkers.add(continuationPending.marker);
+    }
+    continuationPending = undefined;
+  }
+
+  function sendContinuationPrompt(pi: ExtensionAPI, _ctx: ExtensionContext, goal: ActiveGoal): void {
+    const marker = continuationMarker(goal);
+    pi.sendUserMessage(buildContinuePrompt(goal, marker), {
+      deliverAs: "followUp",
+    });
+    continuationPending = { goalId: goal.id, marker };
+  }
+
+  function sendGoalPrompt(pi: ExtensionAPI, _ctx: ExtensionContext, goal: ActiveGoal): void {
+    pi.sendUserMessage(buildGoalPrompt(goal), { deliverAs: "followUp" });
+  }
+
+  function sendObjectiveUpdatedPrompt(pi: ExtensionAPI, _ctx: ExtensionContext, goal: ActiveGoal): void {
+    pi.sendUserMessage(buildObjectiveUpdatedPrompt(goal), { deliverAs: "followUp" });
+  }
+
+  function sendResumePrompt(pi: ExtensionAPI, _ctx: ExtensionContext, goal: ActiveGoal): void {
+    pi.sendUserMessage(buildResumePrompt(goal), { deliverAs: "followUp" });
+  }
+
+  function clearActiveGoal(ctx: ExtensionContext): void {
+    goalState.clear();
+    cancelContinuationPending();
+    persistGoal(null);
+    updateStatus(ctx, null);
+    refreshWidgets(ctx);
+  }
 
   function refreshWidgets(ctx: ExtensionContext): void {
     if (!ctx.hasUI) return;
@@ -90,6 +199,24 @@ export default function myTodo(pi: ExtensionAPI): void {
 
   pi.on("session_start", async (_event, ctx) => {
     state = TaskState.fromSession(ctx.sessionManager.getEntries());
+    goalState = GoalState.fromSession(ctx.sessionManager.getEntries());
+    clearContinuationTracking();
+    const goal = goalState.get();
+    updateStatus(ctx, goal);
+    if (goal?.status === "paused" && ctx.hasUI) {
+      const choice = await ctx.ui.select("Goal is paused", [
+        "Resume goal",
+        "Clear goal",
+      ]);
+      if (choice === "Resume goal") {
+        goalState.resume();
+        updateStatus(ctx, goalState.get());
+        persistGoal(goalState.get());
+        sendResumePrompt(pi, ctx, goalState.get()!);
+      } else {
+        clearActiveGoal(ctx);
+      }
+    }
     refreshWidgets(ctx);
   });
 
@@ -97,9 +224,8 @@ export default function myTodo(pi: ExtensionAPI): void {
     refreshWidgets(ctx);
   });
 
-  pi.on("turn_end", async (event, ctx) => {
+  pi.on("turn_end", async (_event, ctx) => {
     refreshWidgets(ctx);
-    goalState.setHadUsefulWork((event.toolResults?.length ?? 0) > 0);
 
     // Auto-exit plan mode when all tasks are completed during execution
     if (state.getPlanMode() && state.getPlanPhase() === "executing") {
@@ -304,28 +430,21 @@ export default function myTodo(pi: ExtensionAPI): void {
     name: "goal",
     label: "Goal",
     description:
-      "Track long-horizon objectives and autonomous progress. Actions: evaluate, mark_complete, mark_blocked.",
+      "Track long-horizon objectives and autonomous progress. Actions: evaluate, mark_blocked.",
     promptSnippet: "Track long-term goals and evidence of completion",
     promptGuidelines: [
-      "Use the goal tool to record evidence, update the next step, and mark the goal complete only when verified.",
-      "Call mark_complete only when you have concrete evidence the objective is satisfied.",
+      "Use the goal tool to record evidence, update the next step, and mark the goal blocked when no valid path remains.",
       "Call mark_blocked when no valid path remains and explain why.",
       "While the goal is active, do not ask the user for confirmation or clarification. Proceed autonomously or mark_blocked.",
     ],
     parameters: Type.Object({
-      action: StringEnum([
-        "evaluate",
-        "mark_complete",
-        "mark_blocked",
-      ] as const),
+      action: StringEnum(["evaluate", "mark_blocked"] as const),
       lastEvidence: Type.Optional(Type.String()),
       nextAction: Type.Optional(Type.String()),
       status: Type.Optional(
-        StringEnum(["active", "paused", "blocked"] as const),
+        StringEnum(["active", "paused"] as const),
       ),
-      evidence: Type.Optional(Type.String()),
       reason: Type.Optional(Type.String()),
-      nextInputNeeded: Type.Optional(Type.Boolean()),
     }),
 
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -335,7 +454,7 @@ export default function myTodo(pi: ExtensionAPI): void {
             const goal = goalState.evaluate(
               params.lastEvidence,
               params.nextAction,
-              params.status as GoalStatus | undefined,
+              params.status as import("./types").GoalStatus | undefined,
             );
             refreshWidgets(ctx);
             return {
@@ -345,30 +464,17 @@ export default function myTodo(pi: ExtensionAPI): void {
                   text: `Goal updated. Status: ${goal.status}, evidence: ${goal.lastEvidence || "(none)"}, next: ${goal.nextAction || "(none)"}`,
                 },
               ],
-              details: { goal: goalState.snapshot() },
-            };
-          }
-          case "mark_complete": {
-            const goal = goalState.markComplete(params.evidence ?? "");
-            refreshWidgets(ctx);
-            return {
-              content: [
-                { type: "text", text: `Goal completed: ${goal.objective}` },
-              ],
-              details: { goal: goalState.snapshot() },
+              details: { action: params.action, status: goal.status },
             };
           }
           case "mark_blocked": {
-            const goal = goalState.markBlocked(
-              params.reason ?? "",
-              params.nextInputNeeded,
-            );
+            const goal = goalState.markBlocked(params.reason ?? "");
             refreshWidgets(ctx);
             return {
               content: [
                 { type: "text", text: `Goal blocked: ${goal.blocker}` },
               ],
-              details: { goal: goalState.snapshot() },
+              details: { action: params.action, status: goal.status },
             };
           }
           default: {
@@ -380,12 +486,24 @@ export default function myTodo(pi: ExtensionAPI): void {
         const message = err instanceof Error ? err.message : String(err);
         return {
           content: [{ type: "text", text: `Error: ${message}` }],
-          details: { goal: goalState.snapshot() },
+          details: {
+            action: params.action,
+            status: goalState.getStatus(),
+            error: message,
+          },
           isError: true,
         };
       }
     },
   });
+
+  pi.registerTool(
+    createGoalCompleteTool(goalState, {
+      persistGoal,
+      clearStatus,
+      notify: (ctx, message, level) => ctx.ui.notify(message, level),
+    }),
+  );
 
   pi.registerCommand("todos", {
     description:
@@ -587,80 +705,95 @@ export default function myTodo(pi: ExtensionAPI): void {
 
   pi.registerCommand("goal", {
     description:
-      "Set or manage a long-term objective: /goal [objective|pause|resume|clear]",
+      "Set or manage a long-term objective: /goal <objective> | /goal edit <objective> | /goal pause | /goal resume | /goal clear",
     handler: async (args, ctx) => {
-      const raw = args ?? "";
-      const trimmed = raw.trim();
-
-      if (trimmed === "") {
-        if (raw.length > 0) {
-          ctx.ui.notify(
-            "Usage: /goal [objective|pause|resume|clear]",
-            "warning",
-          );
-          return;
-        }
-        const goal = goalState.get();
-        if (!goal) {
-          ctx.ui.notify("No active goal.", "info");
-          return;
-        }
-        const lines = [
-          `Goal [${goal.status}]: ${goal.objective}`,
-          `Iterations: ${goal.iterationCount}`,
-          `Evidence: ${goal.lastEvidence || "(none)"}`,
-        ];
-        if (goal.blocker) lines.push(`Blocker: ${goal.blocker}`);
-        ctx.ui.notify(lines.join("\n"), "info");
+      const result = parseGoalCommand(args ?? "");
+      if (typeof result === "string") {
+        ctx.ui.notify(result, "warning");
         return;
       }
 
-      const [first, ...rest] = trimmed.split(/\s+/);
-      const restJoined = rest.join(" ").trim();
-
-      if (first === "pause" && restJoined === "") {
-        if (!goalState.get()) {
-          ctx.ui.notify("No active goal to pause.", "warning");
+      switch (result.kind) {
+        case "show": {
+          const goal = goalState.get();
+          if (!goal) {
+            ctx.ui.notify("No active goal.", "info");
+            return;
+          }
+          ctx.ui.notify(goalSummary(goal), "info");
           return;
         }
-        goalState.pause();
-        refreshWidgets(ctx);
-        ctx.ui.notify("Goal paused.", "info");
-        return;
-      }
-
-      if (first === "resume" && restJoined === "") {
-        if (!goalState.get()) {
-          ctx.ui.notify("No active goal to resume.", "warning");
+        case "start": {
+          const existing = goalState.get();
+          if (existing && ctx.hasUI) {
+            const choice = await ctx.ui.select("Replace active goal?", [
+              `Replace: ${existing.text}`,
+              "Cancel",
+            ]);
+            if (choice !== `Replace: ${existing.text}`) {
+              ctx.ui.notify("Goal unchanged.", "info");
+              return;
+            }
+          }
+          const goal = goalState.set(result.objective);
+          persistGoal(goal);
+          updateStatus(ctx, goal);
+          refreshWidgets(ctx);
+          ctx.ui.notify(`Goal set: ${goal.text}`, "info");
+          sendGoalPrompt(pi, ctx, goal);
           return;
         }
-        try {
+        case "edit": {
+          const current = goalState.get();
+          if (!current || current.status === "complete") {
+            ctx.ui.notify("No active goal. Use /goal <objective> to start one.", "warning");
+            return;
+          }
+          const goal = goalState.edit(result.objective);
+          persistGoal(goal);
+          updateStatus(ctx, goal);
+          refreshWidgets(ctx);
+          ctx.ui.notify(`Goal updated: ${goal.text}`, "info");
+          sendObjectiveUpdatedPrompt(pi, ctx, goal);
+          return;
+        }
+        case "pause": {
+          if (!goalState.get()) {
+            ctx.ui.notify("No active goal to pause.", "warning");
+            return;
+          }
+          goalState.pause();
+          cancelContinuationPending();
+          persistGoal(goalState.get());
+          updateStatus(ctx, goalState.get());
+          refreshWidgets(ctx);
+          ctx.ui.notify("Goal paused.", "info");
+          return;
+        }
+        case "resume": {
+          const current = goalState.get();
+          if (!current || current.status === "complete") {
+            ctx.ui.notify("No active goal to resume.", "warning");
+            return;
+          }
           goalState.resume();
+          persistGoal(goalState.get());
+          updateStatus(ctx, goalState.get());
           refreshWidgets(ctx);
           ctx.ui.notify("Goal resumed.", "info");
-        } catch (err) {
-          ctx.ui.notify(
-            err instanceof Error ? err.message : String(err),
-            "error",
-          );
-        }
-        return;
-      }
-
-      if (first === "clear" && restJoined === "") {
-        if (!goalState.get()) {
-          ctx.ui.notify("No goal to clear.", "info");
+          sendResumePrompt(pi, ctx, goalState.get()!);
           return;
         }
-        goalState.clear();
-        refreshWidgets(ctx);
-        ctx.ui.notify("Goal cleared.", "info");
-        return;
+        case "clear": {
+          if (!goalState.get()) {
+            ctx.ui.notify("No goal to clear.", "info");
+            return;
+          }
+          clearActiveGoal(ctx);
+          ctx.ui.notify("Goal cleared.", "info");
+          return;
+        }
       }
-
-      goalState.set(trimmed);
-      refreshWidgets(ctx);
-      ctx.ui.notify(`Goal set: ${trimmed}`, "info");
     },
   });
 
@@ -699,18 +832,33 @@ export default function myTodo(pi: ExtensionAPI): void {
   ]);
 
   pi.on("tool_call", async (event, _ctx) => {
-    if (!state.getPlanMode() || state.getPlanPhase() !== "planning") {
-      return;
+    if (state.getPlanMode() && state.getPlanPhase() === "planning") {
+      if (!PLANNING_TOOLS.has(event.toolName)) {
+        return {
+          block: true,
+          reason: "Plan mode: only planning tools are allowed",
+        };
+      }
     }
-    if (!PLANNING_TOOLS.has(event.toolName)) {
+    if (goalState.isActive() && event.toolName === "ask_user_question") {
       return {
         block: true,
-        reason: "Plan mode: only planning tools are allowed",
+        reason:
+          "Goal mode active: do not ask the user for confirmation or clarification. Proceed autonomously or use goal mark_blocked with a clear reason.",
       };
     }
   });
 
-  pi.on("before_agent_start", async (_event, _ctx) => {
+  pi.on("input", (event) => {
+    if (event.source !== "extension") return;
+    if (consumeCancelledContinuationPrompt(event.text))
+      return { action: "handled" };
+  });
+
+  pi.on("before_agent_start", (event) => {
+    markContinuationDelivered(event.prompt);
+    if (isCancelledContinuationPrompt(event.prompt)) return;
+
     if (state.getPlanMode()) {
       if (state.getPlanPhase() === "planning") {
         return {
@@ -739,30 +887,28 @@ export default function myTodo(pi: ExtensionAPI): void {
     }
 
     const goal = goalState.get();
-    if (!goal) return;
-
-    if (goal.status === "active") {
-      return {
-        message: {
-          customType: "hidden",
-          content: `You are working toward a goal:\n${goal.objective}\n\nCurrent status: ${goal.status}\nIterations so far: ${goal.iterationCount}\nLast evidence: ${goal.lastEvidence || "(none)"}\n\nWhat "done" means and how to verify it should be inferred from the goal text and the conversation so far. Use the goal tool to evaluate progress, record evidence, update the next step, mark complete when verified, or mark blocked when no valid path remains.\n\nWhile this goal is active, do not ask the user for confirmation or clarification. Proceed autonomously. If you are stuck, mark the goal as blocked with the reason.`,
-          display: false,
-        },
-      };
-    }
-
-    if (goal.status === "completed" || goal.status === "blocked") {
-      return {
-        message: {
-          customType: "hidden",
-          content: `The goal has reached status: ${goal.status}.\n\nPlease summarize in your final response:\n- Whether the goal was achieved\n- Key evidence\n- Summary of changes made\n${goal.status === "blocked" ? `- Blocker: ${goal.blocker || "(unknown)"}` : ""}`,
-          display: false,
-        },
-      };
-    }
+    if (!goal || goal.status !== "active") return;
+    return {
+      systemPrompt: `${event.systemPrompt}\n\n${buildGoalSystemPrompt(goal)}`,
+    };
   });
 
-  pi.on("agent_end", async (_event, ctx) => {
+  function findFinalAssistantMessage(
+    messages: AgentEndEvent["messages"],
+  ): AssistantMessage | undefined {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.role === "assistant") {
+        return message as AssistantMessage;
+      }
+    }
+    return undefined;
+  }
+
+  pi.on("agent_end", async (event, ctx) => {
+    refreshWidgets(ctx);
+
+    // Plan mode completion dialog
     if (state.getPlanMode() && state.getPlanPhase() === "planning") {
       if (!ctx.hasUI) return;
 
@@ -786,29 +932,60 @@ export default function myTodo(pi: ExtensionAPI): void {
       return;
     }
 
-    if (!goalState.canAutoContinue()) return;
-    if (!ctx.isIdle()) return;
-    if (ctx.hasPendingMessages()) return;
+    if (state.getPlanMode()) return;
+
+    const goal = goalState.get();
+    if (!goal || goal.status !== "active") return;
+    const goalId = goal.id;
+    const hadPendingContinuation = continuationDelivered?.goalId === goalId;
 
     goalState.recordIteration();
-    const goal = goalState.get()!;
-    const entries = goalState.getEntries();
+    goalState.updateUsage(0, Date.now() - goal.startedAt);
 
-    let progressBlock = "";
-    if (entries.length > 0) {
-      const lines = entries.map(
-        (e) =>
-          `- [iteration ${e.iteration}] ${e.status}: ${e.evidence || "(no evidence)"} → ${e.nextAction || "(no next action)"}`,
+    const currentGoal = goalState.get();
+    if (!currentGoal || currentGoal.id !== goalId) return;
+
+    const finalAssistant = findFinalAssistantMessage(event.messages);
+    if (
+      finalAssistant?.stopReason === "aborted" ||
+      finalAssistant?.stopReason === "error"
+    ) {
+      goalState.pause();
+      if (finalAssistant.stopReason === "error" && finalAssistant.errorMessage) {
+        goalState.markBlocked(finalAssistant.errorMessage);
+      }
+      persistGoal(goalState.get());
+      updateStatus(ctx, goalState.get());
+      ctx.ui.notify(
+        `Goal paused after ${finalAssistant.stopReason}. Run /goal resume to continue.`,
+        "warning",
       );
-      progressBlock = `\n\nProgress so far:\n${lines.join("\n")}`;
+      return;
     }
 
-    const autonomousReminder = "\n\nDo not ask the user for confirmation or clarification. Proceed autonomously. If you are stuck or need input to continue, use the goal tool to mark_blocked with a clear reason.";
+    if (currentGoal.iteration > MAX_CONTINUATIONS) {
+      goalState.pause();
+      persistGoal(goalState.get());
+      updateStatus(ctx, goalState.get());
+      ctx.ui.notify(
+        `Goal paused after ${MAX_CONTINUATIONS} automatic continuations. The objective may be too broad or the agent may be stuck.`,
+        "warning",
+      );
+      return;
+    }
 
-    const baseMessage = goal.nextAction.trim()
-      ? `${goal.nextAction}${progressBlock}${autonomousReminder}`
-      : `Continue working toward the goal: ${goal.objective}${progressBlock}\n\nEvaluate progress against what "done" means for this goal, then choose the next useful action. Use the goal tool to record evidence and update the next step. Mark complete only when verified.${autonomousReminder}`;
+    persistGoal(goalState.get());
+    updateStatus(ctx, goalState.get());
 
-    pi.sendUserMessage(baseMessage, { deliverAs: "followUp" });
+    if (hadPendingContinuation) {
+      if (ctx.hasPendingMessages()) return;
+      if (continuationDelivered?.goalId === goalId)
+        continuationDelivered = undefined;
+    }
+
+    if (goalState.get()?.id !== goalId || goalState.get()?.status !== "active")
+      return;
+    if (ctx.hasPendingMessages()) return;
+    sendContinuationPrompt(pi, ctx, goalState.get()!);
   });
 }

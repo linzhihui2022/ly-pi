@@ -21,6 +21,7 @@ const mockPi = {
   }),
   registerShortcut: vi.fn((_key: any, _options: any) => {}),
   sendUserMessage: vi.fn(),
+  appendEntry: vi.fn(),
 };
 
 const createMockCtx = (entries: any[] = []) => ({
@@ -31,6 +32,7 @@ const createMockCtx = (entries: any[] = []) => ({
     }),
     notify: vi.fn(),
     select: vi.fn(),
+    setStatus: vi.fn(),
   },
   sessionManager: {
     getEntries: vi.fn(() => entries),
@@ -1261,15 +1263,53 @@ describe("my-todo extension", () => {
       );
     });
 
-    it("rejects empty objective", async () => {
+    it("edit warns when no active goal", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("edit Refactor auth", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("No active goal"),
+        "warning",
+      );
+    });
+
+    it("edit warns when goal is complete", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+      const tool = registeredTools.find((t) => t.name === "goal_complete")!;
+      await tool.execute("tc-1", { summary: "Done" }, undefined, undefined, ctx);
+      ctx.ui.notify.mockClear();
+      await cmd.handler("edit New goal", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("No active goal"),
+        "warning",
+      );
+    });
+
+    it("resume warns when goal is complete", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+      const tool = registeredTools.find((t) => t.name === "goal_complete")!;
+      await tool.execute("tc-1", { summary: "Done" }, undefined, undefined, ctx);
+      ctx.ui.notify.mockClear();
+      await cmd.handler("resume", ctx);
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("No active goal"),
+        "warning",
+      );
+    });
+
+    it("shows no active goal for whitespace-only input", async () => {
       await initExtension();
       const cmd = registeredCommands.get("goal")!;
       const ctx = createMockCtx();
       await cmd.handler("   ", ctx);
-      expect(ctx.ui.notify).toHaveBeenCalledWith(
-        expect.stringContaining("Usage"),
-        "warning",
-      );
+      expect(ctx.ui.notify).toHaveBeenCalledWith("No active goal.", "info");
     });
 
     it("shows status", async () => {
@@ -1350,40 +1390,7 @@ describe("my-todo extension", () => {
         ctx,
       );
       expect(result.content[0].text).toContain("Tests pass");
-      expect(result.details.goal.lastEvidence).toBe("Tests pass");
-    });
-
-    it("mark_complete requires evidence", async () => {
-      const tool = await getGoalTool();
-      const ctx = createMockCtx();
-      const cmd = registeredCommands.get("goal")!;
-      await cmd.handler("Refactor auth", ctx);
-
-      const result = await tool.execute(
-        "tc-1",
-        { action: "mark_complete" },
-        undefined,
-        undefined,
-        ctx,
-      );
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("Evidence is required");
-    });
-
-    it("mark_complete completes goal", async () => {
-      const tool = await getGoalTool();
-      const ctx = createMockCtx();
-      const cmd = registeredCommands.get("goal")!;
-      await cmd.handler("Refactor auth", ctx);
-
-      const result = await tool.execute(
-        "tc-1",
-        { action: "mark_complete", evidence: "CI green" },
-        undefined,
-        undefined,
-        ctx,
-      );
-      expect(result.details.goal.status).toBe("completed");
+      expect(result.details).toEqual({ action: "evaluate", status: "active" });
     });
 
     it("mark_blocked requires reason", async () => {
@@ -1403,7 +1410,7 @@ describe("my-todo extension", () => {
       expect(result.content[0].text).toContain("Reason is required");
     });
 
-    it("mark_blocked blocks goal", async () => {
+    it("mark_blocked pauses goal", async () => {
       const tool = await getGoalTool();
       const ctx = createMockCtx();
       const cmd = registeredCommands.get("goal")!;
@@ -1416,64 +1423,56 @@ describe("my-todo extension", () => {
         undefined,
         ctx,
       );
-      expect(result.details.goal.status).toBe("blocked");
+      expect(result.details).toEqual({ action: "mark_blocked", status: "paused" });
     });
   });
 
   describe("before_agent_start goal prompt", () => {
-    it("injects active goal context", async () => {
+    it("injects active goal system prompt", async () => {
       await initExtension();
       const cmd = registeredCommands.get("goal")!;
       const ctx = createMockCtx();
       await cmd.handler("Refactor auth", ctx);
 
       const handler = registeredEvents.get("before_agent_start")!;
-      const result = await handler({}, ctx);
+      const result = await handler({ systemPrompt: "base" }, ctx);
       expect(result).toBeDefined();
-      expect(result.message.display).toBe(false);
-      expect(result.message.content).toContain("Refactor auth");
-      expect(result.message.content).toContain("Use the goal tool");
+      expect(result.systemPrompt).toContain("base");
+      expect(result.systemPrompt).toContain("Refactor auth");
+      expect(result.systemPrompt).toContain("Goal-mode rules");
     });
 
-    it("active goal prompt forbids asking the user", async () => {
+    it("active goal system prompt forbids stopping early", async () => {
       await initExtension();
       const cmd = registeredCommands.get("goal")!;
       const ctx = createMockCtx();
       await cmd.handler("Refactor auth", ctx);
 
       const handler = registeredEvents.get("before_agent_start")!;
-      const result = await handler({}, ctx);
-      expect(result.message.content).toMatch(/do not ask.*user/i);
-      expect(result.message.content).toMatch(/confirmation|confirm/i);
-      expect(result.message.content).toMatch(/blocked/i);
+      const result = await handler({ systemPrompt: "base" }, ctx);
+      expect(result.systemPrompt).toMatch(/do not stop at analysis/i);
+      expect(result.systemPrompt).toMatch(/do not redefine/i);
+      expect(result.systemPrompt).toMatch(/goal_complete/i);
     });
 
     it("does not inject when goal is idle", async () => {
       await initExtension();
       const handler = registeredEvents.get("before_agent_start")!;
       const ctx = createMockCtx();
-      const result = await handler({}, ctx);
+      const result = await handler({ systemPrompt: "base" }, ctx);
       expect(result).toBeUndefined();
     });
 
-    it("injects summary prompt for completed goal", async () => {
+    it("does not inject when goal is paused", async () => {
       await initExtension();
       const cmd = registeredCommands.get("goal")!;
       const ctx = createMockCtx();
       await cmd.handler("Refactor auth", ctx);
-      const tool = registeredTools.find((t) => t.name === "goal")!;
-      await tool.execute(
-        "tc-1",
-        { action: "mark_complete", evidence: "Done" },
-        undefined,
-        undefined,
-        ctx,
-      );
+      await cmd.handler("pause", ctx);
 
       const handler = registeredEvents.get("before_agent_start")!;
-      const result = await handler({}, ctx);
-      expect(result.message.content).toContain("completed");
-      expect(result.message.content).toContain("Key evidence");
+      const result = await handler({ systemPrompt: "base" }, ctx);
+      expect(result).toBeUndefined();
     });
   });
 
@@ -1483,99 +1482,56 @@ describe("my-todo extension", () => {
       const ctx = createMockCtx();
       const cmd = registeredCommands.get("goal")!;
       await cmd.handler("Refactor auth", ctx);
+      mockPi.sendUserMessage.mockClear();
       return ctx;
     }
 
-    function fireTurnEnd(ctx: any, toolCount: number) {
-      const handler = registeredEvents.get("turn_end")!;
-      return handler(
-        {
-          type: "turn_end",
-          turnIndex: 1,
-          message: {},
-          toolResults: Array(toolCount).fill({}),
-        },
-        ctx,
-      );
-    }
-
-    it("sends follow-up when active, idle, and tools ran", async () => {
+    it("sends continuation when goal is active and idle", async () => {
       const ctx = await setupActiveGoal();
-      await fireTurnEnd(ctx, 1);
 
       const handler = registeredEvents.get("agent_end")!;
       await handler({ type: "agent_end", messages: [] }, ctx);
 
       expect(mockPi.sendUserMessage).toHaveBeenCalledWith(
-        expect.stringContaining("Continue working toward the goal"),
+        expect.stringContaining("Continue the active /goal"),
         { deliverAs: "followUp" },
       );
     });
 
-    it("follow-up message forbids asking the user for confirmation", async () => {
+    it("continuation message includes persistence rules", async () => {
       const ctx = await setupActiveGoal();
-      await fireTurnEnd(ctx, 1);
 
       const handler = registeredEvents.get("agent_end")!;
       await handler({ type: "agent_end", messages: [] }, ctx);
 
       const message = mockPi.sendUserMessage.mock.calls[0][0];
-      expect(message).toMatch(/do not ask.*user/i);
-      expect(message).toMatch(/confirmation|confirm/i);
-      expect(message).toMatch(/mark_blocked/i);
+      expect(message).toMatch(/do not redefine/i);
+      expect(message).toMatch(/goal_complete/i);
     });
 
-    it("includes progress entries in follow-up", async () => {
+    it("sends successive continuations after each delivered turn", async () => {
       const ctx = await setupActiveGoal();
-      const tool = registeredTools.find((t) => t.name === "goal")!;
-      await tool.execute(
-        "tc-1",
-        {
-          action: "evaluate",
-          lastEvidence: "Read files",
-          nextAction: "Edit config",
-        },
-        undefined,
-        undefined,
-        ctx,
-      );
-      await fireTurnEnd(ctx, 1);
 
-      const handler = registeredEvents.get("agent_end")!;
-      await handler({ type: "agent_end", messages: [] }, ctx);
+      const beforeHandler = registeredEvents.get("before_agent_start")!;
+      const endHandler = registeredEvents.get("agent_end")!;
 
-      expect(mockPi.sendUserMessage).toHaveBeenCalledWith(
-        expect.stringContaining("Progress so far:"),
-        { deliverAs: "followUp" },
-      );
-    });
+      await endHandler({ type: "agent_end", messages: [] }, ctx);
+      const firstPrompt = mockPi.sendUserMessage.mock.calls[0][0];
+      expect(firstPrompt).toContain("automatic continuation #1");
+      mockPi.sendUserMessage.mockClear();
 
-    it("sends custom nextAction when set", async () => {
-      const ctx = await setupActiveGoal();
-      const tool = registeredTools.find((t) => t.name === "goal")!;
-      await tool.execute(
-        "tc-1",
-        { action: "evaluate", nextAction: "Run migration" },
-        undefined,
-        undefined,
-        ctx,
-      );
-      await fireTurnEnd(ctx, 1);
+      // Simulate the agent starting to process the continuation prompt
+      beforeHandler({ prompt: firstPrompt, systemPrompt: "base" }, ctx);
 
-      const handler = registeredEvents.get("agent_end")!;
-      await handler({ type: "agent_end", messages: [] }, ctx);
-
-      expect(mockPi.sendUserMessage).toHaveBeenCalledWith(
-        expect.stringContaining("Run migration"),
-        { deliverAs: "followUp" },
-      );
+      await endHandler({ type: "agent_end", messages: [] }, ctx);
+      const secondPrompt = mockPi.sendUserMessage.mock.calls[0][0];
+      expect(secondPrompt).toContain("automatic continuation #2");
     });
 
     it("does not auto-continue when paused", async () => {
       const ctx = await setupActiveGoal();
       const cmd = registeredCommands.get("goal")!;
       await cmd.handler("pause", ctx);
-      await fireTurnEnd(ctx, 1);
 
       const handler = registeredEvents.get("agent_end")!;
       await handler({ type: "agent_end", messages: [] }, ctx);
@@ -1585,15 +1541,14 @@ describe("my-todo extension", () => {
 
     it("does not auto-continue when completed", async () => {
       const ctx = await setupActiveGoal();
-      const tool = registeredTools.find((t) => t.name === "goal")!;
+      const tool = registeredTools.find((t) => t.name === "goal_complete")!;
       await tool.execute(
         "tc-1",
-        { action: "mark_complete", evidence: "Done" },
+        { summary: "Done" },
         undefined,
         undefined,
         ctx,
       );
-      await fireTurnEnd(ctx, 1);
 
       const handler = registeredEvents.get("agent_end")!;
       await handler({ type: "agent_end", messages: [] }, ctx);
@@ -1611,17 +1566,6 @@ describe("my-todo extension", () => {
         undefined,
         ctx,
       );
-      await fireTurnEnd(ctx, 1);
-
-      const handler = registeredEvents.get("agent_end")!;
-      await handler({ type: "agent_end", messages: [] }, ctx);
-
-      expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
-    });
-
-    it("does not auto-continue when no tools ran", async () => {
-      const ctx = await setupActiveGoal();
-      await fireTurnEnd(ctx, 0);
 
       const handler = registeredEvents.get("agent_end")!;
       await handler({ type: "agent_end", messages: [] }, ctx);
@@ -1632,7 +1576,6 @@ describe("my-todo extension", () => {
     it("does not auto-continue when pending messages exist", async () => {
       const ctx = await setupActiveGoal();
       ctx.hasPendingMessages = vi.fn(() => true);
-      await fireTurnEnd(ctx, 1);
 
       const handler = registeredEvents.get("agent_end")!;
       await handler({ type: "agent_end", messages: [] }, ctx);
@@ -1640,16 +1583,151 @@ describe("my-todo extension", () => {
       expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
     });
 
-    it("does not auto-continue in planning phase", async () => {
+    it("does not auto-continue in plan mode", async () => {
       const ctx = await setupActiveGoal();
       const cmd = registeredCommands.get("todos")!;
       await cmd.handler("plan", ctx);
-      await fireTurnEnd(ctx, 1);
 
       const handler = registeredEvents.get("agent_end")!;
       await handler({ type: "agent_end", messages: [] }, ctx);
 
       expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
+    });
+
+    it("pauses goal on aborted stopReason", async () => {
+      const ctx = await setupActiveGoal();
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler(
+        {
+          type: "agent_end",
+          messages: [{ role: "assistant", stopReason: "aborted" }],
+        },
+        ctx,
+      );
+
+      expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("paused"),
+        "warning",
+      );
+    });
+
+    it("pauses goal on error stopReason", async () => {
+      const ctx = await setupActiveGoal();
+
+      const handler = registeredEvents.get("agent_end")!;
+      await handler(
+        {
+          type: "agent_end",
+          messages: [
+            {
+              role: "assistant",
+              stopReason: "error",
+              errorMessage: "Model failure",
+            },
+          ],
+        },
+        ctx,
+      );
+
+      expect(mockPi.sendUserMessage).not.toHaveBeenCalled();
+      expect(ctx.ui.notify).toHaveBeenCalledWith(
+        expect.stringContaining("paused"),
+        "warning",
+      );
+    });
+  });
+
+  describe("tool_call goal restrictions", () => {
+    it("blocks ask_user_question when goal is active", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Refactor auth", ctx);
+
+      const handler = registeredEvents.get("tool_call")!;
+      const result = await handler(
+        { type: "tool_call", toolCallId: "tc-1", toolName: "ask_user_question", input: {} },
+        ctx,
+      );
+      expect(result).toEqual({
+        block: true,
+        reason: expect.stringContaining("Goal mode active"),
+      });
+    });
+
+    it("allows ask_user_question when goal is idle", async () => {
+      await initExtension();
+      const handler = registeredEvents.get("tool_call")!;
+      const ctx = createMockCtx();
+      const result = await handler(
+        { type: "tool_call", toolCallId: "tc-1", toolName: "ask_user_question", input: {} },
+        ctx,
+      );
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("input event continuation cleanup", () => {
+    it("swallows cancelled continuation prompts from extension source", async () => {
+      await initExtension();
+      const ctx = createMockCtx();
+      const cmd = registeredCommands.get("goal")!;
+      await cmd.handler("Refactor auth", ctx);
+
+      // Generate a continuation prompt
+      const endHandler = registeredEvents.get("agent_end")!;
+      await endHandler({ type: "agent_end", messages: [] }, ctx);
+
+      // Pause cancels the pending continuation
+      await cmd.handler("pause", ctx);
+
+      const inputHandler = registeredEvents.get("input")!;
+      const markerPattern = /<!-- pi-goal-continuation:([^>]+) -->/;
+      const sentPrompt = mockPi.sendUserMessage.mock.calls.find(
+        (call: any[]) => markerPattern.test(call[0]),
+      )?.[0] as string;
+      expect(sentPrompt).toBeDefined();
+      const marker = sentPrompt.match(markerPattern)![1];
+
+      const result = await inputHandler(
+        { type: "input", source: "extension", text: `Continue <!-- pi-goal-continuation:${marker} -->` },
+      );
+      expect(result).toEqual({ action: "handled" });
+    });
+
+    it("cancels pending continuation when a different prompt starts", async () => {
+      await initExtension();
+      const ctx = createMockCtx();
+      const cmd = registeredCommands.get("goal")!;
+      await cmd.handler("Refactor auth", ctx);
+
+      const endHandler = registeredEvents.get("agent_end")!;
+      await endHandler({ type: "agent_end", messages: [] }, ctx);
+
+      const markerPattern = /<!-- pi-goal-continuation:([^>]+) -->/;
+      const sentPrompt = mockPi.sendUserMessage.mock.calls.find(
+        (call: any[]) => markerPattern.test(call[0]),
+      )?.[0] as string;
+      const marker = sentPrompt.match(markerPattern)![1];
+
+      // User sends a new message before the continuation is processed
+      const beforeHandler = registeredEvents.get("before_agent_start")!;
+      beforeHandler({ prompt: "User message", systemPrompt: "base" }, ctx);
+
+      const inputHandler = registeredEvents.get("input")!;
+      const result = await inputHandler(
+        { type: "input", source: "extension", text: `Continue <!-- pi-goal-continuation:${marker} -->` },
+      );
+      expect(result).toEqual({ action: "handled" });
+    });
+
+    it("ignores non-extension input", async () => {
+      await initExtension();
+      const handler = registeredEvents.get("input")!;
+      const result = await handler({ type: "input", source: "interactive", text: "hello" });
+      expect(result).toBeUndefined();
     });
   });
 

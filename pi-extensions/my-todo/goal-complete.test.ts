@@ -34,7 +34,7 @@ describe("goal_complete tool", () => {
     );
 
     expect(result.terminate).toBe(true);
-    expect(result.content[0].text).toContain("Goal complete");
+    expect((result.content[0] as { type: string; text: string }).text).toContain("Goal complete");
     expect(state.get()?.status).toBe("complete");
     expect(persist).toHaveBeenCalledWith(null);
     expect(notify).toHaveBeenCalled();
@@ -50,7 +50,7 @@ describe("goal_complete tool", () => {
       undefined,
       { ui: { setStatus: vi.fn(), notify: vi.fn() } } as any,
     );
-    expect(result.isError).toBe(true);
+    expect((result as any).isError).toBe(true);
     expect(result.terminate).toBeUndefined();
   });
 
@@ -65,7 +65,7 @@ describe("goal_complete tool", () => {
       undefined,
       { ui: { setStatus: vi.fn(), notify: vi.fn() } } as any,
     );
-    expect(result.isError).toBe(true);
+    expect((result as any).isError).toBe(true);
   });
 
   it("errors when goal is paused", async () => {
@@ -80,7 +80,7 @@ describe("goal_complete tool", () => {
       undefined,
       { ui: { setStatus: vi.fn(), notify: vi.fn() } } as any,
     );
-    expect(result.isError).toBe(true);
+    expect((result as any).isError).toBe(true);
     expect(result.terminate).toBeUndefined();
   });
 });

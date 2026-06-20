@@ -50,33 +50,24 @@ describe("parseGoalCommand", () => {
     expect(parseGoalCommand("pause")).toEqual({ kind: "pause" });
   });
 
-  it("treats pause with extra args as a start objective", () => {
-    expect(parseGoalCommand("pause extra")).toEqual({
-      kind: "start",
-      objective: "pause extra",
-    });
+  it("returns error for pause with extra args", () => {
+    expect(parseGoalCommand("pause extra")).toBe("Usage: /goal pause");
   });
 
   it("parses resume", () => {
     expect(parseGoalCommand("resume")).toEqual({ kind: "resume" });
   });
 
-  it("treats resume with extra args as a start objective", () => {
-    expect(parseGoalCommand("resume extra")).toEqual({
-      kind: "start",
-      objective: "resume extra",
-    });
+  it("returns error for resume with extra args", () => {
+    expect(parseGoalCommand("resume extra")).toBe("Usage: /goal resume");
   });
 
   it("parses clear", () => {
     expect(parseGoalCommand("clear")).toEqual({ kind: "clear" });
   });
 
-  it("treats clear with extra args as a start objective", () => {
-    expect(parseGoalCommand("clear extra")).toEqual({
-      kind: "start",
-      objective: "clear extra",
-    });
+  it("returns error for clear with extra args", () => {
+    expect(parseGoalCommand("clear extra")).toBe("Usage: /goal clear");
   });
 
   it("trims whitespace around objective", () => {

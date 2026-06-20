@@ -117,8 +117,10 @@ export class GoalState {
     if (status !== undefined) {
       if (!VALID_EVALUATE_STATUSES.includes(status)) throw new Error(`Invalid evaluate status: ${status}`);
       this.goal.status = status;
+      // evaluate rejects complete goals, so the only reachable previous status
+      // here is "active". Set a default blocker when pausing via evaluate.
       if (status === "paused" && !this.goal.blocker) {
-        this.goal.blocker = previousStatus === "active" ? "Paused by evaluate" : undefined;
+        this.goal.blocker = "Paused by evaluate";
       }
       if (status === "active") {
         this.goal.blocker = undefined;
