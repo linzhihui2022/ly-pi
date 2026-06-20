@@ -10,7 +10,7 @@
 
 ```
 configure/
-├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 9 个）
+├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 8 个）
 ├── pi-skills/skills/       # 自定义技能（15 个）
 ├── pi-themes/              # 自定义主题（Catppuccin Mocha）
 ├── pi-agents/              # 子代理定义（8 个）
@@ -37,7 +37,6 @@ configure/
 | **my-bt** | BT-7274 语音包：会话生命周期事件触发音频，TUI 浮层展示文案，`/bt` 命令控制 |
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
 | **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
-| **my-permission** | 权限管理系统：工具调用拦截与授权，支持规则配置、子代理策略、日志与快照 |
 | **my-todo** | 任务 + 目标追踪：`todo` + `goal` 工具，Plan 模式（规划/执行两阶段），TUI 浮层，自动继续 |
 | **my-visual-companion** | 浏览器可视化伴侣：WebSocket 驱动 HTML 界面，支持交互式确认 |
 | **my-webtool** | 网页搜索与抓取：Tavily API 的 `web_search` / `web_fetch`，自定义 TUI 渲染 |
