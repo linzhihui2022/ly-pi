@@ -78,6 +78,21 @@
         "@typescript/native-preview": "^7.0.0-beta",
       },
     },
+    "pi-extensions/my-permission": {
+      "name": "my-permission",
+      "dependencies": {
+        "@earendil-works/pi-coding-agent": "^0.78.0",
+        "@earendil-works/pi-tui": "^0.78.0",
+        "typebox": "^1.1.39",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "vitest": "^4",
+      },
+      "peerDependencies": {
+        "@typescript/native-preview": "^7.0.0-beta",
+      },
+    },
     "pi-extensions/my-todo": {
       "name": "my-todo",
       "dependencies": {
@@ -597,6 +612,8 @@
 
     "my-hud": ["my-hud@workspace:pi-extensions/my-hud"],
 
+    "my-permission": ["my-permission@workspace:pi-extensions/my-permission"],
+
     "my-todo": ["my-todo@workspace:pi-extensions/my-todo"],
 
     "my-visual-companion": ["my-visual-companion@workspace:pi-extensions/my-visual-companion"],
@@ -752,6 +769,5 @@
     "p-retry/retry": ["retry@0.13.1", "https://registry.npmmirror.com/retry/-/retry-0.13.1.tgz", {}, "sha512-XQBQ3I8W1Cge0Seh+6gjj03LbmRFWuoszgK9ooCpwYIrhhoO80pfq4cUkU5DkknwfOfFteRwlZ56PYOGYyFWdg=="],
 
     "protobufjs/@types/node": ["@types/node@25.9.2", "https://registry.npmmirror.com/@types/node/-/node-25.9.2.tgz", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-G05zqtJhcDLb8uslf5EjCxXg9G1KQxiV8OS0R26IC//Eoyitzqe8z37I7cqvnZlrlSfgocQRfSn/AHBZJJFyGw=="],
-
   }
 }
