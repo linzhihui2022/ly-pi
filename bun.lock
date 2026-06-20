@@ -3,6 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
+      "name": "configure",
       "devDependencies": {
         "@biomejs/biome": "^2.5.0",
         "@types/bun": "^1.3.14",
