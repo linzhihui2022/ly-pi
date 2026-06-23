@@ -1,10 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/gotgenes/pi-permission-system/main/schemas/permissions.schema.json",
   "debugLog": false,
-  "permissionReviewLog": true,
-  "yoloMode": false,
   "permission": {
     "*": "allow",
+    "ask_user_question": "allow",
     "bash": {
       "*": "ask",
       "awk *": "ask",
@@ -16,10 +15,13 @@
       "export -p|*": "deny",
       "gh pr comment *": "ask",
       "gh pr view *": "allow",
+      "gh run view *": "allow",
       "git add *": "allow",
+      "git branch --contains *": "allow",
       "git branch --show-current": "allow",
       "git diff": "allow",
       "git diff *": "allow",
+      "git log *": "allow",
       "git merge-base HEAD main": "allow",
       "git merge-base HEAD master": "allow",
       "git status": "allow",
@@ -34,6 +36,7 @@
       "sst *": "deny",
       "sudo *": "ask"
     },
+    "ctx_execute": "allow",
     "external_directory": "ask",
     "path": {
       "*": "allow",
@@ -41,12 +44,12 @@
       "*.env.*": "deny",
       "*.env.example": "allow"
     },
-    "ask_user_question": "allow",
-    "ctx_execute": "allow",
     "todo": "allow",
     "visual_companion_read_events": "allow",
     "visual_companion_show": "allow",
     "visual_companion_start": "allow",
     "visual_companion_stop": "allow"
-  }
+  },
+  "permissionReviewLog": true,
+  "yoloMode": false
 }
