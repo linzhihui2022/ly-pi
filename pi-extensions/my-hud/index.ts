@@ -94,6 +94,15 @@ export default function myHud(pi: ExtensionAPI): void {
   pi.on("agent_start", (_event, ctx) => updateMemoryWarning(ctx));
   pi.on("agent_end", (_event, ctx) => updateMemoryWarning(ctx));
 
+  // ── /mem command ──
+  pi.registerCommand("mem", {
+    description: "Show current system memory usage",
+    handler: async (_args, ctx) => {
+      const { percent, ok } = checkMemoryPressure();
+      ctx.ui.notify(`内存使用: ${percent}%`, ok ? "info" : "warning");
+    },
+  });
+
   // ── Install HUD on session start ──
   pi.on("session_start", (_event, ctx: ExtensionContext) => {
     if (!ctx.hasUI) {

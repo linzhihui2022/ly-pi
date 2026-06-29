@@ -34,9 +34,14 @@ vi.mock("./vitest-process", () => ({
 
 const registeredEvents = new Map<string, (...args: any[]) => any>();
 
+const registeredCommands = new Map<string, any>();
+
 const mockPi = {
   on: vi.fn((event: string, handler: (...args: any[]) => any) => {
     registeredEvents.set(event, handler);
+  }),
+  registerCommand: vi.fn((name: string, config: any) => {
+    registeredCommands.set(name, config);
   }),
 };
 
@@ -1244,6 +1249,7 @@ describe("working", () => {
 describe("my-hud extension", () => {
   beforeEach(() => {
     registeredEvents.clear();
+    registeredCommands.clear();
     vi.clearAllMocks();
   });
 
@@ -1545,6 +1551,40 @@ describe("my-hud extension", () => {
     turnEndHandler();
 
     expect(mockTui.requestRender).toHaveBeenCalled();
+  });
+
+  it("registers /mem command", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+    expect(registeredCommands.has("mem")).toBe(true);
+  });
+
+  it("/mem command notifies with memory status", async () => {
+    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
+
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const notify = vi.fn();
+    const ctx = { ui: { notify } };
+    const command = registeredCommands.get("mem")!;
+    await command.handler("", ctx);
+
+    expect(notify).toHaveBeenCalledWith("内存使用: 42%", "info");
+  });
+
+  it("/mem command warns when memory is high", async () => {
+    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 87, ok: false });
+
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const notify = vi.fn();
+    const ctx = { ui: { notify } };
+    const command = registeredCommands.get("mem")!;
+    await command.handler("", ctx);
+
+    expect(notify).toHaveBeenCalledWith("内存使用: 87%", "warning");
   });
 
   it("registers agent_start handler", async () => {
