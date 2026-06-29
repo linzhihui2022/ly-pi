@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getGitStatus } from "./git";
+import { checkMemoryPressure } from "./memory";
+import { findVitestProcesses } from "./vitest-process";
 
 vi.mock("@earendil-works/pi-tui", () => ({
   truncateToWidth: (text: string, _width: number) => text,
@@ -11,11 +13,21 @@ vi.mock("./git", () => ({
       ahead: 0,
       behind: 0,
       staged: 0,
+      unstaged: 0,
+      untracked: 0,
       stashed: 0,
       conflicted: 0,
       isClean: true,
     }),
   ),
+}));
+
+vi.mock("./memory", () => ({
+  checkMemoryPressure: vi.fn(),
+}));
+
+vi.mock("./vitest-process", () => ({
+  findVitestProcesses: vi.fn(),
 }));
 
 // ── Mocks ──
@@ -1535,27 +1547,98 @@ describe("my-hud extension", () => {
     expect(mockTui.requestRender).toHaveBeenCalled();
   });
 
-  it("footer handles undefined git branch via nullish coalescing", async () => {
+  it("registers agent_start handler", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+    expect(registeredEvents.has("agent_start")).toBe(true);
+  });
+
+  it("registers agent_end handler", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+    expect(registeredEvents.has("agent_end")).toBe(true);
+  });
+
+  it("agent_start hides memory warning widget when memory is ok", async () => {
+    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
+    vi.mocked(findVitestProcesses).mockReturnValue([]);
+
     const mod = await loadModule();
     mod.default(mockPi as any);
 
-    mockFooterData.getGitBranch.mockReturnValue(undefined as any);
+    const agentStartHandler = registeredEvents.get("agent_start")!;
+    agentStartHandler({}, mockCtx);
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    expect(mockCtx.ui.setWidget).toHaveBeenCalledWith(
+      "my-hud-memory-warning",
+      undefined,
+    );
+  });
+
+  it("agent_start shows memory warning widget when memory is high", async () => {
+    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 87, ok: false });
+    vi.mocked(findVitestProcesses).mockReturnValue([
+      { pid: 44124, rssBytes: 1249328 * 1024, command: "node vitest.mjs run" },
+      { pid: 44126, rssBytes: 1500 * 1024 * 1024, command: "node vitest.mjs run" },
+    ]);
+
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const agentStartHandler = registeredEvents.get("agent_start")!;
+    agentStartHandler({}, mockCtx);
+
+    expect(mockCtx.ui.setWidget).toHaveBeenCalledWith(
+      "my-hud-memory-warning",
+      expect.any(Function),
+      { placement: "aboveEditor" },
+    );
+
+    const factory = mockCtx.ui.setWidget.mock.calls.find(
+      (call) => call[0] === "my-hud-memory-warning" && typeof call[1] === "function",
+    )![1] as any;
+    const component = factory(mockTui, mockTheme);
+    const lines = component.render(200);
+
+    expect(lines).toEqual([
+      "⚠️ 内存 87% · vitest 44124(1.2GB), 44126(1.5GB)",
+    ]);
+  });
+
+  it("agent_end also updates memory warning widget", async () => {
+    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 87, ok: false });
+    vi.mocked(findVitestProcesses).mockReturnValue([]);
+
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const agentEndHandler = registeredEvents.get("agent_end")!;
+    agentEndHandler({}, mockCtx);
+
+    expect(mockCtx.ui.setWidget).toHaveBeenCalledWith(
+      "my-hud-memory-warning",
+      expect.any(Function),
+      { placement: "aboveEditor" },
+    );
+  });
+
+  it("agent_start hides widget when theme is unavailable", async () => {
+    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 87, ok: false });
+    vi.mocked(findVitestProcesses).mockReturnValue([]);
+
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const agentStartHandler = registeredEvents.get("agent_start")!;
     const ctx = {
       ...mockCtx,
-      hasUI: true,
-      sessionManager: {
-        getEntries: vi.fn(() => [
-          { type: "message", message: { role: "user", content: "test" } },
-        ]),
-      },
+      ui: { ...mockCtx.ui, getTheme: vi.fn(() => undefined) },
     };
-    sessionStartHandler({}, ctx);
+    agentStartHandler({}, ctx);
 
-    const component = ctx.ui.setFooter.mock.results[0].value;
-    expect(() => component.render(120)).not.toThrow();
-
-    mockFooterData.getGitBranch.mockReturnValue("main");
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith(
+      "my-hud-memory-warning",
+      undefined,
+    );
   });
 });

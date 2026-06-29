@@ -18,6 +18,9 @@ import { getLastUserMessage } from "./session";
 import { Bar } from "./bar";
 import { icon } from "./icons";
 import { pickRandomMessage } from "./working";
+import { checkMemoryPressure } from "./memory";
+import { findVitestProcesses } from "./vitest-process";
+import { buildMemoryWarningLines } from "./memory-widget";
 
 // Re-export pure helpers for consumers / tests
 export { icon } from "./icons";
@@ -33,6 +36,12 @@ export { pickRandomMessage, WORKING_MESSAGES } from "./working";
 export { Bar } from "./bar";
 export type { TokenUsage, StatusLineData } from "./types";
 
+export { checkMemoryPressure } from "./memory";
+export { findVitestProcesses } from "./vitest-process";
+export { buildMemoryWarningLines } from "./memory-widget";
+
+const MEMORY_WIDGET_KEY = "my-hud-memory-warning";
+
 // ── Extension ──
 
 export default function myHud(pi: ExtensionAPI): void {
@@ -44,6 +53,29 @@ export default function myHud(pi: ExtensionAPI): void {
     if (currentTui) currentTui.requestRender();
     bar?.requestRender();
   }
+
+  function updateMemoryWarning(ctx: ExtensionContext): void {
+    const memoryStatus = checkMemoryPressure();
+    const vitestProcesses = findVitestProcesses();
+    const theme = ctx.ui.getTheme("catppuccin-mocha");
+    const lines = theme
+      ? buildMemoryWarningLines(theme, memoryStatus, vitestProcesses)
+      : null;
+
+    if (lines) {
+      ctx.ui.setWidget(
+        MEMORY_WIDGET_KEY,
+        (_tui, _theme) => ({
+          render: (_width: number) => lines,
+          invalidate: () => {},
+        }),
+        { placement: "aboveEditor" },
+      );
+    } else {
+      ctx.ui.setWidget(MEMORY_WIDGET_KEY, undefined);
+    }
+  }
+
   pi.on("turn_start", (_event, ctx) => {
     const theme = ctx.ui.getTheme("catppuccin-mocha");
     const message =
@@ -58,6 +90,9 @@ export default function myHud(pi: ExtensionAPI): void {
     bar?.invalidateGitStatus();
     requestRender();
   });
+
+  pi.on("agent_start", (_event, ctx) => updateMemoryWarning(ctx));
+  pi.on("agent_end", (_event, ctx) => updateMemoryWarning(ctx));
 
   // ── Install HUD on session start ──
   pi.on("session_start", (_event, ctx: ExtensionContext) => {
