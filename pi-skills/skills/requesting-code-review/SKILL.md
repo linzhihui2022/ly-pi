@@ -124,6 +124,11 @@ You: [Fix progress indicators]
 - Review before merge
 - Review when stuck
 
+**Pre-PR / PR Review:**
+- For multi-dimensional PR review across comments, tests, error handling, types, and general quality, use `review-pr` (e.g. `/review-pr`).
+- For lightweight single-task review, use this skill.
+- Run `/review-pr` before creating a PR or when asked to review a PR diff.
+
 ## Red Flags
 
 **Never:**
