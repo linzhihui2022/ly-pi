@@ -76,32 +76,30 @@ export interface StatusLineData {
 }
 ```
 
-### 5.2 aboveEditor 状态行
+### 5.2 aboveEditor 内存警告 widget
 
-`buildStatusLine()` 在状态行末尾追加内存字段：
+新增一个独立的 `aboveEditor` widget，与现有 my-hud 状态行分离。
 
-- 当 `memoryStatus?.ok === false` 时：
-  - 图标：`icon("warning")`（或新增 `memory` 图标）
-  - 颜色：`theme.fg("error", ...)`
-  - 文本：`mem 87%`
-- 正常时该字段为空，不占用空间。
+- widget 仅在内存异常时显示；正常时通过 `setWidget(key, undefined)` 移除。
+- 内容格式（单行紧凑）：
+  ```
+  ⚠️ 内存 87% · vitest 44124(1.2GB), 44126(818MB)
+  ```
+- 整行使用 `theme.fg("error", ...)` 红色渲染。
+- vitest 信息来自 `findVitestProcesses()`，按 PID 升序排列后格式化为 `pid(rss)`。
 
-### 5.3 通知
+### 5.3 渲染流程
 
 在 `index.ts` 的 `agent_start` / `agent_end` handler 中：
 
 1. 调用 `checkMemoryPressure()`。
 2. 如果 `!ok`：
    - 调用 `findVitestProcesses()`。
-   - 如果列表非空，构造通知文本并 `ctx.ui.notify(text, "warning")`。
+   - 构造 widget 文本并 `ctx.ui.setWidget(MEMORY_WIDGET_KEY, ...)`。
+3. 如果 `ok`：
+   - 调用 `ctx.ui.setWidget(MEMORY_WIDGET_KEY, undefined)` 隐藏 widget。
 
-通知示例：
-
-```
-⚠️ 内存压力 87%，发现 vitest 进程：44124 (1.2GB), 44126 (818MB)
-```
-
-为避免同一轮次重复弹通知，可记录最近一次通知状态，内存恢复正常后清除。
+不做去重：每次 hook 都调用 `setWidget`，内容无变化时只是无害重绘。
 
 ## 6. 事件流
 
@@ -114,17 +112,12 @@ index.ts handler
   │     └── 内存 ≥ 80%?
   │
   ├── vitest-process.ts: findVitestProcesses()
-  │     └── 有 vitest 进程?
+  │     └── 收集 vitest PID + RSS
   │
-  ├── ctx.ui.notify(warningText, "warning")  (异常 + 有 vitest)
+  ├── ctx.ui.setWidget(MEMORY_WIDGET_KEY, renderFn)
+  │     └── 异常时显示红色警告 widget
   │
-  ├── bar.updateMemoryStatus(status)
-  │     └── bar.requestRender()
-  │
-  ▼
-widget render callback
-  └── render.ts: buildStatusLine(..., memoryStatus)
-        └── 异常时追加红色 mem 字段
+  └── 内存正常时：ctx.ui.setWidget(MEMORY_WIDGET_KEY, undefined)
 ```
 
 ## 7. 模块职责
@@ -133,10 +126,9 @@ widget render callback
 |------|------|
 | `memory.ts` | 解析 `vm_stat`，返回内存使用状态 |
 | `vitest-process.ts` | 解析 `ps`，返回 vitest 进程列表 |
-| `types.ts` | 新增 `MemoryStatus` 相关类型 |
-| `bar.ts` | 持有 `memoryStatus`，驱动 widget 重绘 |
-| `render.ts` | 纯函数：根据 `memoryStatus` 渲染状态行 |
-| `index.ts` | 事件注册、状态检测、通知触发、数据流转 |
+| `types.ts` | 新增 `MemoryStatus` 与 `VitestProcess` 类型 |
+| `memory-widget.ts` | 纯函数：构造内存警告 widget 文本 |
+| `index.ts` | 事件注册、内存检测、vitest 扫描、widget 显隐控制 |
 
 ## 8. 测试策略
 
@@ -153,15 +145,15 @@ widget render callback
   - 验证 RSS 解析与字节转换
   - 验证解析失败返回空数组
 
-- `render.test.ts`：
-  - 正常 `memoryStatus` 不渲染 mem 字段
-  - 异常 `memoryStatus` 渲染红色 `mem 87%`
+- `memory-widget.test.ts`：
+  - 验证内存异常 + 无 vitest 时 widget 文本
+  - 验证内存异常 + 有 vitest 时格式 `⚠️ 内存 87% · vitest 44124(1.2GB), 44126(818MB)`
+  - 验证内存正常时不返回内容
 
-- `index.test.ts` / `bar.test.ts`：
-  - 验证 `agent_start` / `agent_end` 触发检测
-  - 验证内存异常时调用 `notify`（当有 vitest 进程）
-  - 验证没有 vitest 进程时不弹通知
-  - 验证内存正常时不渲染警告
+- `index.test.ts`：
+  - 验证 `agent_start` / `agent_end` 触发内存检测
+  - 验证内存异常时设置 widget、正常时隐藏 widget
+  - 验证 widget 内容包含内存压力和 vitest 进程信息
 
 ## 9. 排除项
 
@@ -172,3 +164,4 @@ widget render callback
 | 可配置阈值 | 先硬编码 80%，后续有需求再加 |
 | 非 macOS 支持 | 先解决当前 macOS 场景，其他平台静默兜底 |
 | footer/working 显示 | 内存状态属于系统监控，放在 aboveEditor 统一展示 |
+| notify 弹窗 | 已改为 widget 展示，避免通知堆叠 |
