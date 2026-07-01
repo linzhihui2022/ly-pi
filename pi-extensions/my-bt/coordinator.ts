@@ -17,6 +17,10 @@ import type { BtConfig } from "./types";
 export const GLOBAL_BT_DIR = join(homedir(), ".my-bt");
 export const DEFAULT_PID_FILE = join(GLOBAL_BT_DIR, "playing.json");
 export const DEFAULT_LOCK_DIR = join(GLOBAL_BT_DIR, ".lock");
+export const DEFAULT_SOUND_PID_FILE = join(GLOBAL_BT_DIR, "sound-pids.json");
+export const DEFAULT_OVERLAY_PID_FILE = join(GLOBAL_BT_DIR, "overlay-pids.json");
+export const DEFAULT_SOUND_LOCK_DIR = join(GLOBAL_BT_DIR, ".sound-lock");
+export const DEFAULT_OVERLAY_LOCK_DIR = join(GLOBAL_BT_DIR, ".overlay-lock");
 
 interface CoordinatorState {
   pids: number[];
@@ -121,8 +125,8 @@ export function spawnSoundProcess(
   filePath: string,
   runtimeDir: string = GLOBAL_BT_DIR,
 ): ChildProcess {
-  const pidFile = join(runtimeDir, "playing.json");
-  const lockDir = join(runtimeDir, ".lock");
+  const pidFile = join(runtimeDir, "sound-pids.json");
+  const lockDir = join(runtimeDir, ".sound-lock");
   killPlayingProcesses(pidFile, lockDir);
   const child = exec(`afplay "${filePath}"`, onExecDone);
   if (child.pid) {
@@ -142,8 +146,8 @@ export function spawnOverlayProcess(
   terminalApp: string,
   runtimeDir: string = GLOBAL_BT_DIR,
 ): ChildProcess {
-  const pidFile = join(runtimeDir, "playing.json");
-  const lockDir = join(runtimeDir, ".lock");
+  const pidFile = join(runtimeDir, "overlay-pids.json");
+  const lockDir = join(runtimeDir, ".overlay-lock");
   killPlayingProcesses(pidFile, lockDir);
   const scriptPath = join(extDir, "dist", "mac-overlay.js");
   const child = exec(

@@ -501,4 +501,97 @@ describe("my-bt extension", () => {
     expect(playCategory).not.toHaveBeenCalled();
     expect(playOverlay).not.toHaveBeenCalled();
   });
+
+  // ── Tool event integration tests ──
+
+  it("subscribes to tool_call when toolEventMap is configured", async () => {
+    const configWithToolEvent = {
+      ...DEFAULT_CONFIG,
+      toolEventMap: {
+        ask_user_question: "question",
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithToolEvent));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+    expect(registeredEvents.has("tool_call")).toBe(true);
+  });
+
+  it("does not subscribe to tool_call when toolEventMap is missing", async () => {
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+    expect(registeredEvents.has("tool_call")).toBe(false);
+  });
+
+  it("plays sound and overlay on tool_call when toolName is mapped", async () => {
+    const configWithToolEvent = {
+      ...DEFAULT_CONFIG,
+      toolEventMap: {
+        ask_user_question: "question",
+      },
+      overlayTextMap: {
+        ask_user_question: {
+          type: "QUESTION",
+          title: "侦测到提问",
+          subtitle: "BT-7274 需要你的反馈",
+        },
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithToolEvent));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("tool_call");
+    handler?.({ toolName: "ask_user_question" }, mockCtx as any);
+
+    expect(playCategory).toHaveBeenCalledWith(
+      expect.objectContaining({ toolEventMap: expect.any(Object) }),
+      "question",
+      expect.any(Function),
+    );
+    expect(playOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({ overlayTextMap: expect.any(Object) }),
+      "ask_user_question",
+      expect.any(String),
+      expect.any(Function),
+    );
+  });
+
+  it("does not play on tool_call when toolName is not mapped", async () => {
+    const configWithToolEvent = {
+      ...DEFAULT_CONFIG,
+      toolEventMap: {
+        ask_user_question: "question",
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithToolEvent));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("tool_call");
+    handler?.({ toolName: "bash" }, mockCtx as any);
+
+    expect(playCategory).not.toHaveBeenCalled();
+    expect(playOverlay).not.toHaveBeenCalled();
+  });
+
+  it("does not play on tool_call when disabled", async () => {
+    const configWithToolEvent = {
+      ...DEFAULT_CONFIG,
+      enabled: false,
+      toolEventMap: {
+        ask_user_question: "question",
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithToolEvent));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const handler = registeredEvents.get("tool_call");
+    handler?.({ toolName: "ask_user_question" }, mockCtx as any);
+
+    expect(playCategory).not.toHaveBeenCalled();
+    expect(playOverlay).not.toHaveBeenCalled();
+  });
 });

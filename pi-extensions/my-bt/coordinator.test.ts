@@ -151,7 +151,7 @@ describe("recordPids / killPlayingProcesses", () => {
 });
 
 describe("spawnSoundProcess", () => {
-  it("kills old processes and returns child pid", () => {
+  it("kills old sound processes and returns child pid", () => {
     const config = { soundDir: "/fake/sounds" } as any;
     const result = spawnSoundProcess(config, "startup.wav", TEST_DIR);
     expect(result.pid).toBeGreaterThan(0);
@@ -159,6 +159,10 @@ describe("spawnSoundProcess", () => {
       expect.stringContaining('afplay "startup.wav"'),
       expect.any(Function),
     );
+
+    const pidFile = join(TEST_DIR, "sound-pids.json");
+    const content = JSON.parse(readFileSync(pidFile, "utf-8"));
+    expect(content.pids).toEqual([result.pid]);
   });
 
   it("records pid when child has no pid is a no-op", () => {
@@ -210,7 +214,7 @@ describe("spawnSoundProcess", () => {
 });
 
 describe("spawnOverlayProcess", () => {
-  it("kills old processes and returns child pid", () => {
+  it("kills old overlay processes and returns child pid", () => {
     const result = spawnOverlayProcess(
       "/fake/ext",
       "SESSION START",
@@ -227,6 +231,10 @@ describe("spawnOverlayProcess", () => {
       expect.stringContaining("osascript -l JavaScript"),
       expect.any(Function),
     );
+
+    const pidFile = join(TEST_DIR, "overlay-pids.json");
+    const content = JSON.parse(readFileSync(pidFile, "utf-8"));
+    expect(content.pids).toEqual([result.pid]);
   });
 
   it("records pid when child has no pid is a no-op", () => {
@@ -326,5 +334,41 @@ describe("spawnOverlayProcess", () => {
         TEST_DIR,
       ),
     ).not.toThrow();
+  });
+});
+
+describe("sound and overlay isolation", () => {
+  it("does not kill overlay pids when spawning sound", () => {
+    const overlayPidFile = join(TEST_DIR, "overlay-pids.json");
+    const overlayLockDir = join(TEST_DIR, ".overlay-lock");
+    recordPids([11111], overlayPidFile, overlayLockDir);
+
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
+    spawnSoundProcess({ soundDir: "/fake/sounds" } as any, "startup.wav", TEST_DIR);
+
+    expect(killSpy).not.toHaveBeenCalledWith(11111, "SIGTERM");
+    killSpy.mockRestore();
+  });
+
+  it("does not kill sound pids when spawning overlay", () => {
+    const soundPidFile = join(TEST_DIR, "sound-pids.json");
+    const soundLockDir = join(TEST_DIR, ".sound-lock");
+    recordPids([22222], soundPidFile, soundLockDir);
+
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
+    spawnOverlayProcess(
+      "/fake/ext",
+      "SESSION START",
+      "BT-7274",
+      "subtitle",
+      5,
+      "blue",
+      0,
+      "WezTerm",
+      TEST_DIR,
+    );
+
+    expect(killSpy).not.toHaveBeenCalledWith(22222, "SIGTERM");
+    killSpy.mockRestore();
   });
 });

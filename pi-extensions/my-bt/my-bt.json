@@ -1,19 +1,18 @@
 {
-  "enabled": true,
-  "soundDir": "sounds",
   "categories": {
-    "startup": {
-      "description": "BT-7274 启动 / 上线",
-      "files": [
-        "准备好登机.wav",
-        "我看到你也很高兴.wav",
-        "重启主要系统.wav",
-        "祝你好运.wav"
-      ]
-    },
     "affirmative": {
       "description": "确认 / 执行命令",
-      "files": ["相信我.wav", "电池电力百分之百.wav"]
+      "files": [
+        "相信我.wav",
+        "电池电力百分之百.wav"
+      ]
+    },
+    "completed": {
+      "description": "任务完成",
+      "files": [
+        "做的好.wav",
+        "你还好吗.wav"
+      ]
     },
     "engaging": {
       "description": "开始行动 / 交战",
@@ -24,51 +23,82 @@
         "是时候完成任务了.wav"
       ]
     },
-    "completed": {
-      "description": "任务完成",
-      "files": ["做的好.wav", "你还好吗.wav"]
-    },
     "error": {
       "description": "错误 / 失败",
-      "files": ["侦测到敌方泰坦.wav", "小心点.wav"]
-    },
-    "warning": {
-      "description": "资源 / 限制警告",
-      "files": ["电量低，电力不足.wav", "动力不足.wav", "能量不足.wav"]
+      "files": [
+        "侦测到敌方泰坦.wav",
+        "小心点.wav"
+      ]
     },
     "joke": {
       "description": "彩蛋 / 笑话",
-      "files": ["敌方目标接近.wav"]
+      "files": [
+        "敌方目标接近.wav"
+      ]
+    },
+    "question": {
+      "description": "提问 / 需要用户确认",
+      "files": [
+        "你还好吗.wav",
+        "这边.wav"
+      ]
+    },
+    "startup": {
+      "description": "BT-7274 启动 / 上线",
+      "files": [
+        "准备好登机.wav",
+        "我看到你也很高兴.wav",
+        "重启主要系统.wav",
+        "祝你好运.wav"
+      ]
+    },
+    "warning": {
+      "description": "资源 / 限制警告",
+      "files": [
+        "电量低，电力不足.wav",
+        "动力不足.wav",
+        "能量不足.wav"
+      ]
     }
   },
+  "enabled": true,
   "eventMap": {
-    "session_start": "startup",
+    "agent_end": "completed",
     "agent_start": "engaging",
-    "agent_end": "completed"
+    "session_start": "startup"
+  },
+  "overlayTextMap": {
+    "agent_end": {
+      "subtitle": "做得好，铁御",
+      "title": "任务完成",
+      "type": "COMPLETE"
+    },
+    "agent_start": {
+      "subtitle": "将控制转给铁御",
+      "title": "执行任务中",
+      "type": "MISSION"
+    },
+    "ask_user_question": {
+      "subtitle": "BT-7274 需要你的反馈",
+      "title": "侦测到提问",
+      "type": "QUESTION"
+    },
+    "permissions_ui_prompt": {
+      "subtitle": "铁御，请确认权限",
+      "title": "侦测到危险操作",
+      "type": "WARNING"
+    },
+    "session_start": {
+      "subtitle": "主要系统重启完成",
+      "title": "BT-7274 已上线",
+      "type": "SESSION START"
+    }
   },
   "permissionEventMap": {
     "permissions:ui_prompt": "engaging"
   },
-  "overlayTextMap": {
-    "session_start": {
-      "type": "SESSION START",
-      "title": "BT-7274 已上线",
-      "subtitle": "主要系统重启完成"
-    },
-    "agent_start": {
-      "type": "MISSION",
-      "title": "执行任务中",
-      "subtitle": "将控制转给铁御"
-    },
-    "agent_end": {
-      "type": "COMPLETE",
-      "title": "任务完成",
-      "subtitle": "做得好，铁御"
-    },
-    "permissions_ui_prompt": {
-      "type": "WARNING",
-      "title": "侦测到危险操作",
-      "subtitle": "铁御，请确认权限"
-    }
+  "soundDir": "sounds",
+  "toolEventMap": {
+    "ask_user_question": "question"
   }
 }

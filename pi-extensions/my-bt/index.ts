@@ -52,7 +52,6 @@ export default function myBt(pi: ExtensionAPI): void {
     "agent_end",
     "turn_start",
     "turn_end",
-    "tool_call",
     "tool_result",
   ]);
 
@@ -62,6 +61,18 @@ export default function myBt(pi: ExtensionAPI): void {
       if (!config.enabled) return;
       playCategory(config, category, ctx.ui.notify);
       playOverlay(config, eventName, EXT_DIR, ctx.ui.notify);
+    });
+  }
+
+  // ── Tool-driven playback ──
+
+  if (config.toolEventMap) {
+    pi.on("tool_call", (event: any, ctx) => {
+      if (!config.enabled) return;
+      const category = config.toolEventMap?.[event.toolName];
+      if (!category) return;
+      playCategory(config, category, ctx.ui.notify);
+      playOverlay(config, event.toolName, EXT_DIR, ctx.ui.notify);
     });
   }
 
