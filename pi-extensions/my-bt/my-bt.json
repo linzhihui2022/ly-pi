@@ -95,7 +95,7 @@
     }
   },
   "permissionEventMap": {
-    "permissions:ui_prompt": "engaging"
+    "permissions:ui_prompt": "question"
   },
   "soundDir": "sounds",
   "toolEventMap": {
