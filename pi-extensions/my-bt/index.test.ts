@@ -594,4 +594,115 @@ describe("my-bt extension", () => {
     expect(playCategory).not.toHaveBeenCalled();
     expect(playOverlay).not.toHaveBeenCalled();
   });
+
+  // ── Agent end suppression after question ──
+
+  it("skips agent_end when last played category was question", async () => {
+    const configWithQuestion = {
+      ...DEFAULT_CONFIG,
+      toolEventMap: {
+        ask_user_question: "question",
+      },
+      overlayTextMap: {
+        agent_end: { type: "DONE", title: "Complete" },
+        ask_user_question: { type: "QUESTION", title: "Question" },
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify(configWithQuestion),
+    );
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const toolHandler = registeredEvents.get("tool_call");
+    const agentEndHandler = registeredEvents.get("agent_end");
+
+    toolHandler?.({ toolName: "ask_user_question" }, mockCtx as any);
+    expect(playCategory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ toolEventMap: expect.any(Object) }),
+      "question",
+      expect.any(Function),
+    );
+
+    vi.mocked(playCategory).mockClear();
+    vi.mocked(playOverlay).mockClear();
+    agentEndHandler?.({}, mockCtx as any);
+
+    expect(playCategory).not.toHaveBeenCalled();
+    expect(playOverlay).not.toHaveBeenCalled();
+  });
+
+  it("plays agent_end when last played category was not question", async () => {
+    const configWithOverlay = {
+      ...DEFAULT_CONFIG,
+      overlayTextMap: {
+        agent_start: { type: "GO", title: "Engaging" },
+        agent_end: { type: "DONE", title: "Complete" },
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const agentStartHandler = registeredEvents.get("agent_start");
+    const agentEndHandler = registeredEvents.get("agent_end");
+
+    agentStartHandler?.({}, mockCtx as any);
+    expect(playCategory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ eventMap: expect.any(Object) }),
+      "engaging",
+      expect.any(Function),
+    );
+
+    vi.mocked(playCategory).mockClear();
+    vi.mocked(playOverlay).mockClear();
+    agentEndHandler?.({}, mockCtx as any);
+
+    expect(playCategory).toHaveBeenCalledWith(
+      expect.objectContaining({ eventMap: expect.any(Object) }),
+      "completed",
+      expect.any(Function),
+    );
+    expect(playOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({ overlayTextMap: expect.any(Object) }),
+      "agent_end",
+      expect.any(String),
+      expect.any(Function),
+    );
+  });
+
+  it("resets last played category after skipped agent_end", async () => {
+    const configWithQuestion = {
+      ...DEFAULT_CONFIG,
+      toolEventMap: {
+        ask_user_question: "question",
+      },
+      overlayTextMap: {
+        agent_end: { type: "DONE", title: "Complete" },
+      },
+    };
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify(configWithQuestion),
+    );
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const toolHandler = registeredEvents.get("tool_call");
+    const agentEndHandler = registeredEvents.get("agent_end");
+
+    toolHandler?.({ toolName: "ask_user_question" }, mockCtx as any);
+    vi.mocked(playCategory).mockClear();
+    vi.mocked(playOverlay).mockClear();
+
+    agentEndHandler?.({}, mockCtx as any);
+    agentEndHandler?.({}, mockCtx as any);
+
+    expect(playCategory).toHaveBeenCalledOnce();
+    expect(playCategory).toHaveBeenCalledWith(
+      expect.objectContaining({ eventMap: expect.any(Object) }),
+      "completed",
+      expect.any(Function),
+    );
+    expect(playOverlay).toHaveBeenCalledOnce();
+  });
 });

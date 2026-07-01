@@ -36,6 +36,7 @@ function saveConfig(config: BtConfig): void {
 
 export default function myBt(pi: ExtensionAPI): void {
   let config: BtConfig;
+  let lastPlayedCategory: string | undefined;
   try {
     config = loadConfig();
   } catch {
@@ -59,6 +60,11 @@ export default function myBt(pi: ExtensionAPI): void {
     if (!VALID_EVENTS.has(eventName)) continue;
     pi.on(eventName as any, (_event, ctx) => {
       if (!config.enabled) return;
+      if (eventName === "agent_end" && lastPlayedCategory === "question") {
+        lastPlayedCategory = undefined;
+        return;
+      }
+      lastPlayedCategory = category;
       playCategory(config, category, ctx.ui.notify);
       playOverlay(config, eventName, EXT_DIR, ctx.ui.notify);
     });
@@ -71,6 +77,7 @@ export default function myBt(pi: ExtensionAPI): void {
       if (!config.enabled) return;
       const category = config.toolEventMap?.[event.toolName];
       if (!category) return;
+      lastPlayedCategory = category;
       playCategory(config, category, ctx.ui.notify);
       playOverlay(config, event.toolName, EXT_DIR, ctx.ui.notify);
     });
@@ -84,6 +91,7 @@ export default function myBt(pi: ExtensionAPI): void {
       const category = config.permissionEventMap?.["permissions:ui_prompt"];
       if (!category) return;
       // EventBus handlers don't receive a UI context, so errors are silent.
+      lastPlayedCategory = category;
       playCategory(config, category);
       playOverlay(config, "permissions_ui_prompt", EXT_DIR);
     });
