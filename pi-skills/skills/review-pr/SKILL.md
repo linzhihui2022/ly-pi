@@ -51,6 +51,10 @@ git diff -U10 "$MERGE_BASE"..HEAD > "$DIFF_FILE"
 - 文件放在 `.git/review-pr/` 下，git 不会追踪，也不会污染工作区。
 - 使用 `git rev-parse --git-path review-pr` 能正确处理普通仓库、linked worktree 和 bare repo。
 - 文件名包含时间戳、进程 ID 和随机数，避免并发冲突。
+- **排除自动生成类型产物**：如果项目存在自动生成的类型文件（例如 `*.gen.ts`、GraphQL/Prisma/OpenAPI 代码生成输出、`.d.ts` 生成产物），应当在生成 diff 时排除，避免 reviewer 对无意义噪音进行审查。项目可通过以下方式处理：
+  - 在 `.gitattributes` 中将对应路径标记为 `linguist-generated=true`，GitHub 会自动折叠；
+  - 本地 `git diff` 使用路径排除，例如 `git diff -U10 "$MERGE_BASE"..HEAD -- . ':(exclude)*.gen.ts' ':(exclude)src/generated/**'`；
+  - 无法通过 `.gitattributes` 或路径排除精确过滤时，在摘要中显式列出被排除的生成文件，并确保 reviewer 只审查其源文件/模板。
 
 ### 3. Determine applicable reviewers
 
@@ -175,6 +179,7 @@ Each reviewer emits a prose analysis followed by a mandatory `## Tag Summary for
 - Preserve each reviewer's original output format and scoring; only extract severity tags for aggregation.
 - Do not fix issues automatically — this skill reviews only.
 - **Stay scoped to the PR. Reviewers must report only issues introduced or affected by the PR's diff; historical/pre-existing issues are out of scope. The aggregator must filter out such findings and never include them in the final report.**
+- **Ignore generated artifacts. Do not review files that are automatically generated (e.g., `*.gen.ts`, `*.d.ts` from codegen, GraphQL/Prisma/OpenAPI generated outputs, or paths marked `linguist-generated=true` in `.gitattributes`). Focus review on the source files/templates that produce them.**
 - If a reviewer fails, continue with the others.
 
 ## Integration
