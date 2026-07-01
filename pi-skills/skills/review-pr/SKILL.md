@@ -41,10 +41,16 @@ Abort before reviewing if any of these are true:
 ```bash
 DEFAULT_BRANCH=$(git rev-parse --abbrev-ref origin/HEAD | sed 's@origin/@@')
 MERGE_BASE=$(git merge-base HEAD origin/$DEFAULT_BRANCH)
-mkdir -p .lychee/review-pr
-DIFF_FILE=".lychee/review-pr/review-$(date +%s).diff"
+DIFF_DIR_REL=$(git rev-parse --git-path review-pr)
+mkdir -p "$DIFF_DIR_REL"
+DIFF_DIR=$(cd "$DIFF_DIR_REL" && pwd)
+DIFF_FILE="$DIFF_DIR/review-pr-$(date +%s)-$$-$RANDOM.diff"
 git diff -U10 "$MERGE_BASE"..HEAD > "$DIFF_FILE"
 ```
+
+- 文件放在 `.git/review-pr/` 下，git 不会追踪，也不会污染工作区。
+- 使用 `git rev-parse --git-path review-pr` 能正确处理普通仓库、linked worktree 和 bare repo。
+- 文件名包含时间戳、进程 ID 和随机数，避免并发冲突。
 
 ### 3. Determine applicable reviewers
 
@@ -72,7 +78,7 @@ ${CHANGED_FILES}
 ## Diff file
 ${DIFF_FILE}
 
-Read the diff file and review error handling, catch blocks, fallback logic, retry logic, and any pattern that could suppress or hide failures.`,
+Read the diff file and review error handling, catch blocks, fallback logic, retry logic, and any pattern that could suppress or hide failures. **Focus only on changes introduced by this PR. Do not discuss pre-existing issues or code not modified in the diff.**`,
   run_in_background: true
 })
 ```
@@ -90,44 +96,76 @@ get_subagent_result({ agent_id: "<agent-id-2>", wait: true })
 
 If an agent fails or times out, record it under `Reviewers not completed` and continue.
 
+After all reviewers finish, clean up the diff file:
+
+```bash
+rm -f "$DIFF_FILE"
+```
+
 ### 6. Aggregate output
 
-Each reviewer emits a prose analysis followed by a mandatory `## Tag Summary for Aggregator` section. Parse only that section for lines beginning with `[CRITICAL]`, `[IMPORTANT]`, or `[SUGGESTION]`. Copy tagged lines into the corresponding summary bucket, prefixed by the reviewer name. Place the full reviewer outputs in `Detailed reviewer reports`.
+Each reviewer emits a prose analysis followed by a mandatory `## Tag Summary for Aggregator` section. Parse only that section for lines beginning with `[CRITICAL]`, `[IMPORTANT]`, or `[SUGGESTION]`. Produce a single, consolidated report in Chinese. Remove duplicates and merge overlapping findings. **Discard any findings about pre-existing issues or code not changed by this PR; the report must focus solely on what the PR introduces or modifies.** Do not copy raw tagged lines verbatim, and do not include the original reviewer prose or detailed reports.
 
 ```markdown
-# PR Review Summary
+# PR 审查摘要
 
-## Scope
-- Default branch: origin/main
-- Merge base: <sha>
-- Files changed: N
-- Reviewers run: pr-code-reviewer, pr-test-analyzer, ...
+## 概览
+- PR: <owner/repo#number>
+- 标题: <PR title>
+- 默认分支: <default branch>
+- 合并基线: <merge-base sha>
+- 变更文件数: N
+- 参与审查: <reviewer 列表>
 
-## Critical Issues (must fix)
-- [pr-silent-failure-hunter] Silent retry in catch block masks gateway failures [src/payment.ts:15]
-- [pr-test-analyzer] Missing negative test for invalid amount [src/payment.test.ts:7]
+## 裁定
+<必须修复 / 建议修复 / 可合并>
 
-## Important Issues (should fix)
-- ...
+## 关键问题（必须修复）
+合并重复项，按主题分组。每条只保留一句话描述 + 文件位置。
 
-## Suggestions (nice to have)
-- ...
+- **A1. <问题一句话描述>** — `<file:line>`
+  - 原因：<一句话原因>
+  - 建议：<一句话建议>
+- **A2. <问题一句话描述>** — `<file:line>`
+  - 原因：<一句话原因>
+  - 建议：<一句话建议>
 
-## Detailed reviewer reports
-[Full text from each reviewer for reference]
+## 重要问题（建议修复）
+同上。合并来自不同 reviewer 的同类问题；如果多个 reviewer 提到同一处，只保留一条。
 
-## Reviewers not completed
-- pr-type-design-analyzer (timed out)
+- **B1. <问题一句话描述>** — `<file:line>`
+  - 原因：<一句话原因>
+  - 建议：<一句话建议>
+- **B2. <问题一句话描述>** — `<file:line>`
+  - 原因：<一句话原因>
+  - 建议：<一句话建议>
 
-## Verdict
-Ready to merge | Needs fixes | Do not merge
+## 建议（可选）
+简短、可执行。
 
-## Recommended Action
-1. Fix critical issues first.
-2. Address important issues.
-3. Consider suggestions.
-4. Re-run `/review-pr` after fixes.
+- **C1. <建议一句话描述>** — `<file:line>`
+- **C2. <建议一句话描述>** — `<file:line>`
+
+## 未完成的审查
+- <reviewer>（<原因：超时 / 失败 / 异常>）
+
+## 推荐后续操作
+1. 先修复关键问题（A 开头）。
+2. 处理重要问题（B 开头）。
+3. 酌情采纳建议（C 开头）。
+4. 修改后重新运行 `/review-pr`。`
 ```
+
+### 格式规则
+
+- **统一使用中文**。摘要部分必须全部用中文表述。
+- **去重合并**。同一文件、同一模式的问题只出现一次。
+- **编号前缀**。关键问题用 `A1`, `A2`, ...；重要问题用 `B1`, `B2`, ...；建议用 `C1`, `C2`, ...。方便用户直接引用，如“修复 A2”。
+- **移除标签噪音**。摘要中不出现 `[CRITICAL]` / `[IMPORTANT]` / `[SUGGESTION]`。严重度通过章节标题体现。
+- **一条一点**。每条问题不超过两行核心信息（问题 + 位置），需要补充时用缩进的“原因/建议”子项。
+- **文件位置前置或紧随**。定位信息放在描述之后，便于快速跳转：`packages/foo.ts:42`。
+- **聚焦 PR 本身**。只报告当前 PR 引入或修改的代码相关问题；不要讨论历史遗留问题、未变更文件或既有代码缺陷。
+- **不输出详细审查记录**。只保留合并后的摘要，不要展开各 reviewer 的原始 prose 输出。
 
 ## Rules
 
@@ -136,6 +174,7 @@ Ready to merge | Needs fixes | Do not merge
 - Default to parallel dispatch.
 - Preserve each reviewer's original output format and scoring; only extract severity tags for aggregation.
 - Do not fix issues automatically — this skill reviews only.
+- **Stay scoped to the PR. Reviewers must report only issues introduced or affected by the PR's diff; historical/pre-existing issues are out of scope. The aggregator must filter out such findings and never include them in the final report.**
 - If a reviewer fails, continue with the others.
 
 ## Integration
