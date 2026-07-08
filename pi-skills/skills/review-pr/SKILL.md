@@ -70,10 +70,12 @@ git diff -U10 "$MERGE_BASE"..HEAD > "$DIFF_FILE"
 
 For each selected reviewer, launch a background subagent. Pass the diff file path, the list of changed files, and the merge-base SHA. Each reviewer prompt is self-contained.
 
+For `pr-code-reviewer`, explicitly forbid CI/build/test commands in the prompt to keep it fast:
+
 ```typescript
 subagent({
-  subagent_type: "pr-silent-failure-hunter",
-  description: "Review error handling",
+  subagent_type: "pr-code-reviewer",
+  description: "Review overall code quality",
   prompt: `You are reviewing a git diff. Do not modify files.
 
 ## Files changed
@@ -82,7 +84,9 @@ ${CHANGED_FILES}
 ## Diff file
 ${DIFF_FILE}
 
-Read the diff file and review error handling, catch blocks, fallback logic, retry logic, and any pattern that could suppress or hide failures. **Focus only on changes introduced by this PR. Do not discuss pre-existing issues or code not modified in the diff.**`,
+Read the diff file and review overall code quality, correctness, and project guideline compliance. **Focus only on changes introduced by this PR. Do not discuss pre-existing issues or code not modified in the diff.**
+
+**Important:** Do not execute CI/build/test commands (e.g., \`npm test\`, \`pnpm typecheck\`, \`lint\`, \`build\`, \`prettier --check\`). You may only use lightweight read/grep/find operations to inspect project guidelines or related files when necessary.`,
   run_in_background: true
 })
 ```

@@ -69,3 +69,6 @@ If no high-confidence issues exist, the tag summary must still appear and contai
 - Focus on issues that truly matter.
 - Never say "looks good" without checking.
 - Categorize by actual severity.
+- **Do not execute CI/build/test commands.** Do not run `npm test`, `pnpm test`, `yarn test`, `typecheck`, `tsc`, `lint`, `eslint`, `prettier --check`, `build`, `install`, or any long-running process. These are handled by CI, not this review.
+- **Lightweight file inspection only.** You may use `read`, `grep`, `find`, or `ls` to inspect project guidelines (e.g., `AGENTS.md`) or related source files, but do not run them as part of a build/test pipeline.
+- **Do not modify files.**
