@@ -9,9 +9,12 @@ Run a focused, multi-dimensional PR review by dispatching specialized reviewer s
 
 ## When to Use
 
-- User says `/review-pr` or `/review-pr [aspects]`.
+- User says `/review-pr` or `/review-pr [aspects]` without a URL.
+- User provides `/review-pr <https://github.com/owner/repo/pull/N>` or `/review-pr [aspects] <PR URL>`.
 - User says they are ready to create a PR or asks for a PR review.
 - You have completed a feature and want a comprehensive pre-merge review.
+
+When no PR URL is provided, attempt to detect the PR associated with the current branch. If a PR is found, use its metadata in the report header and review the local diff as that PR. If no PR is found, proceed with the local branch diff and note it in the report header.
 
 ## Supported Aspects
 
@@ -36,7 +39,28 @@ Abort before reviewing if any of these are true:
 - Current branch is the default branch (e.g. `main` or `master`) → tell the user to create a feature branch first.
 - `git merge-base HEAD origin/main` fails → no PR range can be computed.
 
-### 2. Compute review range
+### 2. Determine PR metadata
+
+Determine the PR metadata (number, URL, title) to display in the report header:
+
+1. **If the user provided a PR URL** in the invocation (e.g., `/review-pr https://github.com/owner/repo/pull/42`):
+   - Parse `owner`, `repo`, and `number` from the URL.
+   - Set `PR_URL` to the provided URL.
+   - Optionally fetch the PR title with `gh pr view <number> --json title` or `GET /repos/{owner}/{repo}/pulls/{number}`.
+2. **If no URL was provided**, attempt to detect the PR for the current branch:
+   - Try `gh pr view --json number,url,title --state all`.
+     - If it succeeds and returns a PR, set `PR_URL`, `PR_NUMBER`, and `PR_TITLE` from the output.
+   - If `gh` is unavailable or returns no PR, and `GITHUB_TOKEN` is set:
+     - Determine the current branch: `git branch --show-current`.
+     - Determine the GitHub remote: use the branch's tracking remote or `origin` via `git config` / `git remote`.
+     - Parse `owner/repo` from the remote URL (HTTPS: `https://github.com/owner/repo.git`, SSH: `git@github.com:owner/repo.git`).
+     - Query `GET /repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=all`.
+     - If the response contains at least one PR, use the first result's `html_url`, `number`, and `title`.
+3. **If no PR is found** after both attempts:
+   - Set `PR_URL` to `未检测到` (not detected) and `PR_TITLE` to empty.
+   - Continue reviewing the local branch diff.
+
+### 3. Compute review range
 
 ```bash
 DEFAULT_BRANCH=$(git rev-parse --abbrev-ref origin/HEAD | sed 's@origin/@@')
@@ -56,7 +80,7 @@ git diff -U10 "$MERGE_BASE"..HEAD > "$DIFF_FILE"
   - 本地 `git diff` 使用路径排除，例如 `git diff -U10 "$MERGE_BASE"..HEAD -- . ':(exclude)*.gen.ts' ':(exclude)src/generated/**'`；
   - 无法通过 `.gitattributes` 或路径排除精确过滤时，在摘要中显式列出被排除的生成文件，并确保 reviewer 只审查其源文件/模板。
 
-### 3. Determine applicable reviewers
+### 4. Determine applicable reviewers
 
 | Rule | Reviewer | Condition |
 |------|----------|-----------|
@@ -66,7 +90,7 @@ git diff -U10 "$MERGE_BASE"..HEAD > "$DIFF_FILE"
 | Comments | `pr-comment-analyzer` | Diff adds/modifies more than 5 comment lines (`+//`, `+/*`, `+#`, `+"""`, `+'''`, or JSDoc patterns) |
 | Types | `pr-type-design-analyzer` | Any changed file declares `type`, `interface`, `struct`, `class`, `enum`, or `trait` |
 
-### 4. Dispatch reviewers in parallel
+### 5. Dispatch reviewers in parallel
 
 For each selected reviewer, launch a background subagent. Pass the diff file path, the list of changed files, and the merge-base SHA. Each reviewer prompt is self-contained.
 
@@ -93,7 +117,7 @@ Read the diff file and review overall code quality, correctness, and project gui
 
 Repeat for each applicable reviewer. All background agents can be launched in the same message.
 
-### 5. Collect results
+### 6. Collect results
 
 Wait for each agent to finish:
 
@@ -110,7 +134,7 @@ After all reviewers finish, clean up the diff file:
 rm -f "$DIFF_FILE"
 ```
 
-### 6. Aggregate output
+### 7. Aggregate output
 
 Each reviewer emits a prose analysis followed by a mandatory `## Tag Summary for Aggregator` section. Parse only that section for lines beginning with `[CRITICAL]`, `[IMPORTANT]`, or `[SUGGESTION]`. Produce a single, consolidated report in Chinese. Remove duplicates and merge overlapping findings. **Discard any findings about pre-existing issues or code not changed by this PR; the report must focus solely on what the PR introduces or modifies.** Do not copy raw tagged lines verbatim, and do not include the original reviewer prose or detailed reports.
 
@@ -118,8 +142,8 @@ Each reviewer emits a prose analysis followed by a mandatory `## Tag Summary for
 # PR 审查摘要
 
 ## 概览
-- PR: <owner/repo#number>
-- 标题: <PR title>
+- PR: ${PR_URL:-未检测到}
+- 标题: ${PR_TITLE:-}
 - 默认分支: <default branch>
 - 合并基线: <merge-base sha>
 - 变更文件数: N
@@ -179,6 +203,7 @@ Each reviewer emits a prose analysis followed by a mandatory `## Tag Summary for
 
 - Never run the review if the workspace is dirty or the current branch is the default branch.
 - Always run `pr-code-reviewer`.
+- When no PR URL is provided, attempt to detect the current branch PR via `gh` CLI, then fall back to GitHub API with `GITHUB_TOKEN`. Proceed with the local diff regardless of whether a PR is detected.
 - Default to parallel dispatch.
 - Preserve each reviewer's original output format and scoring; only extract severity tags for aggregation.
 - Do not fix issues automatically — this skill reviews only.
