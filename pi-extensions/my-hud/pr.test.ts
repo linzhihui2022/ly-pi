@@ -4,14 +4,18 @@ import {
   parseRemoteUrl,
   getPullRequestNumber,
   getRemoteUrl,
+  getCurrentBranch,
+  getPullRequestForCurrentBranch,
+  openUrl,
 } from "./pr";
 
-// Mock child_process for gh CLI and git remote tests
+// Mock child_process for gh CLI, git remote, and URL opening tests
 vi.mock("node:child_process", () => ({
   exec: vi.fn(),
+  execFile: vi.fn(),
 }));
 
-import { exec } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 
 describe("parseGhPrOutput", () => {
   it("parses number and url from gh JSON output", () => {
@@ -423,5 +427,256 @@ describe("getPullRequestNumber", () => {
       "token",
     );
     expect(result).toBeNull();
+  });
+});
+
+describe("getCurrentBranch", () => {
+  it("returns the current branch name", async () => {
+    vi.mocked(exec).mockImplementation(
+      (
+        _cmd: string,
+        _opts: any,
+        callback: any,
+      ) => {
+        callback(null, "feature-x\n", "");
+        return undefined as any;
+      },
+    );
+
+    const result = await getCurrentBranch("/x");
+    expect(result).toBe("feature-x");
+  });
+
+  it("returns null when current branch output is empty", async () => {
+    vi.mocked(exec).mockImplementation(
+      (
+        _cmd: string,
+        _opts: any,
+        callback: any,
+      ) => {
+        callback(null, "\n", "");
+        return undefined as any;
+      },
+    );
+
+    const result = await getCurrentBranch("/x");
+    expect(result).toBeNull();
+  });
+});
+
+describe("getPullRequestForCurrentBranch", () => {
+  it("returns PR for the current branch", async () => {
+    vi.mocked(exec).mockImplementation(
+      (
+        cmd: string,
+        _opts: any,
+        callback: any,
+      ) => {
+        if (cmd.includes("branch --show-current")) {
+          callback(null, "feature-x\n", "");
+        } else if (cmd.includes("branch.feature-x.remote")) {
+          callback(null, "origin\n", "");
+        } else if (cmd.includes("remote get-url")) {
+          callback(null, "https://github.com/owner/repo.git\n", "");
+        } else if (cmd.includes("gh pr view")) {
+          callback(
+            null,
+            '{"number": 42, "url": "https://github.com/owner/repo/pull/42"}',
+            "",
+          );
+        } else {
+          callback(new Error("unexpected command"), "", "");
+        }
+        return undefined as any;
+      },
+    );
+
+    const result = await getPullRequestForCurrentBranch("/x", "token");
+    expect(result).toEqual({
+      number: 42,
+      url: "https://github.com/owner/repo/pull/42",
+    });
+  });
+
+  it("returns null when current branch has no PR", async () => {
+    vi.mocked(exec).mockImplementation(
+      (
+        cmd: string,
+        _opts: any,
+        callback: any,
+      ) => {
+        if (cmd.includes("branch --show-current")) {
+          callback(null, "feature-x\n", "");
+        } else if (cmd.includes("branch.feature-x.remote")) {
+          callback(null, "origin\n", "");
+        } else if (cmd.includes("remote get-url")) {
+          callback(null, "https://github.com/owner/repo.git\n", "");
+        } else if (cmd.includes("gh pr view")) {
+          callback(new Error("no PR found"), "", "");
+        } else {
+          callback(new Error("unexpected command"), "", "");
+        }
+        return undefined as any;
+      },
+    );
+
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([]),
+      }),
+    ) as any;
+
+    const result = await getPullRequestForCurrentBranch("/x", "token");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when not in a git repo", async () => {
+    vi.mocked(exec).mockImplementation(
+      (
+        _cmd: string,
+        _opts: any,
+        callback: any,
+      ) => {
+        callback(new Error("not a git repo"), "", "");
+        return undefined as any;
+      },
+    );
+
+    const result = await getPullRequestForCurrentBranch("/x", "token");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when branch has no remote", async () => {
+    vi.mocked(exec).mockImplementation(
+      (
+        cmd: string,
+        _opts: any,
+        callback: any,
+      ) => {
+        if (cmd.includes("branch --show-current")) {
+          callback(null, "feature-x\n", "");
+        } else if (cmd.includes("branch.feature-x.remote")) {
+          callback(new Error("no tracking remote"), "", "");
+        } else {
+          callback(new Error("unexpected command"), "", "");
+        }
+        return undefined as any;
+      },
+    );
+
+    const result = await getPullRequestForCurrentBranch("/x", "token");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when remote is not GitHub", async () => {
+    vi.mocked(exec).mockImplementation(
+      (
+        cmd: string,
+        _opts: any,
+        callback: any,
+      ) => {
+        if (cmd.includes("branch --show-current")) {
+          callback(null, "feature-x\n", "");
+        } else if (cmd.includes("branch.feature-x.remote")) {
+          callback(null, "origin\n", "");
+        } else if (cmd.includes("remote get-url")) {
+          callback(null, "https://gitlab.com/owner/repo.git\n", "");
+        } else {
+          callback(new Error("unexpected command"), "", "");
+        }
+        return undefined as any;
+      },
+    );
+
+    const result = await getPullRequestForCurrentBranch("/x", "token");
+    expect(result).toBeNull();
+  });
+});
+
+describe("openUrl", () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+
+  afterEach(() => {
+    Object.defineProperty(process, "platform", originalPlatform ?? {});
+  });
+
+  it("opens URL on macOS", async () => {
+    Object.defineProperty(process, "platform", { value: "darwin" });
+    vi.mocked(execFile).mockImplementation(
+      (
+        _cmd: string,
+        _args: any,
+        callback: any,
+      ) => {
+        callback(null);
+        return undefined as any;
+      },
+    );
+
+    await openUrl("https://github.com/owner/repo/pull/42");
+    expect(execFile).toHaveBeenCalledWith(
+      "open",
+      ["https://github.com/owner/repo/pull/42"],
+      expect.anything(),
+    );
+  });
+
+  it("opens URL on Linux", async () => {
+    Object.defineProperty(process, "platform", { value: "linux" });
+    vi.mocked(execFile).mockImplementation(
+      (
+        _cmd: string,
+        _args: any,
+        callback: any,
+      ) => {
+        callback(null);
+        return undefined as any;
+      },
+    );
+
+    await openUrl("https://github.com/owner/repo/pull/42");
+    expect(execFile).toHaveBeenCalledWith(
+      "xdg-open",
+      ["https://github.com/owner/repo/pull/42"],
+      expect.anything(),
+    );
+  });
+
+  it("opens URL on Windows", async () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    vi.mocked(execFile).mockImplementation(
+      (
+        _cmd: string,
+        _args: any,
+        callback: any,
+      ) => {
+        callback(null);
+        return undefined as any;
+      },
+    );
+
+    await openUrl("https://github.com/owner/repo/pull/42");
+    expect(execFile).toHaveBeenCalledWith(
+      "start",
+      ["https://github.com/owner/repo/pull/42"],
+      expect.anything(),
+    );
+  });
+
+  it("rejects when open command fails", async () => {
+    Object.defineProperty(process, "platform", { value: "darwin" });
+    vi.mocked(execFile).mockImplementation(
+      (
+        _cmd: string,
+        _args: any,
+        callback: any,
+      ) => {
+        callback(new Error("command not found"));
+        return undefined as any;
+      },
+    );
+
+    await expect(openUrl("https://example.com")).rejects.toThrow("command not found");
   });
 });

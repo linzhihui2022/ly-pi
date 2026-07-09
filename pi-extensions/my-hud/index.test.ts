@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { openUrl, getPullRequestForCurrentBranch } from "./pr";
 import { getGitStatus } from "./git";
 import { checkMemoryPressure } from "./memory";
 import { findVitestProcesses } from "./vitest-process";
@@ -31,6 +32,14 @@ vi.mock("./pr", () => ({
       url: "https://github.com/owner/repo/pull/42",
     }),
   ),
+  getCurrentBranch: vi.fn(() => Promise.resolve("feature-x")),
+  getPullRequestForCurrentBranch: vi.fn(() =>
+    Promise.resolve({
+      number: 42,
+      url: "https://github.com/owner/repo/pull/42",
+    }),
+  ),
+  openUrl: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("./memory", () => ({
@@ -1602,6 +1611,64 @@ describe("my-hud extension", () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
     expect(registeredEvents.has("agent_start")).toBe(true);
+  });
+
+  it("registers /open-pr command", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+    expect(registeredCommands.has("open-pr")).toBe(true);
+  });
+
+  it("/open-pr command opens PR URL when PR exists", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const notify = vi.fn();
+    const ctx = {
+      ui: { notify },
+      cwd: "/x",
+    };
+    const command = registeredCommands.get("open-pr")!;
+    await command.handler("", ctx);
+
+    expect(openUrl).toHaveBeenCalledWith("https://github.com/owner/repo/pull/42");
+  });
+
+  it("/open-pr command notifies when no PR exists", async () => {
+    vi.mocked(getPullRequestForCurrentBranch).mockResolvedValueOnce(null);
+
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const notify = vi.fn();
+    const ctx = {
+      ui: { notify },
+      cwd: "/x",
+    };
+    const command = registeredCommands.get("open-pr")!;
+    await command.handler("", ctx);
+
+    expect(notify).toHaveBeenCalledWith("当前分支没有关联的 PR", "info");
+  });
+
+  it("/open-pr command shows URL when browser open fails", async () => {
+    vi.mocked(openUrl).mockRejectedValueOnce(new Error("no browser"));
+
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const notify = vi.fn();
+    const ctx = {
+      ui: { notify },
+      cwd: "/x",
+    };
+    const command = registeredCommands.get("open-pr")!;
+    await command.handler("", ctx);
+
+    expect(notify).toHaveBeenCalledWith(
+      "https://github.com/owner/repo/pull/42",
+      "info",
+    );
   });
 
   it("registers agent_end handler", async () => {

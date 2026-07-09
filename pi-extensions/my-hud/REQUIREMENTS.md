@@ -70,4 +70,5 @@
 2. **新增**：模型名映射配置（`my-hud.json` + 热重载读取）
 3. **新增**：`render.ts` 的截断策略优化——核心字段优先保留
 4. **新增**：当前分支的 GitHub PR 编号显示在 aboveEditor 分支字段后（如 `main#42`），支持 OSC 8 超链接点击打开 PR 页面；无 PR 时隐藏该字段
+5. **新增**：`/open-pr` 指令，打开当前分支关联的 GitHub PR 页面；若无法打开，则在通知中显示 PR URL
 4. **保留**：footer 最后用户消息、working funny 消息、Context 颜色阈值等现有功能

@@ -2,7 +2,7 @@
  * GitHub Pull Request detection for the current branch.
  */
 
-import { exec } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import type { PullRequestInfo } from "./types";
 
 const execAsync = (
@@ -104,7 +104,7 @@ export async function getPullRequestNumber(
 ): Promise<PullRequestInfo | null> {
   try {
     const { stdout } = await execAsync(
-      "gh pr view --json number,url --state all",
+      "gh pr view --json number,url",
       { cwd, timeout: 5000 },
     );
     const pr = parseGhPrOutput(stdout);
@@ -145,4 +145,60 @@ export async function getPullRequestNumber(
   } catch {
     return null;
   }
+}
+
+/**
+ * Get the name of the current git branch.
+ */
+export async function getCurrentBranch(cwd: string): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync(
+      "git branch --show-current",
+      { cwd, timeout: 3000 },
+    );
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the pull request for the current branch.
+ * Convenience wrapper that discovers branch, remote, owner and repo.
+ */
+export async function getPullRequestForCurrentBranch(
+  cwd: string,
+  token?: string,
+): Promise<PullRequestInfo | null> {
+  const branch = await getCurrentBranch(cwd);
+  if (!branch) return null;
+
+  const remoteUrl = await getRemoteUrl(cwd, branch);
+  if (!remoteUrl) return null;
+
+  const repo = parseRemoteUrl(remoteUrl);
+  if (!repo) return null;
+
+  return getPullRequestNumber(cwd, branch, repo.owner, repo.repo, token);
+}
+
+/**
+ * Open a URL in the system default browser.
+ * Resolves when the command is spawned successfully.
+ */
+export function openUrl(url: string): Promise<void> {
+  const command =
+    process.platform === "darwin" ? "open" :
+    process.platform === "win32" ? "start" :
+    "xdg-open";
+
+  return new Promise((resolve, reject) => {
+    execFile(command, [url], (error) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
 }

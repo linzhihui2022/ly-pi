@@ -129,6 +129,7 @@ my-hud 是一个**三层信息架构**的 pi 扩展，每层有且只有一个�
 ```
 index.ts    — 唯一的事件注册点，三层协调器
             — 职责：决定「什么事件触发哪一层的刷新」
+            — 新增：注册 `/open-pr` 指令，打开当前分支关联 PR 页面
 
 bar.ts      — aboveEditor 的 widget 生命周期
             — 职责：注册/注销 widget、持有 ctx 和 branch、转发 render 请求
@@ -138,8 +139,9 @@ render.ts   — aboveEditor 的「纯函数」渲染器
             — 职责：给定 theme + width + data，返回字符串
             — 禁止：直接访问 ctx、调用副作用
 
-pr.ts       — GitHub PR 探测
+pr.ts       — GitHub PR 探测与打开
             — 职责：给定 cwd 和 token，异步返回当前分支关联 PR 的编号与 URL
+            — 新增：提供 `getPullRequestForCurrentBranch()` 和 `openUrl()`，供 `/open-pr` 使用
             — 禁止：直接访问 UI 或 ctx
 
 format.ts   — 格式化与颜色决策的纯函数
@@ -278,3 +280,4 @@ ctx.ui.setWorkingMessage(theme.fg("accent", message))
 |------|------|
 | 2026-06-02 | 整理现有代码，重新定义三层职责，生成本 spec |
 | 2026-07-08 | 新增 aboveEditor 分支后显示 GitHub PR 编号的规格与数据流说明 |
+| 2026-07-08 | 新增 `/open-pr` 指令规格 |

@@ -21,6 +21,7 @@ import { pickRandomMessage } from "./working";
 import { checkMemoryPressure } from "./memory";
 import { findVitestProcesses } from "./vitest-process";
 import { buildMemoryWarningLines } from "./memory-widget";
+import { getPullRequestForCurrentBranch, openUrl } from "./pr";
 
 // Re-export pure helpers for consumers / tests
 export { icon } from "./icons";
@@ -95,6 +96,27 @@ export default function myHud(pi: ExtensionAPI): void {
 
   pi.on("agent_start", (_event, ctx) => updateMemoryWarning(ctx));
   pi.on("agent_end", (_event, ctx) => updateMemoryWarning(ctx));
+
+  // ── /open-pr command ──
+  pi.registerCommand("open-pr", {
+    description: "Open the current branch's GitHub Pull Request in browser",
+    handler: async (_args, ctx) => {
+      const pr = await getPullRequestForCurrentBranch(
+        ctx.cwd,
+        process.env.GITHUB_TOKEN,
+      );
+      if (!pr) {
+        ctx.ui.notify("当前分支没有关联的 PR", "info");
+        return;
+      }
+
+      try {
+        await openUrl(pr.url);
+      } catch {
+        ctx.ui.notify(pr.url, "info");
+      }
+    },
+  });
 
   // ── /mem command ──
   pi.registerCommand("mem", {
