@@ -2,8 +2,12 @@
  * Status line assembly.
  */
 
+import {
+  getCapabilities,
+  hyperlink,
+  truncateToWidth,
+} from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
 import { icon } from "./icons";
 import { formatTokens, shortModelName, formatCacheRate } from "./format";
 import type { StatusLineData, GitStatus } from "./types";
@@ -20,6 +24,7 @@ export function buildStatusLine(
     ctxColored,
     usage,
     gitStatus,
+    pullRequest,
   } = data;
   const project =
     rawProject.length > 10 ? rawProject.slice(0, 8) + ".." : rawProject;
@@ -32,7 +37,22 @@ export function buildStatusLine(
   ];
 
   if (branch) {
-    parts.push(theme.fg("customMessageLabel", `${icon("branch")}${branch}`));
+    const branchPrefix = theme.fg(
+      "customMessageLabel",
+      `${icon("branch")}${branch}`,
+    );
+    let branchText = branchPrefix;
+
+    if (pullRequest?.number) {
+      const prLabel = `#${pullRequest.number}`;
+      const coloredPr = theme.fg("customMessageLabel", prLabel);
+      const clickablePr = getCapabilities().hyperlinks
+        ? hyperlink(coloredPr, pullRequest.url)
+        : coloredPr;
+      branchText += clickablePr;
+    }
+
+    parts.push(branchText);
     const gitStatusStr = formatGitStatus(theme, gitStatus);
     if (gitStatusStr) {
       parts.push(gitStatusStr);

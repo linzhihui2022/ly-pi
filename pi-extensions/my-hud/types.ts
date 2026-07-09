@@ -21,6 +21,11 @@ export interface GitStatus {
   isClean: boolean;
 }
 
+export interface PullRequestInfo {
+  number: number;
+  url: string;
+}
+
 export interface StatusLineData {
   project: string;
   modelName: string;
@@ -28,4 +33,5 @@ export interface StatusLineData {
   ctxColored: string;
   usage: TokenUsage;
   gitStatus?: GitStatus | null;
+  pullRequest?: PullRequestInfo | null;
 }

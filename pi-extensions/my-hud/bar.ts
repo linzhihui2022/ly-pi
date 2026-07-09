@@ -13,10 +13,12 @@ import { aggregateSessionUsage } from "./session";
 import { contextColored } from "./format";
 import { buildStatusLine } from "./render";
 import { getGitStatus } from "./git";
-import type { GitStatus } from "./types";
+import { getPullRequestNumber, getRemoteUrl, parseRemoteUrl } from "./pr";
+import type { GitStatus, PullRequestInfo } from "./types";
 
 const WIDGET_KEY = "my-hud-bar";
 const GIT_STATUS_CACHE_TTL = 5000;
+const PR_CACHE_TTL = 5000;
 
 export class Bar {
   private uiCtx: ExtensionUIContext | undefined;
@@ -26,9 +28,16 @@ export class Bar {
   private gitStatus: GitStatus | null = null;
   private gitStatusCacheTime = 0;
   private gitStatusRefreshPending = false;
+  private pullRequest: PullRequestInfo | null = null;
+  private pullRequestCacheTime = 0;
+  private pullRequestRefreshPending = false;
 
   setBranch(branch: string | null): void {
     this.branch = branch;
+  }
+
+  invalidatePullRequest(): void {
+    this.pullRequestCacheTime = 0;
   }
 
   setContext(ctx: ExtensionContext): void {
@@ -91,10 +100,45 @@ export class Bar {
       });
   }
 
+  private ensurePullRequest(): void {
+    if (!this.branch) return;
+    const now = Date.now();
+    if (now - this.pullRequestCacheTime <= PR_CACHE_TTL) return;
+    if (this.pullRequestRefreshPending) return;
+
+    this.pullRequestRefreshPending = true;
+    getRemoteUrl(this.ctx!.cwd, this.branch)
+      .then((remoteUrl) => {
+        if (!remoteUrl) return null;
+        const repo = parseRemoteUrl(remoteUrl);
+        if (!repo) return null;
+        return getPullRequestNumber(
+          this.ctx!.cwd,
+          this.branch!,
+          repo.owner,
+          repo.repo,
+          process.env.GITHUB_TOKEN,
+        );
+      })
+      .then((pr) => {
+        this.pullRequest = pr;
+        this.pullRequestCacheTime = Date.now();
+        this.requestRender();
+      })
+      .catch(() => {
+        this.pullRequest = null;
+        this.pullRequestCacheTime = Date.now();
+      })
+      .finally(() => {
+        this.pullRequestRefreshPending = false;
+      });
+  }
+
   private renderWidget(theme: Theme, width: number): string[] {
     if (!this.ctx) return [];
 
     this.ensureGitStatus();
+    this.ensurePullRequest();
 
     const entries = this.ctx.sessionManager.getEntries();
     const usage = aggregateSessionUsage(entries);
@@ -116,6 +160,7 @@ export class Bar {
       ctxColored,
       usage,
       gitStatus: this.gitStatus,
+      pullRequest: this.pullRequest,
     });
     return [line];
   }
@@ -131,5 +176,8 @@ export class Bar {
     this.gitStatus = null;
     this.gitStatusCacheTime = 0;
     this.gitStatusRefreshPending = false;
+    this.pullRequest = null;
+    this.pullRequestCacheTime = 0;
+    this.pullRequestRefreshPending = false;
   }
 }

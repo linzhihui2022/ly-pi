@@ -35,7 +35,7 @@ my-hud 是一个**三层信息架构**的 pi 扩展，每层有且只有一个�
 |------|------|------|----------|----------|
 | Project | `` | 当前目录 basename | `mdCode` | >10 字符截断为前8+`..` |
 | Model | `` | 模型短名或原始 ID | `mdHeading` | 不截断（短名已控制长度） |
-| Branch | `` | Git 分支名 | `customMessageLabel` | 不截断；为空时整字段隐藏 |
+| Branch | `` | Git 分支名；若存在关联 GitHub PR，则在分支名后追加 `#42` 编号，并包装为 OSC 8 可点击超链接 | `customMessageLabel` | 为空或无 PR 时整字段隐藏；分支名为空时该字段完全消失 |
 | Context | `//` | 上下文使用率百分比 | 动态（见下） | 无 |
 | Input | `` | 累计 input tokens | `mdListBullet` | 按 `formatTokens` 格式化 |
 | Output | `` | 累计 output tokens | `thinkingLow` | 按 `formatTokens` 格式化 |
@@ -132,10 +132,15 @@ index.ts    — 唯一的事件注册点，三层协调器
 
 bar.ts      — aboveEditor 的 widget 生命周期
             — 职责：注册/注销 widget、持有 ctx 和 branch、转发 render 请求
+            — 新增：持有 PR 信息并异步刷新
 
 render.ts   — aboveEditor 的「纯函数」渲染器
             — 职责：给定 theme + width + data，返回字符串
             — 禁止：直接访问 ctx、调用副作用
+
+pr.ts       — GitHub PR 探测
+            — 职责：给定 cwd 和 token，异步返回当前分支关联 PR 的编号与 URL
+            — 禁止：直接访问 UI 或 ctx
 
 format.ts   — 格式化与颜色决策的纯函数
             — 职责：token 格式化、context 颜色阈值、模型名映射
@@ -186,13 +191,15 @@ bar.renderWidget(theme, width)
   ├── ctx.getContextUsage()
   ├── ctx.model?.id
   ├── basename(ctx.cwd)
-  └── branch (之前由 footerData 注入)
+  ├── branch (之前由 footerData 注入)
+  └── pullRequest (由 pr.ts 异步探测并缓存)
   │
   ▼
 render.ts: buildStatusLine(theme, width, data)
   ├── format.ts: formatTokens()
   ├── format.ts: shortModelName()
   ├── format.ts: contextColored()
+  ├── pr.ts 提供的 pullRequest.url / number
   └── icons.ts: icon()
   │
   ▼
@@ -241,6 +248,7 @@ ctx.ui.setWorkingMessage(theme.fg("accent", message))
 | 用户自定义 working 消息 | `working.ts` 读取外部配置 | 保持随机选择机制 |
 | 显示最后 AI 回复摘要 | **不要** — 与 footer 职责冲突 | 如需此功能，新增「AI 摘要层」 |
 | 显示最近文件变更 | aboveEditor 新增字段 | 放在 Branch 右侧 |
+| 显示当前分支 GitHub PR | aboveEditor 在 Branch 字段后追加 | 已纳入本次实现 |
 
 ---
 
@@ -269,3 +277,4 @@ ctx.ui.setWorkingMessage(theme.fg("accent", message))
 | 日期 | 变更 |
 |------|------|
 | 2026-06-02 | 整理现有代码，重新定义三层职责，生成本 spec |
+| 2026-07-08 | 新增 aboveEditor 分支后显示 GitHub PR 编号的规格与数据流说明 |

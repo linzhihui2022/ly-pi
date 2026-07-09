@@ -82,12 +82,14 @@ export default function myHud(pi: ExtensionAPI): void {
       theme?.fg("accent", pickRandomMessage()) ?? pickRandomMessage();
     ctx.ui.setWorkingMessage(message);
     bar?.invalidateGitStatus();
+    bar?.invalidatePullRequest();
     requestRender();
   });
 
   pi.on("model_select", requestRender);
   pi.on("turn_end", () => {
     bar?.invalidateGitStatus();
+    bar?.invalidatePullRequest();
     requestRender();
   });
 
@@ -120,6 +122,7 @@ export default function myHud(pi: ExtensionAPI): void {
       const unsubBranch = footerData.onBranchChange(() => {
         bar?.setBranch(footerData.getGitBranch() ?? null);
         bar?.invalidateGitStatus();
+        bar?.invalidatePullRequest();
         tui.requestRender();
       });
 

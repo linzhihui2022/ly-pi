@@ -22,6 +22,17 @@ vi.mock("./git", () => ({
   ),
 }));
 
+vi.mock("./pr", () => ({
+  getRemoteUrl: vi.fn(() => Promise.resolve("https://github.com/owner/repo.git")),
+  parseRemoteUrl: vi.fn(() => ({ owner: "owner", repo: "repo" })),
+  getPullRequestNumber: vi.fn(() =>
+    Promise.resolve({
+      number: 42,
+      url: "https://github.com/owner/repo/pull/42",
+    }),
+  ),
+}));
+
 vi.mock("./memory", () => ({
   checkMemoryPressure: vi.fn(),
 }));
