@@ -45,6 +45,11 @@ export function findLastUserMessageEntry(
 9. 若 entry 包含图片（`content` 为数组且其中存在 `type === "image"` 项），提示 `notify("info", "图片附件未恢复，仅文本已放回编辑器")`。
 10. 成功路径静默完成。
 
+## 命令参数处理
+
+- `/back` 命令只识别命令本身，任何尾随参数（数字、字符串等）都被忽略，仍只回退最近一条用户消息。
+- 参数解析不由命令 handler 负责；Pi 的 slash command 将整段参数作为 `args` 字符串传入，本命令对任何非空 `args` 都不执行额外逻辑。
+
 ## 错误处理
 
 - `navigateTree` 抛异常：catch 后 `notify("error", err.message)`。
