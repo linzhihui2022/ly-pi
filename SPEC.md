@@ -39,10 +39,11 @@ configure/
 ├── turbo.json               # Turborepo 流水线
 ├── package.json             # workspaces + 脚本
 ├── install.sh               # 一键部署
-└── docs/
-    ├── README.md
-    ├── REQUIREMENTS.md      # 项目级需求索引
-    └── SPEC.md              # 本文件
+├── README.md                # 项目总览
+├── AGENTS.md                # 仓库开发指南
+├── MY-AGENTS.md             # 全局 Agent 偏好
+├── REQUIREMENTS.md          # 项目级需求索引
+└── SPEC.md                  # 本文件
 ```
 
 ## 3. Workspace 规范
@@ -190,3 +191,4 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 | 日期 | 变更 |
 |------|------|
 | 2026-07-10 | 创建项目级 `SPEC.md`，定义 monorepo 结构、Turborepo 流水线、扩展架构与需求同步流程 |
+| 2026-07-10 | 修正 Monorepo 目录结构图：项目级 `README.md`、`REQUIREMENTS.md`、`SPEC.md`、`AGENTS.md`、`MY-AGENTS.md` 位于仓库根目录而非 `docs/` 子目录 |

@@ -2,7 +2,7 @@
 
 我的终端、Shell、AI 编码 Agent 全家桶 —— Git 版本管理，一键部署。
 
-> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 9 个自定义扩展、15 个技能、8 个子代理定义、Catppuccin Mocha 主题等。
+> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 9 个自定义扩展、17 个技能、8 个子代理定义、Catppuccin Mocha 主题等。
 
 项目级需求文档见 [`REQUIREMENTS.md`](./REQUIREMENTS.md)，架构与流程规格见 [`SPEC.md`](./SPEC.md)。
 
@@ -54,6 +54,7 @@ configure/
 | 技能 | 用途 |
 |------|------|
 | brainstorming | 创造性工作前探索需求与设计 |
+| creating-pull-requests | 创建 GitHub pull request 时整理描述与验证步骤 |
 | dispatching-parallel-agents | 并行调度 2+ 个独立任务 |
 | executing-plans | 按计划逐步执行并设审查点 |
 | finishing-a-development-branch | 完成开发后选择合并/PR/清理 |
@@ -61,6 +62,7 @@ configure/
 | migrate-superpower | 从 Claude Code / Superpowers 迁移到 Pi |
 | receiving-code-review | 收到审查反馈后严谨验证再修改 |
 | requesting-code-review | 完成任务后请求代码审查 |
+| review-pr | 对 PR diff 做多维度代码审查 |
 | subagent-driven-development | 使用子代理并行执行计划 |
 | test-driven-development | 先写测试再实现（TDD） |
 | using-superpowers | 建立技能查找与调用机制 |

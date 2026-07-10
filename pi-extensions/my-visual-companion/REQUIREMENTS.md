@@ -16,6 +16,14 @@
 4. `visual_companion_read_events` 返回当前 session 记录的 click/confirm events。
 5. `visual_companion_stop` 关闭服务并释放资源。
 
+### Slash 命令
+
+1. `/vc-start` 启动一个 Visual Companion 浏览器会话，等效于调用 `visual_companion_start` 工具。
+2. `/vc-show <session_id> <name> <html>` 推送 HTML 屏幕到浏览器，等效于调用 `visual_companion_show` 工具。
+3. `/vc-wait <session_id>` 阻塞等待用户确认，等效于调用 `visual_companion_wait` 工具。
+4. `/vc-events <session_id>` 读取会话事件，等效于调用 `visual_companion_read_events` 工具。
+5. `/vc-stop <session_id>` 关闭会话，等效于调用 `visual_companion_stop` 工具。
+
 ## 安全需求
 
 1. VC-SEC-1：每个 session 必须生成加密随机 session key。

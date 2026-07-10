@@ -12,7 +12,7 @@
 
 ```
 pi-extensions/my-visual-companion/
-├── index.ts              # 扩展入口：注册 visual_companion_* 工具
+├── index.ts              # 扩展入口：注册 visual_companion_* 工具与 vc-* slash 命令
 ├── server.ts             # HTTP / WebSocket 服务器
 ├── session.ts            # Session 管理与事件持久化
 ├── tools.ts              # 工具定义与执行逻辑
@@ -91,16 +91,30 @@ LLM -> visual_companion_read_events
 | `visual_companion_read_events` | 返回当前 session 记录的 click/confirm events |
 | `visual_companion_stop` | 关闭服务并释放资源 |
 
-## 7. 测试策略
+## 7. Slash 命令
+
+扩展注册以下 slash 命令，作为工具的便捷入口：
+
+| 命令 | 参数 | 行为 |
+|------|------|------|
+| `/vc-start` | 无 | 启动 Visual Companion 会话并通知返回的 URL |
+| `/vc-show` | `session_id` `name` `html` | 推送 HTML 屏幕到浏览器，参数以空格分隔 |
+| `/vc-wait` | `session_id` | 等待用户确认并通知结果 |
+| `/vc-events` | `session_id` | 读取并展示会话事件 |
+| `/vc-stop` | `session_id` | 关闭会话 |
+
+命令内部复用 `tools.ts` 中注册的对应工具实现，仅在缺少必要参数时给出使用提示。
+
+## 8. 测试策略
 
 - `server.ts`：HTTP 路由、WebSocket 升级、session key 校验测试。
 - `session.ts`：事件追加、新 screen 截断、目录回退逻辑测试。
 - `tools.ts`：各工具执行与返回结构测试。
-- `index.ts`：集成测试，mock ExtensionAPI、HTTP 服务器与文件系统。
+- `index.ts`：集成测试，mock ExtensionAPI、HTTP 服务器与文件系统；覆盖工具注册与 slash 命令路径。
 - 覆盖率目标：`branches / functions / lines / statements` 全部 100%。
 - 排除：`types.ts`（纯类型）、`index.ts`（集成入口）。
 
-## 8. 不做什么
+## 9. 不做什么
 
 | 功能 | 排除原因 |
 |------|----------|
@@ -109,8 +123,9 @@ LLM -> visual_companion_read_events
 | 自动打开用户浏览器 | 由用户手动打开返回的 URL |
 | 绑定 Pi 用户身份认证 | session key 已满足当前本地安全模型 |
 
-## 9. 变更日志
+## 10. 变更日志
 
 | 日期 | 变更 |
 |------|------|
 | 2026-07-10 | 整理 visual companion 规格文档，翻译为中文并补充模块结构、时序图、测试策略与变更日志 |
+| 2026-07-10 | 补充 slash 命令（`/vc-start`、`/vc-show`、`/vc-wait`、`/vc-events`、`/vc-stop`）规格 |
