@@ -1,6 +1,7 @@
 # my-html Spec
 
-> 状态：已确认，可作为开发基准  
+> 状态：已确认，可作为开发基准
+> 确认日期：2026-07-10
 > 需求文档：[`REQUIREMENTS.md`](./REQUIREMENTS.md)
 
 ## 1. 设计目标

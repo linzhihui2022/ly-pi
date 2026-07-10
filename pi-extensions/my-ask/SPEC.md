@@ -1,34 +1,35 @@
 # my-ask Spec
 
-> Status: confirmed as implementation baseline  
-> Confirmed date: 2026-06-12  
-> Goal: build a local `my-ask` extension that replaces `@juicesharp/rpiv-ask-user-question`.
+> 状态：已确认，可作为开发基准
+> 确认日期：2026-06-12
+> 最近整理：2026-07-10
+> 需求文档：[`REQUIREMENTS.md`](./REQUIREMENTS.md)
 
-## 1. Design philosophy
+## 1. 设计目标
 
-- **Drop-in replacement**: keep the original tool name `ask_user_question` and schema so prompts do not need to change after uninstalling the original.
-- **Minimal dependencies**: only Pi SDK (`@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`) and `typebox`.
-- **TDD**: write tests first; pure functions and the questionnaire state machine target 100% coverage.
-- **Maintainable**: clear module boundaries and one-way dependencies; UI starts as a simple top/bottom list layout.
+- **Drop-in 替代**：保持原工具名 `ask_user_question` 与 schema，卸载原扩展后无需修改提示词。
+- **最小依赖**：仅使用 Pi SDK（`@earendil-works/pi-coding-agent`、`@earendil-works/pi-tui`）与 `typebox`。
+- **TDD**：先写测试；纯函数与问卷状态机目标 100% 覆盖率。
+- **可维护**：模块边界清晰、依赖单向；UI 从简单的上下列表布局开始。
 
-## 2. Module layout
+## 2. 模块结构
 
 ```
 pi-extensions/my-ask/
-├── index.ts              # extension entry point: register ask_user_question
-├── types.ts              # typebox schemas + result types
-├── validate.ts           # parameter validation (pure function)
-├── format.ts             # assemble user answers into LLM-facing text
-├── questionnaire.ts      # custom TUI component (core interaction)
+├── index.ts              # 扩展入口：注册 ask_user_question
+├── types.ts              # typebox schema + 结果类型
+├── validate.ts           # 参数校验（纯函数）
+├── format.ts             # 将用户答案组装为面向 LLM 的文本
+├── questionnaire.ts      # 自定义 TUI 组件（核心交互）
 ├── package.json
 ├── tsconfig.json
 ├── vitest.config.ts
-├── SPEC.md               # this document
-├── REQUIREMENTS.md       # requirement checklist
-└── scripts/deploy.ts     # deploy to ~/.pi/agent/extensions/my-ask
+├── SPEC.md               # 本文档
+├── REQUIREMENTS.md       # 需求清单
+└── scripts/deploy.ts     # 部署到 ~/.pi/agent/extensions/my-ask
 ```
 
-Dependency direction:
+依赖方向：
 
 ```
 index.ts → questionnaire.ts → types.ts
@@ -36,11 +37,11 @@ index.ts → questionnaire.ts → types.ts
          → format.ts ────────┘
 ```
 
-`questionnaire.ts` is rendered through `ctx.ui.custom` and does not depend on `index.ts` event registration.
+`questionnaire.ts` 通过 `ctx.ui.custom` 渲染，不依赖 `index.ts` 的事件注册。
 
-## 3. Tool definition
+## 3. 工具定义
 
-### 3.1 Tool name
+### 3.1 工具名
 
 `ask_user_question`
 
@@ -65,33 +66,33 @@ const QuestionParamsSchema = Type.Object({
 });
 ```
 
-### 3.3 Limits
+### 3.3 限制
 
-| Item | Limit |
+| 项 | 限制 |
 |---|---|
-| Max questions per call | 4 |
-| Min options per question | 2 |
-| Max options per question | 4 |
-| Max header length | 16 |
-| Max label length | 60 |
-| Preview | single-select only; suppresses "Type something." but keeps "Chat about this" |
+| 单次最大问题数 | 4 |
+| 每问题最小选项数 | 2 |
+| 每问题最大选项数 | 4 |
+| header 最大长度 | 16 |
+| label 最大长度 | 60 |
+| Preview | 仅单选；抑制 "Type something." 但保留 "Chat about this" |
 
-### 3.4 Reserved labels
+### 3.4 保留标签
 
-These option labels are rejected by validation:
+以下选项标签会被校验拒绝：
 
 - `Other`
 - `Type something.`
 - `Chat about this`
 - `Next`
 
-### 3.5 Prompt metadata
+### 3.5 提示词元数据
 
-The tool registers a `promptSnippet` and `promptGuidelines` so the LLM sees it in the available-tools list and knows when and how to use it, matching the original extension.
+工具注册 `promptSnippet` 与 `promptGuidelines`，让 LLM 在可用工具列表中识别并了解何时/如何使用该工具，与原扩展保持一致。
 
-## 4. UI design
+## 4. UI 设计
 
-### 4.1 Top/bottom list layout
+### 4.1 上下列表布局
 
 ```
 ──────────────────────────────────
@@ -108,21 +109,21 @@ The tool registers a `promptSnippet` and `promptGuidelines` so the LLM sees it i
 ──────────────────────────────────
 ```
 
-### 4.2 Multi-question navigation
+### 4.2 多问题导航
 
-When there are multiple questions, a tab bar is shown at the top:
+多问题时顶部显示 tab bar：
 
 ```
 ← □ Q1  ■ Q2  □ Q3  ✓ Submit →
 ```
 
-- Answered questions show `■`; unanswered show `□`.
-- `Tab` / `←` / `→` switch tabs.
-- On the Submit tab, pressing Enter submits if every question is answered.
+- 已答问题显示 `■`，未答显示 `□`。
+- `Tab` / `←` / `→` 切换 tab。
+- Submit tab 上按 Enter 在所有问题已答时提交。
 
-### 4.3 Preview expansion
+### 4.3 Preview 展开
 
-For single-select questions that contain a `preview` on any option, the focused option’s markdown preview is rendered below the list:
+单选问题中若任意选项包含 `preview`，聚焦选项的 markdown preview 渲染在列表下方：
 
 ```
 > 1. Option A
@@ -136,16 +137,15 @@ For single-select questions that contain a `preview` on any option, the focused 
  └──────────────────────────────────────┘
 ```
 
-- Preview suppresses the "Type something." row.
-- Long lines are wrapped inside the box.
-- The preview box is capped to a small height (around 6 lines). Empty padding is
-  not added when the content is shorter than the cap.
-- If the preview is taller than the cap, a `(more...)` hint is shown.
-- The border uses the accent color for visual consistency.
+- Preview 抑制 "Type something." 行。
+- 长行在框内自动换行。
+- Preview 框高度限制约 6 行；内容更短时不添加额外空白。
+- 超出高度时显示 `(more...)` 提示。
+- 边框使用强调色保持视觉一致。
 
-### 4.4 Custom input
+### 4.4 自定义输入
 
-On questions without preview, the list ends with an automatic "Type something." row. Selecting it opens an inline editor:
+无 preview 的问题列表末尾自动添加 "Type something." 行。选中后打开行内编辑器：
 
 ```
  Your answer:
@@ -153,9 +153,9 @@ On questions without preview, the list ends with an automatic "Type something." 
  Enter to submit • Esc to go back
 ```
 
-Pressing Enter applies the custom value and returns focus to the option list. The entered value is added to the option list as a new row labelled `<value> (custom)`; it is not submitted automatically. The user can then move focus to that row and press Enter to select/submit it, add more custom values, or remove it with Delete/Backspace.
+按 Enter 应用自定义值并返回选项列表。输入值作为新行 `<value> (custom)` 加入选项列表；不会自动提交。用户随后可将焦点移到该行并按 Enter 选择/提交，也可继续添加更多自定义值，或用 Delete/Backspace 删除它。
 
-In single-select the list becomes:
+单选列表变为：
 
 ```
 > 1. Red
@@ -165,11 +165,11 @@ In single-select the list becomes:
   5. Chat about this
 ```
 
-In multi-select the value appears as an additional checked row `[x] <value> (custom)` above the "Type something." row; Space toggles it and Enter submits the current selections.
+多选中，自定义值作为额外的已勾选行 `[x] <value> (custom)` 出现在 "Type something." 行上方；Space 切换选中状态，Enter 提交当前选择。
 
-### 4.5 Multi-select
+### 4.5 多选
 
-Multi-select questions use checkboxes and also support a "Type something." row:
+多选问题使用复选框，也支持 "Type something." 行：
 
 ```
 > [x] Option A
@@ -180,31 +180,25 @@ Multi-select questions use checkboxes and also support a "Type something." row:
  Space toggle • Enter submit
 ```
 
-Toggling a checkbox adds or removes the option from the current selections. The
-"Type something." row opens the inline editor; the entered value is added as a
-checked row `[x] <value> (custom)` and focus returns to the option list so the
-user can review or change selections before submitting the question. Space can
-toggle a custom row off, and Delete/Backspace can remove a custom row entirely.
+切换复选框将选项加入或移出当前选择。"Type something." 行打开行内编辑器；输入值作为已勾选行 `[x] <value> (custom)` 加入，焦点返回选项列表以便用户审查或修改选择。Space 可取消自定义行选中，Delete/Backspace 可删除自定义行。
 
-Pressing `a` selects every current row (preset options plus any existing custom
-rows). If every selectable row is already selected, `a` clears all selections
-instead. This gives a quick toggle between "all" and "none".
+按 `a` 选择所有当前行（预设选项 + 已有自定义行）。如果所有可选行都已选中，则再次按 `a` 清空所有选择，实现 "全选 / 全不选" 快速切换。
 
-## 5. Navigation
+## 5. 导航
 
-| Key | Action |
+| 按键 | 行为 |
 |---|---|
-| `↑` / `↓` | move option focus |
-| `Tab` / `→` / `←` | switch question tabs (multi-question only) |
-| `Enter` | select focused option; apply custom input and add it to the list; submit on Submit tab |
-| `Space` | toggle checkbox (including custom rows) in multi-select |
-| `a` | select all current rows in multi-select; press again to clear all |
-| `Delete` / `Backspace` | remove a focused custom row |
-| `Esc` | cancel the questionnaire, or exit custom-input mode |
+| `↑` / `↓` | 移动选项焦点 |
+| `Tab` / `→` / `←` | 切换问题 tab（仅多问题） |
+| `Enter` | 选择聚焦选项；应用自定义输入并加入列表；在 Submit tab 提交 |
+| `Space` | 多选中切换复选框（含自定义行） |
+| `a` | 多选中全选当前行；再次按清空所有 |
+| `Delete` / `Backspace` | 删除聚焦的自定义行 |
+| `Esc` | 取消问卷，或退出自定义输入模式 |
 
-## 6. Errors and return values
+## 6. 错误与返回值
 
-### 6.1 Return structure
+### 6.1 返回结构
 
 ```ts
 interface QuestionAnswer {
@@ -223,61 +217,62 @@ interface QuestionnaireResult {
 }
 ```
 
-### 6.2 Error codes
+### 6.2 错误码
 
-- `no_ui` — `ctx.hasUI` is false (not running in an interactive/RPC UI context)
-- `no_questions` — no questions provided
-- `too_many_questions` — more than 4 questions
-- `empty_options` — fewer than 2 options in a question
-- `duplicate_question` — duplicate question text
-- `duplicate_option_label` — duplicate option label within a question
-- `reserved_label` — option label is reserved
+- `no_ui` — `ctx.hasUI` 为 false（非交互/RPC UI 上下文）
+- `no_questions` — 未提供问题
+- `too_many_questions` — 问题数超过 4
+- `empty_options` — 某问题选项少于 2
+- `duplicate_question` — 问题文本重复
+- `duplicate_option_label` — 同一问题内选项 label 重复
+- `reserved_label` — 选项 label 为保留标签
 
-### 6.3 Tool result text
+### 6.3 工具结果文本
 
-- Completed: `User has answered your questions: "Q"="A". ... You can now continue with the user's answers in mind.`
-- Cancelled / no answers: `User declined to answer questions`
+- 完成：`User has answered your questions: "Q"="A". ... You can now continue with the user's answers in mind.`
+- 取消/无答案：`User declined to answer questions`
 
-## 7. Testing
+## 7. 测试策略
 
-| Module | Test style | Coverage target |
+| 模块 | 测试风格 | 覆盖目标 |
 |---|---|---|
-| `validate.ts` | pure function unit tests | 100% |
-| `format.ts` | pure function unit tests | 100% |
-| `questionnaire.ts` | mocked TUI/Editor state-machine tests | 100% |
-| `index.ts` | mocked `ExtensionAPI` integration | excluded |
-| `types.ts` | type definitions only | excluded |
+| `validate.ts` | 纯函数单元测试 | 100% |
+| `format.ts` | 纯函数单元测试 | 100% |
+| `questionnaire.ts` | mock TUI/Editor 状态机测试 | 100% |
+| `index.ts` | mock `ExtensionAPI` 集成测试 | 排除 |
+| `types.ts` | 纯类型定义 | 排除 |
 
-Key scenarios:
+关键场景：
 
-1. single-select + custom input
-2. multi-select completion
-3. preview single-select
-4. user cancellation
-5. non-UI mode error
-6. validation failures (question count, options, duplicates, reserved labels)
-7. multi-question tab navigation and submit
+1. 单选 + 自定义输入
+2. 多选完成
+3. 带 preview 的单选
+4. 用户取消
+5. 非 UI 模式错误
+6. 校验失败（问题数、选项数、重复、保留标签）
+7. 多问题 tab 导航与提交
 
-## 8. Deployment
+## 8. 部署
 
 1. `bunx turbo run build` → `dist/index.js`
-2. `bun run deploy` copies `dist/index.js` to `~/.pi/agent/extensions/my-ask/index.js`
-3. In Pi run `/reload`
-4. Uninstall the original with `pi uninstall @juicesharp/rpiv-ask-user-question` to avoid name collisions
+2. `bun run deploy` 复制 `dist/index.js` 到 `~/.pi/agent/extensions/my-ask/index.js`
+3. 在 Pi 中运行 `/reload`
+4. 用 `pi uninstall @juicesharp/rpiv-ask-user-question` 卸载原扩展，避免名称冲突
 
-## 9. Excluded features
+## 9. 排除功能
 
-| Feature | Reason |
+| 功能 | 排除原因 |
 |---|---|
-| i18n | local use; English UI is sufficient |
-| External event notifications | not needed |
-| Configurable guidance snippets | not needed |
-| Side-by-side preview panes | start with simple top/bottom preview |
-| Per-option notes | omitted for simplicity |
+| i18n | 本地使用；英文 UI 足够 |
+| 外部事件通知 | 不需要 |
+| 可配置 guidance 片段 | 不需要 |
+| 并排 preview 窗格 | 从简单的上下 preview 开始 |
+| 每个选项的 notes | 为简化而省略 |
 
-## 10. Changelog
+## 10. 变更日志
 
-| Date | Change |
-|---|---|
-| 2026-06-12 | confirmed replacement approach, schema, UI layout, and testing strategy |
-| 2026-06-12 | revised custom-input flow: custom values become selectable list rows with delete support |
+| 日期 | 变更 |
+|------|------|
+| 2026-06-12 | 确认替代方案、schema、UI 布局与测试策略 |
+| 2026-06-12 | 修订自定义输入流程：自定义值变为可选列表行并支持删除 |
+| 2026-07-10 | 统一文档格式与状态头，将正文翻译为中文 |

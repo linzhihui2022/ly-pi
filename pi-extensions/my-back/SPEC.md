@@ -1,6 +1,14 @@
 # `/back` 指令规格文档
 
-## 模块结构
+> 状态：已确认，可作为开发基准
+> 确认日期：2026-07-10
+> 需求文档：[`REQUIREMENTS.md`](./REQUIREMENTS.md)
+
+## 1. 设计目标
+
+提供 `/back` slash 命令，用于快速撤销最近一条用户消息，并将该消息文本放回编辑器供用户修改后重新发送。
+
+## 2. 模块结构
 
 ```
 pi-extensions/my-back/
@@ -13,9 +21,17 @@ pi-extensions/my-back/
 └── my-back.json      # 空扩展配置
 ```
 
-## 核心接口
+依赖方向：
 
-### `back.ts`
+```
+index.ts → back.ts
+```
+
+`back.ts` 不依赖 `index.ts` 或任何 UI/上下文副作用。
+
+## 3. 核心接口
+
+### 3.1 `back.ts`
 
 ```typescript
 import type { SessionEntry, SessionMessageEntry } from "@earendil-works/pi-coding-agent";
@@ -30,7 +46,7 @@ export function findLastUserMessageEntry(
 - 输入：当前分支的 entry 数组（时间顺序）。
 - 输出：最后一条 `type === "message" && message.role === "user"` 的 entry；若无则返回 `undefined`。
 
-### `index.ts`
+### 3.2 `index.ts`
 
 注册 `back` 命令，handler 按以下顺序执行：
 
@@ -45,19 +61,19 @@ export function findLastUserMessageEntry(
 9. 若 entry 包含图片（`content` 为数组且其中存在 `type === "image"` 项），提示 `notify("info", "图片附件未恢复，仅文本已放回编辑器")`。
 10. 成功路径静默完成。
 
-## 命令参数处理
+## 4. 命令参数处理
 
 - `/back` 命令只识别命令本身，任何尾随参数（数字、字符串等）都被忽略，仍只回退最近一条用户消息。
 - 参数解析不由命令 handler 负责；Pi 的 slash command 将整段参数作为 `args` 字符串传入，本命令对任何非空 `args` 都不执行额外逻辑。
 
-## 错误处理
+## 5. 错误处理
 
 - `navigateTree` 抛异常：catch 后 `notify("error", err.message)`。
 - handler 自身抛异常：由 Pi 的 extension runner 统一处理；测试中验证 notify 调用。
 
-## 测试规格
+## 6. 测试规格
 
-### `back.test.ts`
+### 6.1 `back.test.ts`
 
 1. 空数组返回 `undefined`。
 2. 只有 assistant message 时返回 `undefined`。
@@ -66,7 +82,7 @@ export function findLastUserMessageEntry(
 5. user message 为第一条 entry 时正确返回。
 6. 忽略 `toolResult`、`custom`、`custom_message` 等非用户消息 entry。
 
-### `index.test.ts`
+### 6.2 `index.test.ts`
 
 1. 非 tui 模式拒绝并提示。
 2. agent 不 idle 时拒绝并提示。
@@ -77,3 +93,9 @@ export function findLastUserMessageEntry(
 7. `navigateTree` 抛异常时提示错误。
 8. 成功回退且消息含图片时，调用 `setEditorText` 并提示图片未恢复。
 9. 成功回退且消息纯文本时，调用 `setEditorText` 且不提示成功。
+
+## 7. 变更日志
+
+| 日期 | 变更 |
+|------|------|
+| 2026-07-10 | 整理 `/back` 指令规格，补充模块结构、依赖方向、状态头与变更日志 |

@@ -4,13 +4,15 @@
 
 > 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 9 个自定义扩展、15 个技能、8 个子代理定义、Catppuccin Mocha 主题等。
 
+项目级需求文档见 [`REQUIREMENTS.md`](./REQUIREMENTS.md)，架构与流程规格见 [`SPEC.md`](./SPEC.md)。
+
 ---
 
 ## 目录结构
 
 ```
 configure/
-├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 8 个）
+├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 9 个）
 ├── pi-skills/skills/       # 自定义技能（15 个）
 ├── pi-themes/              # 自定义主题（Catppuccin Mocha）
 ├── pi-agents/              # 子代理定义（8 个）
@@ -22,6 +24,8 @@ configure/
 ├── wezterm.lua             # WezTerm 终端配置
 ├── MY-AGENTS.md            # 全局 Agent 指令 → ~/.pi/agent/AGENTS.md
 ├── AGENTS.md               # configure 仓库自身的开发指南
+├── REQUIREMENTS.md         # 项目级需求索引
+├── SPEC.md                 # 项目级架构与流程规格
 ├── turbo.json              # Turborepo 流水线（build → test → deploy）
 ├── install.sh              # 一键部署入口
 └── package.json            # Monorepo 根配置
@@ -34,13 +38,14 @@ configure/
 | 扩展 | 功能 |
 |------|------|
 | **my-ask** | `ask_user_question` 工具：向用户发起结构化问答（最多 4 题，支持单选/多选/预览） |
+| **my-back** | `/back` 命令：撤销最近一条用户消息并将文本放回编辑器 |
 | **my-bt** | BT-7274 语音包：会话生命周期事件触发音频，TUI 浮层展示文案，`/bt` 命令控制 |
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
 | **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
 | **my-todo** | 任务 + 目标追踪：`todo` + `goal` 工具，Plan 模式（规划/执行两阶段），TUI 浮层，自动继续 |
 | **my-visual-companion** | 浏览器可视化伴侣：WebSocket 驱动 HTML 界面，支持交互式确认 |
 | **my-webtool** | 网页搜索与抓取：Tavily API 的 `web_search` / `web_fetch`，自定义 TUI 渲染 |
-| **pi-pet** | 虚拟宠物（占位，待实现） |
+| **pi-pet** | 虚拟 ASCII 宠物：状态随时间衰减，`/pet` 命令喂食/玩耍/睡觉/重命名 |
 
 ---
 

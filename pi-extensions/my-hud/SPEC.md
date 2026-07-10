@@ -1,9 +1,9 @@
 # my-hud Spec
 
 > 状态：已确认，可作为开发基准；模型短名配置仍待实现
-> 目标：定义 aboveEditor / footer / working 三层职责，避免功能归属混乱。
-
----
+> 确认日期：2026-06-02
+> 最近整理：2026-07-10
+> 需求文档：[`REQUIREMENTS.md`](./REQUIREMENTS.md)
 
 ## 1. 设计哲学
 
