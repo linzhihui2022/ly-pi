@@ -2,7 +2,7 @@
 
 我的终端、Shell、AI 编码 Agent 全家桶 —— Git 版本管理，一键部署。
 
-> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 9 个自定义扩展、17 个技能、8 个子代理定义、Catppuccin Mocha 主题等。
+> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 9 个自定义扩展、17 个技能、13 个子代理定义、Catppuccin Mocha 主题等。
 
 项目级需求文档见 [`REQUIREMENTS.md`](./REQUIREMENTS.md)，架构与流程规格见 [`SPEC.md`](./SPEC.md)。
 
@@ -13,9 +13,9 @@
 ```
 configure/
 ├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 9 个）
-├── pi-skills/skills/       # 自定义技能（15 个）
+├── pi-skills/skills/       # 自定义技能（17 个）
 ├── pi-themes/              # 自定义主题（Catppuccin Mocha）
-├── pi-agents/              # 子代理定义（8 个）
+├── pi-agents/              # 子代理定义（13 个）
 ├── pi-config/              # 纯配置扩展（权限系统、工具显示）
 ├── mcp/                    # MCP 服务器配置
 ├── settings/               # Pi 设置（子代理模型映射）
@@ -91,6 +91,11 @@ configure/
 | oracle | kimi-k2-thinking | 深度推理：第二意见、复杂分析（只读） |
 | worker | kimi-for-coding | 实现编码：写代码、修复 bug、TDD |
 | reviewer | kimi-for-coding | 代码审查：结构化审查报告（只读） |
+| pr-code-reviewer | kimi-for-coding | PR 通用代码审查：项目规范、bug 检测、代码质量 |
+| pr-comment-analyzer | deepseek-v4-flash | PR 注释与文档审查：准确性、完整性、可维护性 |
+| pr-silent-failure-hunter | kimi-for-coding | PR 静默失败审查：错误处理、fallback、异常抑制 |
+| pr-test-analyzer | kimi-for-coding | PR 测试覆盖审查：质量、完整性、行为覆盖 |
+| pr-type-design-analyzer | kimi-k2-thinking | PR 类型设计审查：封装、不变量、类型表达 |
 
 ---
 
