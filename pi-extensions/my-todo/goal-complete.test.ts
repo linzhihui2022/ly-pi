@@ -1,9 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createGoalCompleteTool } from "./goal-complete";
 import { GoalState } from "./goal-state";
 
 function makeTool(state: GoalState) {
-  return createGoalCompleteTool(state, {
+  return createGoalCompleteTool({
+    getGoalState: () => state,
+    markComplete: (summary) => state.markComplete(summary),
     persistGoal: vi.fn(),
     clearStatus: vi.fn(),
     notify: vi.fn(),
@@ -17,7 +19,9 @@ describe("goal_complete tool", () => {
     const persist = vi.fn();
     const clearStatus = vi.fn();
     const notify = vi.fn();
-    const tool = createGoalCompleteTool(state, {
+    const tool = createGoalCompleteTool({
+      getGoalState: () => state,
+      markComplete: (summary) => state.markComplete(summary),
       persistGoal: persist,
       clearStatus,
       notify,
@@ -34,7 +38,9 @@ describe("goal_complete tool", () => {
     );
 
     expect(result.terminate).toBe(true);
-    expect((result.content[0] as { type: string; text: string }).text).toContain("Goal complete");
+    expect(
+      (result.content[0] as { type: string; text: string }).text,
+    ).toContain("Goal complete");
     expect(state.get()?.status).toBe("complete");
     expect(persist).toHaveBeenCalledWith(null);
     expect(notify).toHaveBeenCalled();

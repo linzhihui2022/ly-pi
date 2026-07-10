@@ -1,35 +1,35 @@
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+import { StringEnum } from "@earendil-works/pi-ai";
 import type {
   AgentEndEvent,
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { Type } from "typebox";
-import { StringEnum } from "@earendil-works/pi-ai";
 import { Key } from "@earendil-works/pi-tui";
-import { TaskState } from "./state";
-import {
-  renderActiveOverlay,
-  renderCompletedOverlay,
-  renderPlanOverlay,
-} from "./overlay";
-import { GoalState } from "./goal-state";
-import { renderGoalOverlay } from "./goal-overlay";
+import { Type } from "typebox";
 import { parseGoalCommand } from "./goal-command";
 import { createGoalCompleteTool } from "./goal-complete";
 import {
-  MAX_CONTINUATIONS,
-  buildGoalSystemPrompt,
+  buildContinuePrompt,
   buildGoalPrompt,
+  buildGoalSystemPrompt,
   buildObjectiveUpdatedPrompt,
   buildResumePrompt,
-  buildContinuePrompt,
   continuationMarker,
   extractContinuationMarker,
   extractGoalTextFromSystemPrompt,
   formatStatus,
   goalSummary,
+  MAX_CONTINUATIONS,
 } from "./goal-logic";
+import { renderGoalOverlay } from "./goal-overlay";
+import { GoalState } from "./goal-state";
+import {
+  renderActiveOverlay,
+  renderCompletedOverlay,
+  renderPlanOverlay,
+} from "./overlay";
+import { TaskState } from "./state";
 import type { ActiveGoal, Task, TaskStatus } from "./types";
 
 const STATUS_SYMBOLS: Record<Task["status"], string> = {
@@ -47,12 +47,8 @@ export default function myTodo(pi: ExtensionAPI): void {
   let state = new TaskState();
   let goalState = new GoalState();
 
-  let continuationPending:
-    | { goalId: string; marker: string }
-    | undefined;
-  let continuationDelivered:
-    | { goalId: string; marker: string }
-    | undefined;
+  let continuationPending: { goalId: string; marker: string } | undefined;
+  let continuationDelivered: { goalId: string; marker: string } | undefined;
   const cancelledContinuationMarkers = new Set<string>();
 
   function persistGoal(goal: ActiveGoal | null): void {
@@ -112,7 +108,11 @@ export default function myTodo(pi: ExtensionAPI): void {
     continuationPending = undefined;
   }
 
-  function sendContinuationPrompt(pi: ExtensionAPI, _ctx: ExtensionContext, goal: ActiveGoal): void {
+  function sendContinuationPrompt(
+    pi: ExtensionAPI,
+    _ctx: ExtensionContext,
+    goal: ActiveGoal,
+  ): void {
     const marker = continuationMarker(goal);
     pi.sendUserMessage(buildContinuePrompt(goal, marker), {
       deliverAs: "followUp",
@@ -120,15 +120,29 @@ export default function myTodo(pi: ExtensionAPI): void {
     continuationPending = { goalId: goal.id, marker };
   }
 
-  function sendGoalPrompt(pi: ExtensionAPI, _ctx: ExtensionContext, goal: ActiveGoal): void {
+  function sendGoalPrompt(
+    pi: ExtensionAPI,
+    _ctx: ExtensionContext,
+    goal: ActiveGoal,
+  ): void {
     pi.sendUserMessage(buildGoalPrompt(goal), { deliverAs: "followUp" });
   }
 
-  function sendObjectiveUpdatedPrompt(pi: ExtensionAPI, _ctx: ExtensionContext, goal: ActiveGoal): void {
-    pi.sendUserMessage(buildObjectiveUpdatedPrompt(goal), { deliverAs: "followUp" });
+  function sendObjectiveUpdatedPrompt(
+    pi: ExtensionAPI,
+    _ctx: ExtensionContext,
+    goal: ActiveGoal,
+  ): void {
+    pi.sendUserMessage(buildObjectiveUpdatedPrompt(goal), {
+      deliverAs: "followUp",
+    });
   }
 
-  function sendResumePrompt(pi: ExtensionAPI, _ctx: ExtensionContext, goal: ActiveGoal): void {
+  function sendResumePrompt(
+    pi: ExtensionAPI,
+    _ctx: ExtensionContext,
+    goal: ActiveGoal,
+  ): void {
     pi.sendUserMessage(buildResumePrompt(goal), { deliverAs: "followUp" });
   }
 
@@ -442,9 +456,7 @@ export default function myTodo(pi: ExtensionAPI): void {
       action: StringEnum(["evaluate", "mark_blocked"] as const),
       lastEvidence: Type.Optional(Type.String()),
       nextAction: Type.Optional(Type.String()),
-      status: Type.Optional(
-        StringEnum(["active", "paused"] as const),
-      ),
+      status: Type.Optional(StringEnum(["active", "paused"] as const)),
       reason: Type.Optional(Type.String()),
     }),
 
@@ -499,7 +511,9 @@ export default function myTodo(pi: ExtensionAPI): void {
   });
 
   pi.registerTool(
-    createGoalCompleteTool(goalState, {
+    createGoalCompleteTool({
+      getGoalState: () => goalState,
+      markComplete: (summary) => goalState.markComplete(summary),
       persistGoal,
       clearStatus,
       notify: (ctx, message, level) => ctx.ui.notify(message, level),
@@ -747,7 +761,10 @@ export default function myTodo(pi: ExtensionAPI): void {
         case "edit": {
           const current = goalState.get();
           if (!current || current.status === "complete") {
-            ctx.ui.notify("No active goal. Use /goal <objective> to start one.", "warning");
+            ctx.ui.notify(
+              "No active goal. Use /goal <objective> to start one.",
+              "warning",
+            );
             return;
           }
           const goal = goalState.edit(result.objective);
@@ -865,7 +882,9 @@ export default function myTodo(pi: ExtensionAPI): void {
     // the system prompt contains the goal text but no goal-state entry exists
     // yet in this session. Create the local goal so goal_complete can succeed.
     if (!goalState.get()) {
-      const harnessGoalText = extractGoalTextFromSystemPrompt(event.systemPrompt);
+      const harnessGoalText = extractGoalTextFromSystemPrompt(
+        event.systemPrompt,
+      );
       if (harnessGoalText) {
         const goal = goalState.set(harnessGoalText);
         persistGoal(goal);
@@ -974,7 +993,10 @@ export default function myTodo(pi: ExtensionAPI): void {
       finalAssistant?.stopReason === "error"
     ) {
       goalState.pause();
-      if (finalAssistant.stopReason === "error" && finalAssistant.errorMessage) {
+      if (
+        finalAssistant.stopReason === "error" &&
+        finalAssistant.errorMessage
+      ) {
         goalState.markBlocked(finalAssistant.errorMessage);
       }
       persistGoal(goalState.get());

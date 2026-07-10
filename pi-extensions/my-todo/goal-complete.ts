@@ -1,9 +1,9 @@
-import { Type } from "typebox";
 import {
   defineTool,
   type ExtensionContext,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import type { GoalState } from "./goal-state";
 import type { ActiveGoal } from "./types";
 
@@ -15,12 +15,11 @@ export interface GoalCompleteDeps {
     message: string,
     level?: "info" | "warning" | "error",
   ): void;
+  getGoalState(): GoalState | null;
+  markComplete(summary: string): void;
 }
 
-export function createGoalCompleteTool(
-  state: GoalState,
-  deps: GoalCompleteDeps,
-): ToolDefinition {
+export function createGoalCompleteTool(deps: GoalCompleteDeps): ToolDefinition {
   return defineTool({
     name: "goal_complete",
     label: "Goal Complete",
@@ -40,10 +39,12 @@ export function createGoalCompleteTool(
       }),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const completedGoal = state.get();
+      const completedGoal = deps.getGoalState()?.get();
       if (!completedGoal) {
         return {
-          content: [{ type: "text", text: "Error: no active goal to complete" }],
+          content: [
+            { type: "text", text: "Error: no active goal to complete" },
+          ],
           details: {},
           isError: true,
         };
@@ -69,7 +70,7 @@ export function createGoalCompleteTool(
         };
       }
       const goalText = completedGoal.text;
-      state.markComplete(summary);
+      deps.markComplete(summary);
       deps.persistGoal(null);
       deps.clearStatus(ctx);
       deps.notify(ctx, `Goal complete: ${goalText}`, "info");
