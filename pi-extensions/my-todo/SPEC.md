@@ -187,6 +187,27 @@ interface ActiveGoal {
 - `error` 时调用 `markBlocked` 记录错误信息。
 - 超过 `MAX_CONTINUATIONS` 时暂停。
 
+### 10.4 Harness 注入目标同步
+
+当 Pi 的 goal-mode 在会话恢复或自动 continuation 时通过 `before_agent_start` 的 `systemPrompt` 注入活跃目标，但本地 `goalState` 为空（没有 `goal-state` session entry），扩展需要按以下流程同步：
+
+1. `before_agent_start` 收到事件后，先检查 `goalState.get()`。
+2. 若为空，调用 `goal-logic.ts` 的 `extractGoalTextFromSystemPrompt(event.systemPrompt)`。
+3. 解析逻辑：
+   - 查找 `"Active /goal:"` 前缀。
+   - 查找后续 `"Goal-mode rules:"` 后缀。
+   - 提取中间文本并 trim；为空则返回 `undefined`。
+4. 若提取到非空目标文本：
+   - `goalState.set(text)` 创建 `active` 目标。
+   - `persistGoal(goal)` 写入 `goal-state` session entry。
+   - `updateStatus(ctx, goal)` 更新状态栏。
+   - `refreshWidgets(ctx)` 刷新 goal overlay。
+5. 返回系统提示时，若 `event.systemPrompt` 已包含 `"Active /goal:"`，则不再追加 `buildGoalSystemPrompt`，避免重复。
+
+### 10.5 状态恢复来源
+
+本地 `goalState` 优先从 `goal-state` custom entry 恢复。若该 entry 不存在但系统提示中注入了 goal，则通过 10.4 流程在运行时重建。该机制确保 `goal_complete` 在 goal-mode 续跑场景下也能找到 active goal。
+
 ## 11. TUI 集成
 
 - 任务 overlay：
@@ -202,11 +223,11 @@ interface ActiveGoal {
 
 - `state.ts`：任务 CRUD、状态转换、会话恢复单元测试。
 - `goal-state.ts`：目标状态转换、entry 记录、会话恢复单元测试。
-- `goal-logic.ts`：提示词构建、格式化函数单元测试。
+- `goal-logic.ts`：提示词构建、格式化函数、系统提示目标提取单元测试。
 - `goal-command.ts`：命令解析单元测试。
 - `goal-complete.ts`：工具执行逻辑测试。
 - `overlay.ts` / `goal-overlay.ts`：渲染函数测试。
-- `index.ts`：集成测试，mock ExtensionAPI、事件、TUI。
+- `index.ts`：集成测试，mock ExtensionAPI、事件、TUI，覆盖 Harness 注入目标同步路径。
 - 覆盖率目标：branches / functions / lines / statements 全部 100%。
 
 ## 13. 不做什么
@@ -219,8 +240,9 @@ interface ActiveGoal {
 | 任务持久化到外部数据库 | 依赖会话 entries 恢复 |
 | 用户自定义状态机 | 当前状态转换已固定 |
 
-## 14. 变更日志
+## 15. 变更日志
 
 | 日期 | 变更 |
 |------|------|
 | 2026-07-10 | 补充 my-todo 需求与规格文档，确认 todo/goal 工具、命令、计划模式与目标自动推进 |
+| 2026-07-10 | 新增 Harness 注入目标同步规格与需求：在 `before_agent_start` 中从 system prompt 恢复活跃目标到本地 `goalState` |

@@ -72,6 +72,13 @@
 3. 超过最大自动继续次数（50）后暂停目标。
 4. 无待处理消息时自动发送继续提示，推动目标完成。
 
+### Harness 注入目标同步
+
+1. 当 Pi 通过 `before_agent_start` 的 `systemPrompt` 注入活跃目标（如 goal-mode 续跑或会话恢复）时，扩展必须识别并同步到本地 `goalState`。
+2. 同步条件：本地 `goalState` 为空，且 `systemPrompt` 包含 `Active /goal:` 与 `Goal-mode rules:` 区块。
+3. 同步动作：创建 `active` 目标、持久化到 `goal-state` session entry、更新状态栏与 goal overlay。
+4. 同步后，系统提示中已存在的 goal 区块不再重复追加。
+
 ### TUI 集成
 
 1. 活跃任务和已完成任务分别渲染为 overlay widget。
@@ -104,5 +111,6 @@
 2. `/todos` 命令和计划模式工作正常。
 3. `/goal` 命令和 `goal` 工具状态转换正确。
 4. 目标自动推进和暂停路径有测试覆盖。
-5. TUI overlay 在状态变化时正确刷新。
-6. 单元测试和覆盖率检查通过。
+5. Harness 注入目标的同步路径有测试覆盖。
+6. TUI overlay 在状态变化时正确刷新。
+7. 单元测试和覆盖率检查通过。
