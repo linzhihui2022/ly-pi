@@ -111,7 +111,7 @@ The goal is to migrate **all** Superpowers skills as-is. Each skill retains its 
 | `executing-plans` | ✅ Migrated | Removed `superpowers:` prefixes from skill references; replaced `TodoWrite` with `todo` tool; removed `using-git-worktrees` reference (Pi does not support worktrees); neutralized branding. |
 | `verification-before-completion` | ✅ Migrated | Pure documentation skill; no platform-specific content. |
 | `requesting-code-review` | ✅ Migrated | Replaced `Task tool` with `Agent` tool; updated plan path to `.lychee/artifacts/plans/`. |
-| `receiving-code-review` | ✅ Migrated | Migrated as-is. Replaced `CLAUDE.md` with `AGENTS.md`. |
+| `receiving-code-review` | ✅ Migrated | **Locally customized.** Migrated as-is; replaced `CLAUDE.md` with `AGENTS.md`. Added `SUMMARIZE` + `CONFIRM` steps for external reviewer feedback before verification/implementation. See §10.5. |
 | `dispatching-parallel-agents` | ✅ Migrated | Replaced `Task()` with Pi `Agent` + `background: true`. |
 | `subagent-driven-development` | ✅ Migrated | Migrated as-is. Replaced `TodoWrite` with `todo`, `Task tool` with `Agent` tool, removed `using-git-worktrees` reference, updated paths to `.lychee/artifacts/`. |
 | `using-git-worktrees` | 🚫 Skip | Pi does not support git worktrees. Remove all references. |
@@ -807,6 +807,35 @@ Invoke `subagent-driven-development`
    - 保留无远程仓库时跳过 push/PR 选项的逻辑
 4. 更新 `skill-sha.json` 中的 SHA
 5. 运行 `./install.sh` 部署
+
+### `receiving-code-review`
+
+**Upstream SHA:** `6b9f1b214ab28a75677a9072d9333075971c333d`
+
+**Local modification summary (relative to upstream):**
+
+| Change | Upstream | Local |
+|---|---|---|
+| **Response pattern for external review** | `READ → UNDERSTAND → VERIFY → EVALUATE → RESPOND → IMPLEMENT` | `READ → UNDERSTAND → SUMMARIZE → CONFIRM → VERIFY → EVALUATE → RESPOND → IMPLEMENT` |
+| **External reviewer workflow** | Run all codebase checks, then implement or push back | First summarize the review to human partner and wait for direction (`proceed` / `hold` / `clarify` / `reject`) before any verification |
+| **Human partner gate** | Implicit in pushback / conflict cases | Explicit: human partner must confirm before proceeding; `hold`/`reject` stops all work |
+| **Source-specific handling** | External reviewer checks listed 1–5 | Check list renumbered 3–7 and preceded by `SUMMARIZE` + `CONFIRM`; added `IF human partner says proceed after all checks` transition |
+
+**Modification rationale:**
+
+- External review feedback is a suggestion, not an order. The human partner should see a concise summary before any implementation work begins, so they can decide whether to pursue it, push back, or ignore it.
+- This prevents the agent from silently spending effort on reviewer feedback that the human partner may not want to act on.
+
+**Re-migration steps:**
+
+1. Re-migrate `receiving-code-review` from upstream
+2. Re-apply the local customizations:
+   - Add `SUMMARIZE` and `CONFIRM` steps to the generic response pattern (steps 3 and 4)
+   - Reorder the external-reviewer section so `SUMMARIZE` and `CONFIRM` come before the five codebase checks
+   - Add explicit `IF human partner says hold or reject: Stop` and `IF human partner says proceed: Continue...` branches
+3. Update `skill-mapping.md` notes for `receiving-code-review`
+4. Update `skill-sha.json` if the upstream SHA changed
+5. Run `./install.sh` to deploy
 
 ### `using-superpowers`
 

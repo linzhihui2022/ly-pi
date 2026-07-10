@@ -18,10 +18,12 @@ WHEN receiving code review feedback:
 
 1. READ: Complete feedback without reacting
 2. UNDERSTAND: Restate requirement in own words (or ask)
-3. VERIFY: Check against codebase reality
-4. EVALUATE: Technically sound for THIS codebase?
-5. RESPOND: Technical acknowledgment or reasoned pushback
-6. IMPLEMENT: One item at a time, test each
+3. SUMMARIZE: If external reviewer, summarize key points and source to human partner
+4. CONFIRM: If external reviewer, wait for human partner direction before proceeding (proceed / hold / clarify / reject)
+5. VERIFY: Check against codebase reality
+6. EVALUATE: Technically sound for THIS codebase?
+7. RESPOND: Technical acknowledgment or reasoned pushback
+8. IMPLEMENT: One item at a time, test each
 ```
 
 ## Forbidden Responses
@@ -67,13 +69,20 @@ You understand 1,2,3,6. Unclear on 4,5.
 ### From External Reviewers
 ```
 BEFORE implementing:
-  1. Check: Technically correct for THIS codebase?
-  2. Check: Breaks existing functionality?
-  3. Check: Reason for current implementation?
-  4. Check: Works on all platforms/versions?
-  5. Check: Does reviewer understand full context?
+  1. SUMMARIZE the review to your human partner (key points, source, scope)
+  2. CONFIRM next step: proceed / hold / reject / ask for clarification
 
-IF suggestion seems wrong:
+IF human partner says hold or reject:
+  Stop. Do not proceed with verification or implementation.
+
+IF human partner says proceed:
+  3. Check: Technically correct for THIS codebase?
+  4. Check: Breaks existing functionality?
+  5. Check: Reason for current implementation?
+  6. Check: Works on all platforms/versions?
+  7. Check: Does reviewer understand full context?
+
+IF suggestion seems wrong after checking:
   Push back with technical reasoning
 
 IF can't easily verify:
@@ -81,6 +90,9 @@ IF can't easily verify:
 
 IF conflicts with your human partner's prior decisions:
   Stop and discuss with your human partner first
+
+IF human partner says proceed after all checks:
+  Continue with VERIFY → EVALUATE → RESPOND → IMPLEMENT
 ```
 
 **your human partner's rule:** "External feedback - be skeptical, but check carefully"
