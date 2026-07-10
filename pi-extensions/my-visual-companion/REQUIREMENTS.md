@@ -1,53 +1,60 @@
-# Visual Companion Requirements
+# my-visual-companion 需求文档
 
-## What this extension does
+> 状态：已确认，可作为开发基准
+> 设计文档：[`SPEC.md`](./SPEC.md)
 
-Provide a browser-based visual companion for Pi so the assistant can show
-mockups, diagrams, and structured choices during a conversation. The user
-interacts with the browser and the assistant receives the result through
-Pi tools without switching back to the terminal.
+## 目标
 
-## Functional requirements
+为 Pi 提供浏览器中的可视化伴随界面，让助手在对话中展示 mockup、图表和结构化选择，并通过 Pi 工具读取用户在浏览器里的交互结果。
 
-1. `visual_companion_start` opens a local HTTP/WebSocket server and returns a
-   session URL.
-2. `visual_companion_show` pushes an HTML fragment or full document to the
-   browser and refreshes the page.
-3. `visual_companion_wait` blocks until the user clicks the confirmation button
-   in the browser, then returns the confirm event.
-4. `visual_companion_read_events` returns all recorded click/confirm events for
-   the session.
-5. `visual_companion_stop` shuts down the server and frees resources.
+## 功能需求
 
-## Security requirements
+1. `visual_companion_start` 启动本地 HTTP/WebSocket 服务，并返回 session URL。
+2. `visual_companion_show` 将 HTML fragment 或完整 HTML document 推送到浏览器，并刷新页面。
+3. `visual_companion_wait` 阻塞直到用户点击确认按钮，然后返回 confirm event。
+4. `visual_companion_read_events` 返回当前 session 记录的 click/confirm events。
+5. `visual_companion_stop` 关闭服务并释放资源。
 
-- VC-SEC-1: Every session must have a cryptographically random session key.
-- VC-SEC-2: The session key must be part of the URL returned to the assistant
-  (`?key=...`).
-- VC-SEC-3: HTTP requests to `/` and `/files/*` must reject requests without a
-  valid session key.
-- VC-SEC-4: WebSocket upgrade requests must reject connections without a valid
-  session key.
-- VC-SEC-5: The browser must remember the key (cookie or query param) so
-  reloads and `/helper.js` continue to work after the first validated load.
-- VC-SEC-6: A key must not be guessable from the port or session id alone.
+## 安全需求
 
-## Persistence requirements
+1. VC-SEC-1：每个 session 必须生成加密随机 session key。
+2. VC-SEC-2：`visual_companion_start` 返回的 URL 必须包含 session key（`?key=...`）。
+3. VC-SEC-3：HTTP `/` 和 `/files/*` 请求必须拒绝无有效 session key 的访问。
+4. VC-SEC-4：WebSocket upgrade 必须拒绝无有效 session key 的连接。
+5. VC-SEC-5：浏览器必须记住 key（cookie 或 query param），让 reload 和 `/helper.js` 在首次校验后继续工作。
+6. VC-SEC-6：session key 不得仅凭 port 或 session id 推测。
 
-- VC-PER-1: Each session must persist its event stream to the working tree at
-  `.lychee/visual-companion/<session-id>/events.jsonl`.
-- VC-PER-2: Events must be appended as one JSON object per line, in order.
-- VC-PER-3: A new screen must clear the in-memory event buffer (existing
-  behavior), but the persisted file may keep the full history or rotate per
-  screen — the design decision belongs in SPEC.md.
-- VC-PER-4: The companion must still work when the project root cannot be
-  determined; in that case it falls back to a temp directory or keeps events
-  in memory only.
-- VC-PER-5: Session workspace directories must be ignored by git automatically.
+## 持久化需求
 
-## Non-requirements / out of scope
+1. VC-PER-1：每个 session 必须将事件流持久化到工作树 `.lychee/visual-companion/<session-id>/events.jsonl`。
+2. VC-PER-2：事件必须按顺序追加，每行一个 JSON object。
+3. VC-PER-3：新 screen 必须清空内存事件缓冲；持久化文件的保留或轮转策略由 `SPEC.md` 定义。
+4. VC-PER-4：无法确定项目 root 时，允许回退到临时目录或仅保留内存事件。
+5. VC-PER-5：session workspace 目录必须自动被 git 忽略。
 
-- Screen HTML persistence (saving `*.html` files to disk) is out of scope.
-- Cross-machine access beyond `localhost`/`127.0.0.1` is out of scope.
-- Auto-opening the user's browser is out of scope.
-- Authentication tied to Pi user identity is out of scope.
+## 非功能需求
+
+1. 本地服务仅面向 `localhost`/`127.0.0.1` 使用场景。
+2. 工具返回值需要包含可读文本和结构化 `details`。
+3. 单元测试覆盖 API、server、session、tools 和入口注册行为。
+4. 构建命令：`bunx turbo run build`。
+5. 测试命令：`bunx turbo run test` 或在扩展目录执行 `vitest run`。
+
+## 不做什么
+
+| 功能 | 排除原因 |
+|------|----------|
+| 将 screen HTML 持久化为 `*.html` 文件 | 当前只持久化事件流 |
+| 支持跨机器访问 | 当前仅支持本机浏览器协作 |
+| 自动打开用户浏览器 | 由用户手动打开返回的 URL |
+| 绑定 Pi 用户身份认证 | session key 已满足当前本地安全模型 |
+
+## 验收标准
+
+1. 启动后返回带 key 的 session URL。
+2. 无 key 或 key 不匹配的 HTTP/WebSocket 访问被拒绝。
+3. 推送新 screen 后浏览器能刷新到最新内容。
+4. click/confirm events 同步写入内存和 `events.jsonl`。
+5. 新 screen 会清空内存事件并按 `SPEC.md` 处理持久化文件。
+6. `visual_companion_wait` 只在 confirm event 到达时解析。
+7. 单元测试和覆盖率检查通过。

@@ -1,7 +1,7 @@
 # my-hud Spec
 
-> 状态：需求澄清草案  
-> 目标：重新定义 aboveEditor / footer / working 三层职责，消除功能归属混乱。
+> 状态：已确认，可作为开发基准；模型短名配置仍待实现
+> 目标：定义 aboveEditor / footer / working 三层职责，避免功能归属混乱。
 
 ---
 
@@ -17,7 +17,7 @@ my-hud 是一个**三层信息架构**的 pi 扩展，每层有且只有一个�
 
 **核心原则**：
 
-- 一层一责，不越界。aboveEditor 不显示动态进度，footer 不显示统计数字，working 不显示技术信息。
+- 一层一责，不越界。aboveEditor 不显示工具调用进度，footer 不显示统计数字，working 不显示技术信息。
 - 能隐藏就不显示。分支为空时隐藏分支，没有用户消息时 footer 留空。
 - 信息密度服从终端宽度。超长项目名截断，整行超长则尾部截断。
 
@@ -34,13 +34,14 @@ my-hud 是一个**三层信息架构**的 pi 扩展，每层有且只有一个�
 | 字段 | 图标 | 内容 | 颜色规则 | 截断规则 |
 |------|------|------|----------|----------|
 | Project | `` | 当前目录 basename | `mdCode` | >10 字符截断为前8+`..` |
-| Model | `` | 模型短名或原始 ID | `mdHeading` | 不截断（短名已控制长度） |
+| Model | `` | 模型短名或原始 ID；当前使用内置映射，配置化映射见待实现项 | `mdHeading` | 不截断（短名应控制长度） |
 | Branch | `` | Git 分支名；若存在关联 GitHub PR，则在分支名后追加 `#42` 编号，并包装为 OSC 8 可点击超链接 | `customMessageLabel` | 为空或无 PR 时整字段隐藏；分支名为空时该字段完全消失 |
 | Context | `//` | 上下文使用率百分比 | 动态（见下） | 无 |
 | Input | `` | 累计 input tokens | `mdListBullet` | 按 `formatTokens` 格式化 |
 | Output | `` | 累计 output tokens | `thinkingLow` | 按 `formatTokens` 格式化 |
 | Cache Read | `` | 累计 cache-read tokens | `thinkingMedium` | 按 `formatTokens` 格式化 |
 | Cost | `` | 累计成本（CNY） | `toolDiffRemoved` | 保留两位小数 |
+| Cache Rate | `󰄬` | cache read / (cache read + input) | `accent` | 四舍五入为整数百分比 |
 
 **Context 颜色阈值**：
 
@@ -67,6 +68,7 @@ my-hud 是一个**三层信息架构**的 pi 扩展，每层有且只有一个�
 - `session_start` — 初始化
 - `model_select` — 模型切换
 - `turn_start` — 新回合开始（token 统计更新）
+- `turn_end` — 回合结束（token 统计和 Git/PR 缓存更新）
 - `branch_change` — Git 分支变化（由 footerData 订阅）
 
 ---
@@ -129,27 +131,40 @@ my-hud 是一个**三层信息架构**的 pi 扩展，每层有且只有一个�
 ```
 index.ts    — 唯一的事件注册点，三层协调器
             — 职责：决定「什么事件触发哪一层的刷新」
-            — 新增：注册 `/open-pr` 指令，打开当前分支关联 PR 页面
+            — 注册 `/open-pr` 和 `/mem` 指令
 
 bar.ts      — aboveEditor 的 widget 生命周期
             — 职责：注册/注销 widget、持有 ctx 和 branch、转发 render 请求
-            — 新增：持有 PR 信息并异步刷新
+            — 持有 Git 状态和 PR 信息并异步刷新
 
 render.ts   — aboveEditor 的「纯函数」渲染器
             — 职责：给定 theme + width + data，返回字符串
             — 禁止：直接访问 ctx、调用副作用
 
+git.ts      — Git 状态探测
+            — 职责：解析 staged、unstaged、untracked、stashed、conflicted、ahead、behind
+            — 禁止：直接访问 UI 或 ctx
+
 pr.ts       — GitHub PR 探测与打开
             — 职责：给定 cwd 和 token，异步返回当前分支关联 PR 的编号与 URL
-            — 新增：提供 `getPullRequestForCurrentBranch()` 和 `openUrl()`，供 `/open-pr` 使用
+            — 提供 `getPullRequestForCurrentBranch()` 和 `openUrl()`，供 `/open-pr` 使用
             — 禁止：直接访问 UI 或 ctx
 
 format.ts   — 格式化与颜色决策的纯函数
-            — 职责：token 格式化、context 颜色阈值、模型名映射
+            — 职责：token 格式化、context 颜色阈值、cache hit rate、模型名映射
 
 session.ts  — session 数据聚合与查询
             — 职责：累计 token/cost、提取最后用户消息
             — 注意：cost 转换（USD→CNY）在此处完成
+
+memory.ts   — macOS 内存压力探测
+            — 职责：读取 `vm_stat` 和 `sysctl -n hw.memsize` 并返回百分比
+
+vitest-process.ts — 残留 Vitest 进程探测
+            — 职责：解析 `ps -axo pid,command,rss` 输出
+
+memory-widget.ts — aboveEditor 内存提示渲染
+            — 职责：在内存压力过高时生成提示行
 
 icons.ts    — 图标常量表
             — 职责：只读映射，无逻辑
@@ -164,8 +179,12 @@ types.ts    — 跨模块共享类型
 
 ```
 index.ts → bar.ts → render.ts → format.ts → icons.ts
+         → git.ts
+         → pr.ts
          → session.ts ────────────────┘
          → working.ts
+         → memory.ts → memory-widget.ts
+         → vitest-process.ts ────────┘
 ```
 
 - `render.ts` 不依赖 `bar.ts`
@@ -179,7 +198,7 @@ index.ts → bar.ts → render.ts → format.ts → icons.ts
 ### 4.1 aboveEditor 刷新流
 
 ```
-事件触发 (session_start / model_select / turn_start / branch_change)
+事件触发 (session_start / model_select / turn_start / turn_end / branch_change)
   │
   ▼
 bar.requestRender() ──→ TUI 请求重绘
@@ -194,6 +213,7 @@ bar.renderWidget(theme, width)
   ├── ctx.model?.id
   ├── basename(ctx.cwd)
   ├── branch (之前由 footerData 注入)
+  ├── gitStatus (由 git.ts 异步探测并缓存)
   └── pullRequest (由 pr.ts 异步探测并缓存)
   │
   ▼
@@ -201,6 +221,8 @@ render.ts: buildStatusLine(theme, width, data)
   ├── format.ts: formatTokens()
   ├── format.ts: shortModelName()
   ├── format.ts: contextColored()
+  ├── format.ts: formatCacheRate()
+  ├── render.ts: formatGitStatus()
   ├── pr.ts 提供的 pullRequest.url / number
   └── icons.ts: icon()
   │
@@ -235,6 +257,30 @@ working.ts: pickRandomMessage()
 ctx.ui.setWorkingMessage(theme.fg("accent", message))
 ```
 
+### 4.4 内存提示流
+
+```
+agent_start / agent_end 事件
+  │
+  ▼
+memory.ts: checkMemoryPressure()
+  │
+  ├── ok=true  ──→ 移除 my-hud-memory-warning widget
+  │
+  └── ok=false ──→ vitest-process.ts: findVitestProcesses()
+                   │
+                   ▼
+                 memory-widget.ts: buildMemoryWarningLines()
+                   │
+                   ▼
+                 ctx.ui.setWidget(..., placement: "aboveEditor")
+```
+
+### 4.5 Slash 命令流
+
+- `/open-pr`：调用 `pr.ts:getPullRequestForCurrentBranch()`；有 PR 时调用 `openUrl()`，打开失败则通知 PR URL。
+- `/mem`：调用 `memory.ts:checkMemoryPressure()`；根据 `ok` 返回 info 或 warning 通知。
+
 ---
 
 ## 5. 扩展点（未来需求着陆区）
@@ -246,19 +292,16 @@ ctx.ui.setWorkingMessage(theme.fg("accent", message))
 | 显示当前 step / 工具调用状态 | **新增中间层**（belowEditor） | 不要塞进 aboveEditor |
 | 显示当前时间 / 计时器 | aboveEditor 新增字段 | 放在 Cost 右侧 |
 | 多货币切换（USD/CNY） | `format.ts` 或配置项 | 影响 render.ts 的调用签名 |
-| 模型名短名可配置 | `format.ts` 或配置文件 | 当前硬编码，可改为读取配置 |
 | 用户自定义 working 消息 | `working.ts` 读取外部配置 | 保持随机选择机制 |
 | 显示最后 AI 回复摘要 | **不要** — 与 footer 职责冲突 | 如需此功能，新增「AI 摘要层」 |
-| 显示最近文件变更 | aboveEditor 新增字段 | 放在 Branch 右侧 |
-| 显示当前分支 GitHub PR | aboveEditor 在 Branch 字段后追加 | 已纳入本次实现 |
 
 ---
 
 ## 6. 待决策项
 
-以下问题不在当前实现中，spec 中标注为 TBD，不阻塞现有功能：
+以下问题不在当前实现中，标注为待决策项，不阻塞现有功能：
 
-1. **配置系统**：是否支持 JSON 配置（如模型名映射、货币汇率、自定义 working 消息）？
+1. **模型短名配置实现方式**：`REQUIREMENTS.md` 已要求 `my-hud.json` 支持 `modelShortNames`，仍需确定读取时机、默认值合并和 `/reload` 行为。
 2. **footer 交互**：是否支持点击 footer 复制消息内容？
 3. **aboveEditor 字段可选**：是否允许用户通过配置隐藏某些字段（如 Cost）？
 4. **working 消息持久化**：同一回合内是否保持同一条 working 消息（当前每 turn_start 都重新随机）？
@@ -267,10 +310,11 @@ ctx.ui.setWorkingMessage(theme.fg("accent", message))
 
 ## 7. 测试策略
 
-- **纯函数**（`format.ts`, `render.ts`, `session.ts`, `working.ts`）：单元测试，覆盖率 100%
+- **纯函数**（`format.ts`, `render.ts`, `session.ts`, `working.ts`, `memory-widget.ts`）：单元测试，覆盖率 100%
 - **Bar 类**：mock TUI 和 ctx，测试 widget 注册/注销/render 行为
-- **index.ts**：mock `ExtensionAPI`，测试事件注册和 handler 行为
-- **不测试**：真实 TUI 渲染、真实 Git 分支获取、真实 session 数据
+- **集成入口**：mock `ExtensionAPI`，测试事件注册、命令 handler 和 widget 更新行为
+- **系统探测**：mock shell 输出，测试 `git.ts`、`pr.ts`、`memory.ts`、`vitest-process.ts`
+- **不测试**：真实 TUI 渲染、真实 GitHub API、真实浏览器打开、真实 session 数据
 
 ---
 
@@ -281,3 +325,4 @@ ctx.ui.setWorkingMessage(theme.fg("accent", message))
 | 2026-06-02 | 整理现有代码，重新定义三层职责，生成本 spec |
 | 2026-07-08 | 新增 aboveEditor 分支后显示 GitHub PR 编号的规格与数据流说明 |
 | 2026-07-08 | 新增 `/open-pr` 指令规格 |
+| 2026-07-10 | 同步 Git 状态、cache hit rate、内存提示、`/mem` 和模型短名配置待实现项 |
