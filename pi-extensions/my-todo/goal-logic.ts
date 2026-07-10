@@ -32,6 +32,20 @@ export function extractContinuationMarker(prompt: string): string | undefined {
   return pattern.exec(prompt)?.[1];
 }
 
+export function extractGoalTextFromSystemPrompt(systemPrompt: string | undefined): string | undefined {
+  if (typeof systemPrompt !== "string") return undefined;
+  const prefix = "Active /goal:";
+  const idx = systemPrompt.indexOf(prefix);
+  if (idx === -1) return undefined;
+
+  const afterPrefix = systemPrompt.slice(idx + prefix.length);
+  const rulesIdx = afterPrefix.indexOf("Goal-mode rules:");
+  if (rulesIdx === -1) return undefined;
+
+  const text = afterPrefix.slice(0, rulesIdx).trim();
+  return text || undefined;
+}
+
 export function formatStatus(goal: ActiveGoal | undefined): string | undefined {
   if (!goal) return undefined;
   if (goal.status === "complete") return "complete";

@@ -8,6 +8,7 @@ import {
   buildContinuePrompt,
   continuationMarker,
   extractContinuationMarker,
+  extractGoalTextFromSystemPrompt,
   formatStatus,
   formatDuration,
   formatTokenCount,
@@ -188,5 +189,35 @@ describe("goalCommandHint", () => {
 
   it("returns complete hints", () => {
     expect(goalCommandHint("complete")).toBe("/goal edit <objective>, /goal clear");
+  });
+});
+
+describe("extractGoalTextFromSystemPrompt", () => {
+  it("extracts goal text from my-todo system prompt", () => {
+    const prompt = buildGoalSystemPrompt(sampleGoal);
+    expect(extractGoalTextFromSystemPrompt(prompt)).toBe(sampleGoal.text);
+  });
+
+  it("extracts goal text from a larger system prompt", () => {
+    const prompt = `You are a helpful assistant.\n\n${buildGoalSystemPrompt(sampleGoal)}\n\nProceed.`;
+    expect(extractGoalTextFromSystemPrompt(prompt)).toBe(sampleGoal.text);
+  });
+
+  it("returns undefined when no active goal section exists", () => {
+    expect(extractGoalTextFromSystemPrompt("No goal here.")).toBeUndefined();
+  });
+
+  it("returns undefined when goal section has no rules suffix", () => {
+    expect(extractGoalTextFromSystemPrompt("Active /goal:\n\nOnly this")).toBeUndefined();
+  });
+
+  it("trims surrounding whitespace from extracted goal", () => {
+    const prompt = "Active /goal:\n\n  Verify all docs  \n\nGoal-mode rules:\n...";
+    expect(extractGoalTextFromSystemPrompt(prompt)).toBe("Verify all docs");
+  });
+
+  it("returns undefined for empty goal text", () => {
+    const prompt = "Active /goal:\n\n\n\nGoal-mode rules:\n...";
+    expect(extractGoalTextFromSystemPrompt(prompt)).toBeUndefined();
   });
 });

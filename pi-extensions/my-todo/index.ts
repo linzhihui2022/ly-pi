@@ -26,6 +26,7 @@ import {
   buildContinuePrompt,
   continuationMarker,
   extractContinuationMarker,
+  extractGoalTextFromSystemPrompt,
   formatStatus,
   goalSummary,
 } from "./goal-logic";
@@ -855,9 +856,23 @@ export default function myTodo(pi: ExtensionAPI): void {
       return { action: "handled" };
   });
 
-  pi.on("before_agent_start", (event) => {
+  pi.on("before_agent_start", (event, ctx) => {
     markContinuationDelivered(event.prompt);
     if (isCancelledContinuationPrompt(event.prompt)) return;
+
+    // Reconcile a harness-injected active goal with my-todo's goal state.
+    // When a goal is resumed from a previous session via Pi's goal-mode,
+    // the system prompt contains the goal text but no goal-state entry exists
+    // yet in this session. Create the local goal so goal_complete can succeed.
+    if (!goalState.get()) {
+      const harnessGoalText = extractGoalTextFromSystemPrompt(event.systemPrompt);
+      if (harnessGoalText) {
+        const goal = goalState.set(harnessGoalText);
+        persistGoal(goal);
+        updateStatus(ctx, goal);
+        refreshWidgets(ctx);
+      }
+    }
 
     if (state.getPlanMode()) {
       if (state.getPlanPhase() === "planning") {
@@ -888,6 +903,14 @@ export default function myTodo(pi: ExtensionAPI): void {
 
     const goal = goalState.get();
     if (!goal || goal.status !== "active") return;
+
+    // If the system prompt already includes the active goal section (e.g.
+    // injected by the harness on a resumed goal-mode session), do not append
+    // a duplicate goal block.
+    if (event.systemPrompt.includes("Active /goal:")) {
+      return;
+    }
+
     return {
       systemPrompt: `${event.systemPrompt}\n\n${buildGoalSystemPrompt(goal)}`,
     };

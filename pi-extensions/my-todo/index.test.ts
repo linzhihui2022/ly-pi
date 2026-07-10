@@ -1474,6 +1474,61 @@ describe("my-todo extension", () => {
       const result = await handler({ systemPrompt: "base" }, ctx);
       expect(result).toBeUndefined();
     });
+
+    it("reconciles harness-injected active goal when local goalState is empty", async () => {
+      await initExtension();
+      const handler = registeredEvents.get("before_agent_start")!;
+      const ctx = createMockCtx();
+
+      const goalSection = `Active /goal:\n\nVerify all docs\n\nGoal-mode rules:\n...`;
+      const result = await handler({ systemPrompt: `base\n\n${goalSection}` }, ctx);
+
+      // Should not duplicate the already-present goal section
+      expect(result).toBeUndefined();
+
+      // Goal should be persisted, status updated, widgets refreshed
+      expect(mockPi.appendEntry).toHaveBeenCalledWith("goal-state", {
+        goal: expect.objectContaining({ text: "Verify all docs", status: "active" }),
+      });
+      expect(ctx.ui.setStatus).toHaveBeenCalledWith(
+        "my-todo-goal",
+        expect.stringContaining("active"),
+      );
+      expect(ctx.ui.setWidget).toHaveBeenCalledWith(
+        "my-goal",
+        expect.any(Function),
+      );
+    });
+
+    it("does not reconcile when local goalState already has an active goal", async () => {
+      await initExtension();
+      const cmd = registeredCommands.get("goal")!;
+      const ctx = createMockCtx();
+      await cmd.handler("Local goal", ctx);
+      mockPi.appendEntry.mockClear();
+      ctx.ui.setStatus.mockClear();
+      ctx.ui.setWidget.mockClear();
+
+      const handler = registeredEvents.get("before_agent_start")!;
+      const goalSection = `Active /goal:\n\nHarness goal\n\nGoal-mode rules:\n...`;
+      await handler({ systemPrompt: `base\n\n${goalSection}` }, ctx);
+
+      expect(mockPi.appendEntry).not.toHaveBeenCalled();
+      expect(ctx.ui.setStatus).not.toHaveBeenCalled();
+      expect(ctx.ui.setWidget).not.toHaveBeenCalled();
+    });
+
+    it("does not reconcile when system prompt has no active goal section", async () => {
+      await initExtension();
+      const handler = registeredEvents.get("before_agent_start")!;
+      const ctx = createMockCtx();
+      const result = await handler({ systemPrompt: "base" }, ctx);
+      expect(result).toBeUndefined();
+      expect(mockPi.appendEntry).not.toHaveBeenCalledWith(
+        "goal-state",
+        expect.anything(),
+      );
+    });
   });
 
   describe("agent_end auto-continue", () => {
