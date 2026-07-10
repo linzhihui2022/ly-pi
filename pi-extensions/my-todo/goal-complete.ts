@@ -41,9 +41,21 @@ export function createGoalCompleteTool(
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const completedGoal = state.get();
-      if (!completedGoal || completedGoal.status !== "active") {
+      if (!completedGoal) {
         return {
           content: [{ type: "text", text: "Error: no active goal to complete" }],
+          details: {},
+          isError: true,
+        };
+      }
+      if (completedGoal.status !== "active") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: goal is not active (status: ${completedGoal.status})`,
+            },
+          ],
           details: {},
           isError: true,
         };

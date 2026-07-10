@@ -52,6 +52,9 @@ describe("goal_complete tool", () => {
     );
     expect((result as any).isError).toBe(true);
     expect(result.terminate).toBeUndefined();
+    expect((result.content[0] as { text: string }).text).toBe(
+      "Error: no active goal to complete",
+    );
   });
 
   it("errors when summary empty", async () => {
@@ -82,5 +85,8 @@ describe("goal_complete tool", () => {
     );
     expect((result as any).isError).toBe(true);
     expect(result.terminate).toBeUndefined();
+    expect((result.content[0] as { text: string }).text).toBe(
+      "Error: goal is not active (status: paused)",
+    );
   });
 });
