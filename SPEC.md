@@ -28,8 +28,7 @@ configure/
 │   ├── my-hud/
 │   ├── my-todo/
 │   ├── my-visual-companion/
-│   ├── my-webtool/
-│   └── pi-pet/
+│   └── my-webtool/
 ├── pi-skills/               # 自定义技能文件
 ├── pi-themes/               # 主题 JSON + 部署脚本
 ├── pi-agents/               # 子代理定义
@@ -148,7 +147,6 @@ index.ts
 ├── my-ask/index.js
 ├── my-back/index.js
 ├── ...
-└── pi-pet/index.js
 ```
 
 ### 7.2 技能、主题、设置、MCP

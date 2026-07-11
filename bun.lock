@@ -144,22 +144,6 @@
         "@typescript/native-preview": "^7.0.0-beta",
       },
     },
-    "pi-extensions/pi-pet": {
-      "name": "pi-pet",
-      "dependencies": {
-        "@earendil-works/pi-ai": "^0.78.0",
-        "@earendil-works/pi-coding-agent": "^0.78.0",
-        "@earendil-works/pi-tui": "^0.78.0",
-        "@types/node": "^25.9.1",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-        "vitest": "^4",
-      },
-      "peerDependencies": {
-        "@typescript/native-preview": "^7.0.0-beta",
-      },
-    },
     "pi-skills": {
       "name": "pi-skills",
     },
@@ -650,8 +634,6 @@
     "pi-agents": ["pi-agents@workspace:pi-agents"],
 
     "pi-config": ["pi-config@workspace:pi-config"],
-
-    "pi-pet": ["pi-pet@workspace:pi-extensions/pi-pet"],
 
     "pi-skills": ["pi-skills@workspace:pi-skills"],
 

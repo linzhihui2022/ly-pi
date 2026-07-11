@@ -2,7 +2,7 @@
 
 我的终端、Shell、AI 编码 Agent 全家桶 —— Git 版本管理，一键部署。
 
-> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 9 个自定义扩展、17 个技能、13 个子代理定义、Catppuccin Mocha 主题等。
+> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 8 个自定义扩展、17 个技能、13 个子代理定义、Catppuccin Mocha 主题等。
 
 项目级需求文档见 [`REQUIREMENTS.md`](./REQUIREMENTS.md)，架构与流程规格见 [`SPEC.md`](./SPEC.md)。
 
@@ -12,7 +12,7 @@
 
 ```
 configure/
-├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 9 个）
+├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 8 个）
 ├── pi-skills/skills/       # 自定义技能（17 个）
 ├── pi-themes/              # 自定义主题（Catppuccin Mocha）
 ├── pi-agents/              # 子代理定义（13 个）
@@ -45,7 +45,6 @@ configure/
 | **my-todo** | 任务 + 目标追踪：`todo` + `goal` 工具，Plan 模式（规划/执行两阶段），TUI 浮层，自动继续 |
 | **my-visual-companion** | 浏览器可视化伴侣：WebSocket 驱动 HTML 界面，支持交互式确认 |
 | **my-webtool** | 网页搜索与抓取：Tavily API 的 `web_search` / `web_fetch`，自定义 TUI 渲染 |
-| **pi-pet** | 虚拟 ASCII 宠物：状态随时间衰减，`/pet` 命令喂食/玩耍/睡觉/重命名 |
 
 ---
 

@@ -12,7 +12,7 @@
 
 ```
 configure/
-├── pi-extensions/          # Pi 自定义扩展（9 个）
+├── pi-extensions/          # Pi 自定义扩展（8 个）
 ├── pi-skills/              # 自定义技能
 ├── pi-themes/              # 自定义主题
 ├── pi-agents/              # 子代理定义
@@ -41,7 +41,6 @@ configure/
 | `my-todo` | `todo` / `goal` / `goal_complete` 工具与计划模式 | [REQUIREMENTS](./pi-extensions/my-todo/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-todo/SPEC.md) |
 | `my-visual-companion` | 浏览器可视化伴侣 | [REQUIREMENTS](./pi-extensions/my-visual-companion/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-visual-companion/SPEC.md) |
 | `my-webtool` | `web_search` / `web_fetch` 网页工具 | [REQUIREMENTS](./pi-extensions/my-webtool/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-webtool/SPEC.md) |
-| `pi-pet` | 虚拟 ASCII 宠物 | [REQUIREMENTS](./pi-extensions/pi-pet/REQUIREMENTS.md) | [SPEC](./pi-extensions/pi-pet/SPEC.md) |
 
 ### 技能、主题、子代理与配置
 
