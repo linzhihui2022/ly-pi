@@ -43,7 +43,7 @@ Each file starts with YAML frontmatter using exactly these fields:
 ```yaml
 ---
 Title: <concise ticket title>
-ID: <3-digit zero-padded sequential number>
+ID: <sequential number: 001-999 zero-padded, then 1000+>
 Status: TODO
 Labels: <comma-separated labels>
 Estimate: <1 | 2 | 3 | 5 | 8 | 13>
@@ -54,7 +54,7 @@ Source: <path-to-source-design-file>
 ---
 ```
 
-- `ID` is the 3-digit zero-padded number from the filename prefix (e.g., `001`, `002`). It is unique for each ticket.
+- `ID` is the sequential number from the filename prefix. For `001`–`999`, use 3-digit zero padding. If the count exceeds `999`, continue with `1000`, `1001`, and so on without renumbering or repadding existing `001`–`999` tickets. It is unique for each ticket.
 - `Status` is always `TODO` for new tickets.
 - `Labels` come from the design module or inferred categories (e.g., `backend, push-notifications`).
 - `Estimate` is one of `1`, `2`, `3`, `5`, `8`, `13`. If the design lacks sizing, infer from scope and note it briefly to the user.
@@ -114,6 +114,8 @@ Use kebab-case and a sequential prefix:
 tickets/001-<module-name>.md
 tickets/002-<module-name>.md
 ```
+
+If the count exceeds `999`, continue with `tickets/1000-<module-name>.md` (and so on) without renumbering earlier tickets.
 
 If the project already numbers design sections, reuse those numbers for the prefix.
 
