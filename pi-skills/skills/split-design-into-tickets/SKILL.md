@@ -48,6 +48,7 @@ Labels: <comma-separated labels>
 Estimate: <S | M | L | XL>
 PHASE: <number>
 CYCLE: <number>
+Source: <path-to-source-design-file>
 ---
 ```
 
@@ -55,6 +56,7 @@ CYCLE: <number>
 - `Labels` come from the design module or inferred categories (e.g., `backend, push-notifications`).
 - `Estimate` is one of `S`, `M`, `L`, `XL`. If the design lacks sizing, infer from scope and note it briefly to the user.
 - `PHASE` and `CYCLE` are sequential numbers. If the design does not define phases/cycles, default to `PHASE: 1` and `CYCLE: 1` for all tickets.
+- `Source` is the relative path to the design file the ticket was generated from (e.g., `docs/design.md`, `design.md`).
 
 Do not add extra fields like `id`, `priority`, `assignee`, or `parent` unless the user specifically requests them.
 
@@ -158,6 +160,7 @@ Labels: frontend, mobile, notifications
 Estimate: L
 PHASE: 1
 CYCLE: 1
+Source: design.md
 ---
 
 # In-App Inbox
