@@ -43,24 +43,26 @@ Each file starts with YAML frontmatter using exactly these fields:
 ```yaml
 ---
 Title: <concise ticket title>
+ID: <3-digit zero-padded sequential number>
 Status: TODO
 Labels: <comma-separated labels>
 Estimate: <1 | 2 | 3 | 5 | 8 | 13>
-Depends: <comma-separated ticket titles or empty>
+Depends: <comma-separated ticket IDs or empty>
 PHASE: <number>
 CYCLE: <number>
 Source: <path-to-source-design-file>
 ---
 ```
 
+- `ID` is the 3-digit zero-padded number from the filename prefix (e.g., `001`, `002`). It is unique for each ticket.
 - `Status` is always `TODO` for new tickets.
 - `Labels` come from the design module or inferred categories (e.g., `backend, push-notifications`).
 - `Estimate` is one of `1`, `2`, `3`, `5`, `8`, `13`. If the design lacks sizing, infer from scope and note it briefly to the user.
-- `Depends` lists comma-separated ticket titles that must be completed before this ticket. If there are no dependencies, leave it empty.
+- `Depends` lists comma-separated ticket IDs that must be completed before this ticket. If there are no dependencies, leave it empty.
 - `PHASE` and `CYCLE` are sequential numbers. If the design does not define phases/cycles, default to `PHASE: 1` and `CYCLE: 1` for all tickets.
 - `Source` is the relative path to the design file the ticket was generated from (e.g., `docs/design.md`, `design.md`).
 
-Do not add extra fields like `id`, `priority`, `assignee`, or `parent` unless the user specifically requests them. `Depends` is the only optional dependency field.
+Do not add extra fields like `priority`, `assignee`, or `parent` unless the user specifically requests them. `Depends` is the only optional dependency field.
 
 ### 3. Body structure
 
@@ -157,10 +159,11 @@ Generated ticket (`tickets/002-in-app-inbox.md`):
 ```markdown
 ---
 Title: In-App Inbox
+ID: 002
 Status: TODO
 Labels: frontend, mobile, notifications
 Estimate: 5
-Depends: Push Notification Service
+Depends: 001
 PHASE: 1
 CYCLE: 1
 Source: design.md
