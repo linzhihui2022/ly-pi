@@ -7,7 +7,7 @@
 ## Evaluation Criteria (apply to all scenarios)
 For each generated ticket file:
 1. File is a markdown file under `docs/tickets/` or `tickets/`.
-2. Top YAML frontmatter contains: `Title`, `Status`, `Labels`, `Estimate`, `PHASE`, `CYCLE`, `Source`.
+2. Top YAML frontmatter contains: `Title`, `Status`, `Labels`, `Estimate`, `Depends` (may be empty), `PHASE`, `CYCLE`, `Source`.
 3. Body starts with the user-story form: `As a <role>, I want to <feature>, So that <expected outcome>.`
 4. Acceptance Criteria section uses Gherkin `Given/When/Then` scenarios.
 5. Includes a References section with the third-party documentation links from the source module.

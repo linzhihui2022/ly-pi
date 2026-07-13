@@ -45,7 +45,8 @@ Each file starts with YAML frontmatter using exactly these fields:
 Title: <concise ticket title>
 Status: TODO
 Labels: <comma-separated labels>
-Estimate: <S | M | L | XL>
+Estimate: <1 | 2 | 3 | 5 | 8 | 13>
+Depends: <comma-separated ticket titles or empty>
 PHASE: <number>
 CYCLE: <number>
 Source: <path-to-source-design-file>
@@ -54,11 +55,12 @@ Source: <path-to-source-design-file>
 
 - `Status` is always `TODO` for new tickets.
 - `Labels` come from the design module or inferred categories (e.g., `backend, push-notifications`).
-- `Estimate` is one of `S`, `M`, `L`, `XL`. If the design lacks sizing, infer from scope and note it briefly to the user.
+- `Estimate` is one of `1`, `2`, `3`, `5`, `8`, `13`. If the design lacks sizing, infer from scope and note it briefly to the user.
+- `Depends` lists comma-separated ticket titles that must be completed before this ticket. If there are no dependencies, leave it empty.
 - `PHASE` and `CYCLE` are sequential numbers. If the design does not define phases/cycles, default to `PHASE: 1` and `CYCLE: 1` for all tickets.
 - `Source` is the relative path to the design file the ticket was generated from (e.g., `docs/design.md`, `design.md`).
 
-Do not add extra fields like `id`, `priority`, `assignee`, or `parent` unless the user specifically requests them.
+Do not add extra fields like `id`, `priority`, `assignee`, or `parent` unless the user specifically requests them. `Depends` is the only optional dependency field.
 
 ### 3. Body structure
 
@@ -157,7 +159,8 @@ Generated ticket (`tickets/002-in-app-inbox.md`):
 Title: In-App Inbox
 Status: TODO
 Labels: frontend, mobile, notifications
-Estimate: L
+Estimate: 5
+Depends: Push Notification Service
 PHASE: 1
 CYCLE: 1
 Source: design.md
