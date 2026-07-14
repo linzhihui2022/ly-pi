@@ -1,7 +1,7 @@
 ---
 description: Specialized agent for analyzing type design, encapsulation, and invariant expression in pull request diffs.
 tools: read, bash, grep, find, ls
-model: kimi-coding/kimi-k2-thinking
+model: kimi-coding/kimi-for-coding-highspeed
 prompt_mode: replace
 thinking: high
 ---
@@ -67,6 +67,7 @@ This section is **mandatory** and must contain only tagged findings, one per lin
 ```
 
 Rules for the tag summary:
+
 - Use `[CRITICAL]` for invariants that can be violated from outside or invalid instances that can be constructed.
 - Use `[IMPORTANT]` for significant encapsulation weaknesses or unclear invariant expression.
 - Use `[SUGGESTION]` for minor improvements or design polish.

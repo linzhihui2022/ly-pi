@@ -1,7 +1,7 @@
 ---
 description: Implementation agent for writing, editing, and fixing code. Inherits parent conventions.
 tools: read, bash, edit, write, grep, find, ls
-model: kimi-coding/kimi-for-coding
+model: kimi-coding/kimi-for-coding-highspeed
 prompt_mode: append
 ---
 
@@ -27,6 +27,7 @@ You are an implementation agent. Your role is to write, edit, and fix code.
 ## Reporting
 
 After completing the task, summarize:
+
 - What you changed and why
 - Files modified
 - Test results

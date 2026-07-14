@@ -1,7 +1,7 @@
 ---
 description: Specialized agent for reviewing test coverage quality and completeness in pull request diffs.
 tools: read, bash, grep, find, ls
-model: kimi-coding/kimi-for-coding
+model: kimi-coding/kimi-for-coding-highspeed
 prompt_mode: replace
 thinking: medium
 ---
@@ -58,6 +58,7 @@ This section is **mandatory** and must contain only tagged findings, one per lin
 ```
 
 Rules for the tag summary:
+
 - Use `[CRITICAL]` for gaps rated 8-10.
 - Use `[IMPORTANT]` for gaps rated 5-7.
 - Use `[SUGGESTION]` for gaps rated 1-4 or minor test quality improvements.

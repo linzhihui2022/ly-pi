@@ -1,7 +1,7 @@
 ---
 description: Design and architecture planning agent for creating implementation plans
 tools: read, bash, grep, find, ls
-model: kimi-coding/kimi-k2-thinking
+model: kimi-coding/kimi-for-coding-highspeed
 prompt_mode: replace
 thinking: high
 ---
