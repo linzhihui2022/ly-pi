@@ -41,10 +41,11 @@ export function contextColored(
 // ── Model name shortening ──
 
 const SHORT_NAMES: Record<string, string> = {
-  "kimi-k2-thinking": "k-tkg",
-  "kimi-for-coding": "k-cdg",
+  "kimi-k2-thinking": "k-thinking",
+  "kimi-for-coding": "k-coding",
   "deepseek-v4-flash": "ds-fls",
   "deepseek-v4-pro": "ds-pro",
+  "kimi-for-coding-highspeed":"k-coding-h"
 };
 export function shortModelName(modelName: string): string {
   return SHORT_NAMES[modelName] ?? modelName;

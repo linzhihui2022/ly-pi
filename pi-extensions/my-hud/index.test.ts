@@ -162,8 +162,9 @@ describe("formatTokens", () => {
 describe("shortModelName", () => {
   it("returns short name for known models", async () => {
     const { shortModelName } = await loadModule();
-    expect(shortModelName("kimi-k2-thinking")).toBe("k-tkg");
-    expect(shortModelName("kimi-for-coding")).toBe("k-cdg");
+    expect(shortModelName("kimi-k2-thinking")).toBe("k-thinking");
+    expect(shortModelName("kimi-for-coding")).toBe("k-coding");
+    expect(shortModelName("kimi-for-coding-highspeed")).toBe("k-coding-h");
     expect(shortModelName("deepseek-v4-flash")).toBe("ds-fls");
     expect(shortModelName("deepseek-v4-pro")).toBe("ds-pro");
   });
