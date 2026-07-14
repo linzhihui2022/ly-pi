@@ -5,13 +5,17 @@
 - The target skill is NOT available to the agent during baseline runs.
 
 ## Evaluation Criteria (apply to all scenarios)
-For each generated ticket file:
-1. File is a markdown file under `docs/tickets/` or `tickets/`.
-2. Top YAML frontmatter contains: `Title`, `Status`, `Labels`, `Estimate`, `Depends` (may be empty), `PHASE`, `CYCLE`, `Source`.
-3. Body starts with the user-story form: `As a <role>, I want to <feature>, So that <expected outcome>.`
-4. Acceptance Criteria section uses Gherkin `Given/When/Then` scenarios.
-5. Includes a References section with the third-party documentation links from the source module.
-6. Out-of-scope items are NOT turned into tickets.
+For each generated ticket directory:
+1. Directory is under `docs/tickets/` or `tickets/` and is named `000-<module-name>`.
+2. The directory contains exactly one `ticket.md` file.
+3. `ticket.md` top YAML frontmatter contains: `Title`, `Status`, `Labels`, `Estimate`, `Depends` (may be empty), `PHASE`, `CYCLE`, `Source`.
+4. Body starts with the Chinese user-story form: `作为<角色>，我希望<功能>，以便<期望结果>。`
+5. Body contains a `## 范围` section with `### 包含` and `### 不包含` subsections, placed between the user story and acceptance criteria.
+6. Acceptance Criteria section uses Gherkin `Given/When/Then` scenarios.
+7. If present, an `## 遗留问题` section follows Acceptance Criteria and uses a bullet list of unresolved questions from the design.
+8. If present, a `## 后续工单` section follows Open Questions and uses a bullet list of follow-up descriptions or ticket IDs.
+9. Includes a References section with the third-party documentation links from the source module.
+10. Out-of-scope items are NOT turned into tickets.
 
 ## Scenarios
 
@@ -40,4 +44,4 @@ For each generated ticket file:
 For each scenario, record:
 - Which criteria passed/failed.
 - Verbatim rationalizations the agent used for deviations (e.g., "too detailed", "user asked for Jira").
-- Concrete file names and paths created.
+- Concrete directory names and paths created.
