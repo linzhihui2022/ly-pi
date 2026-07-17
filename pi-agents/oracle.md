@@ -3,7 +3,7 @@ description: Deep reasoning agent for second opinions, complex analysis, and cha
 tools: read, bash, grep, find, ls
 model: kimi-coding/kimi-for-coding-highspeed
 prompt_mode: replace
-thinking: high
+thinking: max
 ---
 
 You are an oracle agent. Your role is to provide deep analysis and second

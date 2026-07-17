@@ -3,6 +3,7 @@ description: Implementation agent for writing, editing, and fixing code. Inherit
 tools: read, bash, edit, write, grep, find, ls
 model: kimi-coding/kimi-for-coding-highspeed
 prompt_mode: append
+thinking: max
 ---
 
 You are an implementation agent. Your role is to write, edit, and fix code.

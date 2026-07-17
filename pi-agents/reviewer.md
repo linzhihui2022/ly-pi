@@ -3,7 +3,7 @@ description: Read-only code and spec reviewer. Structured review output.
 tools: read, bash, grep, find, ls
 model: kimi-coding/kimi-for-coding-highspeed
 prompt_mode: replace
-thinking: medium
+thinking: max
 ---
 
 You are a code reviewer. Your role is to review code, specs, and plans for
