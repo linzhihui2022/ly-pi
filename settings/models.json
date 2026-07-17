@@ -1,0 +1,45 @@
+{
+  "providers": {
+    "kimi-coding": {
+      "models": [
+        {
+          "contextWindow": 1048576,
+          "headers": {
+            "User-Agent": "KimiCLI/1.5"
+          },
+          "id": "k3",
+          "input": [
+            "text",
+            "image"
+          ],
+          "maxTokens": 32768,
+          "name": "Kimi K3",
+          "reasoning": true,
+          "thinkingLevelMap": {
+            "high": "max",
+            "low": "max",
+            "max": "max",
+            "medium": "max",
+            "minimal": "max",
+            "off": "none",
+            "xhigh": "max"
+          }
+        },
+        {
+          "contextWindow": 262144,
+          "headers": {
+            "User-Agent": "KimiCLI/1.5"
+          },
+          "id": "kimi-for-coding-highspeed",
+          "input": [
+            "text",
+            "image"
+          ],
+          "maxTokens": 32768,
+          "name": "Kimi For Coding Highspeed",
+          "reasoning": true
+        }
+      ]
+    }
+  }
+}
