@@ -18,7 +18,7 @@ configure/
 ├── pi-agents/              # 子代理定义
 ├── pi-config/              # 纯配置扩展
 ├── mcp/                    # MCP 服务器配置
-├── settings/               # Pi 设置
+├── settings/               # Pi 设置与自定义模型配置
 ├── README.md               # 项目总览
 ├── AGENTS.md               # 仓库开发指南
 ├── MY-AGENTS.md            # 全局 Agent 偏好
@@ -51,7 +51,7 @@ configure/
 | `pi-agents` | 子代理定义（scout、delegate、researcher、context-builder、planner、oracle、worker、reviewer） | `./pi-agents/` |
 | `pi-config` | 纯配置扩展（权限系统、工具显示） | `./pi-config/` |
 | `mcp` | MCP 服务器配置 | `./mcp/` |
-| `settings` | 子代理模型映射与 fallback | `./settings/` |
+| `settings` | 子代理模型映射、fallback 与自定义模型配置 | `./settings/` |
 
 ## 4. 全局功能需求
 
@@ -61,6 +61,12 @@ configure/
 2. 使用 `bunx turbo run test` 运行全量测试。
 3. 使用 `bunx turbo run build test deploy` 执行完整流水线。
 4. 使用 `bun run deploy` 一键部署扩展、技能、主题、设置与 MCP 配置。
+
+### 设置与模型
+
+1. `settings/settings.json` 维护子代理模型映射与 fallback。
+2. `settings/models.json` 仅注册 Pi 尚未内置的模型；Pi 已内置的 provider/model ID 不得重复定义，以官方模型元数据为准。
+3. `bun run deploy` 将上述配置同步到 `~/.pi/agent/settings.json` 与 `~/.pi/agent/models.json`。
 
 ### 扩展开发规范
 
@@ -102,9 +108,11 @@ configure/
 3. `README.md` 中扩展列表与仓库实际数量一致。
 4. 全量测试与构建通过：`bunx turbo run build test` 成功。
 5. 文档整理过程不引入代码变更，仅修改需求、规格与 README 文件。
+6. `settings/models.json` 不再自定义 `kimi-coding/k3`；部署后 Kimi K3 使用 Pi 官方定义，`kimi-for-coding-highspeed` 仍保留为自定义模型。
 
 ## 8. 变更日志
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-21 | 明确自定义模型仅用于 Pi 未内置模型，Kimi K3 改用官方定义 |
 | 2026-07-10 | 创建项目级 `REQUIREMENTS.md` 与 `SPEC.md`，统一索引各子组件需求文档 |

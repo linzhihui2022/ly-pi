@@ -34,7 +34,7 @@ configure/
 ├── pi-agents/               # 子代理定义
 ├── pi-config/               # 纯配置 JSON 扩展
 ├── mcp/                     # MCP 服务器配置
-├── settings/                # Pi 设置 JSON
+├── settings/                # Pi 设置与自定义模型 JSON
 ├── turbo.json               # Turborepo 流水线
 ├── package.json             # workspaces + 脚本
 ├── install.sh               # 一键部署
@@ -74,7 +74,7 @@ configure/
 
 ### 3.3 pi-skills / pi-themes / pi-agents / mcp / settings
 
-这些目录以静态配置或脚本为主，不强制要求 `REQUIREMENTS.md`/`SPEC.md`；复杂子组件可独立补充。
+这些目录以静态配置或脚本为主，不强制要求 `REQUIREMENTS.md`/`SPEC.md`；复杂子组件可独立补充。`settings/models.json` 只声明 Pi 尚未内置的模型，不重复定义官方 provider/model ID。
 
 ## 4. Turborepo 流水线
 
@@ -156,7 +156,10 @@ index.ts
 - `~/.pi/agent/skills/`
 - `~/.pi/agent/themes/`
 - `~/.pi/agent/settings.json`
+- `~/.pi/agent/models.json`
 - `~/.pi/agent/mcp.json`
+
+`settings/scripts/deploy.ts` 对对象执行递归合并，对数组使用仓库配置整体替换。Pi 加载 `models.json` 时，再将其中的自定义模型按 provider/model ID 合并到内置目录。因此，仓库省略 `kimi-coding/k3` 后会使用 Pi 官方定义，同时仍可保留未内置的 `kimi-for-coding-highspeed`。
 
 ### 7.3 终端配置
 
@@ -188,5 +191,6 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-21 | 明确 `models.json` 的部署与合并语义，Kimi K3 改用 Pi 官方定义 |
 | 2026-07-10 | 创建项目级 `SPEC.md`，定义 monorepo 结构、Turborepo 流水线、扩展架构与需求同步流程 |
 | 2026-07-10 | 修正 Monorepo 目录结构图：项目级 `README.md`、`REQUIREMENTS.md`、`SPEC.md`、`AGENTS.md`、`MY-AGENTS.md` 位于仓库根目录而非 `docs/` 子目录 |
