@@ -1,30 +1,20 @@
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-await deployJson("settings.json", ".pi/agent/settings.json", deepMerge);
-await deployJson("models.json", ".pi/agent/models.json", deepMerge);
+const srcPath = "settings.json";
+const destPath = join(homedir(), ".pi/agent/settings.json");
 
-async function deployJson(
-  srcPath: string,
-  destRelativePath: string,
-  merge: (
-    base: Record<string, unknown>,
-    overlay: Record<string, unknown>,
-  ) => Record<string, unknown>,
-) {
-  const destPath = join(homedir(), destRelativePath);
-  const src = JSON.parse(await Bun.file(srcPath).text());
+const src = JSON.parse(await Bun.file(srcPath).text());
 
-  let merged: Record<string, unknown>;
-  try {
-    const existing = JSON.parse(await Bun.file(destPath).text());
-    merged = merge(existing as Record<string, unknown>, src);
-  } catch {
-    merged = src;
-  }
-
-  await Bun.write(destPath, `${JSON.stringify(merged, null, 2)}\n`);
+let merged: Record<string, unknown>;
+try {
+  const existing = JSON.parse(await Bun.file(destPath).text());
+  merged = deepMerge(existing as Record<string, unknown>, src);
+} catch {
+  merged = src;
 }
+
+await Bun.write(destPath, `${JSON.stringify(merged, null, 2)}\n`);
 
 function deepMerge(
   base: Record<string, unknown>,
