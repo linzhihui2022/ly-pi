@@ -38,7 +38,6 @@ configure/
 | `my-bt` | BT-7274 语音包与浮层通知 | [REQUIREMENTS](./pi-extensions/my-bt/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-bt/SPEC.md) |
 | `my-html` | `/html` 命令将 assistant 回复渲染为 HTML 预览 | [REQUIREMENTS](./pi-extensions/my-html/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-html/SPEC.md) |
 | `my-hud` | 三层 HUD 状态栏（aboveEditor / footer / working） | [REQUIREMENTS](./pi-extensions/my-hud/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-hud/SPEC.md) |
-| `my-todo` | `todo` / `goal` / `goal_complete` 工具与计划模式 | [REQUIREMENTS](./pi-extensions/my-todo/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-todo/SPEC.md) |
 | `my-webtool` | `web_search` / `web_fetch` 网页工具 | [REQUIREMENTS](./pi-extensions/my-webtool/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-webtool/SPEC.md) |
 
 ### 技能、主题、子代理与配置

@@ -26,7 +26,6 @@ configure/
 │   ├── my-bt/
 │   ├── my-html/
 │   ├── my-hud/
-│   ├── my-todo/
 │   └── my-webtool/
 ├── pi-skills/               # 自定义技能文件
 ├── pi-themes/               # 主题 JSON + 部署脚本
@@ -101,12 +100,12 @@ graph TD
 
 配置在 `turbo.json`：
 
-| 任务 | 说明 | 依赖 |
-|------|------|------|
-| `typecheck` | TypeScript 类型检查 | 无 |
-| `build` | 编译到 `dist/**` | `^build` |
-| `test` | Vitest 运行 + v8 覆盖率 | `build` |
-| `deploy` | 复制产物到 `~/.pi/agent/extensions/...` 或对应目录 | `test`（非缓存） |
+| 任务        | 说明                                               | 依赖             |
+| ----------- | -------------------------------------------------- | ---------------- |
+| `typecheck` | TypeScript 类型检查                                | 无               |
+| `build`     | 编译到 `dist/**`                                   | `^build`         |
+| `test`      | Vitest 运行 + v8 覆盖率                            | `build`          |
+| `deploy`    | 复制产物到 `~/.pi/agent/extensions/...` 或对应目录 | `test`（非缓存） |
 
 ## 5. 扩展架构模式
 
@@ -125,12 +124,12 @@ index.ts
 
 ### 5.2 测试分层
 
-| 测试类型 | 覆盖对象 | 示例 |
-|----------|----------|------|
-| 纯函数单元测试 | `validate.ts`、`format.ts`、`helper.ts`、`render.ts` | 校验错误码、格式化输出 |
-| 状态机测试 | `state.ts`、`questionnaire.ts` | 任务 CRUD、问卷状态流转 |
-| 系统探测测试 | `git.ts`、`pr.ts`、`memory.ts` | mock shell 输出 |
-| 集成测试 | `index.ts` | mock `ExtensionAPI`、事件、TUI |
+| 测试类型       | 覆盖对象                                             | 示例                           |
+| -------------- | ---------------------------------------------------- | ------------------------------ |
+| 纯函数单元测试 | `validate.ts`、`format.ts`、`helper.ts`、`render.ts` | 校验错误码、格式化输出         |
+| 状态机测试     | `state.ts`、`questionnaire.ts`                       | 任务 CRUD、问卷状态流转        |
+| 系统探测测试   | `git.ts`、`pr.ts`、`memory.ts`                       | mock shell 输出                |
+| 集成测试       | `index.ts`                                           | mock `ExtensionAPI`、事件、TUI |
 
 ### 5.3 覆盖率策略
 
@@ -198,22 +197,22 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 
 ## 9. 不做什么
 
-| 功能 | 排除原因 |
-|------|----------|
-| 在仓库中提交敏感凭证 | 使用环境变量或外部配置文件注入 |
-| 为技能/主题/agent 写独立 SPEC 模块 | 当前复杂度较低，由本文件和目录入口说明统一覆盖 |
-| 在 `pi-skills` 中迁移或镜像外部技能 | 避免重复维护；上游支持 Pi 时使用其原生安装方式 |
-| 自维护 Visual Companion 扩展 | 使用官方 Superpowers 自带实现，避免重复维护 Pi 工具、WebSocket 服务与持久化目录 |
-| 支持非 macOS 的音频/浮层 | 依赖 `afplay` / `osascript` |
-| 跨网络访问本地服务 | 所有 HTTP/WebSocket 服务器仅绑定 localhost |
+| 功能                                | 排除原因                                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------- |
+| 在仓库中提交敏感凭证                | 使用环境变量或外部配置文件注入                                                  |
+| 为技能/主题/agent 写独立 SPEC 模块  | 当前复杂度较低，由本文件和目录入口说明统一覆盖                                  |
+| 在 `pi-skills` 中迁移或镜像外部技能 | 避免重复维护；上游支持 Pi 时使用其原生安装方式                                  |
+| 自维护 Visual Companion 扩展        | 使用官方 Superpowers 自带实现，避免重复维护 Pi 工具、WebSocket 服务与持久化目录 |
+| 支持非 macOS 的音频/浮层            | 依赖 `afplay` / `osascript`                                                     |
+| 跨网络访问本地服务                  | 所有 HTTP/WebSocket 服务器仅绑定 localhost                                      |
 
 ## 10. 变更日志
 
-| 日期 | 变更 |
-|------|------|
-| 2026-07-22 | 将子代理运行时切换为 `pi-subagents`，定义 agent frontmatter、模型配置、权限桥接与包管理边界 |
-| 2026-07-22 | 删除本地 Visual Companion workspace、部署副本、权限项与 `.lychee/visual-companion/` 运行产物 |
-| 2026-07-22 | 将 `pi-skills` 收敛为 6 个仓库自有技能，删除迁移工具与外部技能副本，并明确快照部署清理旧副本 |
-| 2026-07-21 | 移除 `models.json` 部署，Kimi K3 与 highspeed 统一使用 Pi 官方定义 |
-| 2026-07-10 | 创建项目级 `SPEC.md`，定义 monorepo 结构、Turborepo 流水线、扩展架构与需求同步流程 |
+| 日期       | 变更                                                                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-22 | 将子代理运行时切换为 `pi-subagents`，定义 agent frontmatter、模型配置、权限桥接与包管理边界                                               |
+| 2026-07-22 | 删除本地 Visual Companion workspace、部署副本、权限项与 `.lychee/visual-companion/` 运行产物                                              |
+| 2026-07-22 | 将 `pi-skills` 收敛为 6 个仓库自有技能，删除迁移工具与外部技能副本，并明确快照部署清理旧副本                                              |
+| 2026-07-21 | 移除 `models.json` 部署，Kimi K3 与 highspeed 统一使用 Pi 官方定义                                                                        |
+| 2026-07-10 | 创建项目级 `SPEC.md`，定义 monorepo 结构、Turborepo 流水线、扩展架构与需求同步流程                                                        |
 | 2026-07-10 | 修正 Monorepo 目录结构图：项目级 `README.md`、`REQUIREMENTS.md`、`SPEC.md`、`AGENTS.md`、`MY-AGENTS.md` 位于仓库根目录而非 `docs/` 子目录 |
