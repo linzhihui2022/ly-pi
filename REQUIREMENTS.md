@@ -38,7 +38,6 @@ configure/
 | `my-bt` | BT-7274 语音包与浮层通知 | [REQUIREMENTS](./pi-extensions/my-bt/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-bt/SPEC.md) |
 | `my-html` | `/html` 命令将 assistant 回复渲染为 HTML 预览 | [REQUIREMENTS](./pi-extensions/my-html/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-html/SPEC.md) |
 | `my-hud` | 三层 HUD 状态栏（aboveEditor / footer / working） | [REQUIREMENTS](./pi-extensions/my-hud/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-hud/SPEC.md) |
-| `my-webtool` | `web_search` / `web_fetch` 网页工具 | [REQUIREMENTS](./pi-extensions/my-webtool/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-webtool/SPEC.md) |
 
 ### 技能、主题、子代理与配置
 
@@ -114,7 +113,6 @@ configure/
 | 自维护 Visual Companion 扩展 | 官方 Superpowers 已包含自己的浏览器伴侣实现，避免维护重复工具与运行产物 |
 | 跨平台音频/浮层支持 | 当前扩展（如 `my-bt`）仅支持 macOS |
 | 远程访问 HTML 预览服务器 | 仅绑定 localhost/127.0.0.1 |
-| 多后端搜索 | 当前 `my-webtool` 仅实现 Tavily，接口已预留 |
 
 ## 7. 验收标准
 

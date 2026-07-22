@@ -26,7 +26,6 @@ configure/
 │   ├── my-bt/
 │   ├── my-html/
 │   ├── my-hud/
-│   └── my-webtool/
 ├── pi-skills/               # 自定义技能文件
 ├── pi-themes/               # 主题 JSON + 部署脚本
 ├── pi-agents/               # 子代理定义
