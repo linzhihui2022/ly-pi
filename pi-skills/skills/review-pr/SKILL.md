@@ -5,7 +5,7 @@ description: Use when preparing a pull request, reviewing a PR diff, or needing 
 
 # PR Review Toolkit
 
-Run a focused, multi-dimensional PR review by dispatching specialized reviewer subagents in parallel. This skill is the pre-PR / PR-review entry point; it does not replace lightweight task reviews from `requesting-code-review` or the task-level review inside `subagent-driven-development`.
+Run a focused, multi-dimensional PR review by dispatching specialized reviewer subagents in parallel.
 
 ## When to Use
 
@@ -213,6 +213,6 @@ Each reviewer emits a prose analysis followed by a mandatory `## Tag Summary for
 
 ## Integration
 
-- For lightweight single-task review, use `requesting-code-review`.
-- For executing a multi-task plan with per-task reviews, use `subagent-driven-development`.
-- For finalizing a branch after `/review-pr` is clean, use `finishing-a-development-branch`.
+- For a lightweight single-task review, dispatch a `reviewer` subagent with the targeted diff and requirements instead of running the full toolkit.
+- This skill reports findings only; code changes and branch finalization remain the caller's responsibility.
+- After `/review-pr` is clean, use `creating-pull-requests` when the user asks to open a PR.

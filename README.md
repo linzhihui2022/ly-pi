@@ -2,7 +2,7 @@
 
 我的终端、Shell、AI 编码 Agent 全家桶 —— Git 版本管理，一键部署。
 
-> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 8 个自定义扩展、17 个技能、13 个子代理定义、Catppuccin Mocha 主题等。
+> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 7 个自定义扩展、6 个技能、13 个子代理定义、Catppuccin Mocha 主题等。
 
 项目级需求文档见 [`REQUIREMENTS.md`](./REQUIREMENTS.md)，架构与流程规格见 [`SPEC.md`](./SPEC.md)。
 
@@ -12,8 +12,8 @@
 
 ```
 configure/
-├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 8 个）
-├── pi-skills/skills/       # 自定义技能（17 个）
+├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 7 个）
+├── pi-skills/skills/       # 自定义技能（6 个）
 ├── pi-themes/              # 自定义主题（Catppuccin Mocha）
 ├── pi-agents/              # 子代理定义（13 个）
 ├── pi-config/              # 纯配置扩展（权限系统、工具显示）
@@ -43,7 +43,6 @@ configure/
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
 | **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
 | **my-todo** | 任务 + 目标追踪：`todo` + `goal` 工具，Plan 模式（规划/执行两阶段），TUI 浮层，自动继续 |
-| **my-visual-companion** | 浏览器可视化伴侣：WebSocket 驱动 HTML 界面，支持交互式确认 |
 | **my-webtool** | 网页搜索与抓取：Tavily API 的 `web_search` / `web_fetch`，自定义 TUI 渲染 |
 
 ---
@@ -52,23 +51,12 @@ configure/
 
 | 技能 | 用途 |
 |------|------|
-| brainstorming | 创造性工作前探索需求与设计 |
+| auditing-plan-implementation | 审计实现是否符合计划、票据或设计文档 |
 | creating-pull-requests | 创建 GitHub pull request 时整理描述与验证步骤 |
-| dispatching-parallel-agents | 并行调度 2+ 个独立任务 |
-| executing-plans | 按计划逐步执行并设审查点 |
-| finishing-a-development-branch | 完成开发后选择合并/PR/清理 |
-| grill-me | 压力测试计划、设计、架构 |
-| migrate-superpower | 从 Claude Code / Superpowers 迁移到 Pi |
-| receiving-code-review | 收到审查反馈后严谨验证再修改 |
-| requesting-code-review | 完成任务后请求代码审查 |
 | review-pr | 对 PR diff 做多维度代码审查 |
-| subagent-driven-development | 使用子代理并行执行计划 |
-| test-driven-development | 先写测试再实现（TDD） |
-| using-superpowers | 建立技能查找与调用机制 |
-| verification-before-completion | 声明完成前必须验证通过 |
+| split-design-into-tickets | 将设计文档拆分为可执行票据 |
 | web-search-researcher | 检索训练数据之外的最新信息 |
-| writing-plans | 多步骤任务前编写实施计划 |
-| writing-skills | 创建或编辑技能文件 |
+| writing-plan-for-ticket | 将 Linear 风格票据转换为实施计划 |
 
 ---
 
@@ -79,6 +67,8 @@ configure/
 ---
 
 ## 🤖 子代理
+
+运行时使用 [`pi-subagents`](https://pi.dev/packages/pi-subagents)。`pi-agents/*.md` 采用其 agent frontmatter，并部署到 `~/.pi/agent/agents/`；通用角色的模型与 fallback 由 `settings/settings.json` 统一覆盖。
 
 | 子代理 | 模型 | 用途 |
 |--------|------|------|
@@ -117,14 +107,24 @@ REPO="$HOME/Documents/configure"
 # 安装依赖
 cd "$REPO" && bun install
 
+# 安装子代理运行时
+pi install npm:pi-subagents
+
 # 创建符号链接
 ln -sf "$REPO/starship.toml" ~/.config/starship.toml
 ln -sf "$REPO/wezterm.lua" ~/.wezterm.lua
 ln -sf "$REPO/MY-AGENTS.md" ~/.pi/agent/AGENTS.md
 ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 
-# 部署扩展、技能、主题、设置、MCP
+# 部署扩展、技能、主题、子代理、设置、MCP
 "$REPO/install.sh"
+```
+
+从旧运行时迁移时先移除冲突包，再安装新包：
+
+```bash
+pi remove npm:@gotgenes/pi-subagents
+pi install npm:pi-subagents
 ```
 
 ## 💻 日常开发

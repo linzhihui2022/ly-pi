@@ -27,7 +27,6 @@ configure/
 │   ├── my-html/
 │   ├── my-hud/
 │   ├── my-todo/
-│   ├── my-visual-companion/
 │   └── my-webtool/
 ├── pi-skills/               # 自定义技能文件
 ├── pi-themes/               # 主题 JSON + 部署脚本
@@ -75,6 +74,21 @@ configure/
 ### 3.3 pi-skills / pi-themes / pi-agents / mcp / settings
 
 这些目录以静态配置或脚本为主，不强制要求 `REQUIREMENTS.md`/`SPEC.md`；复杂子组件可独立补充。`settings` 仅维护 `settings.json`；当前使用的 Kimi 模型全部由 Pi 内置目录提供。
+
+子代理运行时使用 `npm:pi-subagents`。`pi-agents/*.md` 部署到用户级 agent 目录，每个文件显式声明 `name`，使用 `systemPromptMode` 及 `inheritProjectContext` / `inheritSkills` 控制提示词组装。通用角色的模型和 fallback 由 `settings/settings.json` 的 `subagents.agentOverrides` 维护；agent frontmatter 只保留角色专属的工具、thinking 与提示词。只读但包含 `bash` 或扩展工具的角色显式设置 `acceptanceRole: read-only` 和 `completionGuard: false`，避免被实现完成度检查误判为 writer。
+
+`pi-subagents` 与 `@gotgenes/pi-subagents` 都注册 `subagent`，因此不得并装。运行时包通过 `pi install` / `pi remove` 管理，不写入仓库的合并式 `settings/settings.json`，避免覆盖用户已有的其他包列表。`@gotgenes/pi-permission-system` 保留，并通过 `pi-subagents` 的父会话身份桥接对子进程执行权限检查。
+
+`pi-skills/skills/` 只保存仓库自有技能，不迁移或镜像外部技能。当前目录固定为：
+
+- `auditing-plan-implementation`
+- `creating-pull-requests`
+- `review-pr`
+- `split-design-into-tickets`
+- `web-search-researcher`
+- `writing-plan-for-ticket`
+
+外部技能不进入本仓库的技能部署目录；上游支持 Pi 原生安装时，由 Pi 包管理器在仓库外独立管理。
 
 ## 4. Turborepo 流水线
 
@@ -155,10 +169,15 @@ index.ts
 
 - `~/.pi/agent/skills/`
 - `~/.pi/agent/themes/`
+- `~/.pi/agent/agents/`
 - `~/.pi/agent/settings.json`
 - `~/.pi/agent/mcp.json`
 
-`settings/scripts/deploy.ts` 仅将仓库的 `settings.json` 递归合并到本机设置。仓库不部署 `models.json`，`kimi-coding/k3` 与 `kimi-coding/kimi-for-coding-highspeed` 直接使用 Pi 内置模型目录。
+`pi-skills/scripts/deploy.ts` 以仓库中的 `pi-skills/skills/` 为完整快照：部署前重建 `~/.pi/agent/skills/`，因此已从仓库删除的迁移技能不会残留在本机。
+
+`pi-agents/scripts/deploy.ts` 将仓库中的 Markdown 定义同步到 `~/.pi/agent/agents/`。迁移验证通过 `pi-subagents` 的 agent list/doctor 接口确认 13 个定义均可解析，而不是只检查文件存在。
+
+`settings/scripts/deploy.ts` 仅将仓库的 `settings.json` 递归合并到本机设置。仓库不部署 `models.json`，`kimi-coding/k3` 与 `kimi-coding/kimi-for-coding-highspeed` 直接使用 Pi 内置模型目录。本次清理不配置 `git:github.com/obra/superpowers`；若将来需要官方 Superpowers，应使用 Pi 包管理器单独安装。该脚本不管理 `packages` 数组；包迁移使用 `pi remove npm:@gotgenes/pi-subagents` 与 `pi install npm:pi-subagents`，防止数组合并覆盖其他用户包。
 
 ### 7.3 终端配置
 
@@ -183,6 +202,8 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 |------|----------|
 | 在仓库中提交敏感凭证 | 使用环境变量或外部配置文件注入 |
 | 为技能/主题/agent 写独立 SPEC 模块 | 当前复杂度较低，由本文件和目录入口说明统一覆盖 |
+| 在 `pi-skills` 中迁移或镜像外部技能 | 避免重复维护；上游支持 Pi 时使用其原生安装方式 |
+| 自维护 Visual Companion 扩展 | 使用官方 Superpowers 自带实现，避免重复维护 Pi 工具、WebSocket 服务与持久化目录 |
 | 支持非 macOS 的音频/浮层 | 依赖 `afplay` / `osascript` |
 | 跨网络访问本地服务 | 所有 HTTP/WebSocket 服务器仅绑定 localhost |
 
@@ -190,6 +211,9 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-22 | 将子代理运行时切换为 `pi-subagents`，定义 agent frontmatter、模型配置、权限桥接与包管理边界 |
+| 2026-07-22 | 删除本地 Visual Companion workspace、部署副本、权限项与 `.lychee/visual-companion/` 运行产物 |
+| 2026-07-22 | 将 `pi-skills` 收敛为 6 个仓库自有技能，删除迁移工具与外部技能副本，并明确快照部署清理旧副本 |
 | 2026-07-21 | 移除 `models.json` 部署，Kimi K3 与 highspeed 统一使用 Pi 官方定义 |
 | 2026-07-10 | 创建项目级 `SPEC.md`，定义 monorepo 结构、Turborepo 流水线、扩展架构与需求同步流程 |
 | 2026-07-10 | 修正 Monorepo 目录结构图：项目级 `README.md`、`REQUIREMENTS.md`、`SPEC.md`、`AGENTS.md`、`MY-AGENTS.md` 位于仓库根目录而非 `docs/` 子目录 |

@@ -17,10 +17,7 @@ Create pull requests via the GitHub CLI after running the narrowest verification
 
 ## Before Creating the PR
 
-1. **Load relevant skills first**
-   - `verification-before-completion` if you are about to claim the work is done
-   - `finishing-a-development-branch` if the implementation is complete and you need to decide merge, PR, or cleanup
-   - `requesting-code-review` if you are asking for review or final checks
+1. **Inspect the final change set** with `git status --short` and the branch diff. Run `/review-pr` first when the user requests review or the change is high-risk.
 2. **Run verification** scoped to the touched area, then broader checks if the change crosses package boundaries. For the jog-monorepo this usually means:
    - `pnpm --filter <package> lint`
    - `pnpm --filter <package> typecheck`

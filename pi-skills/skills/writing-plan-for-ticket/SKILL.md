@@ -19,11 +19,11 @@ Convert a Linear-style markdown ticket (`tickets/NNN-<name>/ticket.md`) into a c
 Use this skill when:
 - A user asks to turn a ticket into an implementation plan.
 - The ticket is a Linear-style markdown ticket with YAML frontmatter and Gherkin acceptance criteria.
-- You need to produce a step-by-step plan that can be executed by `executing-plans` or `subagent-driven-development`.
+- You need to produce a step-by-step plan for a coding agent or human implementer.
 
 Do NOT use for:
 - Tickets in other formats (Jira, GitHub Issues) unless they are first converted to Linear-style markdown.
-- Writing plans directly from a design/spec file (use `writing-plans` instead).
+- Writing plans directly from a design/spec file; use a general planning workflow instead.
 
 ## Input: Linear-Style Markdown Ticket
 
@@ -122,7 +122,7 @@ A task is the smallest unit that carries its own test cycle and is worth a fresh
 
 > Ticket: `tickets/NNN-<ticket-name>/ticket.md`
 > Plan: `tickets/NNN-<ticket-name>/plan.md`
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `subagent-driven-development` (recommended) or `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For implementers:** Execute tasks in order and track each checkbox (`- [ ]`). Preserve every test-first, verification, and commit step.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -220,7 +220,7 @@ After writing the complete plan, look at the ticket with fresh eyes and check th
 
 **3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
 
-**4. Plan reliability:** Use the `grill-me` skill to stress-test the plan before finalizing. Confirm that the plan contains no hidden assumptions, no unexplained leaps, and no decisions that contradict the ticket or source design. Fix any gaps or contradictions uncovered before saving the plan.
+**4. Plan reliability:** Stress-test the plan before finalizing. Confirm that it contains no hidden assumptions, unexplained leaps, or decisions that contradict the ticket or source design. Fix any gaps or contradictions before saving the plan.
 
 If you find issues, fix them inline. No need to re-review — just fix and move on. If you find an acceptance criterion with no task, add the task.
 
@@ -235,20 +235,14 @@ Only make changes that are directly justified by the planning work. Do not expan
 
 ## Execution Handoff
 
-After saving the plan and syncing any updates back to the ticket/source, offer execution choice:
+After saving the plan and syncing any updates back to the ticket/source, offer an execution choice:
 
 **"Plan complete and saved to `tickets/NNN-<ticket-name>/plan.md`. Two execution options:**
 
-**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
+**1. Subagent execution (recommended)** - Dispatch a fresh worker for each task and review each completed task
 
-**2. Inline Execution** - Execute tasks in this session using `executing-plans`, batch execution with checkpoints
+**2. Inline execution** - Track tasks with `todo` and execute them in this session with checkpoints
 
 **Which approach?"**
 
-**If Subagent-Driven chosen:**
-- **REQUIRED SUB-SKILL:** Use `subagent-driven-development`
-- Fresh subagent per task + two-stage review
-
-**If Inline Execution chosen:**
-- **REQUIRED SUB-SKILL:** Use `executing-plans`
-- Batch execution with checkpoints for review
+For subagent execution, give each worker only its task and required context, then dispatch a reviewer before advancing. For inline execution, keep exactly one task `in_progress`, run every listed verification command, and stop at the plan's checkpoints.

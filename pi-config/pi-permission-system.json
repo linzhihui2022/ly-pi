@@ -46,11 +46,7 @@
       "*.env.*": "deny",
       "*.env.example": "allow"
     },
-    "todo": "allow",
-    "visual_companion_read_events": "allow",
-    "visual_companion_show": "allow",
-    "visual_companion_start": "allow",
-    "visual_companion_stop": "allow"
+    "todo": "allow"
   },
   "permissionReviewLog": true,
   "yoloMode": false
