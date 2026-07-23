@@ -1,4 +1,4 @@
-import { describe, expect, it, afterAll } from "vitest";
+import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { loadConfig } from "./config";
 import { join } from "node:path";
 import { mkdir, writeFile, rm } from "node:fs/promises";
@@ -90,5 +90,73 @@ describe("loadConfig", () => {
     await writeFile(path, JSON.stringify({ permission: { read: "allow" } }));
     const cfg = await loadConfig(path);
     expect(cfg.permission).toEqual({ read: "allow" });
+  });
+
+  it("rejects permission array, falls back to empty object", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "perm-array.json");
+    await writeFile(path, JSON.stringify({ permission: ["read", "write"] }));
+    const cfg = await loadConfig(path);
+    expect(cfg.permission).toEqual({});
+  });
+
+  it("rejects negative judgeTimeoutMs", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "neg-timeout.json");
+    await writeFile(path, JSON.stringify({ judgeTimeoutMs: -100 }));
+    const cfg = await loadConfig(path);
+    expect(cfg.judgeTimeoutMs).toBe(8000);
+  });
+
+  it("rejects NaN judgeTimeoutMs", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "nan-timeout.json");
+    await writeFile(path, JSON.stringify({ judgeTimeoutMs: NaN }));
+    const cfg = await loadConfig(path);
+    expect(cfg.judgeTimeoutMs).toBe(8000);
+  });
+
+  it("rejects Infinity judgeTimeoutMs", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "inf-timeout.json");
+    await writeFile(path, JSON.stringify({ judgeTimeoutMs: Infinity }));
+    const cfg = await loadConfig(path);
+    expect(cfg.judgeTimeoutMs).toBe(8000);
+  });
+
+  it("explicitly accepts childPolicy deny-on-unsafe", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "child-deny.json");
+    await writeFile(path, JSON.stringify({ childPolicy: "deny-on-unsafe" }));
+    const cfg = await loadConfig(path);
+    expect(cfg.childPolicy).toBe("deny-on-unsafe");
+  });
+
+  it("returns a fresh object each call (not default ref)", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "fresh.json");
+    await writeFile(path, JSON.stringify({ defaultPolicy: "deny" }));
+    const wanted = await loadConfig(join(tmp, "missing.json"));
+    const got = await loadConfig(path);
+    // Mutating got should never affect "wanted"
+    got.defaultPolicy = "ask" as const;
+    expect(wanted.defaultPolicy).toBe("ask");
+  });
+
+  it("returns fresh config per fallback call", async () => {
+    await mkdir(tmp, { recursive: true });
+    const first = await loadConfig(join(tmp, "missing.json"));
+    const second = await loadConfig(join(tmp, "missing2.json"));
+    first.judgeModel = "custom/local";
+    expect(second.judgeModel).toBe("deepseek/deepseek-v4-flash");
+  });
+
+  it("rejects parsed JSON array, uses defaults", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "array-root.json");
+    await writeFile(path, JSON.stringify(["a", "b"]));
+    const cfg = await loadConfig(path);
+    expect(cfg.defaultPolicy).toBe("ask");
+    expect(cfg.judgeTimeoutMs).toBe(8000);
   });
 });
