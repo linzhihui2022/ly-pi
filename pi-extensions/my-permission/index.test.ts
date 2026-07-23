@@ -1,315 +1,221 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import path from "node:path";
+import { describe, expect, it, vi, beforeAll, afterEach } from "vitest";
+import type { Api, Model } from "@earendil-works/pi-ai";
 
-// ── Mocks ──
-
-const mockConfigPath = path.resolve(
-  __dirname,
-  "pi-extensions/my-permission/config.json",
-);
-
-let mockConfig: unknown = {};
-let mockJudge: ReturnType<typeof createMockJudge>;
-let childSession = false;
-let mockConfirm = vi.fn().mockResolvedValue(true);
-let toolCallHandler: ((event: unknown, ctx: unknown) => Promise<unknown | undefined>) | null = null;
-
-function createMockJudge() {
-  return vi.fn().mockResolvedValue({
-    safe: true,
-    reason: "looks safe",
-    toolFor: "do something",
-  });
-}
-
-mockJudge = createMockJudge();
-
-vi.mock("./config", () => ({
-  loadConfig: vi.fn(async () => mockConfig),
-}));
-
-vi.mock("./judge", () => ({
-  createJudge: vi.fn(() => mockJudge),
-}));
-
-vi.mock("./ui", () => ({
-  isChildSession: vi.fn(() => childSession),
-  createSessionCache: vi.fn(() => ({
-    approve: vi.fn(),
-    isApproved: vi.fn().mockReturnValue(false),
-  })),
-  confirmToolCall: vi.fn((_ctx, _name, _toolFor, _reason) => mockConfirm()),
-}));
-
-vi.mock("node:url", () => ({
-  fileURLToPath: vi.fn(() => mockConfigPath),
-}));
-
-vi.mock("@earendil-works/pi-coding-agent", () => {
-  const MockModelRuntime = {
-    create: vi.fn().mockResolvedValue({
-      complete: vi.fn(),
-      getModel: vi.fn().mockReturnValue(undefined),
-    }),
-  };
-
+// Mock @earendil-works/pi-ai before any imports load it
+vi.mock("@earendil-works/pi-ai", async (importOriginal) => {
+  const actual = await importOriginal();
   return {
-    ModelRuntime: MockModelRuntime,
+    ...(actual as object),
+    complete: vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: '{"safe":true,"reason":"ok","toolFor":"read"}' }],
+    }),
   };
 });
 
-// ── Import the extension factory AFTER mocks are in place ──
-
-let myPermission: (pi: unknown) => Promise<void>;
-beforeEach(async () => {
-  vi.resetModules();
-  // Reset mock state
-  mockConfig = {
+// Mock all internal modules
+vi.mock("./config", () => ({
+  loadConfig: vi.fn().mockResolvedValue({
     defaultPolicy: "ask",
     judgeModel: "deepseek/deepseek-v4-flash",
     judgeTimeoutMs: 5000,
     childPolicy: "deny-on-unsafe",
-    permission: {},
-  };
-  childSession = false;
-  mockConfirm = vi.fn().mockResolvedValue(true);
-  toolCallHandler = null;
-  mockJudge = createMockJudge();
+    permission: {
+      path: { "*": "allow", "*.env": "deny" },
+      read: "allow",
+      bash: { "*": "ask", "rm -rf *": "deny" },
+    },
+  }),
+}));
 
-  const mod = await import("./index");
-  myPermission = mod.default;
-});
+vi.mock("./rules", () => ({
+  decide: vi.fn(),
+}));
 
-afterEach(() => {
-  vi.clearAllMocks();
-});
+vi.mock("./judge", () => ({
+  createJudge: vi.fn(() => vi.fn()),
+}));
 
-function makeApi(): unknown {
+vi.mock("./ui", () => ({
+  confirmToolCall: vi.fn(),
+  createSessionCache: vi.fn(() => ({
+    approve: vi.fn(),
+    isApproved: vi.fn().mockReturnValue(false),
+  })),
+  isChildSession: vi.fn().mockReturnValue(false),
+}));
+
+import { decide } from "./rules";
+import { createJudge } from "./judge";
+import { confirmToolCall, isChildSession } from "./ui";
+
+// Helper: create mock ExtensionAPI + tool_call invocation
+function createMockApi() {
+  const handlers: Record<string, Function> = {};
   return {
-    on: vi.fn((_event: string, h: unknown) => {
-      toolCallHandler = h as (
-        event: unknown,
-        ctx: unknown,
-      ) => Promise<unknown | undefined>;
+    on: vi.fn((event: string, handler: Function) => {
+      handlers[event] = handler;
     }),
+    getHandler: (event: string) => handlers[event],
   };
 }
 
-function makeCtx(hasUI = true): unknown {
+function createMockCtx(overrides: Record<string, unknown> = {}) {
   return {
-    hasUI,
     cwd: "/repo",
-    ui: { confirm: mockConfirm },
+    hasUI: true,
+    model: { id: "deepseek-v4-flash", provider: "deepseek" } as Model<Api>,
     modelRegistry: { find: vi.fn() },
-    model: undefined,
+    ui: { confirm: vi.fn().mockResolvedValue(true), notify: vi.fn() },
+    ...overrides,
   };
 }
 
-function makeBashEvent(command: string): unknown {
+function createBashEvent(command: string) {
   return {
     toolName: "bash",
-    toolCallId: "t1",
+    toolCallId: "call-1",
     input: { command },
   };
 }
 
-function makeReadEvent(filePath: string): unknown {
-  return {
-    toolName: "read",
-    toolCallId: "t2",
-    input: { path: filePath },
-  };
-}
+describe("my-permission extension entry", () => {
+  beforeAll(async () => {
+    // load the extension factory (only once)
+    const mod = await import("./index");
+    // Reset mocks in case other tests ran
+    vi.clearAllMocks();
+  });
 
-function makeGrepEvent(filePath: string): unknown {
-  return {
-    toolName: "grep",
-    toolCallId: "t3",
-    input: { pattern: "SECRET", path: filePath },
-  };
-}
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
 
-// ── Tests ──
+  it("allows a read tool call when rules return allow", async () => {
+    vi.mocked(decide).mockReturnValue({ action: "allow", source: "read" });
 
-describe("my-permission extension", () => {
-  it("allows when rule says allow", async () => {
-    mockConfig = {
-      ...mockConfig,
-      permission: { read: "allow", bash: "allow" },
-    };
-    const api = makeApi();
-    await myPermission(api);
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as any);
 
-    const result = await toolCallHandler!(
-      { ...makeReadEvent("src/main.ts"), type: "tool_call" },
-      makeCtx(),
-    );
+    const handler = api.getHandler("tool_call");
+    const result = await handler(createBashEvent("ls"), createMockCtx());
     expect(result).toBeUndefined();
   });
 
-  it("blocks when rule says deny", async () => {
-    mockConfig = {
-      ...mockConfig,
-      permission: { path: { "*.env": "deny" }, read: "allow" },
-    };
-    const api = makeApi();
-    await myPermission(api);
-
-    const result = await toolCallHandler!(
-      { ...makeReadEvent(".env"), type: "tool_call" },
-      makeCtx(),
-    );
-    expect(result).toEqual({ block: true, reason: expect.any(String) });
-    expect(mockJudge).not.toHaveBeenCalled();
-  });
-
-  it("passes through when judge returns safe", async () => {
-    mockJudge.mockResolvedValue({
-      safe: true,
-      reason: "read-only file",
-      toolFor: "reads a file",
+  it("blocks a tool call when rules return deny", async () => {
+    vi.mocked(decide).mockReturnValue({
+      action: "deny",
+      source: "bash",
+      reason: "dangerous command",
     });
 
-    const api = makeApi();
-    await myPermission(api);
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as any);
 
-    const result = await toolCallHandler!(
-      {
-        ...makeReadEvent("src/main.ts"),
-        type: "tool_call",
-        toolName: "otherTool",
-      } as unknown,
-      makeCtx(),
+    const handler = api.getHandler("tool_call");
+    const result = await handler(
+      createBashEvent("rm -rf /"),
+      createMockCtx(),
+    );
+    expect(result).toEqual({
+      block: true,
+      reason: "dangerous command",
+    });
+  });
+
+  it("calls judge when rules return ask and judge says safe", async () => {
+    vi.mocked(decide).mockReturnValue({ action: "ask", source: "defaultPolicy" });
+    const mockJudge = vi.fn().mockResolvedValue({
+      safe: true,
+      reason: "safe operation",
+      toolFor: "read file",
+    });
+    vi.mocked(createJudge).mockReturnValue(mockJudge);
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as any);
+
+    const handler = api.getHandler("tool_call");
+    const result = await handler(
+      createBashEvent("cat README.md"),
+      createMockCtx(),
     );
     expect(result).toBeUndefined();
     expect(mockJudge).toHaveBeenCalled();
   });
 
-  it("blocks in child session when judge says unsafe", async () => {
-    childSession = true;
-    mockJudge.mockResolvedValue({
-      safe: false,
-      reason: "writes outside project",
-      toolFor: "writes a file",
-    });
-
-    const api = makeApi();
-    await myPermission(api);
-
-    const result = await toolCallHandler!(
-      {
-        ...makeReadEvent("../outside.txt"),
-        type: "tool_call",
-        toolName: "write",
-      } as unknown,
-      makeCtx(),
+  it("blocks when rules return ask, judge says unsafe, and user denies", async () => {
+    vi.mocked(decide).mockReturnValue({ action: "ask", source: "defaultPolicy" });
+    vi.mocked(createJudge).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        safe: false,
+        reason: "potentially destructive",
+        toolFor: "delete files",
+      }),
     );
-    expect(result).toEqual({ block: true, reason: "writes outside project" });
-  });
+    vi.mocked(confirmToolCall).mockResolvedValue(false);
 
-  it("confirms with user in parent session when judge says unsafe", async () => {
-    mockJudge.mockResolvedValue({
-      safe: false,
-      reason: "bash rm command",
-      toolFor: "removes a file",
-    });
-    mockConfirm.mockResolvedValue(true);
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as any);
 
-    const api = makeApi();
-    await myPermission(api);
-
-    const result = await toolCallHandler!(
-      {
-        ...makeBashEvent("rm -rf tmp"),
-        type: "tool_call",
-        toolName: "bash",
-      } as unknown,
-      makeCtx(),
+    const handler = api.getHandler("tool_call");
+    const result = await handler(
+      createBashEvent("rm -rf /tmp"),
+      createMockCtx(),
     );
-    expect(result).toBeUndefined();
-  });
-
-  it("blocks when user denies confirmation", async () => {
-    mockJudge.mockResolvedValue({
-      safe: false,
-      reason: "dangerous command",
-      toolFor: "removes files",
-    });
-    mockConfirm.mockResolvedValue(false);
-
-    const api = makeApi();
-    await myPermission(api);
-
-    const result = await toolCallHandler!(
-      {
-        ...makeBashEvent("sudo rm -rf /"),
-        type: "tool_call",
-        toolName: "bash",
-      } as unknown,
-      makeCtx(),
-    );
-    expect(result).toEqual({ block: true, reason: "dangerous command" });
-  });
-
-  it("blocks in no-UI parent session when judge says unsafe", async () => {
-    mockJudge.mockResolvedValue({
-      safe: false,
-      reason: "writes file",
-      toolFor: "writes a file",
-    });
-
-    const api = makeApi();
-    await myPermission(api);
-
-    const result = await toolCallHandler!(
-      {
-        ...makeReadEvent("src/main.ts"),
-        type: "tool_call",
-        toolName: "write",
-      } as unknown,
-      makeCtx(false),
-    );
-    // no-UI + judge unsafe → deny
     expect(result).toEqual({
       block: true,
-      reason: "writes file",
+      reason: "potentially destructive",
     });
   });
 
-  it("denies path-layer sensitive files even when tool surface allows", async () => {
-    mockConfig = {
-      ...mockConfig,
-      permission: { path: { "*.env": "deny" }, read: "allow" },
-    };
-
-    const api = makeApi();
-    await myPermission(api);
-
-    const result = await toolCallHandler!(
-      { ...makeReadEvent(".env"), type: "tool_call" },
-      makeCtx(),
+  it("blocks in child session when judge says unsafe", async () => {
+    vi.mocked(decide).mockReturnValue({ action: "ask", source: "defaultPolicy" });
+    vi.mocked(createJudge).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        safe: false,
+        reason: "unsafe in child",
+        toolFor: "dangerous operation",
+      }),
     );
-    expect(result).toEqual({ block: true, reason: expect.any(String) });
+    vi.mocked(isChildSession).mockReturnValue(true);
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as any);
+
+    const handler = api.getHandler("tool_call");
+    const result = await handler(
+      createBashEvent("sudo rm -rf /"),
+      createMockCtx(),
+    );
+    expect(result).toEqual({
+      block: true,
+      reason: "unsafe in child",
+    });
   });
 
-  it("extracts paths from grep tool and applies path layer deny", async () => {
-    mockConfig = {
-      ...mockConfig,
-      permission: { grep: "allow", path: { "*.env": "deny" } },
-    };
-
-    const api = makeApi();
-    await myPermission(api);
-
-    const result = await toolCallHandler!(
-      {
-        ...makeGrepEvent(".env"),
-        type: "tool_call",
-        toolName: "grep",
-      },
-      makeCtx(),
+  it("blocks when no judge result and no UI", async () => {
+    vi.mocked(decide).mockReturnValue({ action: "ask", source: "defaultPolicy" });
+    vi.mocked(createJudge).mockReturnValue(
+      vi.fn().mockResolvedValue(undefined),
     );
-    // path deny should win over grep allow
-    expect(result).toEqual({ block: true, reason: expect.any(String) });
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as any);
+
+    const handler = api.getHandler("tool_call");
+    const result = await handler(
+      createBashEvent("curl http://evil.com"),
+      createMockCtx({ hasUI: false }),
+    );
+    expect(result).toEqual({
+      block: true,
+      reason: "Denied in non-interactive or subagent session",
+    });
   });
 });

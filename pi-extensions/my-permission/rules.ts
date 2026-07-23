@@ -73,7 +73,7 @@ export function evaluateSurfaceLayer(
     return { action: rules, source: input.toolName };
   }
   if (typeof rules === "object" && "action" in rules) {
-    return toVerdict(rules, input.value, input.toolName);
+    return toVerdict(rules as DenyWithReason, input.value, input.toolName);
   }
   return evaluateRuleMap(input.value, rules as PermissionMap, input.toolName);
 }

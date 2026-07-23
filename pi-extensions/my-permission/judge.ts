@@ -1,14 +1,16 @@
-import type { Model, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import { complete } from "@earendil-works/pi-ai";
 import type { Config, JudgeResult, ToolInput } from "./types";
 
-export function createJudge(runtime: ModelRuntime, config: Config) {
+export function createJudge(config: Config) {
   return async function judge(
     input: ToolInput,
     cwd: string,
-    fallbackModel: Model | undefined,
+    model: Model<Api> | undefined,
+    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
   ): Promise<JudgeResult | undefined> {
-    const model = resolveModel(runtime, config, fallbackModel);
-    if (!model) return undefined;
+    const resolved = resolveJudgeModel(config, resolveModel, model);
+    if (!resolved) return undefined;
 
     const prompt = buildJudgePrompt(input, cwd);
     const context = {
@@ -24,9 +26,9 @@ export function createJudge(runtime: ModelRuntime, config: Config) {
         () => controller.abort(),
         config.judgeTimeoutMs,
       );
-      const response = await runtime.complete(model, context, {
+      const response = await complete(resolved, context, {
         signal: controller.signal,
-      } as never);
+      });
       clearTimeout(timeout);
       return parseJudgeResponse(response);
     } catch (error) {
@@ -36,27 +38,16 @@ export function createJudge(runtime: ModelRuntime, config: Config) {
   };
 }
 
-function resolveModel(
-  runtime: ModelRuntime,
+function resolveJudgeModel(
   config: Config,
-  fallback: Model | undefined,
-): Model | undefined {
+  resolveModel: (provider: string, id: string) => Model<Api> | undefined,
+  fallback: Model<Api> | undefined,
+): Model<Api> | undefined {
   const parts = config.judgeModel.split("/");
   if (parts.length !== 2) return fallback;
 
-  const [provider, id] = parts;
-  const model = runtime.getModel(provider, id);
-  if (model) return model;
-
-  const alt = (
-    runtime as ModelRuntime & {
-      find?: (p: string, m: string) => Model | undefined;
-    }
-  ).find;
-  if (alt) {
-    const found = alt(provider, id);
-    if (found) return found;
-  }
+  const found = resolveModel(parts[0], parts[1]);
+  if (found) return found;
 
   return fallback;
 }

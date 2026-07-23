@@ -1,5 +1,4 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { realpathSync } from "node:fs";
@@ -12,8 +11,7 @@ import { extractPathTokens } from "./utils";
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const extensionDir = dirname(fileURLToPath(import.meta.url));
   const config = await loadConfig(join(extensionDir, "config.json"));
-  const runtime = await ModelRuntime.create();
-  const judge = createJudge(runtime, config);
+  const judge = createJudge(config);
   const cache = createSessionCache();
   const child = isChildSession();
 
@@ -32,7 +30,14 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     const cacheKey = `${toolName}:${value}`;
     if (cache.isApproved(cacheKey)) return undefined;
 
-    const judgeResult = await judge({ toolName, value, paths }, ctx.cwd, ctx.model);
+    const resolveModel = (provider: string, id: string) =>
+      ctx.modelRegistry.find(provider, id);
+    const judgeResult = await judge(
+      { toolName, value, paths },
+      ctx.cwd,
+      ctx.model,
+      resolveModel,
+    );
     if (judgeResult?.safe === true) return undefined;
 
     if (child || !ctx.hasUI) {
