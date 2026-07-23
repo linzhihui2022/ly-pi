@@ -1,0 +1,61 @@
+{
+  "$schema": "https://pi.dev/packages/pi-subagents/schema.json",
+
+  "runtime": {
+    "toolDescriptionMode": "compact",
+    "asyncWidget": true,
+    "asyncByDefault": false,
+    "waitTool": { "enabled": true },
+    "forceTopLevelAsync": false,
+    "globalConcurrencyLimit": 5,
+    "maxSubagentSpawnsPerSession": 0,
+    "maxSubagentDepth": 0,
+    "parallel": {
+      "maxTasks": 4,
+      "concurrency": 2
+    },
+    "intercomBridge": {
+      "mode": "always"
+    },
+    "completionBatch": {
+      "enabled": false,
+      "debounceMs": 150,
+      "maxWaitMs": 1000,
+      "stragglerDebounceMs": 75,
+      "stragglerMaxWaitMs": 400,
+      "stragglerWindowMs": 2000
+    }
+  },
+
+  "subagents": {
+    "disableThinking": false,
+    "agentOverrides": {
+      "worker": {
+        "model": "kimi-coding/k3",
+        "fallbackModels": ["deepseek-v4-pro"]
+      },
+      "reviewer": {
+        "model": "kimi-coding/k3",
+        "fallbackModels": ["deepseek-v4-pro"]
+      },
+      "scout": {
+        "model": "deepseek/deepseek-v4-flash"
+      },
+      "planner": {
+        "model": "kimi-coding/k3",
+        "fallbackModels": ["deepseek-v4-pro"]
+      },
+      "oracle": {
+        "model": "kimi-coding/k3",
+        "fallbackModels": ["deepseek-v4-pro"]
+      },
+      "context-builder": {
+        "model": "kimi-coding/k3",
+        "fallbackModels": ["deepseek-v4-pro"]
+      },
+      "delegate": {
+        "model": "deepseek/deepseek-v4-flash"
+      }
+    }
+  }
+}

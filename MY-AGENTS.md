@@ -115,3 +115,7 @@
 - 只关注合并请求引入的变更，忽略既存问题
 - 当收到 PR 地址时，先检查 URL 是否包含 `pullrequestreview`：若是（即 PR 上的某条 review 留言），只读取该条留言内容，不要对整份 PR 执行完整代码审查
 - 审查结束后询问："是要依次处理，还是指定处理？"；如果用户选择依次处理，先展示下一项内容并等待确认后再修改；解决后再按同样方式逐项处理
+
+## GitHub PR 访问
+
+所有 GitHub Pull Request 的读取和分析，默认使用 `gh` CLI（`gh pr view`、`gh pr diff`、`gh pr review`、`gh api`）直接获取内容。**不使用 `fetch_content` 或 `web_search` 获取 PR 页面。** 不判断仓库是否为私有，一律走 `gh` CLI。

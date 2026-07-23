@@ -9,3 +9,20 @@ await Bun.write(join(piToolDisplayDest, "config.json"), Bun.file("pi-tool-displa
 let piPermissionSystemDest = join(homedir(), ".pi/agent/extensions/pi-permission-system");
 await mkdir(piPermissionSystemDest, { recursive: true });
 await Bun.write(join(piPermissionSystemDest, "config.json"), Bun.file("pi-permission-system.json"));
+
+// pi-subagents: split runtime config and settings subagents key
+const piSubagents = await Bun.file("pi-subagents.json").json();
+
+// 1) runtime → ~/.pi/agent/extensions/subagent/config.json
+const subagentDir = join(homedir(), ".pi/agent/extensions/subagent");
+await mkdir(subagentDir, { recursive: true });
+await Bun.write(
+  join(subagentDir, "config.json"),
+  JSON.stringify(piSubagents.runtime, null, 2) + "\n"
+);
+
+// 2) subagents → ~/.pi/agent/settings.json (merge, preserving other keys)
+const settingsPath = join(homedir(), ".pi/agent/settings.json");
+const settings = await Bun.file(settingsPath).json();
+settings.subagents = piSubagents.subagents;
+await Bun.write(settingsPath, JSON.stringify(settings, null, 2) + "\n");
