@@ -46,13 +46,6 @@ vi.mock("node:url", () => ({
 }));
 
 vi.mock("@earendil-works/pi-coding-agent", () => {
-  const actual = {
-    isToolCallEventType: (
-      name: string,
-      event: { toolName: string },
-    ): boolean => event.toolName === name,
-  };
-
   const MockModelRuntime = {
     create: vi.fn().mockResolvedValue({
       complete: vi.fn(),
@@ -61,7 +54,6 @@ vi.mock("@earendil-works/pi-coding-agent", () => {
   };
 
   return {
-    isToolCallEventType: actual.isToolCallEventType,
     ModelRuntime: MockModelRuntime,
   };
 });
@@ -284,7 +276,7 @@ describe("my-permission extension", () => {
     });
   });
 
-  it("passes paths to rules including symlink resolved form", async () => {
+  it("denies path-layer sensitive files even when tool surface allows", async () => {
     mockConfig = {
       ...mockConfig,
       permission: { path: { "*.env": "deny" }, read: "allow" },
