@@ -1,0 +1,25 @@
+{
+  "name": "my-permission-judge",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*' --external '@gotgenes/*'",
+    "typecheck": "bun x tsgo --noEmit",
+    "test": "npx vitest run --coverage",
+    "deploy": "bun run scripts/deploy.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "vitest": "^4"
+  },
+  "peerDependencies": {
+    "@typescript/native-preview": "^7.0.0-beta"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "^0.79.0",
+    "@earendil-works/pi-coding-agent": "^0.79.0",
+    "@earendil-works/pi-tui": "^0.79.0",
+    "@gotgenes/pi-permission-system": "^20.10.0",
+    "@types/node": "^25.9.1"
+  }
+}
