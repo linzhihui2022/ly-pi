@@ -92,15 +92,16 @@ git diff -U10 "$MERGE_BASE"..HEAD > "$DIFF_FILE"
 
 ### 5. Dispatch reviewers in parallel
 
-For each selected reviewer, launch a background subagent. Pass the diff file path, the list of changed files, and the merge-base SHA. Each reviewer prompt is self-contained.
+For each selected reviewer, launch a background subagent with the diff file path, the list of changed files, and the merge-base SHA. Each reviewer prompt is self-contained.
 
-For `pr-code-reviewer`, explicitly forbid CI/build/test commands in the prompt to keep it fast:
+Use `subagent` with a `tasks` array to launch all selected reviewers in parallel:
 
 ```typescript
 subagent({
-  subagent_type: "pr-code-reviewer",
-  description: "Review overall code quality",
-  prompt: `You are reviewing a git diff. Do not modify files.
+  tasks: [
+    {
+      agent: "pr-code-reviewer",
+      task: `You are reviewing a git diff. Do not modify files.
 
 ## Files changed
 ${CHANGED_FILES}
@@ -110,20 +111,69 @@ ${DIFF_FILE}
 
 Read the diff file and review overall code quality, correctness, and project guideline compliance. **Focus only on changes introduced by this PR. Do not discuss pre-existing issues or code not modified in the diff.**
 
-**Important:** Do not execute CI/build/test commands (e.g., \`npm test\`, \`pnpm typecheck\`, \`lint\`, \`build\`, \`prettier --check\`). You may only use lightweight read/grep/find operations to inspect project guidelines or related files when necessary.`,
-  run_in_background: true
+**Important:** Do not execute CI/build/test commands (e.g., \`npm test\`, \`pnpm typecheck\`, \`lint\`, \`build\`, \`prettier --check\`). You may only use lightweight read/grep/find operations to inspect project guidelines or related files when necessary.`
+    },
+    {
+      agent: "pr-test-analyzer",
+      task: `Review the git diff for test coverage quality and completeness.
+
+## Files changed
+${CHANGED_FILES}
+
+## Diff file
+${DIFF_FILE}
+
+Focus only on changes introduced by this PR. Assess whether critical functionality has adequate tests, whether existing tests are updated, and whether edge cases are covered. Do not modify files.`
+    },
+    {
+      agent: "pr-silent-failure-hunter",
+      task: `Review the git diff for silent failures and inadequate error handling.
+
+## Files changed
+${CHANGED_FILES}
+
+## Diff file
+${DIFF_FILE}
+
+Focus only on changes introduced by this PR. Look for swallowed exceptions, missing error branches, inappropriate fallbacks, and unhandled edge cases. Do not modify files.`
+    },
+    {
+      agent: "pr-comment-analyzer",
+      task: `Review the git diff for comment and documentation accuracy.
+
+## Files changed
+${CHANGED_FILES}
+
+## Diff file
+${DIFF_FILE}
+
+Focus only on changes introduced by this PR. Check that comments, docstrings, and documentation are accurate, complete, and maintainable. Do not modify files.`
+    },
+    {
+      agent: "pr-type-design-analyzer",
+      task: `Review the git diff for type design, encapsulation, and invariant expression.
+
+## Files changed
+${CHANGED_FILES}
+
+## Diff file
+${DIFF_FILE}
+
+Focus only on changes introduced by this PR. Evaluate type definitions, interfaces, classes, and structural choices for clarity, safety, and encapsulation. Do not modify files.`
+    }
+  ],
+  async: true
 })
 ```
 
-Repeat for each applicable reviewer. All background agents can be launched in the same message.
+Only include the tasks for reviewers selected in step 4. Omit reviewers whose conditions are not met.
 
 ### 6. Collect results
 
-Wait for each agent to finish:
+Wait for all reviewers to finish:
 
 ```typescript
-get_subagent_result({ agent_id: "<agent-id-1>", wait: true })
-get_subagent_result({ agent_id: "<agent-id-2>", wait: true })
+subagent_wait({ all: true })
 ```
 
 If an agent fails or times out, record it under `Reviewers not completed` and continue.
