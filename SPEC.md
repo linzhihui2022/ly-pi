@@ -21,7 +21,6 @@
 ```
 configure/
 ├── pi-extensions/           # Bun workspaces，每个扩展一个目录
-│   ├── my-ask/
 │   ├── my-back/
 │   ├── my-bt/
 │   ├── my-html/
@@ -156,8 +155,10 @@ index.ts
 
 ```
 ~/.pi/agent/extensions/
-├── my-ask/index.js
 ├── my-back/index.js
+├── my-bt/index.js
+├── my-html/index.js
+├── my-hud/index.js
 ├── ...
 ```
 

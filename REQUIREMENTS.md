@@ -33,7 +33,6 @@ configure/
 
 | 扩展 | 核心能力 | 需求文档 | 规格文档 |
 |------|----------|----------|----------|
-| `my-ask` | `ask_user_question` 结构化问答工具 | [REQUIREMENTS](./pi-extensions/my-ask/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-ask/SPEC.md) |
 | `my-back` | `/back` 命令回退最近用户消息 | [REQUIREMENTS](./pi-extensions/my-back/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-back/SPEC.md) |
 | `my-bt` | BT-7274 语音包与浮层通知 | [REQUIREMENTS](./pi-extensions/my-bt/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-bt/SPEC.md) |
 | `my-html` | `/html` 命令将 assistant 回复渲染为 HTML 预览 | [REQUIREMENTS](./pi-extensions/my-html/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-html/SPEC.md) |
