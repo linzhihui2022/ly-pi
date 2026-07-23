@@ -29,3 +29,10 @@ await Bun.write(settingsPath, JSON.stringify(settings, null, 2) + "\n");
 
 // pi-goal: config → ~/.pi/agent/pi-goal.json
 await Bun.write(join(homedir(), ".pi/agent/pi-goal.json"), Bun.file("pi-goal.json"));
+
+// rtk: install/refresh the Pi extension (skipped if rtk is not installed)
+if (Bun.which("rtk")) {
+  Bun.spawnSync(["rtk", "init", "-g", "--agent", "pi"]);
+} else {
+  console.log("rtk not found in PATH, skipping rtk init");
+}

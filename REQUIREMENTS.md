@@ -45,7 +45,7 @@ configure/
 | `pi-skills` | 6 个仓库自有技能；不保存从外部仓库迁移或镜像的技能副本 | `./pi-skills/` |
 | `pi-themes` | Catppuccin Mocha 主题 | `./pi-themes/` |
 | `pi-agents` | 5 个 PR 审查子代理定义；通用角色由 `npm:pi-subagents` 官方包提供 | `./pi-agents/` |
-| `pi-config` | 纯配置扩展（权限系统、工具显示） | `./pi-config/` |
+| `pi-config` | 纯配置扩展（权限系统、工具显示）；deploy 时同步执行 `rtk init -g --agent pi` | `./pi-config/` |
 | `mcp` | MCP 服务器配置 | `./mcp/` |
 | `settings` | `pi-subagents` 模型映射与 fallback | `./settings/` |
 
@@ -57,6 +57,7 @@ configure/
 2. 使用 `bunx turbo run test` 运行全量测试。
 3. 使用 `bunx turbo run build test deploy` 执行完整流水线。
 4. 使用 `bun run deploy` 一键部署扩展、技能、主题、设置与 MCP 配置。
+5. deploy 时若本机已安装 `rtk`，执行 `rtk init -g --agent pi` 安装/刷新 RTK 的 Pi 扩展；未安装则跳过，不阻塞部署。
 
 ### 设置与模型
 

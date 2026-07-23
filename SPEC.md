@@ -67,6 +67,10 @@ configure/
 
 - `pi-permission-system.json`：权限规则。
 - `pi-tool-display.json`：工具显示与 diff 风格。
+- `pi-subagents.json`：pi-subagents 运行时配置与 settings 的 `subagents` 键（部署时拆分写入）。
+- `pi-goal.json`：pi-goal 配置（部署到 `~/.pi/agent/pi-goal.json`）。
+
+`pi-config/scripts/deploy.ts` 除复制 JSON 配置外，还会在本机已安装 `rtk` 时执行 `rtk init -g --agent pi`，将 RTK 的 Pi 扩展安装/刷新到 `~/.pi/agent/extensions/rtk.ts`；`rtk` 不在 PATH 时打印提示并跳过，不影响其余部署。
 
 ### 3.3 pi-skills / pi-themes / pi-agents / mcp / settings
 
