@@ -37,6 +37,7 @@ configure/
 | `my-bt` | BT-7274 语音包与浮层通知 | [REQUIREMENTS](./pi-extensions/my-bt/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-bt/SPEC.md) |
 | `my-html` | `/html` 命令将 assistant 回复渲染为 HTML 预览 | [REQUIREMENTS](./pi-extensions/my-html/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-html/SPEC.md) |
 | `my-hud` | 三层 HUD 状态栏（aboveEditor / footer / working） | [REQUIREMENTS](./pi-extensions/my-hud/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-hud/SPEC.md) |
+| `my-permission` | 独立工具调用拦截器 + 规则 + 模型法官 | [REQUIREMENTS](./pi-extensions/my-permission/REQUIREMENTS.md) | [SPEC](./pi-extensions/my-permission/SPEC.md) |
 
 ### 技能、主题、子代理与配置
 
@@ -136,5 +137,6 @@ configure/
 | 2026-07-22 | 移除本地 `pi-agents/` 中与 `pi-subagents` 官方包重复的 8 个通用角色，仅保留 5 个 PR 审查角色 |
 | 2026-07-22 | 移除本地 `my-visual-companion` 扩展、权限配置与历史运行产物，扩展数量调整为 7 |
 | 2026-07-22 | 移除技能迁移工具及所有外部迁移副本，仅保留 6 个仓库自有技能；不安装官方 Superpowers 包 |
+| 2026-07-22 | 新增 `my-permission` 扩展计划：独立 tool_call 拦截器 + 规则 + 模型法官 |
 | 2026-07-21 | 移除重复的 Kimi K3 与 highspeed 自定义定义，统一使用 Pi 官方模型目录 |
 | 2026-07-10 | 创建项目级 `REQUIREMENTS.md` 与 `SPEC.md`，统一索引各子组件需求文档 |

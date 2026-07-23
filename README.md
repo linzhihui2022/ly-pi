@@ -2,7 +2,7 @@
 
 我的终端、Shell、AI 编码 Agent 全家桶 —— Git 版本管理，一键部署。
 
-> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 7 个自定义扩展、6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
+> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 5 个 Pi 扩展、6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
 
 项目级需求文档见 [`REQUIREMENTS.md`](./REQUIREMENTS.md)，架构与流程规格见 [`SPEC.md`](./SPEC.md)。
 
@@ -12,11 +12,16 @@
 
 ```
 configure/
-├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 7 个）
+├── pi-extensions/          # Pi 扩展（Bun workspaces，5 个）
+│   ├── my-back/            # /back 命令
+│   ├── my-bt/              # BT-7274 语音包
+│   ├── my-html/            # /html 渲染
+│   ├── my-hud/             # 自定义 HUD 状态栏
+│   └── my-permission/      # 工具调用权限拦截器 + 模型法官
+├── pi-config/              # 纯配置扩展（权限规则、工具显示、子代理配置）
 ├── pi-skills/skills/       # 自定义技能（6 个）
 ├── pi-themes/              # 自定义主题（Catppuccin Mocha）
 ├── pi-agents/              # 子代理定义（5 个 PR 审查角色）
-├── pi-config/              # 纯配置扩展（权限系统、工具显示）
 ├── mcp/                    # MCP 服务器配置
 ├── settings/               # Pi 设置（子代理模型映射）
 │
@@ -41,6 +46,7 @@ configure/
 | **my-bt** | BT-7274 语音包：会话生命周期事件触发音频，TUI 浮层展示文案，`/bt` 命令控制 |
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
 | **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
+| **my-permission** | 工具调用权限拦截器：确定性规则 + `deepseek-v4-flash` 模型法官 + 子代理差异化处理 |
 
 ---
 

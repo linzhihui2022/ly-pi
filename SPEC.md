@@ -25,6 +25,7 @@ configure/
 │   ├── my-bt/
 │   ├── my-html/
 │   ├── my-hud/
+│   └── my-permission/       # 独立工具调用拦截器 + 规则 + 模型法官
 ├── pi-skills/               # 自定义技能文件
 ├── pi-themes/               # 主题 JSON + 部署脚本
 ├── pi-agents/               # 子代理定义（PR 审查角色）
@@ -163,6 +164,8 @@ index.ts
 ├── my-bt/index.js
 ├── my-html/index.js
 ├── my-hud/index.js
+├── my-permission/index.js
+├── my-permission/config.json
 ├── ...
 ```
 
@@ -214,6 +217,7 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 
 | 日期       | 变更                                                                                                                                      |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-22 | 新增 `my-permission` 扩展计划：独立 `tool_call` 拦截器 + 规则 + 模型法官，处理子代理无 UI 场景                                               |
 | 2026-07-22 | 将子代理运行时切换为 `pi-subagents`，定义 agent frontmatter、模型配置、权限桥接与包管理边界                                               |
 | 2026-07-22 | 移除本地 `pi-agents/` 中与 `pi-subagents` 官方包重复的 8 个通用角色，仅保留 5 个 PR 审查角色                                               |
 | 2026-07-22 | 删除本地 Visual Companion workspace、部署副本、权限项与 `.lychee/visual-companion/` 运行产物                                              |
