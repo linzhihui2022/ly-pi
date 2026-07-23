@@ -38,10 +38,11 @@ describe("resolvePath", () => {
 
 describe("splitBashCommandUnits", () => {
   it("splits by &&, |, ;, and newline", () => {
-    expect(splitBashCommandUnits("cd /tmp && cat file | grep x")).toEqual([
+    expect(splitBashCommandUnits("cd /tmp; cat file | grep x && echo done")).toEqual([
       "cd /tmp",
       "cat file",
       "grep x",
+      "echo done",
     ]);
   });
 

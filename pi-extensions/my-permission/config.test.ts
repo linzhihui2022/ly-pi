@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
+import { describe, expect, it, afterAll } from "vitest";
 import { loadConfig } from "./config";
 import { join } from "node:path";
 import { mkdir, writeFile, rm } from "node:fs/promises";
