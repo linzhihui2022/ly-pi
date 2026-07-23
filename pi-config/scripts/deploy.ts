@@ -26,3 +26,6 @@ const settingsPath = join(homedir(), ".pi/agent/settings.json");
 const settings = await Bun.file(settingsPath).json();
 settings.subagents = piSubagents.subagents;
 await Bun.write(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+
+// pi-goal: config → ~/.pi/agent/pi-goal.json
+await Bun.write(join(homedir(), ".pi/agent/pi-goal.json"), Bun.file("pi-goal.json"));
