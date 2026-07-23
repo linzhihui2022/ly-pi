@@ -1,0 +1,7 @@
+{
+  "defaultPolicy": "ask",
+  "judgeModel": "deepseek/deepseek-v4-flash",
+  "judgeTimeoutMs": 8000,
+  "childPolicy": "deny-on-unsafe",
+  "permission": {}
+}

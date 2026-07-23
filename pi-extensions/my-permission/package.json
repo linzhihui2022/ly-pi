@@ -1,0 +1,23 @@
+{
+  "name": "my-permission",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*'",
+    "typecheck": "bun x tsgo --noEmit",
+    "test": "npx vitest run --coverage",
+    "deploy": "bun run scripts/deploy.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "vitest": "^4"
+  },
+  "peerDependencies": {
+    "@typescript/native-preview": "^7.0.0-beta"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "^0.78.0",
+    "@earendil-works/pi-coding-agent": "^0.78.0",
+    "@types/node": "^25.9.1"
+  }
+}
