@@ -2,7 +2,7 @@
 
 我的终端、Shell、AI 编码 Agent 全家桶 —— Git 版本管理，一键部署。
 
-> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 7 个自定义扩展、6 个技能、13 个子代理定义、Catppuccin Mocha 主题等。
+> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 7 个自定义扩展、6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
 
 项目级需求文档见 [`REQUIREMENTS.md`](./REQUIREMENTS.md)，架构与流程规格见 [`SPEC.md`](./SPEC.md)。
 
@@ -15,7 +15,7 @@ configure/
 ├── pi-extensions/          # Pi 自定义扩展（Bun workspaces, 7 个）
 ├── pi-skills/skills/       # 自定义技能（6 个）
 ├── pi-themes/              # 自定义主题（Catppuccin Mocha）
-├── pi-agents/              # 子代理定义（13 个）
+├── pi-agents/              # 子代理定义（5 个 PR 审查角色）
 ├── pi-config/              # 纯配置扩展（权限系统、工具显示）
 ├── mcp/                    # MCP 服务器配置
 ├── settings/               # Pi 设置（子代理模型映射）
@@ -65,18 +65,10 @@ configure/
 
 ## 🤖 子代理
 
-运行时使用 [`pi-subagents`](https://pi.dev/packages/pi-subagents)。`pi-agents/*.md` 采用其 agent frontmatter，并部署到 `~/.pi/agent/agents/`；通用角色的模型与 fallback 由 `settings/settings.json` 统一覆盖。
+运行时使用 [`pi-subagents`](https://pi.dev/packages/pi-subagents)。通用角色（scout、delegate、researcher、context-builder、planner、oracle、reviewer、worker）由 `pi-subagents` 官方包提供；`pi-agents/*.md` 只保留 5 个 PR 审查角色，采用其 agent frontmatter 并部署到 `~/.pi/agent/agents/`。通用角色的模型与 fallback 由 `settings/settings.json` 统一覆盖。
 
 | 子代理 | 模型 | 用途 |
 |--------|------|------|
-| scout | deepseek-v4-flash | 快速侦察：搜集文件、搜索模式、diff |
-| delegate | deepseek-v4-flash | 轻量通用任务（可读写） |
-| researcher | kimi-k2-thinking | 网络调研：查找最新信息（可扩展） |
-| context-builder | kimi-k2-thinking | 上下文打包：总结代码库信息（只读） |
-| planner | kimi-k2-thinking | 设计规划：输出实施计划（只读） |
-| oracle | kimi-k2-thinking | 深度推理：第二意见、复杂分析（只读） |
-| worker | kimi-for-coding | 实现编码：写代码、修复 bug、TDD |
-| reviewer | kimi-for-coding | 代码审查：结构化审查报告（只读） |
 | pr-code-reviewer | kimi-for-coding | PR 通用代码审查：项目规范、bug 检测、代码质量 |
 | pr-comment-analyzer | deepseek-v4-flash | PR 注释与文档审查：准确性、完整性、可维护性 |
 | pr-silent-failure-hunter | kimi-for-coding | PR 静默失败审查：错误处理、fallback、异常抑制 |

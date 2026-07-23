@@ -1,26 +1,28 @@
-import { mkdir, readdir } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
 const dest = join(homedir(), ".pi/agent/agents");
-await mkdir(dest, { recursive: true });
 
-for (const entry of await readdir(".", { withFileTypes: true })) {
-  if (
-    entry.name === "package.json" ||
-    entry.name === "scripts" ||
-    entry.name === "node_modules" ||
-    entry.name === ".gitkeep"
-  )
-    continue;
-  const srcPath = join(".", entry.name);
-  const destPath = join(dest, entry.name);
-  if (entry.isDirectory()) {
-    await mkdir(destPath, { recursive: true });
-    for (const f of await readdir(srcPath)) {
-      await Bun.write(join(destPath, f), Bun.file(join(srcPath, f)));
+async function copyDir(src: string, dest: string) {
+  await mkdir(dest, { recursive: true });
+  for (const entry of await readdir(src, { withFileTypes: true })) {
+    if (
+      entry.name === "package.json" ||
+      entry.name === "scripts" ||
+      entry.name === "node_modules" ||
+      entry.name === ".gitkeep"
+    )
+      continue;
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+    if (entry.isDirectory()) {
+      await copyDir(srcPath, destPath);
+    } else {
+      await Bun.write(destPath, Bun.file(srcPath));
     }
-  } else {
-    await Bun.write(destPath, Bun.file(srcPath));
   }
 }
+
+await rm(dest, { recursive: true, force: true });
+await copyDir(".", dest);

@@ -27,7 +27,7 @@ configure/
 │   ├── my-hud/
 ├── pi-skills/               # 自定义技能文件
 ├── pi-themes/               # 主题 JSON + 部署脚本
-├── pi-agents/               # 子代理定义
+├── pi-agents/               # 子代理定义（PR 审查角色）
 ├── pi-config/               # 纯配置 JSON 扩展
 ├── mcp/                     # MCP 服务器配置
 ├── settings/                # Pi 设置 JSON
@@ -72,7 +72,7 @@ configure/
 
 这些目录以静态配置或脚本为主，不强制要求 `REQUIREMENTS.md`/`SPEC.md`；复杂子组件可独立补充。`settings` 仅维护 `settings.json`；当前使用的 Kimi 模型全部由 Pi 内置目录提供。
 
-子代理运行时使用 `npm:pi-subagents`。`pi-agents/*.md` 部署到用户级 agent 目录，每个文件显式声明 `name`，使用 `systemPromptMode` 及 `inheritProjectContext` / `inheritSkills` 控制提示词组装。通用角色的模型和 fallback 由 `settings/settings.json` 的 `subagents.agentOverrides` 维护；agent frontmatter 只保留角色专属的工具、thinking 与提示词。只读但包含 `bash` 或扩展工具的角色显式设置 `acceptanceRole: read-only` 和 `completionGuard: false`，避免被实现完成度检查误判为 writer。
+子代理运行时使用 `npm:pi-subagents`。通用角色（scout、delegate、researcher、context-builder、planner、oracle、reviewer、worker）由 `pi-subagents` 官方包提供；`pi-agents/*.md` 只保留 PR 审查角色，部署到用户级 agent 目录，每个文件显式声明 `name`，使用 `systemPromptMode` 及 `inheritProjectContext` / `inheritSkills` 控制提示词组装。通用角色的模型和 fallback 由 `settings/settings.json` 的 `subagents.agentOverrides` 维护；本地 PR 审查角色文件显式声明其专用 `model`。agent frontmatter 只保留角色专属的工具、thinking 与提示词。只读但包含 `bash` 或扩展工具的角色显式设置 `acceptanceRole: read-only` 和 `completionGuard: false`，避免被实现完成度检查误判为 writer。
 
 `pi-subagents` 与 `@gotgenes/pi-subagents` 都注册 `subagent`，因此不得并装。运行时包通过 `pi install` / `pi remove` 管理，不写入仓库的合并式 `settings/settings.json`，避免覆盖用户已有的其他包列表。`@gotgenes/pi-permission-system` 保留，并通过 `pi-subagents` 的父会话身份桥接对子进程执行权限检查。
 
@@ -174,7 +174,7 @@ index.ts
 
 `pi-skills/scripts/deploy.ts` 以仓库中的 `pi-skills/skills/` 为完整快照：部署前重建 `~/.pi/agent/skills/`，因此已从仓库删除的迁移技能不会残留在本机。
 
-`pi-agents/scripts/deploy.ts` 将仓库中的 Markdown 定义同步到 `~/.pi/agent/agents/`。迁移验证通过 `pi-subagents` 的 agent list/doctor 接口确认 13 个定义均可解析，而不是只检查文件存在。
+`pi-agents/scripts/deploy.ts` 将仓库中的 Markdown 定义同步到 `~/.pi/agent/agents/`。迁移验证通过 `pi-subagents` 的 agent list/doctor 接口确认本地 5 个 PR 审查 agent 定义及官方包通用角色均可解析，而不是只检查文件存在。
 
 `settings/scripts/deploy.ts` 仅将仓库的 `settings.json` 递归合并到本机设置。仓库不部署 `models.json`，`kimi-coding/k3` 与 `kimi-coding/kimi-for-coding-highspeed` 直接使用 Pi 内置模型目录。本次清理不配置 `git:github.com/obra/superpowers`；若将来需要官方 Superpowers，应使用 Pi 包管理器单独安装。该脚本不管理 `packages` 数组；包迁移使用 `pi remove npm:@gotgenes/pi-subagents` 与 `pi install npm:pi-subagents`，防止数组合并覆盖其他用户包。
 
@@ -211,6 +211,7 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 | 日期       | 变更                                                                                                                                      |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-07-22 | 将子代理运行时切换为 `pi-subagents`，定义 agent frontmatter、模型配置、权限桥接与包管理边界                                               |
+| 2026-07-22 | 移除本地 `pi-agents/` 中与 `pi-subagents` 官方包重复的 8 个通用角色，仅保留 5 个 PR 审查角色                                               |
 | 2026-07-22 | 删除本地 Visual Companion workspace、部署副本、权限项与 `.lychee/visual-companion/` 运行产物                                              |
 | 2026-07-22 | 将 `pi-skills` 收敛为 6 个仓库自有技能，删除迁移工具与外部技能副本，并明确快照部署清理旧副本                                              |
 | 2026-07-21 | 移除 `models.json` 部署，Kimi K3 与 highspeed 统一使用 Pi 官方定义                                                                        |

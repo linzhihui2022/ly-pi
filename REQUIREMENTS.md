@@ -44,7 +44,7 @@ configure/
 |------|------|------|
 | `pi-skills` | 6 个仓库自有技能；不保存从外部仓库迁移或镜像的技能副本 | `./pi-skills/` |
 | `pi-themes` | Catppuccin Mocha 主题 | `./pi-themes/` |
-| `pi-agents` | 13 个 `pi-subagents` 用户级子代理定义（通用角色 8 个、PR 审查角色 5 个） | `./pi-agents/` |
+| `pi-agents` | 5 个 PR 审查子代理定义；通用角色由 `npm:pi-subagents` 官方包提供 | `./pi-agents/` |
 | `pi-config` | 纯配置扩展（权限系统、工具显示） | `./pi-config/` |
 | `mcp` | MCP 服务器配置 | `./mcp/` |
 | `settings` | `pi-subagents` 模型映射与 fallback | `./settings/` |
@@ -60,7 +60,7 @@ configure/
 
 ### 设置与模型
 
-1. `settings/settings.json` 维护 `pi-subagents` 子代理模型映射与 fallback；同名通用角色的 agent 文件不重复声明 `model`，以确保 `agentOverrides` 生效。
+1. `settings/settings.json` 维护 `pi-subagents` 官方通用角色（scout、delegate、researcher、context-builder、planner、oracle、reviewer、worker）的模型映射与 fallback；本地 PR 审查角色的 agent 文件显式声明其专用 `model`。
 2. Pi 内置模型目录是官方 provider/model 元数据的唯一来源；当前所需 Kimi 模型均已内置，仓库不维护 `settings/models.json`。
 3. `bun run deploy` 将设置同步到 `~/.pi/agent/settings.json`，不写入自定义模型配置。
 4. Pi 包由 Pi 包管理器单独维护；子代理运行时必须安装 `npm:pi-subagents`，不得同时安装 `npm:@gotgenes/pi-subagents`。
@@ -124,7 +124,7 @@ configure/
 7. `settings/settings.json` 不包含 `git:github.com/obra/superpowers`。
 8. 仓库和 `~/.pi/agent/extensions/` 均不存在 `my-visual-companion`，仓库不存在 `.lychee/visual-companion/` 运行产物，权限配置不包含 `visual_companion_*`。
 9. `pi list` 包含 `npm:pi-subagents` 且不包含 `npm:@gotgenes/pi-subagents`；`@gotgenes/pi-permission-system` 继续加载。
-10. `pi-subagents` 能发现全部 13 个 `pi-agents` 用户级定义，且 `/subagents-doctor` 不报告代理配置或权限桥接错误。
+10. `pi-subagents` 能发现 5 个本地 PR 审查 agent 定义以及官方包提供的通用角色，且 `/subagents-doctor` 不报告代理配置或权限桥接错误。
 11. `pi-agents/` 与仍在部署的技能中不存在 `prompt_mode`、`subagent_type`、`run_in_background`、`get_subagent_result`、`steer_subagent` 等旧格式。
 
 ## 8. 变更日志
@@ -132,6 +132,7 @@ configure/
 | 日期 | 变更 |
 |------|------|
 | 2026-07-22 | 子代理运行时从 `@gotgenes/pi-subagents` 迁移至 `pi-subagents`，同步迁移 13 个 agent 定义与调度语法 |
+| 2026-07-22 | 移除本地 `pi-agents/` 中与 `pi-subagents` 官方包重复的 8 个通用角色，仅保留 5 个 PR 审查角色 |
 | 2026-07-22 | 移除本地 `my-visual-companion` 扩展、权限配置与历史运行产物，扩展数量调整为 7 |
 | 2026-07-22 | 移除技能迁移工具及所有外部迁移副本，仅保留 6 个仓库自有技能；不安装官方 Superpowers 包 |
 | 2026-07-21 | 移除重复的 Kimi K3 与 highspeed 自定义定义，统一使用 Pi 官方模型目录 |
