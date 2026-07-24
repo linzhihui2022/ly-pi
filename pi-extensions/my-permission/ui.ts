@@ -1,5 +1,32 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+const ANSI = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  cyan: "\x1b[36m",
+};
+
+function styled(text: string, ...codes: string[]): string {
+  return `${codes.join("")}${text}${ANSI.reset}`;
+}
+
+function label(text: string): string {
+  return styled(text, ANSI.bold);
+}
+
+function value(text: string): string {
+  return styled(text, ANSI.cyan);
+}
+
+function scoreStyle(score: number): string {
+  if (score <= 3) return ANSI.red;
+  if (score <= 6) return ANSI.yellow;
+  return ANSI.green;
+}
+
 export function isChildSession(): boolean {
   return !!process.env.PI_SUBAGENT_PARENT_SESSION;
 }
@@ -43,19 +70,21 @@ export function formatConfirmMessage(options: {
   paths: string[];
 }): { title: string; body: string } {
   const lines = [
-    `工具：${options.toolName}`,
-    `操作：${options.toolFor}`,
-    `输入：${options.value}`,
-    `工作目录：${options.cwd}`,
+    `${label("工具：")}${value(options.toolName)}`,
+    `${label("操作：")}${styled(options.toolFor, ANSI.yellow)}`,
+    `${label("输入：")}${value(options.value)}`,
+    `${label("工作目录：")}${value(options.cwd)}`,
   ];
   if (options.paths.length > 0) {
-    lines.push(`涉及路径：${options.paths.join(", ")}`);
+    lines.push(`${label("涉及路径：")}${value(options.paths.join(", "))}`);
   }
-  const scoreSuffix =
-    options.score !== undefined ? `（安全评分：${options.score}/10）` : "";
-  lines.push(`理由：${options.reason}${scoreSuffix}`);
+  const scoreText =
+    options.score !== undefined
+      ? styled(`（安全评分：${options.score}/10）`, scoreStyle(options.score), ANSI.bold)
+      : "";
+  lines.push(`${label("理由：")}${styled(options.reason, ANSI.bold)}${scoreText}`);
   return {
-    title: `确认工具调用：${options.toolName}`,
+    title: `${label("确认工具调用：")}${styled(options.toolName, ANSI.bold, ANSI.cyan)}`,
     body: lines.join("\n"),
   };
 }

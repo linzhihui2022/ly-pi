@@ -204,13 +204,13 @@ tool_call event
 
 - 当最终裁决为 `ask` 且法官返回 `safe === false` 或评审失败时触发。
 - 弹窗标题统一为中文：`确认工具调用：{toolName}`。
-- 弹窗正文通过 `formatConfirmMessage` 组装，结构化展示以下信息：
-  - 工具：`{toolName}`
-  - 操作：`{toolFor}`（法官一句话摘要）
-  - 输入：`{value}`（原始 tool input 字符串）
-  - 工作目录：`{cwd}`
-  - 涉及路径：当 `paths` 非空时列出，否则省略
-  - 理由：`{reason}`（法官返回 JSON 中的 `score` 会作为 `（安全评分：{score}/10）` 附在理由后展示）
+- 弹窗正文通过 `formatConfirmMessage` 组装，结构化展示以下信息，并使用 ANSI 颜色/加粗高亮关键词：
+  - `工具：{toolName}`（标签加粗，值青色）
+  - `操作：{toolFor}`（值黄色）
+  - `输入：{value}`（值青色）
+  - `工作目录：{cwd}`（值青色）
+  - `涉及路径`：当 `paths` 非空时列出（值青色）
+  - `理由：{reason}`（值加粗），`score` 以 `（安全评分：{score}/10）` 附后并按分数区间着色（≤3 红、4–6 黄、≥7 绿）
 - 法官调用失败时不再显示 `No model judgment available`，而是给出具体原因：
   - 未找到可用/已认证的法官模型：`未找到可用的法官模型，请手动确认`
   - 模型调用超时：`法官模型调用超时（{judgeTimeoutMs}ms），请手动确认`

@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { confirmToolCall, createSessionCache, formatConfirmMessage, isChildSession } from "./ui";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
 const mockCtx = (confirmValue: boolean): ExtensionContext =>
   ({
     hasUI: true,
@@ -40,13 +44,43 @@ describe("formatConfirmMessage", () => {
       cwd: "/repo",
       paths: ["src", "dist"],
     });
-    expect(title).toBe("确认工具调用：bash");
-    expect(body).toContain("工具：bash");
-    expect(body).toContain("操作：列出当前目录文件");
-    expect(body).toContain("输入：ls -la");
-    expect(body).toContain("工作目录：/repo");
-    expect(body).toContain("涉及路径：src, dist");
-    expect(body).toContain("理由：只读取目录内容，相对安全（安全评分：8/10）");
+    expect(stripAnsi(title)).toBe("确认工具调用：bash");
+    expect(stripAnsi(body)).toContain("工具：bash");
+    expect(stripAnsi(body)).toContain("操作：列出当前目录文件");
+    expect(stripAnsi(body)).toContain("输入：ls -la");
+    expect(stripAnsi(body)).toContain("工作目录：/repo");
+    expect(stripAnsi(body)).toContain("涉及路径：src, dist");
+    expect(stripAnsi(body)).toContain("理由：只读取目录内容，相对安全（安全评分：8/10）");
+    expect(body).toContain("\x1b[32m");
+    expect(body).toContain("\x1b[36m");
+    expect(body).toContain("\x1b[33m");
+    expect(body).toContain("\x1b[1m");
+  });
+
+  it("uses red color for low scores", () => {
+    const { body } = formatConfirmMessage({
+      toolName: "bash",
+      toolFor: "删除文件",
+      reason: "危险操作",
+      score: 2,
+      value: "rm -rf /tmp",
+      cwd: "/repo",
+      paths: [],
+    });
+    expect(body).toContain("\x1b[31m");
+  });
+
+  it("uses yellow color for medium scores", () => {
+    const { body } = formatConfirmMessage({
+      toolName: "bash",
+      toolFor: "下载文件",
+      reason: "网络请求",
+      score: 5,
+      value: "curl -O https://example.com/file",
+      cwd: "/repo",
+      paths: [],
+    });
+    expect(body).toContain("\x1b[33m");
   });
 
   it("omits paths when empty and omits score when undefined", () => {
@@ -58,9 +92,10 @@ describe("formatConfirmMessage", () => {
       cwd: "/repo",
       paths: [],
     });
-    expect(body).not.toContain("涉及路径");
-    expect(body).not.toContain("安全评分");
-    expect(body).toContain("理由：模型返回格式不正确，请手动确认");
+    expect(stripAnsi(body)).not.toContain("涉及路径");
+    expect(stripAnsi(body)).not.toContain("安全评分");
+    expect(stripAnsi(body)).toContain("理由：模型返回格式不正确，请手动确认");
+    expect(stripAnsi(title)).toBe("确认工具调用：read");
   });
 });
 
@@ -77,10 +112,10 @@ describe("confirmToolCall", () => {
       paths: [],
     });
     expect(ok).toBe(true);
-    expect(ctx.ui.confirm).toHaveBeenCalledWith(
-      "确认工具调用：read",
-      expect.stringContaining("理由：routine read（安全评分：8/10）"),
-    );
+    const calls = (ctx.ui.confirm as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
+    expect(stripAnsi(calls[0][0])).toBe("确认工具调用：read");
+    expect(calls[0][1]).toContain("\x1b[32m");
+    expect(stripAnsi(calls[0][1])).toContain("理由：routine read（安全评分：8/10）");
   });
 
   it("returns false when user denies", async () => {
