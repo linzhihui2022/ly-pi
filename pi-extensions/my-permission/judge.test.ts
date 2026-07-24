@@ -124,6 +124,21 @@ describe("createJudge", () => {
     expect(result).toEqual({ safe: true, reason: "ok", toolFor: "do stuff" });
   });
 
+  it("passes apiKey and headers from getAuth to complete", async () => {
+    const { complete } = await import("@earendil-works/pi-ai");
+    (complete as ReturnType<typeof vi.fn>).mockImplementation(
+      (_model: unknown, _context: unknown, options?: { apiKey?: string; headers?: Record<string, string> }) =>
+        Promise.resolve({ content: [{ type: "text" as const, text: '{"safe":true,"reason":"auth ok","toolFor":"read"}' }] }),
+    );
+    const judge = createJudge(config, {
+      getAuth: async () => ({ apiKey: "deepseek-key", headers: { "X-Custom": "1" } }),
+    });
+    await judge(input, "/repo", undefined, resolveFnOk);
+    const calls = (complete as ReturnType<typeof vi.fn>).mock.calls;
+    const options = calls[calls.length - 1][2];
+    expect(options).toMatchObject({ apiKey: "deepseek-key", headers: { "X-Custom": "1" } });
+  });
+
   it("builds prompt with correct context", async () => {
     let capturedContext: unknown;
     const { complete } = await import("@earendil-works/pi-ai");

@@ -11,11 +11,16 @@ import { extractPathTokens } from "./utils";
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const extensionDir = dirname(fileURLToPath(import.meta.url));
   const config = await loadConfig(join(extensionDir, "config.json"));
-  const judge = createJudge(config);
   const cache = createSessionCache();
   const child = isChildSession();
 
   pi.on("tool_call", async (event, ctx) => {
+    const judge = createJudge(config, {
+      getAuth:
+        typeof ctx.modelRegistry.getApiKeyAndHeaders === "function"
+          ? (model) => ctx.modelRegistry.getApiKeyAndHeaders(model)
+          : undefined,
+    });
     const toolName = event.toolName;
     const value = stringifyToolInput(event);
     const rawPaths = collectPaths(toolName, value, event, ctx.cwd);

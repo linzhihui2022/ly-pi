@@ -2,7 +2,14 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai";
 import type { Config, JudgeResult, ToolInput } from "./types";
 
-export function createJudge(config: Config) {
+export function createJudge(
+  config: Config,
+  deps?: {
+    getAuth?: (
+      model: Model<Api>,
+    ) => Promise<{ apiKey?: string; headers?: Record<string, string> }>;
+  },
+) {
   return async function judge(
     input: ToolInput,
     cwd: string,
@@ -12,6 +19,7 @@ export function createJudge(config: Config) {
     const resolved = resolveJudgeModel(config, resolveModel, model);
     if (!resolved) return undefined;
 
+    const auth = deps?.getAuth ? await deps.getAuth(resolved) : undefined;
     const prompt = buildJudgePrompt(input, cwd);
     const context = {
       systemPrompt: "You are a security gate. Reply with strict JSON only.",
@@ -28,6 +36,8 @@ export function createJudge(config: Config) {
       );
       const response = await complete(resolved, context, {
         signal: controller.signal,
+        apiKey: auth?.apiKey,
+        headers: auth?.headers,
       });
       clearTimeout(timeout);
       return parseJudgeResponse(response);
