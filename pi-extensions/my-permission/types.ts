@@ -32,6 +32,7 @@ export interface Verdict {
 
 export interface JudgeResult {
   safe: boolean;
+  score?: number;
   reason: string;
   toolFor: string;
 }

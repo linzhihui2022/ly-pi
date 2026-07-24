@@ -28,14 +28,15 @@
 ### 2.2 模型法官
 
 1. 默认使用模型 `deepseek/deepseek-v4-flash`。
-2. 法官 prompt 要求输出严格 JSON：`{ safe: boolean, reason: string, toolFor: string }`。
+2. 法官 prompt 要求输出严格 JSON：`{ safe: boolean, score: number, reason: string, toolFor: string }`，其中 `score` 为 1-10 的安全评分，越高越安全。
 3. `toolFor` 用一句话概括该工具调用会做什么。
-4. 法官超时或输出异常时 fallback 到 `ask`（父会话）或 `deny`（子会话）。
-5. 超时时间默认可配置，建议 8 秒。
+4. `safe` 仍作为最终放行/弹窗依据；`score` 用于在 UI 中展示。
+5. 法官超时或输出异常时 fallback 到 `ask`（父会话）或 `deny`（子会话）。
+6. 超时时间默认可配置，建议 8 秒。
 
 ### 2.3 UI 确认
 
-1. 父会话中，法官认为不安全时调用 `ctx.ui.confirm` 弹窗。
+1. 父会话中，法官认为不安全时调用 `ctx.ui.confirm` 弹窗；弹窗展示 `toolFor`、`reason` 以及 `score`（`安全评分：{score}/10`）。
 2. 用户可单次放行或拒绝；拒绝时 block 并附带 `reason`。
 3. 子会话中不弹窗，按 `childPolicy` 直接决定。
 
@@ -72,7 +73,7 @@
 4. 部署后 `~/.pi/agent/extensions/my-permission/` 包含 `index.js` 与 `config.json`。
 5. 规则匹配覆盖 `path`、`external_directory`、`bash`、`read`、`write`、`mcp`、`skill` 等场景。
 6. 子代理会话中法官 unsafe 时直接 deny，不弹窗。
-7. 法官输出 `{ safe, reason, toolFor }` 并被正确解析。
+7. 法官输出 `{ safe, score, reason, toolFor }` 并被正确解析；弹窗展示 `score`。
 
 ## 5. 不做什么
 

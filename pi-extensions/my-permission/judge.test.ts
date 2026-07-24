@@ -41,6 +41,14 @@ const resolveModelNotFound = () => undefined;
 const resolveFnOk = vi.fn(resolveModelOk);
 const resolveFnNotFound = vi.fn(resolveModelNotFound);
 
+function failureReason(input: { toolName: string; value: string }, reason: string) {
+  return {
+    safe: false,
+    reason,
+    toolFor: `${input.toolName} ${input.value}`,
+  };
+}
+
 async function mockComplete(value: unknown): Promise<void> {
   const { complete } = await import("@earendil-works/pi-ai");
   (complete as ReturnType<typeof vi.fn>).mockResolvedValue(value);
@@ -49,86 +57,100 @@ async function mockComplete(value: unknown): Promise<void> {
 describe("createJudge", () => {
   it("returns safe result when model says safe", async () => {
     await mockComplete({
-      content: [{ type: "text", text: '{"safe":true,"reason":"read only","toolFor":"read file"}' }],
+      content: [{ type: "text", text: '{"safe":true,"score":8,"reason":"read only","toolFor":"read file"}' }],
     });
     const judge = createJudge(config);
     const result = await judge(input, "/repo", undefined, resolveFnOk);
-    expect(result).toEqual({ safe: true, reason: "read only", toolFor: "read file" });
+    expect(result).toEqual({ safe: true, score: 8, reason: "read only", toolFor: "read file" });
   });
 
   it("returns unsafe result when model says unsafe", async () => {
     await mockComplete({
-      content: [{ type: "text", text: '{"safe":false,"reason":"destructive","toolFor":"delete files"}' }],
+      content: [{ type: "text", text: '{"safe":false,"score":3,"reason":"destructive","toolFor":"delete files"}' }],
     });
     const judge = createJudge(config);
     const result = await judge({ toolName: "bash", value: "rm -rf /", paths: [] }, "/repo", undefined, resolveFnOk);
-    expect(result).toEqual({ safe: false, reason: "destructive", toolFor: "delete files" });
+    expect(result).toEqual({ safe: false, score: 3, reason: "destructive", toolFor: "delete files" });
   });
 
-  it("returns undefined on invalid JSON", async () => {
+  it("returns failure result on invalid JSON", async () => {
     await mockComplete({ content: [{ type: "text", text: "not json" }] });
     const judge = createJudge(config);
     const result = await judge(input, "/repo", undefined, resolveFnOk);
-    expect(result).toBeUndefined();
+    expect(result).toEqual(failureReason(input, "法官模型返回格式不正确，请手动确认"));
   });
 
-  it("returns undefined when model response has no text content", async () => {
+  it("returns failure result when model response has no text content", async () => {
     await mockComplete({ content: [] });
     const judge = createJudge(config);
     const result = await judge(input, "/repo", undefined, resolveFnOk);
-    expect(result).toBeUndefined();
+    expect(result).toEqual(failureReason(input, "法官模型返回格式不正确，请手动确认"));
   });
 
-  it("returns undefined when JSON is missing 'safe' field", async () => {
-    await mockComplete({ content: [{ type: "text", text: '{"reason":"ok","toolFor":"do stuff"}' }] });
+  it("returns failure result when JSON is missing 'safe' field", async () => {
+    await mockComplete({ content: [{ type: "text", text: '{"score":5,"reason":"ok","toolFor":"do stuff"}' }] });
     const judge = createJudge(config);
     const result = await judge(input, "/repo", undefined, resolveFnOk);
-    expect(result).toBeUndefined();
+    expect(result).toEqual(failureReason(input, "法官模型返回格式不正确，请手动确认"));
   });
 
-  it("returns undefined when 'reason' is not a string", async () => {
-    await mockComplete({ content: [{ type: "text", text: '{"safe":true,"reason":42,"toolFor":"do stuff"}' }] });
+  it("returns failure result when 'reason' is not a string", async () => {
+    await mockComplete({ content: [{ type: "text", text: '{"safe":true,"score":5,"reason":42,"toolFor":"do stuff"}' }] });
     const judge = createJudge(config);
     const result = await judge(input, "/repo", undefined, resolveFnOk);
-    expect(result).toBeUndefined();
+    expect(result).toEqual(failureReason(input, "法官模型返回格式不正确，请手动确认"));
   });
 
-  it("returns undefined on model call throwing", async () => {
+  it("returns failure result when 'score' is missing", async () => {
+    await mockComplete({ content: [{ type: "text", text: '{"safe":false,"reason":"ok","toolFor":"do stuff"}' }] });
+    const judge = createJudge(config);
+    const result = await judge(input, "/repo", undefined, resolveFnOk);
+    expect(result).toEqual(failureReason(input, "法官模型返回格式不正确，请手动确认"));
+  });
+
+  it("returns failure result when 'score' is out of range", async () => {
+    await mockComplete({ content: [{ type: "text", text: '{"safe":false,"score":11,"reason":"ok","toolFor":"do stuff"}' }] });
+    const judge = createJudge(config);
+    const result = await judge(input, "/repo", undefined, resolveFnOk);
+    expect(result).toEqual(failureReason(input, "法官模型返回格式不正确，请手动确认"));
+  });
+
+  it("returns failure result on model call throwing", async () => {
     const { complete } = await import("@earendil-works/pi-ai");
     (complete as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("network error"));
     const judge = createJudge(config);
     const result = await judge(input, "/repo", undefined, resolveFnOk);
-    expect(result).toBeUndefined();
+    expect(result).toEqual(failureReason(input, "法官模型调用失败，请手动确认"));
   });
 
-  it("returns undefined when model resolution fails and no fallback", async () => {
+  it("returns failure result when model resolution fails and no fallback", async () => {
     const judge = createJudge(config);
     const result = await judge(input, "/repo", undefined, resolveFnNotFound);
-    expect(result).toBeUndefined();
+    expect(result).toEqual(failureReason(input, "未找到可用的法官模型，请手动确认"));
   });
 
   it("uses fallbackModel when primary resolution fails", async () => {
-    await mockComplete({ content: [{ type: "text", text: '{"safe":true,"reason":"fallback ok","toolFor":"read"}' }] });
+    await mockComplete({ content: [{ type: "text", text: '{"safe":true,"score":9,"reason":"fallback ok","toolFor":"read"}' }] });
     const fallback = makeModel({ id: "fallback-model", provider: "openai" });
     const judge = createJudge(config);
     const result = await judge(input, "/repo", fallback, resolveFnNotFound);
-    expect(result).toEqual({ safe: true, reason: "fallback ok", toolFor: "read" });
+    expect(result).toEqual({ safe: true, score: 9, reason: "fallback ok", toolFor: "read" });
   });
 
   it("parses JSON wrapped in markdown code fence", async () => {
     await mockComplete({
-      content: [{ type: "text", text: '```json\n{"safe":true,"reason":"ok","toolFor":"do stuff"}\n```' }],
+      content: [{ type: "text", text: '```json\n{"safe":true,"score":7,"reason":"ok","toolFor":"do stuff"}\n```' }],
     });
     const judge = createJudge(config);
     const result = await judge(input, "/repo", undefined, resolveFnOk);
-    expect(result).toEqual({ safe: true, reason: "ok", toolFor: "do stuff" });
+    expect(result).toEqual({ safe: true, score: 7, reason: "ok", toolFor: "do stuff" });
   });
 
   it("passes apiKey and headers from getAuth to complete", async () => {
     const { complete } = await import("@earendil-works/pi-ai");
     (complete as ReturnType<typeof vi.fn>).mockImplementation(
       (_model: unknown, _context: unknown, options?: { apiKey?: string; headers?: Record<string, string> }) =>
-        Promise.resolve({ content: [{ type: "text" as const, text: '{"safe":true,"reason":"auth ok","toolFor":"read"}' }] }),
+        Promise.resolve({ content: [{ type: "text" as const, text: '{"safe":true,"score":8,"reason":"auth ok","toolFor":"read"}' }] }),
     );
     const judge = createJudge(config, {
       getAuth: async () => ({ apiKey: "deepseek-key", headers: { "X-Custom": "1" } }),
@@ -145,7 +167,7 @@ describe("createJudge", () => {
     (complete as ReturnType<typeof vi.fn>).mockImplementation(
       (_model: unknown, context: unknown) => {
         capturedContext = context;
-        return Promise.resolve({ content: [{ type: "text" as const, text: '{"safe":true,"reason":"ok","toolFor":"do"}' }] });
+        return Promise.resolve({ content: [{ type: "text" as const, text: '{"safe":true,"score":6,"reason":"ok","toolFor":"do"}' }] });
       },
     );
     const judge = createJudge(config);
@@ -155,25 +177,26 @@ describe("createJudge", () => {
     expect(msg).toContain("/my-project");
     expect(msg).toContain("bash");
     expect(msg).toContain("rm file");
+    expect(msg).toContain('"score": number');
   });
 
-  it("returns undefined when judgeModel has no provider separator", async () => {
+  it("returns failure result when judgeModel has no provider separator", async () => {
     const noSlashConfig: Config = { ...config, judgeModel: "some-model" };
     const judge = createJudge(noSlashConfig);
     const result = await judge(input, "/repo", undefined, resolveFnOk);
-    expect(result).toBeUndefined();
+    expect(result).toEqual(failureReason(input, "未找到可用的法官模型，请手动确认"));
   });
 
-  it("returns undefined when JSON.parse throws on malformed JSON with braces", async () => {
+  it("returns failure result on malformed JSON with braces", async () => {
     await mockComplete({
       content: [{ type: "text", text: "{not valid json}" }],
     });
     const judge = createJudge(config);
     const result = await judge(input, "/repo", undefined, resolveFnOk);
-    expect(result).toBeUndefined();
+    expect(result).toEqual(failureReason(input, "法官模型返回格式不正确，请手动确认"));
   });
 
-  it("handles timeout by catching abort error", async () => {
+  it("returns timeout failure result", async () => {
     const { complete } = await import("@earendil-works/pi-ai");
     let abortSignal: AbortSignal | undefined;
     (complete as ReturnType<typeof vi.fn>).mockImplementation(
@@ -195,6 +218,6 @@ describe("createJudge", () => {
     const shortConfig: Config = { ...config, judgeTimeoutMs: 1 };
     const judge = createJudge(shortConfig);
     const result = await judge(input, "/repo", undefined, resolveFnOk);
-    expect(result).toBeUndefined();
+    expect(result).toEqual(failureReason(input, "法官模型调用超时（1ms），请手动确认"));
   });
 });

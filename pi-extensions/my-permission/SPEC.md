@@ -170,6 +170,7 @@ Tool input (sanitized): {inputJson}
 Reply with strict JSON only:
 {
   "safe": boolean,
+  "score": number, // 1-10, higher is safer
   "reason": "one sentence explaining why it is safe or unsafe",
   "toolFor": "one sentence describing what this tool call will do"
 }
@@ -184,6 +185,7 @@ Guidelines:
 
 - 从模型返回中提取 JSON 对象；允许 JSON 被包裹在 markdown code fence 中。
 - 解析失败、缺少字段或 `safe` 非布尔值时，视为评审失败。
+- `score` 为可选数字，范围 1-10；缺失或非法时视为评审失败。
 - 评审失败时：父会话 fallback 到 `ask`（弹窗），子会话 fallback 到 `deny`。
 
 ## 6. 子代理处理
@@ -201,12 +203,22 @@ Guidelines:
 ## 7. UI 确认（父会话）
 
 - 当最终裁决为 `ask` 且法官返回 `safe === false` 或评审失败时触发。
-- 调用 `ctx.ui.confirm`，展示 `toolFor` 与 `reason`：
-  - 标题：`Tool call needs confirmation: {toolName}`
-  - 消息：`{toolFor}\n\nReason: {reason}`
+- 弹窗标题统一为中文：`确认工具调用：{toolName}`。
+- 弹窗正文通过 `formatConfirmMessage` 组装，结构化展示以下信息：
+  - 工具：`{toolName}`
+  - 操作：`{toolFor}`（法官一句话摘要）
+  - 输入：`{value}`（原始 tool input 字符串）
+  - 工作目录：`{cwd}`
+  - 涉及路径：当 `paths` 非空时列出，否则省略
+  - 理由：`{reason}`（法官返回 JSON 中的 `score` 会作为 `（安全评分：{score}/10）` 附在理由后展示）
+- 法官调用失败时不再显示 `No model judgment available`，而是给出具体原因：
+  - 未找到可用/已认证的法官模型：`未找到可用的法官模型，请手动确认`
+  - 模型调用超时：`法官模型调用超时（{judgeTimeoutMs}ms），请手动确认`
+  - 模型返回无法解析：`法官模型返回格式不正确，请手动确认`
+  - 其他调用错误：`法官模型调用失败，请手动确认`
 - 用户同意 → 放行，并记录 session 级缓存（键：surface + value），后续相同调用直接放行。
 - 用户拒绝 → `block`，返回 `{ block: true, reason: "User denied: {reason}" }`。
-- 无 UI 时（`!ctx.hasUI`）：父会话中 fallback 到 `deny`（与子会话一致）。
+- 无 UI 时（`!ctx.hasUI`）：父会话中 fallback 到 `deny`（与子会话一致），block reason 使用法官给出的具体原因。
 
 ## 8. 错误处理
 
@@ -215,9 +227,9 @@ Guidelines:
 | `config.json` 不存在 | 使用默认配置：`defaultPolicy: "ask"`、`judgeModel: "deepseek/deepseek-v4-flash"`、`judgeTimeoutMs: 8000` |
 | `config.json` 解析失败 | 控制台 warn 一次，使用默认配置 |
 | 规则匹配异常 | 该层视为 `ask` |
-| 法官模型解析失败 | fallback 到 `ctx.model`（当前会话模型），再失败则父会话有 UI 时 ask / 无 UI 时 deny；子会话 deny |
-| 法官模型调用失败/超时 | 父会话有 UI 时 ask / 无 UI 时 deny；子会话 deny |
-| 法官输出 JSON 解析失败 | 父会话有 UI 时 ask / 无 UI 时 deny；子会话 deny |
+| 法官模型解析失败 | fallback 到 `ctx.model`（当前会话模型），再失败则返回 `未找到可用的法官模型，请手动确认`；父会话弹窗 / 无 UI 或子会话 deny |
+| 法官模型调用失败/超时 | 返回具体原因（超时带 `judgeTimeoutMs`），父会话弹窗 / 无 UI 或子会话 deny |
+| 法官输出 JSON 解析失败 | 返回 `法官模型返回格式不正确，请手动确认`；父会话弹窗 / 无 UI 或子会话 deny |
 | 弹窗用户拒绝 | block + reason |
 | 弹窗用户同意 | allow，加入 session 缓存 |
 

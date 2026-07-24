@@ -43,27 +43,30 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       ctx.model,
       resolveModel,
     );
-    if (judgeResult?.safe === true) return undefined;
+    if (judgeResult.safe === true) return undefined;
 
     if (child || !ctx.hasUI) {
       return {
         block: true,
-        reason: judgeResult?.reason ?? "Denied in non-interactive or subagent session",
+        reason: judgeResult.reason,
       };
     }
 
-    const approved = await confirmToolCall(
-      ctx,
+    const approved = await confirmToolCall(ctx, {
       toolName,
-      judgeResult?.toolFor ?? `${toolName} ${value}`,
-      judgeResult?.reason ?? "No model judgment available",
-    );
+      toolFor: judgeResult.toolFor,
+      reason: judgeResult.reason,
+      score: judgeResult.score,
+      value,
+      cwd: ctx.cwd,
+      paths,
+    });
 
     if (approved) {
       cache.approve(cacheKey);
       return undefined;
     }
-    return { block: true, reason: judgeResult?.reason ?? "User denied" };
+    return { block: true, reason: `User denied: ${judgeResult.reason}` };
   });
 }
 

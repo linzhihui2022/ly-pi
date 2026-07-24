@@ -15,9 +15,11 @@ export function createJudge(
     cwd: string,
     model: Model<Api> | undefined,
     resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  ): Promise<JudgeResult | undefined> {
+  ): Promise<JudgeResult> {
     const resolved = resolveJudgeModel(config, resolveModel, model);
-    if (!resolved) return undefined;
+    if (!resolved) {
+      return failureResult("未找到可用的法官模型，请手动确认", input);
+    }
 
     const auth = deps?.getAuth ? await deps.getAuth(resolved) : undefined;
     const prompt = buildJudgePrompt(input, cwd);
@@ -28,23 +30,37 @@ export function createJudge(
       ],
     };
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.judgeTimeoutMs);
+
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        config.judgeTimeoutMs,
-      );
       const response = await complete(resolved, context, {
         signal: controller.signal,
         apiKey: auth?.apiKey,
         headers: auth?.headers,
       });
       clearTimeout(timeout);
-      return parseJudgeResponse(response);
+      return parseJudgeResponse(response) ??
+        failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
+      clearTimeout(timeout);
       console.warn("[my-permission] judge call failed:", error);
-      return undefined;
+      if (controller.signal.aborted) {
+        return failureResult(
+          `法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`,
+          input,
+        );
+      }
+      return failureResult("法官模型调用失败，请手动确认", input);
     }
+  };
+}
+
+function failureResult(reason: string, input: ToolInput): JudgeResult {
+  return {
+    safe: false,
+    reason,
+    toolFor: `${input.toolName} ${input.value}`,
   };
 }
 
@@ -72,6 +88,7 @@ Tool input (sanitized): ${JSON.stringify(input.value)}
 Reply with strict JSON only:
 {
   "safe": boolean,
+  "score": number, // 1-10, higher is safer
   "reason": "one sentence explaining why it is safe or unsafe",
   "toolFor": "one sentence describing what this tool call will do"
 }
@@ -100,7 +117,11 @@ function parseJudgeResponse(response: {
     ) {
       return undefined;
     }
-    return parsed as JudgeResult;
+    const score = (parsed as { score?: unknown }).score;
+    if (typeof score !== "number" || score < 1 || score > 10) {
+      return undefined;
+    }
+    return { ...(parsed as JudgeResult), score };
   } catch {
     return undefined;
   }
