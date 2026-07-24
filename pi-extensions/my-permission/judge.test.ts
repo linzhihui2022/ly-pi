@@ -178,6 +178,7 @@ describe("createJudge", () => {
     expect(msg).toContain("bash");
     expect(msg).toContain("rm file");
     expect(msg).toContain('"score": number');
+    expect(msg).toContain("判断标准");
   });
 
   it("returns failure result when judgeModel has no provider separator", async () => {

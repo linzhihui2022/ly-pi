@@ -28,7 +28,7 @@
 ### 2.2 模型法官
 
 1. 默认使用模型 `deepseek/deepseek-v4-flash`。
-2. 法官 prompt 要求输出严格 JSON：`{ safe: boolean, score: number, reason: string, toolFor: string }`，其中 `score` 为 1-10 的安全评分，越高越安全。
+2. 法官 prompt 使用中文，要求模型输出严格 JSON：`{ safe: boolean, score: number, reason: string, toolFor: string }`，其中 `reason` 与 `toolFor` 使用中文。
 3. `toolFor` 用一句话概括该工具调用会做什么。
 4. `safe` 仍作为最终放行/弹窗依据；`score` 用于在 UI 中展示。
 5. 法官超时或输出异常时 fallback 到 `ask`（父会话）或 `deny`（子会话）。
