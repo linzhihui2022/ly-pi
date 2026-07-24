@@ -210,11 +210,13 @@ function mergeVerdicts(...verdicts) {
 
 // judge.ts
 import { complete } from "@earendil-works/pi-ai";
-function createJudge(config) {
+function createJudge(config, deps) {
   return async function judge(input, cwd, model, resolveModel) {
     const resolved = resolveJudgeModel(config, resolveModel, model);
-    if (!resolved)
-      return;
+    if (!resolved) {
+      return failureResult("未找到可用的法官模型，请手动确认", input);
+    }
+    const auth = deps?.getAuth ? await deps.getAuth(resolved) : undefined;
     const prompt = buildJudgePrompt(input, cwd);
     const context = {
       systemPrompt: "You are a security gate. Reply with strict JSON only.",
@@ -222,18 +224,31 @@ function createJudge(config) {
         { role: "user", content: prompt, timestamp: Date.now() }
       ]
     };
+    const controller = new AbortController;
+    const timeout = setTimeout(() => controller.abort(), config.judgeTimeoutMs);
     try {
-      const controller = new AbortController;
-      const timeout = setTimeout(() => controller.abort(), config.judgeTimeoutMs);
       const response = await complete(resolved, context, {
-        signal: controller.signal
+        signal: controller.signal,
+        apiKey: auth?.apiKey,
+        headers: auth?.headers
       });
       clearTimeout(timeout);
-      return parseJudgeResponse(response);
+      return parseJudgeResponse(response) ?? failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
+      clearTimeout(timeout);
       console.warn("[my-permission] judge call failed:", error);
-      return;
+      if (controller.signal.aborted) {
+        return failureResult(`法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`, input);
+      }
+      return failureResult("法官模型调用失败，请手动确认", input);
     }
+  };
+}
+function failureResult(reason, input) {
+  return {
+    safe: false,
+    reason,
+    toolFor: `${input.toolName} ${input.value}`
   };
 }
 function resolveJudgeModel(config, resolveModel, fallback) {
@@ -246,23 +261,24 @@ function resolveJudgeModel(config, resolveModel, fallback) {
   return fallback;
 }
 function buildJudgePrompt(input, cwd) {
-  return `You are a security gate for a coding assistant. Evaluate whether the following tool call is safe to run automatically.
+  return `你是一名编码助手的安全门禁。评估以下工具调用是否可以自动执行。
 
-Current working directory: ${cwd}
-Tool name: ${input.toolName}
-Tool input (sanitized): ${JSON.stringify(input.value)}
+当前工作目录：${cwd}
+工具名：${input.toolName}
+工具输入（已脱敏）：${JSON.stringify(input.value)}
 
-Reply with strict JSON only:
+只回复严格 JSON：
 {
   "safe": boolean,
-  "reason": "one sentence explaining why it is safe or unsafe",
-  "toolFor": "one sentence describing what this tool call will do"
+  "score": number, // 1-10，分数越高越安全
+  "reason": "一句话说明为什么安全或不安全",
+  "toolFor": "一句话说明该工具调用会做什么"
 }
 
-Guidelines:
-- Safe: read-only operations, git status/diff/log, running tests, building, installing dependencies within the project.
-- Unsafe: rm -rf, sudo, chmod/chown 777, writing secrets (.env, .pem, ssh keys), accessing files outside the project without clear reason, sending credentials over network, arbitrary code execution.
-- Be concise. Do not include markdown formatting.`;
+判断标准：
+- 安全：只读操作、git status/diff/log、运行测试、构建项目、安装项目依赖等。
+- 不安全：rm -rf、sudo、chmod/chown 777、写入密钥（.env、.pem、ssh 密钥）、无明确理由访问项目外文件、通过网络发送凭证、任意代码执行等。
+- 保持简洁。不要包含 markdown 格式。`;
 }
 function parseJudgeResponse(response) {
   const text = response.content.find((c) => c.type === "text")?.text;
@@ -276,13 +292,41 @@ function parseJudgeResponse(response) {
     if (!parsed || typeof parsed !== "object" || typeof parsed.safe !== "boolean" || typeof parsed.reason !== "string" || typeof parsed.toolFor !== "string") {
       return;
     }
-    return parsed;
+    const score = parsed.score;
+    if (typeof score !== "number" || score < 1 || score > 10) {
+      return;
+    }
+    return { ...parsed, score };
   } catch {
     return;
   }
 }
 
 // ui.ts
+var ANSI = {
+  reset: "\x1B[0m",
+  bold: "\x1B[1m",
+  red: "\x1B[31m",
+  green: "\x1B[32m",
+  yellow: "\x1B[33m",
+  cyan: "\x1B[36m"
+};
+function styled(text, ...codes) {
+  return `${codes.join("")}${text}${ANSI.reset}`;
+}
+function label(text) {
+  return styled(text, ANSI.bold);
+}
+function value(text) {
+  return styled(text, ANSI.cyan);
+}
+function scoreStyle(score) {
+  if (score <= 3)
+    return ANSI.red;
+  if (score <= 6)
+    return ANSI.yellow;
+  return ANSI.green;
+}
 function isChildSession() {
   return !!process.env.PI_SUBAGENT_PARENT_SESSION;
 }
@@ -297,51 +341,142 @@ function createSessionCache() {
     }
   };
 }
-async function confirmToolCall(ctx, toolName, toolFor, reason) {
+async function confirmToolCall(ctx, options) {
   if (!ctx.hasUI)
     return false;
-  return await ctx.ui.confirm(`Tool call needs confirmation: ${toolName}`, `${toolFor}
+  const { title, body } = formatConfirmMessage(options);
+  return await ctx.ui.confirm(title, body);
+}
+function formatConfirmMessage(options) {
+  const lines = [
+    `${label("工具：")}${value(options.toolName)}`,
+    `${label("操作：")}${styled(options.toolFor, ANSI.yellow)}`,
+    `${label("输入：")}${value(options.value)}`,
+    `${label("工作目录：")}${value(options.cwd)}`
+  ];
+  if (options.paths.length > 0) {
+    lines.push(`${label("涉及路径：")}${value(options.paths.join(", "))}`);
+  }
+  const scoreText = options.score !== undefined ? styled(`（安全评分：${options.score}/10）`, scoreStyle(options.score), ANSI.bold) : "";
+  lines.push(`${label("理由：")}${styled(options.reason, ANSI.bold)}${scoreText}`);
+  return {
+    title: `${label("确认工具调用：")}${styled(options.toolName, ANSI.bold, ANSI.cyan)}`,
+    body: lines.join(`
+`)
+  };
+}
 
-Reason: ${reason}`);
+// stats.ts
+var JUDGE_STATS_CUSTOM_TYPE = "my-permission-judge";
+var MAX_VALUE_LENGTH = 60;
+function recordJudgeStats(pi, input, result) {
+  const entry = {
+    decision: result.safe ? "allowed" : "denied",
+    toolName: input.toolName,
+    value: input.value,
+    safe: result.safe,
+    reason: result.reason,
+    toolFor: result.toolFor
+  };
+  if (result.score !== undefined) {
+    entry.score = result.score;
+  }
+  pi.appendEntry(JUDGE_STATS_CUSTOM_TYPE, entry);
+}
+function formatJudgeLog(entries) {
+  const logs = [];
+  for (const entry of entries) {
+    if (entry.type === "custom" && entry.customType === JUDGE_STATS_CUSTOM_TYPE && entry.data && typeof entry.data === "object") {
+      const data = entry.data;
+      if (typeof data.toolName === "string" && typeof data.value === "string" && typeof data.safe === "boolean" && typeof data.reason === "string" && typeof data.toolFor === "string") {
+        logs.push({
+          decision: data.safe ? "allowed" : "denied",
+          toolName: data.toolName,
+          value: truncate(data.value, MAX_VALUE_LENGTH),
+          safe: data.safe,
+          score: typeof data.score === "number" ? data.score : undefined,
+          reason: data.reason,
+          toolFor: data.toolFor
+        });
+      }
+    }
+  }
+  if (logs.length === 0) {
+    return "当前会话暂无法官判断";
+  }
+  const lines = [`当前会话法官判断（共 ${logs.length} 条）：`];
+  for (let i = 0;i < logs.length; i++) {
+    const log = logs[i];
+    const label2 = log.safe ? "安全" : "不安全";
+    const scoreText = log.score !== undefined ? `（${log.score}/10）` : "";
+    lines.push(`${i + 1}. ${log.toolName}: ${log.value} → ${label2}${scoreText}`);
+    lines.push(`   用途：${log.toolFor}`);
+    lines.push(`   理由：${log.reason}`);
+  }
+  return lines.join(`
+`);
+}
+function truncate(value2, maxLength) {
+  if (value2.length <= maxLength)
+    return value2;
+  return `${value2.slice(0, maxLength)}...`;
 }
 
 // index.ts
 async function myPermission(pi) {
   const extensionDir = dirname(fileURLToPath(import.meta.url));
   const config = await loadConfig(join(extensionDir, "config.json"));
-  const judge = createJudge(config);
   const cache = createSessionCache();
   const child = isChildSession();
+  pi.registerCommand("judge-log", {
+    description: "查看当前会话的每一次法官判断",
+    handler: async (_args, ctx) => {
+      const text = formatJudgeLog(ctx.sessionManager.getEntries());
+      ctx.ui.notify(text, "info");
+    }
+  });
   pi.on("tool_call", async (event, ctx) => {
+    const judge = createJudge(config, {
+      getAuth: typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? (model) => ctx.modelRegistry.getApiKeyAndHeaders(model) : undefined
+    });
     const toolName = event.toolName;
-    const value = stringifyToolInput(event);
-    const rawPaths = collectPaths(toolName, value, event, ctx.cwd);
+    const value2 = stringifyToolInput(event);
+    const rawPaths = collectPaths(toolName, value2, event, ctx.cwd);
     const paths = resolveSymlinkedPaths(rawPaths, ctx.cwd);
-    const verdict = decide({ toolName, value, paths }, ctx.cwd, config);
+    const verdict = decide({ toolName, value: value2, paths }, ctx.cwd, config);
     if (verdict.action === "allow")
       return;
     if (verdict.action === "deny") {
       return { block: true, reason: verdict.reason ?? `Blocked by ${verdict.source}` };
     }
-    const cacheKey = `${toolName}:${value}`;
+    const cacheKey = `${toolName}:${value2}`;
     if (cache.isApproved(cacheKey))
       return;
     const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
-    const judgeResult = await judge({ toolName, value, paths }, ctx.cwd, ctx.model, resolveModel);
-    if (judgeResult?.safe === true)
+    const judgeResult = await judge({ toolName, value: value2, paths }, ctx.cwd, ctx.model, resolveModel);
+    recordJudgeStats(pi, { toolName, value: value2 }, judgeResult);
+    if (judgeResult.safe === true)
       return;
     if (child || !ctx.hasUI) {
       return {
         block: true,
-        reason: judgeResult?.reason ?? "Denied in non-interactive or subagent session"
+        reason: judgeResult.reason
       };
     }
-    const approved = await confirmToolCall(ctx, toolName, judgeResult?.toolFor ?? `${toolName} ${value}`, judgeResult?.reason ?? "No model judgment available");
+    const approved = await confirmToolCall(ctx, {
+      toolName,
+      toolFor: judgeResult.toolFor,
+      reason: judgeResult.reason,
+      score: judgeResult.score,
+      value: value2,
+      cwd: ctx.cwd,
+      paths
+    });
     if (approved) {
       cache.approve(cacheKey);
       return;
     }
-    return { block: true, reason: judgeResult?.reason ?? "User denied" };
+    return { block: true, reason: `User denied: ${judgeResult.reason}` };
   });
 }
 function stringifyToolInput(event) {
@@ -353,9 +488,9 @@ function stringifyToolInput(event) {
   }
   return JSON.stringify(event.input);
 }
-function collectPaths(toolName, value, event, cwd) {
+function collectPaths(toolName, value2, event, cwd) {
   if (toolName === "bash")
-    return extractPathTokens(value, cwd);
+    return extractPathTokens(value2, cwd);
   if (toolName === "read" || toolName === "write" || toolName === "edit" || toolName === "ls") {
     return typeof event.input.path === "string" ? [event.input.path] : [];
   }

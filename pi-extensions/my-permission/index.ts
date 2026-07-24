@@ -7,13 +7,21 @@ import { decide } from "./rules";
 import { createJudge } from "./judge";
 import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
 import { extractPathTokens } from "./utils";
-import { recordJudgeStats } from "./stats";
+import { formatJudgeLog, recordJudgeStats } from "./stats";
 
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const extensionDir = dirname(fileURLToPath(import.meta.url));
   const config = await loadConfig(join(extensionDir, "config.json"));
   const cache = createSessionCache();
   const child = isChildSession();
+
+  pi.registerCommand("judge-log", {
+    description: "查看当前会话的每一次法官判断",
+    handler: async (_args, ctx) => {
+      const text = formatJudgeLog(ctx.sessionManager.getEntries());
+      ctx.ui.notify(text, "info");
+    },
+  });
 
   pi.on("tool_call", async (event, ctx) => {
     const judge = createJudge(config, {
@@ -44,7 +52,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       ctx.model,
       resolveModel,
     );
-    recordJudgeStats(ctx, judgeResult.safe === true);
+    recordJudgeStats(pi, { toolName, value }, judgeResult);
     if (judgeResult.safe === true) return undefined;
 
     if (child || !ctx.hasUI) {

@@ -51,11 +51,17 @@ import { confirmToolCall, isChildSession } from "./ui";
 // Helper: create mock ExtensionAPI + tool_call invocation
 function createMockApi() {
   const handlers: Record<string, Function> = {};
+  const commands: Record<string, Function> = {};
   return {
     on: vi.fn((event: string, handler: Function) => {
       handlers[event] = handler;
     }),
+    registerCommand: vi.fn((name: string, options: { handler: Function }) => {
+      commands[name] = options.handler;
+    }),
     getHandler: (event: string) => handlers[event],
+    getCommand: (name: string) => commands[name],
+    appendEntry: vi.fn(),
   };
 }
 
@@ -66,7 +72,6 @@ function createMockCtx(overrides: Record<string, unknown> = {}) {
     model: { id: "deepseek-v4-flash", provider: "deepseek" } as Model<Api>,
     modelRegistry: { find: vi.fn() },
     ui: { confirm: vi.fn().mockResolvedValue(true), notify: vi.fn() },
-    sessionManager: { appendEntry: vi.fn(), getEntries: vi.fn() },
     ...overrides,
   };
 }
@@ -139,13 +144,19 @@ describe("my-permission extension entry", () => {
     await mod.default(api as any);
 
     const handler = api.getHandler("tool_call");
-    const ctx = createMockCtx();
-    const result = await handler(createBashEvent("cat README.md"), ctx);
+    const result = await handler(createBashEvent("cat README.md"), createMockCtx());
     expect(result).toBeUndefined();
     expect(mockJudge).toHaveBeenCalled();
-    expect(ctx.sessionManager.appendEntry).toHaveBeenCalledWith(
+    expect(api.appendEntry).toHaveBeenCalledWith(
       "my-permission-judge",
-      { decision: "allowed" },
+      {
+        decision: "allowed",
+        toolName: "bash",
+        value: "cat README.md",
+        safe: true,
+        reason: "safe operation",
+        toolFor: "read file",
+      },
     );
   });
 
@@ -172,9 +183,17 @@ describe("my-permission extension entry", () => {
       block: true,
       reason: "User denied: potentially destructive",
     });
-    expect(ctx.sessionManager.appendEntry).toHaveBeenCalledWith(
+    expect(api.appendEntry).toHaveBeenCalledWith(
       "my-permission-judge",
-      { decision: "denied" },
+      {
+        decision: "denied",
+        toolName: "bash",
+        value: "rm -rf /tmp",
+        safe: false,
+        score: 3,
+        reason: "potentially destructive",
+        toolFor: "delete files",
+      },
     );
   });
 
@@ -228,5 +247,68 @@ describe("my-permission extension entry", () => {
       block: true,
       reason: "未找到可用的法官模型，请手动确认",
     });
+  });
+});
+
+describe("/judge-log command", () => {
+  function createMockCtxWithEntries(entries: unknown[]) {
+    return createMockCtx({
+      sessionManager: { getEntries: () => entries },
+    });
+  }
+
+  it("notifies empty message when no judge entries", async () => {
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as any);
+
+    const cmd = api.getCommand("judge-log");
+    const ctx = createMockCtxWithEntries([]);
+    await cmd("", ctx);
+    expect(ctx.ui.notify).toHaveBeenCalledWith("当前会话暂无法官判断", "info");
+  });
+
+  it("formats and notifies judge entries", async () => {
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as any);
+
+    const entries = [
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: {
+          decision: "allowed",
+          toolName: "bash",
+          value: "git status",
+          safe: true,
+          score: 8,
+          reason: "只读操作",
+          toolFor: "查看 git 状态",
+        },
+      },
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: {
+          decision: "denied",
+          toolName: "bash",
+          value: "rm -rf /tmp",
+          safe: false,
+          score: 2,
+          reason: "危险命令",
+          toolFor: "删除临时目录",
+        },
+      },
+    ];
+    const ctx = createMockCtxWithEntries(entries);
+    const cmd = api.getCommand("judge-log");
+    await cmd("", ctx);
+
+    const notifyArg = ctx.ui.notify.mock.calls[0][0] as string;
+    expect(notifyArg).toContain("当前会话法官判断（共 2 条）");
+    expect(notifyArg).toContain("bash: git status → 安全（8/10）");
+    expect(notifyArg).toContain("bash: rm -rf /tmp → 不安全（2/10）");
+    expect(ctx.ui.notify).toHaveBeenCalledWith(expect.any(String), "info");
   });
 });

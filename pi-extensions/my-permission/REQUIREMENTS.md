@@ -47,11 +47,13 @@
 2. 子会话中所有 `ask` 都先走法官；法官认为 `safe` 才放行，否则 `deny`。
 3. 法官异常/超时时子会话直接 `deny`。
 
-### 2.5 统计（当前会话）
+### 2.5 统计与日志（当前会话）
 
-1. 法官每次作出 `safe: true` / `safe: false` 判断后，通过 `ctx.sessionManager.appendEntry` 写入自定义 session entry，仅统计当前会话。
-2. 自定义 entry 类型为 `my-permission-judge`，数据格式：`{ decision: "allowed" | "denied" }`。
-3. 统计供 `my-hud` 读取并在 aboveEditor 显示，两个扩展通过自定义 entry 类型约定解耦。
+1. 法官每次作出 `safe: true` / `safe: false` 判断后，通过 `pi.appendEntry` 写入自定义 session entry，仅记录当前会话。
+2. 自定义 entry 类型为 `my-permission-judge`，数据格式：`{ decision: "allowed" | "denied", toolName: string, value: string, safe: boolean, score?: number, reason: string, toolFor: string }`。
+3. `decision` 字段保持为 `"allowed" | "denied"`，用于兼容 `my-hud` 的允许/拒绝次数统计。
+4. 提供指令 `/judge-log`，读取当前会话中所有 `my-permission-judge` 自定义 entry，并以格式化文本展示每一次法官判断的：工具名、输入、安全判定、评分、理由、用途。无记录时提示用户。
+5. 两个扩展通过自定义 entry 类型约定解耦。
 
 ### 2.6 配置
 
@@ -97,3 +99,4 @@
 | 日期 | 变更 |
 |------|------|
 | 2026-07-22 | 创建 `my-permission` 需求文档，确认独立规则 + 模型法官 + 子代理策略 |
+| 2026-07-23 | 新增 `/judge-log` 指令，支持查看当前会话每次法官判断详情 |

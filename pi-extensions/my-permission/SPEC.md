@@ -220,11 +220,30 @@ tool_call event
 - 用户拒绝 → `block`，返回 `{ block: true, reason: "User denied: {reason}" }`。
 - 无 UI 时（`!ctx.hasUI`）：父会话中 fallback 到 `deny`（与子会话一致），block reason 使用法官给出的具体原因。
 
-## 7.5 法官统计（当前会话）
+## 7.5 法官统计与日志（当前会话）
 
-- 法官每次作出判断后，调用 `ctx.sessionManager.appendEntry("my-permission-judge", { decision: "allowed" | "denied" })` 记录结果。
+- 法官每次作出判断后，调用 `pi.appendEntry("my-permission-judge", { decision, toolName, value, safe, score, reason, toolFor })` 记录结果。
+  - `decision` 为 `"allowed"` 或 `"denied"`，由 `judgeResult.safe` 推导，保持与 `my-hud` 统计的兼容性。
+  - 其余字段直接取自本次 `tool_call` 的 `toolName`、`value` 与法官返回结果，用于 `/judge-log` 展示。
 - 仅统计当前会话，不持久化到磁盘。
-- `my-hud` 通过扫描 session entries 的 `customType === "my-permission-judge"` 来聚合允许/拒绝次数。
+- `my-hud` 通过扫描 session entries 的 `customType === "my-permission-judge"` 并读取 `data.decision` 来聚合允许/拒绝次数；新增字段不影响该行为。
+
+## 7.6 `/judge-log` 指令
+
+- 通过 `pi.registerCommand("judge-log", { ... })` 注册，描述为「查看当前会话的每一次法官判断」。
+- 命令处理函数从 `ctx.sessionManager.getEntries()` 中筛选 `type === "custom" && customType === "my-permission-judge"` 的 entry。
+- 按 entry 在会话中出现的顺序（时间序）输出，格式如下：
+
+```
+当前会话法官判断（共 {n} 条）：
+1. {toolName}: {value摘要} → {安全|不安全}（{score}/10）
+   用途：{toolFor}
+   理由：{reason}
+```
+
+- `value` 长度超过 60 字符时截断并追加 `...`。
+- 无记录时通过 `ctx.ui.notify("当前会话暂无法官判断", "info")` 提示用户。
+- 输出通过 `ctx.ui.notify` 以多行字符串展示，保持中文以与确认弹窗一致。
 
 ## 8. 错误处理
 
@@ -310,3 +329,4 @@ tool_call event
 | 日期 | 变更 |
 |------|------|
 | 2026-07-22 | 创建 `my-permission` 规格文档，确认模块结构、裁决流程、模型法官、子代理策略与测试策略 |
+| 2026-07-23 | 新增 `/judge-log` 指令，扩展法官判断记录字段以支持展示详情 |
