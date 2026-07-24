@@ -7,6 +7,7 @@ import { decide } from "./rules";
 import { createJudge } from "./judge";
 import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
 import { extractPathTokens } from "./utils";
+import { recordJudgeStats } from "./stats";
 
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const extensionDir = dirname(fileURLToPath(import.meta.url));
@@ -43,6 +44,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       ctx.model,
       resolveModel,
     );
+    recordJudgeStats(ctx, judgeResult.safe === true);
     if (judgeResult.safe === true) return undefined;
 
     if (child || !ctx.hasUI) {

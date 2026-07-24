@@ -94,6 +94,11 @@ export default function myHud(pi: ExtensionAPI): void {
     requestRender();
   });
 
+  pi.on("tool_call", () => {
+    // Refresh judge stats after my-permission records a decision.
+    bar?.requestRender();
+  });
+
   pi.on("agent_start", (_event, ctx) => updateMemoryWarning(ctx));
   pi.on("agent_end", (_event, ctx) => updateMemoryWarning(ctx));
 

@@ -42,6 +42,7 @@ my-hud 是一个**三层信息架构**的 pi 扩展，每层有且只有一个�
 | Cache Read | `` | 累计 cache-read tokens | `thinkingMedium` | 按 `formatTokens` 格式化 |
 | Cost | `` | 累计成本（CNY） | `toolDiffRemoved` | 保留两位小数 |
 | Cache Rate | `󰄬` | cache read / (cache read + input) | `accent` | 四舍五入为整数百分比 |
+| Permission | `` | `my-permission` 法官当前会话允许/拒绝次数 | `accent` / `error` 分段着色；`/` 为 `dim` | 无相关 entry 时隐藏 |
 
 **Context 颜色阈值**：
 
@@ -68,7 +69,8 @@ my-hud 是一个**三层信息架构**的 pi 扩展，每层有且只有一个�
 - `session_start` — 初始化
 - `model_select` — 模型切换
 - `turn_start` — 新回合开始（token 统计更新）
-- `turn_end` — 回合结束（token 统计和 Git/PR 缓存更新）
+- `turn_end` — 回合结束（token 统计、Git/PR 缓存与法官统计更新）
+- `tool_call` — 工具调用完成后刷新法官统计
 - `branch_change` — Git 分支变化（由 footerData 订阅）
 
 ---
@@ -154,7 +156,7 @@ format.ts   — 格式化与颜色决策的纯函数
             — 职责：token 格式化、context 颜色阈值、cache hit rate、模型名映射
 
 session.ts  — session 数据聚合与查询
-            — 职责：累计 token/cost、提取最后用户消息
+            — 职责：累计 token/cost、提取最后用户消息、聚合 `my-permission-judge` 自定义 entry 的允许/拒绝次数
             — 注意：cost 转换（USD→CNY）在此处完成
 
 memory.ts   — macOS 内存压力探测
@@ -198,7 +200,7 @@ index.ts → bar.ts → render.ts → format.ts → icons.ts
 ### 4.1 aboveEditor 刷新流
 
 ```
-事件触发 (session_start / model_select / turn_start / turn_end / branch_change)
+事件触发 (session_start / model_select / turn_start / turn_end / tool_call / branch_change)
   │
   ▼
 bar.requestRender() ──→ TUI 请求重绘
@@ -209,6 +211,7 @@ widget render callback
   ▼
 bar.renderWidget(theme, width)
   ├── ctx.sessionManager.getEntries() ──→ session.ts: aggregateSessionUsage()
+  ├── ctx.sessionManager.getEntries() ──→ session.ts: aggregateJudgeStats()
   ├── ctx.getContextUsage()
   ├── ctx.model?.id
   ├── basename(ctx.cwd)
@@ -222,6 +225,7 @@ render.ts: buildStatusLine(theme, width, data)
   ├── format.ts: shortModelName()
   ├── format.ts: contextColored()
   ├── format.ts: formatCacheRate()
+  ├── format.ts: formatPermissionStats()
   ├── render.ts: formatGitStatus()
   ├── pr.ts 提供的 pullRequest.url / number
   └── icons.ts: icon()
@@ -325,4 +329,4 @@ memory.ts: checkMemoryPressure()
 | 2026-06-02 | 整理现有代码，重新定义三层职责，生成本 spec |
 | 2026-07-08 | 新增 aboveEditor 分支后显示 GitHub PR 编号的规格与数据流说明 |
 | 2026-07-08 | 新增 `/open-pr` 指令规格 |
-| 2026-07-10 | 同步 Git 状态、cache hit rate、内存提示、`/mem` 和模型短名配置待实现项 |
+| 2026-07-24 | 新增 aboveEditor 显示 `my-permission` 法官当前会话允许/拒绝次数的规格与数据流说明 |

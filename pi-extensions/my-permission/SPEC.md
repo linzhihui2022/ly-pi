@@ -220,6 +220,12 @@ tool_call event
 - 用户拒绝 → `block`，返回 `{ block: true, reason: "User denied: {reason}" }`。
 - 无 UI 时（`!ctx.hasUI`）：父会话中 fallback 到 `deny`（与子会话一致），block reason 使用法官给出的具体原因。
 
+## 7.5 法官统计（当前会话）
+
+- 法官每次作出判断后，调用 `ctx.sessionManager.appendEntry("my-permission-judge", { decision: "allowed" | "denied" })` 记录结果。
+- 仅统计当前会话，不持久化到磁盘。
+- `my-hud` 通过扫描 session entries 的 `customType === "my-permission-judge"` 来聚合允许/拒绝次数。
+
 ## 8. 错误处理
 
 | 场景 | 行为 |

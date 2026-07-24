@@ -82,14 +82,27 @@ describe("buildStatusLine with PR", () => {
     expect(line).not.toContain("\u001b]8;;");
   });
 
-  it("hides PR field when branch is null even if pullRequest exists", () => {
+  it("hides permission stats when judgeStats is undefined", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, baseData);
+    expect(line).not.toContain("/");
+  });
+
+  it("hides permission stats when both counts are zero", () => {
     const theme = createMockTheme();
     const line = buildStatusLine(theme, 200, {
       ...baseData,
-      branch: null,
-      pullRequest: { number: 42, url: "https://github.com/owner/repo/pull/42" },
+      judgeStats: { allowed: 0, denied: 0 },
     });
-    expect(line).not.toContain("#42");
-    expect(line).not.toContain("main");
+    expect(line).not.toContain("/");
+  });
+
+  it("shows permission stats when counts are non-zero", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+      judgeStats: { allowed: 12, denied: 3 },
+    });
+    expect(line).toContain("12/3");
   });
 });

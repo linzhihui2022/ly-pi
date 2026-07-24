@@ -52,6 +52,18 @@ export function shortModelName(modelName: string): string {
 }
 
 /**
+ * Format judge permission stats as `allowed/denied`.
+ * Returns empty string when no stats.
+ */
+export function formatPermissionStats(
+  stats: { allowed: number; denied: number } | undefined,
+): string {
+  if (!stats) return "";
+  if (stats.allowed === 0 && stats.denied === 0) return "";
+  return `${stats.allowed}/${stats.denied}`;
+}
+
+/**
  * Format cache hit rate as a percentage.
  * cacheRead / (cacheRead + input), rounded to nearest integer.
  */

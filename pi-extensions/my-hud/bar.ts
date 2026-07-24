@@ -9,7 +9,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { basename } from "node:path";
-import { aggregateSessionUsage } from "./session";
+import { aggregateSessionUsage, aggregateJudgeStats } from "./session";
 import { contextColored } from "./format";
 import { buildStatusLine } from "./render";
 import { getGitStatus } from "./git";
@@ -142,6 +142,7 @@ export class Bar {
 
     const entries = this.ctx.sessionManager.getEntries();
     const usage = aggregateSessionUsage(entries);
+    const judgeStats = aggregateJudgeStats(entries);
 
     const cu = this.ctx.getContextUsage();
     const ctxColored = contextColored(
@@ -161,6 +162,7 @@ export class Bar {
       usage,
       gitStatus: this.gitStatus,
       pullRequest: this.pullRequest,
+      judgeStats,
     });
     return [line];
   }

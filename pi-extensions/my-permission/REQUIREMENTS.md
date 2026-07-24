@@ -47,7 +47,13 @@
 2. 子会话中所有 `ask` 都先走法官；法官认为 `safe` 才放行，否则 `deny`。
 3. 法官异常/超时时子会话直接 `deny`。
 
-### 2.5 配置
+### 2.5 统计（当前会话）
+
+1. 法官每次作出 `safe: true` / `safe: false` 判断后，通过 `ctx.sessionManager.appendEntry` 写入自定义 session entry，仅统计当前会话。
+2. 自定义 entry 类型为 `my-permission-judge`，数据格式：`{ decision: "allowed" | "denied" }`。
+3. 统计供 `my-hud` 读取并在 aboveEditor 显示，两个扩展通过自定义 entry 类型约定解耦。
+
+### 2.6 配置
 
 1. 配置文件 `config.json` 与扩展目录同级，随扩展一起部署到 `~/.pi/agent/extensions/my-permission/`。
 2. 配置项包括：

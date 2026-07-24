@@ -34,4 +34,5 @@ export interface StatusLineData {
   usage: TokenUsage;
   gitStatus?: GitStatus | null;
   pullRequest?: PullRequestInfo | null;
+  judgeStats?: { allowed: number; denied: number };
 }

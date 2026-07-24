@@ -66,6 +66,7 @@ function createMockCtx(overrides: Record<string, unknown> = {}) {
     model: { id: "deepseek-v4-flash", provider: "deepseek" } as Model<Api>,
     modelRegistry: { find: vi.fn() },
     ui: { confirm: vi.fn().mockResolvedValue(true), notify: vi.fn() },
+    sessionManager: { appendEntry: vi.fn(), getEntries: vi.fn() },
     ...overrides,
   };
 }
@@ -138,12 +139,14 @@ describe("my-permission extension entry", () => {
     await mod.default(api as any);
 
     const handler = api.getHandler("tool_call");
-    const result = await handler(
-      createBashEvent("cat README.md"),
-      createMockCtx(),
-    );
+    const ctx = createMockCtx();
+    const result = await handler(createBashEvent("cat README.md"), ctx);
     expect(result).toBeUndefined();
     expect(mockJudge).toHaveBeenCalled();
+    expect(ctx.sessionManager.appendEntry).toHaveBeenCalledWith(
+      "my-permission-judge",
+      { decision: "allowed" },
+    );
   });
 
   it("blocks when rules return ask, judge says unsafe, and user denies", async () => {
@@ -163,14 +166,16 @@ describe("my-permission extension entry", () => {
     await mod.default(api as any);
 
     const handler = api.getHandler("tool_call");
-    const result = await handler(
-      createBashEvent("rm -rf /tmp"),
-      createMockCtx(),
-    );
+    const ctx = createMockCtx();
+    const result = await handler(createBashEvent("rm -rf /tmp"), ctx);
     expect(result).toEqual({
       block: true,
       reason: "User denied: potentially destructive",
     });
+    expect(ctx.sessionManager.appendEntry).toHaveBeenCalledWith(
+      "my-permission-judge",
+      { decision: "denied" },
+    );
   });
 
   it("blocks in child session when judge says unsafe", async () => {

@@ -22,6 +22,11 @@
 7. 显示 cache hit rate。
 8. 终端宽度不足时优先保留模型、上下文使用率、input/output tokens，其余字段允许尾部截断。
 9. 上下文使用率按窗口大小使用不同颜色阈值。
+10. 显示 `my-permission` 法官当前会话的允许/拒绝次数：
+    - 扫描 session entries 中 `customType === "my-permission-judge"` 的自定义 entry。
+    - 格式：` 允许数/拒绝数`，放在 aboveEditor 行尾。
+    - 允许数使用主题色 `accent`，拒绝数使用 `error`，中间 `/` 使用 `dim`。
+    - 没有相关 entry 时隐藏该字段。
 
 ### footer：上下文锚点
 
@@ -95,3 +100,4 @@
 | 2026-06-02 | 确认 aboveEditor/footer/working 三层 HUD 需求与验收标准 |
 | 2026-07-08 | 新增 GitHub PR 编号显示与 `/open-pr` 命令需求 |
 | 2026-07-10 | 同步 Git 状态、cache hit rate、内存提示与 `/mem` 命令需求 |
+| 2026-07-24 | 新增 aboveEditor 显示 `my-permission` 法官当前会话允许/拒绝次数需求 |

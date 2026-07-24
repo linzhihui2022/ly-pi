@@ -9,7 +9,12 @@ import {
 } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { icon } from "./icons";
-import { formatTokens, shortModelName, formatCacheRate } from "./format";
+import {
+  formatTokens,
+  shortModelName,
+  formatCacheRate,
+  formatPermissionStats,
+} from "./format";
 import type { StatusLineData, GitStatus } from "./types";
 
 export function buildStatusLine(
@@ -25,6 +30,7 @@ export function buildStatusLine(
     usage,
     gitStatus,
     pullRequest,
+    judgeStats,
   } = data;
   const project =
     rawProject.length > 10 ? rawProject.slice(0, 8) + ".." : rawProject;
@@ -73,6 +79,15 @@ export function buildStatusLine(
       `${icon("cacheRate")}${formatCacheRate(usage.input, usage.cacheRead)}`,
     ),
   );
+
+  const permissionStats = formatPermissionStats(judgeStats);
+  if (permissionStats) {
+    parts.push(
+      theme.fg("accent", `${icon("shield")}${judgeStats!.allowed}`) +
+        theme.fg("dim", "/") +
+        theme.fg("error", `${judgeStats!.denied}`),
+    );
+  }
 
   return truncateToWidth(parts.join(" "), width);
 }
