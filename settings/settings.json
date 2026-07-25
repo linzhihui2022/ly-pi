@@ -1,4 +1,5 @@
 {
+  "extensions": ["extensions/my-script-guard", "extensions/my-permission"],
   "subagents": {
     "agentOverrides": {
       "worker": {
