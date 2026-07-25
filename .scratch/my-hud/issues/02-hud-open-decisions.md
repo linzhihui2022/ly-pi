@@ -4,9 +4,17 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** needs-triage
+**Status:** resolved
 
-- [ ] footer 点击复制：有明确做/不做结论
-- [ ] aboveEditor 字段可隐藏：有明确做/不做结论
-- [ ] working 消息回合内固定：有明确做/不做结论
-- [ ] 结论记录在本文件 ## Answer 下；决定做的项已另建实现票
+- [x] footer 点击复制：有明确做/不做结论
+- [x] aboveEditor 字段可隐藏：有明确做/不做结论
+- [x] working 消息回合内固定：有明确做/不做结论
+- [x] 结论记录在本文件 ## Answer 下；决定做的项已另建实现票
+
+## Answer
+
+2026-07 与用户短讨论后逐项拍板：
+
+1. **footer 点击复制消息内容 → 不做**。footer 是单行状态栏，TUI 鼠标点击支持不稳定；复制消息内容已有其他途径，收益低、实现复杂。
+2. **aboveEditor 字段可通过配置隐藏 → 做**。复用 01 票引入的 `my-hud.json`，成本低，符合仓库配置约定。已另建实现票 `03-hideable-fields.md`。
+3. **working 消息回合内固定 → 做**。减少视觉噪音，改动小。已另建实现票 `04-stable-working-message.md`。

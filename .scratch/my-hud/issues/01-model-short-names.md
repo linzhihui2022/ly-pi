@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 - [ ] `my-hud.json` 的 `modelShortNames` 映射生效，HUD 模型字段显示短名
 - [ ] 未命中映射的模型显示默认名称
