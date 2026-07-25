@@ -96,6 +96,16 @@
         "@typescript/native-preview": "^7.0.0-beta",
       },
     },
+    "pi-extensions/my-script-guard": {
+      "name": "my-script-guard",
+      "dependencies": {
+        "@earendil-works/pi-coding-agent": "^0.78.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "vitest": "^4",
+      },
+    },
     "pi-skills": {
       "name": "pi-skills",
     },
@@ -565,6 +575,8 @@
     "my-hud": ["my-hud@workspace:pi-extensions/my-hud"],
 
     "my-permission": ["my-permission@workspace:pi-extensions/my-permission"],
+
+    "my-script-guard": ["my-script-guard@workspace:pi-extensions/my-script-guard"],
 
     "nanoid": ["nanoid@3.3.12", "https://registry.npmmirror.com/nanoid/-/nanoid-3.3.12.tgz", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ=="],
 

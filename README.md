@@ -12,12 +12,13 @@
 
 ```
 configure/
-├── pi-extensions/          # Pi 扩展（Bun workspaces，5 个）
+├── pi-extensions/          # Pi 扩展（Bun workspaces，6 个）
 │   ├── my-back/            # /back 命令
 │   ├── my-bt/              # BT-7274 语音包
 │   ├── my-html/            # /html 渲染
 │   ├── my-hud/             # 自定义 HUD 状态栏
-│   └── my-permission/      # 工具调用权限拦截器 + 模型法官
+│   ├── my-permission/      # 工具调用权限拦截器 + 模型法官
+│   └── my-script-guard/    # 内联脚本硬拦截 + 急迫升级
 ├── pi-config/              # 纯配置扩展（权限规则、工具显示、子代理配置）
 ├── pi-skills/skills/       # 自定义技能（6 个）
 ├── pi-themes/              # 自定义主题（Catppuccin Mocha）
@@ -58,6 +59,7 @@ configure/
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
 | **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
 | **my-permission** | 工具调用权限拦截器：确定性规则 + `deepseek-v4-flash` 模型法官 + 子代理差异化处理 |
+| **my-script-guard** | 内联脚本硬拦截：拦截 bash 中的 `-c`/`-e`/heredoc 长脚本，被拦 3 次后升级为用户确认 |
 
 ---
 
