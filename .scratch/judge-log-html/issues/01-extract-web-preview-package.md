@@ -4,7 +4,11 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** resolved
+
+## Answer
+
+已完成。`web-preview` 包落地：通用 `buildHtmlDocument`（标题/body/可选 css+js）与预览 server（含 `PREVIEW_DIR`、端口自动递增）均 100% 覆盖率；`my-html` 改为依赖 `web-preview`（`workspace:*`，bundle 时内联），46 个既有测试全绿，`/html` 行为不变。偏离验收标准一处：`web-preview` 未配 build script —— 它作为库被消费方从源码 bundle，turbo `build` 对其为 no-op，`test` 正常纳入流水线。`turbo build test` 16/16 通过，`check-docs` 全过，README 扩展表已补录。已 `bun run deploy`。
 
 - [ ] `web-preview` 包纳入 bun workspaces 与 turbo 流水线（build/test 可运行），含自身的 `buildHtmlDocument` 纯函数测试与 server 真实端口测试
 - [ ] server 行为与迁入前一致：单例复用、端口被占自动递增、非 GET 返回 405、非 `.html` 路径 404

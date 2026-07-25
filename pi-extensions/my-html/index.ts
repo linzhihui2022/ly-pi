@@ -7,11 +7,15 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import open from "open";
 import {
+  ensurePreviewServer,
+  PREVIEW_DIR,
+  stopPreviewServer,
+} from "web-preview";
+import {
   buildHtmlDocument,
   extractAssistantText,
   renderMarkdownToHtml,
 } from "./render";
-import { ensurePreviewServer, PREVIEW_DIR, stopPreviewServer } from "./server";
 
 interface AssistantContentBlock {
   type: string;

@@ -12,14 +12,15 @@
 
 ```
 configure/
-├── pi-extensions/          # Pi 扩展（Bun workspaces，7 个）
+├── pi-extensions/          # Pi 扩展（Bun workspaces，8 个）
 │   ├── my-back/            # /back 命令
 │   ├── my-bt/              # BT-7274 语音包
 │   ├── my-cd-guard/        # 冗余 cd 前缀自动纠正
 │   ├── my-html/            # /html 渲染
 │   ├── my-hud/             # 自定义 HUD 状态栏
 │   ├── my-permission/      # 工具调用权限拦截器 + 模型法官
-│   └── my-script-guard/    # 内联脚本硬拦截 + 急迫升级
+│   ├── my-script-guard/    # 内联脚本硬拦截 + 急迫升级
+│   └── web-preview/        # 共享包：HTML 预览 server + 文档骨架
 ├── pi-config/              # 纯配置扩展（权限规则、工具显示、子代理配置）
 ├── pi-skills/skills/       # 自定义技能（6 个）
 ├── pi-themes/              # 自定义主题（Catppuccin Mocha）
@@ -62,6 +63,7 @@ configure/
 | **my-permission** | 工具调用权限拦截器：确定性规则 + `deepseek-v4-flash` 模型法官 + 子代理差异化处理 |
 | **my-cd-guard** | 冗余 cd 前缀自动纠正：原地剥掉指向会话工作目录的 `cd <cwd> &&` 前缀并通知用户 |
 | **my-script-guard** | 内联脚本 + 写文件旁路硬拦截：拦截 bash 中的 `-c`/`-e`/heredoc 长脚本及 `cat <<EOF > file` 等模拟 write/edit 的写法，被拦 3 次后升级为用户确认 |
+| **web-preview** | 共享包（非独立扩展）：静态 HTML 预览 server 与通用文档骨架，供 my-html 等扩展复用（见 `docs/adr/0004`） |
 
 ---
 

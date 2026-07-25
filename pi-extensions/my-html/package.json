@@ -13,7 +13,8 @@
     "marked": "^15.0.0",
     "marked-highlight": "^2.2.0",
     "open": "^10.0.0",
-    "github-markdown-css": "^5.8.1"
+    "github-markdown-css": "^5.8.1",
+    "web-preview": "workspace:*"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "^0.78.0",

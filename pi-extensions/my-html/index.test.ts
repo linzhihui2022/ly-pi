@@ -6,8 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import myHtml from "./index";
 
 vi.mock("open", () => ({ default: vi.fn(() => Promise.resolve()) }));
-vi.mock("./server", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./server")>();
+vi.mock("web-preview", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("web-preview")>();
   return {
     ...actual,
     ensurePreviewServer: vi.fn(() =>
@@ -30,7 +30,7 @@ vi.mock("node:fs", async (importOriginal) => {
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import open from "open";
-import { ensurePreviewServer } from "./server";
+import { ensurePreviewServer } from "web-preview";
 
 describe("myHtml extension", () => {
   let registeredCommands: Map<string, any>;
