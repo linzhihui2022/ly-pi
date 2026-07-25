@@ -46,6 +46,16 @@
         "vitest": "^4",
       },
     },
+    "pi-extensions/my-cd-guard": {
+      "name": "my-cd-guard",
+      "dependencies": {
+        "@earendil-works/pi-coding-agent": "^0.78.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "vitest": "^4",
+      },
+    },
     "pi-extensions/my-html": {
       "name": "my-html",
       "dependencies": {
@@ -569,6 +579,8 @@
     "my-back": ["my-back@workspace:pi-extensions/my-back"],
 
     "my-bt": ["my-bt@workspace:pi-extensions/my-bt"],
+
+    "my-cd-guard": ["my-cd-guard@workspace:pi-extensions/my-cd-guard"],
 
     "my-html": ["my-html@workspace:pi-extensions/my-html"],
 
