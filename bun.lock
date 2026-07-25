@@ -98,6 +98,8 @@
         "@earendil-works/pi-ai": "^0.78.0",
         "@earendil-works/pi-coding-agent": "^0.78.0",
         "@types/node": "^25.9.1",
+        "open": "^10.0.0",
+        "web-preview": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "latest",

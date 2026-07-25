@@ -4,7 +4,11 @@
 
 **Blocked by:** 01 — 抽取 web-preview 共享包，my-html 迁移依赖
 
-**Status:** ready-for-agent
+**Status:** resolved
+
+## Answer
+
+已完成。`collectJudgeLogs`（沿用原校验规则、不截断、按时间正序收集）+ `renderJudgeLogPage` 纯函数（表格、最新在前、序号按时间正序、命令完整转义显示、全部/安全/不安全过滤按钮）+ handler 重写（空态仅 notify；有数据写固定 `judge-log.html`、起 server、`open` 打开、notify URL、失败 error notify）+ `session_shutdown` 停 server。`formatJudgeLog` 及其测试已删除，`recordJudgeStats` 与数据格式未动。`open` 依 my-html 先例由 my-permission 直接依赖（规格允许的二选一，未放入共享包）。my-permission 130 测试全绿，全文件覆盖率 100%；`turbo build test` 16/16、`check-docs` 全过；已 `bun run deploy` 并验证产物无 `formatJudgeLog` 残留。待办：交互会话中 `/reload` 后人工验证 `/judge-log`（需真实会话，无法在仓库内完成）。
 
 - [ ] Judge Log 收集沿用现有 entry 校验规则（忽略非 judge entry 与字段缺失的 entry），结果按时间倒序
 - [ ] 渲染纯函数产出完整页面：表格行内容正确、命令完整显示且 HTML 转义、过滤按钮与空列表文案存在；页面通过共享包的通用骨架生成

@@ -4,7 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import {
-  formatJudgeLog,
+  collectJudgeLogs,
   JUDGE_STATS_CUSTOM_TYPE,
   type JudgeLogEntry,
   recordJudgeStats,
@@ -72,10 +72,9 @@ describe("recordJudgeStats", () => {
   });
 });
 
-describe("formatJudgeLog", () => {
-  it("returns empty message when no judge entries", () => {
-    const text = formatJudgeLog([]);
-    expect(text).toBe("当前会话暂无法官判断");
+describe("collectJudgeLogs", () => {
+  it("returns empty array when no judge entries", () => {
+    expect(collectJudgeLogs([])).toEqual([]);
   });
 
   it("ignores non-judge entries", () => {
@@ -90,7 +89,7 @@ describe("formatJudgeLog", () => {
         message: { role: "user", content: "hi" },
       } as unknown as SessionEntry,
     ];
-    expect(formatJudgeLog(entries)).toBe("当前会话暂无法官判断");
+    expect(collectJudgeLogs(entries)).toEqual([]);
   });
 
   it("ignores judge entries with invalid data", () => {
@@ -101,52 +100,24 @@ describe("formatJudgeLog", () => {
         data: { decision: "allowed" },
       } as unknown as SessionEntry,
     ];
-    expect(formatJudgeLog(entries)).toBe("当前会话暂无法官判断");
+    expect(collectJudgeLogs(entries)).toEqual([]);
   });
 
-  it("formats a single allowed entry", () => {
-    const text = formatJudgeLog([createJudgeLogEntry()]);
-    expect(text).toBe(
-      "当前会话法官判断（共 1 条）：\n1. bash: git status → 安全（8/10）\n   用途：查看 git 状态\n   理由：只读操作",
-    );
-  });
-
-  it("formats a denied entry without score", () => {
-    const text = formatJudgeLog([
-      createJudgeLogEntry({
-        decision: "denied",
-        safe: false,
-        score: undefined,
-        reason: "危险命令",
-        toolFor: "删除根目录",
-      }),
-    ]);
-    expect(text).toBe(
-      "当前会话法官判断（共 1 条）：\n1. bash: git status → 不安全\n   用途：删除根目录\n   理由：危险命令",
-    );
-  });
-
-  it("truncates long values", () => {
+  it("collects entries in chronological order without truncating values", () => {
     const longValue = "a".repeat(80);
-    const text = formatJudgeLog([createJudgeLogEntry({ value: longValue })]);
-    expect(text).toContain(`bash: ${"a".repeat(60)}... → 安全（8/10）`);
+    const logs = collectJudgeLogs([
+      createJudgeLogEntry({ value: longValue }),
+      createJudgeLogEntry({ toolName: "write", value: "b.txt", safe: false }),
+    ]);
+    expect(logs).toHaveLength(2);
+    expect(logs[0].value).toBe(longValue);
+    expect(logs[0].toolName).toBe("bash");
+    expect(logs[1].toolName).toBe("write");
+    expect(logs[1].safe).toBe(false);
   });
 
-  it("formats multiple entries in order", () => {
-    const text = formatJudgeLog([
-      createJudgeLogEntry({ toolName: "read", value: "a.txt" }),
-      createJudgeLogEntry({
-        toolName: "write",
-        value: "b.txt",
-        safe: false,
-        score: 2,
-        reason: "写入文件",
-        toolFor: "写入 b.txt",
-      }),
-    ]);
-    const lines = text.split("\n");
-    expect(lines[0]).toBe("当前会话法官判断（共 2 条）：");
-    expect(lines[1]).toContain("read: a.txt → 安全");
-    expect(lines[4]).toContain("write: b.txt → 不安全（2/10）");
+  it("omits score when not a number", () => {
+    const logs = collectJudgeLogs([createJudgeLogEntry({ score: undefined })]);
+    expect(logs[0].score).toBeUndefined();
   });
 });

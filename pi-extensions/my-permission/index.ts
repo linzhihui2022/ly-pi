@@ -1,11 +1,21 @@
-import { realpathSync } from "node:fs";
+import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+} from "@earendil-works/pi-coding-agent";
+import open from "open";
+import {
+  ensurePreviewServer,
+  PREVIEW_DIR,
+  stopPreviewServer,
+} from "web-preview";
 import { loadConfig } from "./config";
 import { createJudge } from "./judge";
+import { renderJudgeLogPage } from "./log-page";
 import { decide } from "./rules";
-import { formatJudgeLog, recordJudgeStats } from "./stats";
+import { collectJudgeLogs, recordJudgeStats } from "./stats";
 import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
 import { extractPathTokens } from "./utils";
 
@@ -17,10 +27,45 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
 
   pi.registerCommand("judge-log", {
     description: "查看当前会话的每一次法官判断",
-    handler: async (_args, ctx) => {
-      const text = formatJudgeLog(ctx.sessionManager.getEntries());
-      ctx.ui.notify(text, "info");
+    handler: async (_args, ctx: ExtensionCommandContext) => {
+      const logs = collectJudgeLogs(ctx.sessionManager.getEntries());
+      if (logs.length === 0) {
+        ctx.ui.notify("当前会话暂无法官判断", "info");
+        return;
+      }
+
+      try {
+        const sessionId = ctx.sessionManager.getSessionId();
+        const sessionDir = join(PREVIEW_DIR, sessionId);
+        mkdirSync(sessionDir, { recursive: true });
+        writeFileSync(
+          join(sessionDir, "judge-log.html"),
+          renderJudgeLogPage(logs),
+          "utf-8",
+        );
+
+        const server = await ensurePreviewServer({
+          host: "127.0.0.1",
+          urlHost: "localhost",
+          port: 3456,
+        });
+
+        const fileUrl = `${server.url}/${sessionId}/judge-log.html`;
+        open(fileUrl).catch(() => {
+          // Browser open failures are non-fatal
+        });
+        ctx.ui.notify(`Preview: ${fileUrl}`, "info");
+      } catch (err) {
+        ctx.ui.notify(
+          `Failed to start preview server: ${(err as Error).message}`,
+          "error",
+        );
+      }
     },
+  });
+
+  pi.on("session_shutdown", async () => {
+    await stopPreviewServer();
   });
 
   pi.on("tool_call", async (event, ctx) => {

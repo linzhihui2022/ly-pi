@@ -46,6 +46,35 @@ vi.mock("./ui", () => ({
   isChildSession: vi.fn().mockReturnValue(false),
 }));
 
+vi.mock("open", () => ({ default: vi.fn(() => Promise.resolve()) }));
+
+vi.mock("web-preview", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("web-preview")>();
+  return {
+    ...actual,
+    ensurePreviewServer: vi.fn(() =>
+      Promise.resolve({
+        port: 3456,
+        url: "http://localhost:3456",
+        server: {} as any,
+      }),
+    ),
+    stopPreviewServer: vi.fn(() => Promise.resolve()),
+  };
+});
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    mkdirSync: vi.fn(),
+    writeFileSync: vi.fn(),
+  };
+});
+
+import { mkdirSync, writeFileSync } from "node:fs";
+import open from "open";
+import { ensurePreviewServer, stopPreviewServer } from "web-preview";
 import { createJudge } from "./judge";
 import { decide } from "./rules";
 import { confirmToolCall, isChildSession } from "./ui";
@@ -261,11 +290,43 @@ describe("my-permission extension entry", () => {
 describe("/judge-log command", () => {
   function createMockCtxWithEntries(entries: unknown[]) {
     return createMockCtx({
-      sessionManager: { getEntries: () => entries },
+      sessionManager: {
+        getEntries: () => entries,
+        getSessionId: () => "session-xyz",
+      },
     });
   }
 
-  it("notifies empty message when no judge entries", async () => {
+  const judgeEntries = [
+    {
+      type: "custom",
+      customType: "my-permission-judge",
+      data: {
+        decision: "allowed",
+        toolName: "bash",
+        value: "git status",
+        safe: true,
+        score: 8,
+        reason: "只读操作",
+        toolFor: "查看 git 状态",
+      },
+    },
+    {
+      type: "custom",
+      customType: "my-permission-judge",
+      data: {
+        decision: "denied",
+        toolName: "bash",
+        value: "rm -rf /tmp",
+        safe: false,
+        score: 2,
+        reason: "危险命令",
+        toolFor: "删除临时目录",
+      },
+    },
+  ];
+
+  it("notifies empty message and writes no file when no judge entries", async () => {
     const api = createMockApi();
     const mod = await import("./index");
     await mod.default(api as any);
@@ -274,49 +335,69 @@ describe("/judge-log command", () => {
     const ctx = createMockCtxWithEntries([]);
     await cmd("", ctx);
     expect(ctx.ui.notify).toHaveBeenCalledWith("当前会话暂无法官判断", "info");
+    expect(writeFileSync).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
   });
 
-  it("formats and notifies judge entries", async () => {
+  it("renders judge log page, writes fixed file and opens preview", async () => {
     const api = createMockApi();
     const mod = await import("./index");
     await mod.default(api as any);
 
-    const entries = [
-      {
-        type: "custom",
-        customType: "my-permission-judge",
-        data: {
-          decision: "allowed",
-          toolName: "bash",
-          value: "git status",
-          safe: true,
-          score: 8,
-          reason: "只读操作",
-          toolFor: "查看 git 状态",
-        },
-      },
-      {
-        type: "custom",
-        customType: "my-permission-judge",
-        data: {
-          decision: "denied",
-          toolName: "bash",
-          value: "rm -rf /tmp",
-          safe: false,
-          score: 2,
-          reason: "危险命令",
-          toolFor: "删除临时目录",
-        },
-      },
-    ];
-    const ctx = createMockCtxWithEntries(entries);
+    const ctx = createMockCtxWithEntries(judgeEntries);
     const cmd = api.getCommand("judge-log");
     await cmd("", ctx);
 
-    const notifyArg = ctx.ui.notify.mock.calls[0][0] as string;
-    expect(notifyArg).toContain("当前会话法官判断（共 2 条）");
-    expect(notifyArg).toContain("bash: git status → 安全（8/10）");
-    expect(notifyArg).toContain("bash: rm -rf /tmp → 不安全（2/10）");
-    expect(ctx.ui.notify).toHaveBeenCalledWith(expect.any(String), "info");
+    expect(mkdirSync).toHaveBeenCalledWith(
+      expect.stringContaining("session-xyz"),
+      { recursive: true },
+    );
+    expect(writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("judge-log.html"),
+      expect.stringContaining("法官判断日志"),
+      "utf-8",
+    );
+    const writtenHtml = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    expect(writtenHtml).toContain("git status");
+    expect(writtenHtml).toContain("rm -rf /tmp");
+    expect(ensurePreviewServer).toHaveBeenCalledWith({
+      host: "127.0.0.1",
+      urlHost: "localhost",
+      port: 3456,
+    });
+    expect(open).toHaveBeenCalledWith(
+      "http://localhost:3456/session-xyz/judge-log.html",
+    );
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "Preview: http://localhost:3456/session-xyz/judge-log.html",
+      "info",
+    );
+  });
+
+  it("notifies error when preview server fails to start", async () => {
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as any);
+
+    vi.mocked(ensurePreviewServer).mockRejectedValueOnce(
+      new Error("port in use"),
+    );
+    const ctx = createMockCtxWithEntries(judgeEntries);
+    const cmd = api.getCommand("judge-log");
+    await cmd("", ctx);
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "Failed to start preview server: port in use",
+      "error",
+    );
+  });
+
+  it("stops the preview server on session_shutdown", async () => {
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as any);
+
+    await api.getHandler("session_shutdown")();
+    expect(stopPreviewServer).toHaveBeenCalled();
   });
 });

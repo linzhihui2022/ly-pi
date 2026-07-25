@@ -5,7 +5,6 @@ import type {
 import type { JudgeResult } from "./types";
 
 export const JUDGE_STATS_CUSTOM_TYPE = "my-permission-judge";
-const MAX_VALUE_LENGTH = 60;
 
 export interface JudgeLogEntry {
   decision: "allowed" | "denied";
@@ -41,7 +40,7 @@ export function recordJudgeStats(
   pi.appendEntry(JUDGE_STATS_CUSTOM_TYPE, entry);
 }
 
-export function formatJudgeLog(entries: SessionEntry[]): string {
+export function collectJudgeLogs(entries: SessionEntry[]): JudgeLogEntry[] {
   const logs: JudgeLogEntry[] = [];
   for (const entry of entries) {
     if (
@@ -61,7 +60,7 @@ export function formatJudgeLog(entries: SessionEntry[]): string {
         logs.push({
           decision: data.safe ? "allowed" : "denied",
           toolName: data.toolName,
-          value: truncate(data.value, MAX_VALUE_LENGTH),
+          value: data.value,
           safe: data.safe,
           score: typeof data.score === "number" ? data.score : undefined,
           reason: data.reason,
@@ -70,27 +69,5 @@ export function formatJudgeLog(entries: SessionEntry[]): string {
       }
     }
   }
-
-  if (logs.length === 0) {
-    return "当前会话暂无法官判断";
-  }
-
-  const lines: string[] = [`当前会话法官判断（共 ${logs.length} 条）：`];
-  for (let i = 0; i < logs.length; i++) {
-    const log = logs[i];
-    const label = log.safe ? "安全" : "不安全";
-    const scoreText = log.score !== undefined ? `（${log.score}/10）` : "";
-    lines.push(
-      `${i + 1}. ${log.toolName}: ${log.value} → ${label}${scoreText}`,
-    );
-    lines.push(`   用途：${log.toolFor}`);
-    lines.push(`   理由：${log.reason}`);
-  }
-
-  return lines.join("\n");
-}
-
-function truncate(value: string, maxLength: number): string {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength)}...`;
+  return logs;
 }
