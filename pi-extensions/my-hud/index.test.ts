@@ -117,6 +117,7 @@ const mockCtx = {
       return factory(mockTui, mockTheme, mockFooterData);
     }),
     setWidget: vi.fn(),
+    setWorkingMessage: vi.fn(),
     getTheme: vi.fn(() => mockTheme),
   },
 };
@@ -1500,32 +1501,73 @@ describe("my-hud extension", () => {
     expect(lines[0]).toContain("boom");
   });
 
-  it("turn_start handler sets working message with theme and triggers render", async () => {
+  it("agent_start handler sets working message with theme", async () => {
+    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
+    vi.mocked(findVitestProcesses).mockReturnValue([]);
+
     const mod = await loadModule();
     mod.default(mockPi as any);
 
-    const turnStartHandler = registeredEvents.get("turn_start")!;
+    const agentStartHandler = registeredEvents.get("agent_start")!;
     const setWorkingMessage = vi.fn();
     const theme = createMockTheme();
-    const ctx = { ui: { setWorkingMessage, getTheme: vi.fn(() => theme) } };
+    const ctx = {
+      ...mockCtx,
+      ui: { ...mockCtx.ui, setWorkingMessage, getTheme: vi.fn(() => theme) },
+    };
 
-    turnStartHandler({}, ctx);
+    agentStartHandler({}, ctx);
 
     expect(ctx.ui.getTheme).toHaveBeenCalledWith("catppuccin-mocha");
     expect(setWorkingMessage).toHaveBeenCalledWith(expect.any(String));
   });
 
-  it("turn_start handler falls back to plain message when theme is undefined", async () => {
+  it("agent_start handler falls back to plain message when theme is undefined", async () => {
+    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
+    vi.mocked(findVitestProcesses).mockReturnValue([]);
+
     const mod = await loadModule();
     mod.default(mockPi as any);
 
-    const turnStartHandler = registeredEvents.get("turn_start")!;
+    const agentStartHandler = registeredEvents.get("agent_start")!;
     const setWorkingMessage = vi.fn();
-    const ctx = { ui: { setWorkingMessage, getTheme: vi.fn(() => undefined) } };
+    const ctx = {
+      ...mockCtx,
+      ui: {
+        ...mockCtx.ui,
+        setWorkingMessage,
+        getTheme: vi.fn(() => undefined),
+      },
+    };
 
-    turnStartHandler({}, ctx);
+    agentStartHandler({}, ctx);
 
     expect(setWorkingMessage).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it("keeps working message stable across turn_start events within an agent run", async () => {
+    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
+    vi.mocked(findVitestProcesses).mockReturnValue([]);
+
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const agentStartHandler = registeredEvents.get("agent_start")!;
+    const turnStartHandler = registeredEvents.get("turn_start")!;
+    const setWorkingMessage = vi.fn();
+    const ctx = {
+      ...mockCtx,
+      ui: { ...mockCtx.ui, setWorkingMessage },
+    };
+
+    agentStartHandler({}, ctx);
+    const callsAfterStart = setWorkingMessage.mock.calls.length;
+
+    turnStartHandler();
+    turnStartHandler();
+
+    expect(callsAfterStart).toBeGreaterThan(0);
+    expect(setWorkingMessage.mock.calls.length).toBe(callsAfterStart);
   });
 
   it("turn_start handler triggers requestRender when currentTui is set", async () => {
@@ -1537,27 +1579,28 @@ describe("my-hud extension", () => {
 
     const turnStartHandler = registeredEvents.get("turn_start")!;
     mockTui.requestRender.mockClear();
-    const theme = createMockTheme();
-    turnStartHandler(
-      {},
-      { ui: { setWorkingMessage: vi.fn(), getTheme: vi.fn(() => theme) } },
-    );
+    turnStartHandler();
 
     expect(mockTui.requestRender).toHaveBeenCalled();
   });
 
-  it("turn_start handler no-ops when setWorkingMessage throws", async () => {
+  it("agent_start handler propagates when setWorkingMessage throws", async () => {
+    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
+    vi.mocked(findVitestProcesses).mockReturnValue([]);
+
     const mod = await loadModule();
     mod.default(mockPi as any);
 
-    const turnStartHandler = registeredEvents.get("turn_start")!;
+    const agentStartHandler = registeredEvents.get("agent_start")!;
     const setWorkingMessage = vi.fn(() => {
       throw new Error("ui fail");
     });
-    const theme = createMockTheme();
-    const ctx = { ui: { setWorkingMessage, getTheme: vi.fn(() => theme) } };
+    const ctx = {
+      ...mockCtx,
+      ui: { ...mockCtx.ui, setWorkingMessage },
+    };
 
-    expect(() => turnStartHandler({}, ctx)).toThrow("ui fail");
+    expect(() => agentStartHandler({}, ctx)).toThrow("ui fail");
   });
 
   it("turn_end handler triggers requestRender when currentTui is set", async () => {

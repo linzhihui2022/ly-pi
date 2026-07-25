@@ -94,11 +94,7 @@ export default function myHud(pi: ExtensionAPI): void {
     }
   }
 
-  pi.on("turn_start", (_event, ctx) => {
-    const theme = ctx.ui.getTheme("catppuccin-mocha");
-    const message =
-      theme?.fg("accent", pickRandomMessage()) ?? pickRandomMessage();
-    ctx.ui.setWorkingMessage(message);
+  pi.on("turn_start", () => {
     bar?.invalidateGitStatus();
     bar?.invalidatePullRequest();
     requestRender();
@@ -116,7 +112,15 @@ export default function myHud(pi: ExtensionAPI): void {
     bar?.requestRender();
   });
 
-  pi.on("agent_start", (_event, ctx) => updateMemoryWarning(ctx));
+  pi.on("agent_start", (_event, ctx) => {
+    updateMemoryWarning(ctx);
+    // Pick the working message once per agent run: pi fires turn_start on
+    // every tool-call iteration, so picking there would reshuffle mid-turn.
+    const theme = ctx.ui.getTheme("catppuccin-mocha");
+    const message =
+      theme?.fg("accent", pickRandomMessage()) ?? pickRandomMessage();
+    ctx.ui.setWorkingMessage(message);
+  });
   pi.on("agent_end", (_event, ctx) => updateMemoryWarning(ctx));
 
   // ── /open-pr command ──
