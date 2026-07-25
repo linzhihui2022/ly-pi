@@ -45,10 +45,18 @@ const SHORT_NAMES: Record<string, string> = {
   "kimi-for-coding": "k-coding",
   "deepseek-v4-flash": "ds-fls",
   "deepseek-v4-pro": "ds-pro",
-  "kimi-for-coding-highspeed":"k-coding-h"
+  "kimi-for-coding-highspeed": "k-coding-h",
 };
+
+let userShortNames: Record<string, string> = {};
+
+/** Install user-configured short names (from my-hud.json); they override builtins. */
+export function setModelShortNames(map: Record<string, string>): void {
+  userShortNames = { ...map };
+}
+
 export function shortModelName(modelName: string): string {
-  return SHORT_NAMES[modelName] ?? modelName;
+  return userShortNames[modelName] ?? SHORT_NAMES[modelName] ?? modelName;
 }
 
 /**

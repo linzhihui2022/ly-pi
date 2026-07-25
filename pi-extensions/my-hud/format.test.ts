@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   formatCacheRate,
   formatPermissionStats,
   formatTokens,
+  setModelShortNames,
+  shortModelName,
 } from "./format";
 
 describe("formatTokens", () => {
@@ -40,5 +42,34 @@ describe("formatPermissionStats", () => {
 
   it("returns allowed/denied pair", () => {
     expect(formatPermissionStats({ allowed: 12, denied: 3 })).toBe("12/3");
+  });
+});
+
+describe("shortModelName", () => {
+  afterEach(() => {
+    setModelShortNames({});
+  });
+
+  it("returns builtin short name for known model", () => {
+    expect(shortModelName("kimi-for-coding")).toBe("k-coding");
+  });
+
+  it("returns raw name when unmapped", () => {
+    expect(shortModelName("some-other-model")).toBe("some-other-model");
+  });
+
+  it("returns user-configured short name", () => {
+    setModelShortNames({ "kimi-coding/k3": "k3" });
+    expect(shortModelName("kimi-coding/k3")).toBe("k3");
+  });
+
+  it("user mapping overrides builtin", () => {
+    setModelShortNames({ "kimi-for-coding": "kc" });
+    expect(shortModelName("kimi-for-coding")).toBe("kc");
+  });
+
+  it("keeps builtin mapping for models not in user config", () => {
+    setModelShortNames({ "kimi-coding/k3": "k3" });
+    expect(shortModelName("deepseek-v4-pro")).toBe("ds-pro");
   });
 });

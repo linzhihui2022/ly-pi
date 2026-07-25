@@ -4,9 +4,20 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `my-hud.json` 的 `modelShortNames` 映射生效，HUD 模型字段显示短名
-- [ ] 未命中映射的模型显示默认名称
-- [ ] 配置缺失/解析失败静默回退，不影响 HUD 其他字段
-- [ ] 单元测试覆盖映射命中、未命中、配置缺失、配置损坏四种路径
+- [x] `my-hud.json` 的 `modelShortNames` 映射生效，HUD 模型字段显示短名
+- [x] 未命中映射的模型显示默认名称
+- [x] 配置缺失/解析失败静默回退，不影响 HUD 其他字段
+- [x] 单元测试覆盖映射命中、未命中、配置缺失、配置损坏四种路径
+
+## Answer
+
+2026-07 实现完成。要点：
+
+- 配置文件位置定为**扩展目录内** `pi-extensions/my-hud/my-hud.json`（与 my-bt/my-permission 实际代码一致；AGENTS.md “同级”描述与实际不符，另行修正）
+- 新增 `config.ts`：`loadHudConfig(dir)` 加载并校验 `my-hud.json`，缺失/损坏/结构非法一律静默回退空映射
+- `format.ts` 新增 `setModelShortNames()`：用户映射覆盖内置 `SHORT_NAMES`，未命中回退内置短名再回退原始 ID
+- `index.ts` 启动时加载配置；`/reload` 重新加载扩展即生效
+- `scripts/deploy.ts` 部署时若存在 `my-hud.json` 一并拷贝
+- 测试：`config.test.ts` 8 条 + `format.test.ts` 5 条；全量 220 通过，覆盖率 100%

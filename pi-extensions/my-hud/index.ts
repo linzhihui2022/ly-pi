@@ -14,6 +14,8 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { getLastUserMessage } from "./session";
 import { Bar } from "./bar";
 import { icon } from "./icons";
@@ -22,6 +24,19 @@ import { checkMemoryPressure } from "./memory";
 import { findVitestProcesses } from "./vitest-process";
 import { buildMemoryWarningLines } from "./memory-widget";
 import { getPullRequestForCurrentBranch, openUrl } from "./pr";
+import { loadHudConfig } from "./config";
+import { setModelShortNames } from "./format";
+
+// Resolve extension directory — prefer __dirname, fall back to CWD-relative
+const EXT_DIR = (() => {
+  if (typeof __dirname !== "undefined") return __dirname;
+  try {
+    return dirname(fileURLToPath(import.meta.url));
+  } catch {
+    /* not ESM */
+  }
+  return process.cwd();
+})();
 
 // Re-export pure helpers for consumers / tests
 export { icon } from "./icons";
@@ -48,6 +63,8 @@ const MEMORY_WIDGET_KEY = "my-hud-memory-warning";
 export default function myHud(pi: ExtensionAPI): void {
   let currentTui: { requestRender(): void } | null = null;
   let bar: Bar | undefined;
+
+  setModelShortNames(loadHudConfig(EXT_DIR).modelShortNames);
 
   // Refresh both footer and widget on lifecycle events
   function requestRender(): void {
