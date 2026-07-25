@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   decide,
-  evaluatePathLayer,
   evaluateExternalDirectoryLayer,
-  evaluateSurfaceLayer,
+  evaluatePathLayer,
   evaluateRuleMap,
   evaluateRuleMapMany,
+  evaluateSurfaceLayer,
   matchPattern,
   mergeVerdicts,
   toVerdict,
@@ -47,7 +47,9 @@ describe("matchPattern", () => {
   });
 
   it("expands tilde before matching", () => {
-    expect(matchPattern("~/.ssh/*", `${process.env.HOME}/.ssh/id_rsa`)).toBe(true);
+    expect(matchPattern("~/.ssh/*", `${process.env.HOME}/.ssh/id_rsa`)).toBe(
+      true,
+    );
   });
 });
 
@@ -58,8 +60,17 @@ describe("toVerdict", () => {
   });
 
   it("converts deny with reason", () => {
-    const v = toVerdict({ action: "deny", reason: "Use pnpm" }, "npm *", "bash");
-    expect(v).toEqual({ action: "deny", reason: "Use pnpm", matchedPattern: "npm *", source: "bash" });
+    const v = toVerdict(
+      { action: "deny", reason: "Use pnpm" },
+      "npm *",
+      "bash",
+    );
+    expect(v).toEqual({
+      action: "deny",
+      reason: "Use pnpm",
+      matchedPattern: "npm *",
+      source: "bash",
+    });
   });
 });
 
@@ -70,7 +81,11 @@ describe("evaluateRuleMap", () => {
   });
 
   it("returns last matching rule", () => {
-    const v = evaluateRuleMap("rm -rf /tmp", { "rm *": "deny", "rm -rf *": "allow" }, "bash");
+    const v = evaluateRuleMap(
+      "rm -rf /tmp",
+      { "rm *": "deny", "rm -rf *": "allow" },
+      "bash",
+    );
     expect(v?.action).toBe("allow");
   });
 });
@@ -89,7 +104,9 @@ describe("mergeVerdicts", () => {
   });
 
   it("filters out undefined verdicts", () => {
-    expect(mergeVerdicts(undefined, { action: "allow" }, undefined)?.action).toBe("allow");
+    expect(
+      mergeVerdicts(undefined, { action: "allow" }, undefined)?.action,
+    ).toBe("allow");
   });
 
   it("chooses deny over ask and allow", () => {
@@ -112,12 +129,20 @@ describe("mergeVerdicts", () => {
 
 describe("evaluatePathLayer", () => {
   it("denies matched path pattern", () => {
-    const v = evaluatePathLayer(["src/.env"], { "*": "allow", "*.env": "deny" }, "/repo");
+    const v = evaluatePathLayer(
+      ["src/.env"],
+      { "*": "allow", "*.env": "deny" },
+      "/repo",
+    );
     expect(v?.action).toBe("deny");
   });
 
   it("allows non-matching paths", () => {
-    const v = evaluatePathLayer(["src/main.ts"], { "*.env": "deny", "*": "allow" }, "/repo");
+    const v = evaluatePathLayer(
+      ["src/main.ts"],
+      { "*.env": "deny", "*": "allow" },
+      "/repo",
+    );
     expect(v?.action).toBe("allow");
   });
 });
@@ -125,17 +150,29 @@ describe("evaluatePathLayer", () => {
 describe("evaluateExternalDirectoryLayer", () => {
   it("returns undefined when no paths are external", () => {
     const cwd = "/repo";
-    const v = evaluateExternalDirectoryLayer(["src/main.ts", "package.json"], { "*": "ask" }, cwd);
+    const v = evaluateExternalDirectoryLayer(
+      ["src/main.ts", "package.json"],
+      { "*": "ask" },
+      cwd,
+    );
     expect(v).toBeUndefined();
   });
 
   it("evaluates rules for external paths", () => {
-    const v = evaluateExternalDirectoryLayer(["../foo.txt"], { "*": "ask" }, "/repo");
+    const v = evaluateExternalDirectoryLayer(
+      ["../foo.txt"],
+      { "*": "ask" },
+      "/repo",
+    );
     expect(v?.action).toBe("ask");
   });
 
   it("allows specific external directory", () => {
-    const v = evaluateExternalDirectoryLayer(["/tmp/cache/file"], { "*": "ask", "/tmp/cache/*": "allow" }, "/repo");
+    const v = evaluateExternalDirectoryLayer(
+      ["/tmp/cache/file"],
+      { "*": "ask", "/tmp/cache/*": "allow" },
+      "/repo",
+    );
     expect(v?.action).toBe("allow");
   });
 });
@@ -162,7 +199,7 @@ describe("evaluateSurfaceLayer", () => {
   it("handles non-bash tool with permission map", () => {
     const v = evaluateSurfaceLayer(
       { toolName: "mcp", value: "mcp_status", paths: [] },
-      { "*": "ask", "mcp_status": "allow" },
+      { "*": "ask", mcp_status: "allow" },
       "/repo",
     );
     expect(v?.action).toBe("allow");
@@ -232,7 +269,10 @@ describe("decide", () => {
   it("denies external_directory with DenyWithReason object", () => {
     const c = cfg({
       read: "allow",
-      external_directory: { action: "deny", reason: "not allowed outside project" },
+      external_directory: {
+        action: "deny",
+        reason: "not allowed outside project",
+      },
     });
     const v = decide(
       { toolName: "read", value: "../foo.txt", paths: ["../foo.txt"] },
@@ -255,7 +295,9 @@ describe("decide", () => {
   });
 
   it("denies path with DenyWithReason object", () => {
-    const c = cfg({ path: { "*.env": { action: "deny", reason: "env files blocked" } } });
+    const c = cfg({
+      path: { "*.env": { action: "deny", reason: "env files blocked" } },
+    });
     const v = decide(
       { toolName: "read", value: ".env", paths: [".env"] },
       "/repo",
@@ -284,7 +326,11 @@ describe("decide", () => {
   });
 
   it("skips path and external_directory layers when paths is empty", () => {
-    const c = cfg({ path: { "*": "deny" }, external_directory: "ask", bash: { "echo *": "allow" } });
+    const c = cfg({
+      path: { "*": "deny" },
+      external_directory: "ask",
+      bash: { "echo *": "allow" },
+    });
     const v = decide(
       { toolName: "bash", value: "echo hello", paths: [] },
       "/repo",
@@ -304,7 +350,9 @@ describe("decide", () => {
   });
 
   it("handles deny with reason object", () => {
-    const c = cfg({ bash: { "npm *": { action: "deny", reason: "Use pnpm instead" } } });
+    const c = cfg({
+      bash: { "npm *": { action: "deny", reason: "Use pnpm instead" } },
+    });
     const v = decide(
       { toolName: "bash", value: "npm install", paths: [] },
       "/repo",

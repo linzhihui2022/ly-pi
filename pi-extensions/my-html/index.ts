@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type {
   ExtensionAPI,
@@ -6,12 +6,12 @@ import type {
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import open from "open";
-import { ensurePreviewServer, stopPreviewServer, PREVIEW_DIR } from "./server";
 import {
-  renderMarkdownToHtml,
   buildHtmlDocument,
   extractAssistantText,
+  renderMarkdownToHtml,
 } from "./render";
+import { ensurePreviewServer, PREVIEW_DIR, stopPreviewServer } from "./server";
 
 interface AssistantContentBlock {
   type: string;

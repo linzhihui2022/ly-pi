@@ -13,9 +13,10 @@ export function resolvePath(path: string, cwd: string): string {
 }
 
 export function isExternalPath(path: string, cwd: string): boolean {
-  const absolute = path.startsWith("/") || path.startsWith("~")
-    ? resolve(expandHome(path))
-    : resolve(cwd, path);
+  const absolute =
+    path.startsWith("/") || path.startsWith("~")
+      ? resolve(expandHome(path))
+      : resolve(cwd, path);
   const cwdAbsolute = resolve(cwd);
   return !absolute.startsWith(cwdAbsolute + "/") && absolute !== cwdAbsolute;
 }
@@ -68,7 +69,11 @@ export function extractPathTokens(command: string, _cwd: string): string[] {
       tokens.add(trimmed);
     } else if (trimmed.startsWith(".") && trimmed.length > 1) {
       tokens.add(trimmed);
-    } else if (!trimmed.startsWith("-") && /^[a-zA-Z0-9._-]+$/.test(trimmed) && trimmed.length > 1) {
+    } else if (
+      !trimmed.startsWith("-") &&
+      /^[a-zA-Z0-9._-]+$/.test(trimmed) &&
+      trimmed.length > 1
+    ) {
       // bare filename candidate (like id_rsa)
       tokens.add(trimmed);
     }

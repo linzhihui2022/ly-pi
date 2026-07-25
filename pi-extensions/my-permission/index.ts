@@ -1,13 +1,13 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { realpathSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadConfig } from "./config";
-import { decide } from "./rules";
 import { createJudge } from "./judge";
+import { decide } from "./rules";
+import { formatJudgeLog, recordJudgeStats } from "./stats";
 import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
 import { extractPathTokens } from "./utils";
-import { formatJudgeLog, recordJudgeStats } from "./stats";
 
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const extensionDir = dirname(fileURLToPath(import.meta.url));
@@ -38,7 +38,10 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
 
     if (verdict.action === "allow") return undefined;
     if (verdict.action === "deny") {
-      return { block: true, reason: verdict.reason ?? `Blocked by ${verdict.source}` };
+      return {
+        block: true,
+        reason: verdict.reason ?? `Blocked by ${verdict.source}`,
+      };
     }
 
     const cacheKey = `${toolName}:${value}`;
@@ -80,12 +83,17 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   });
 }
 
-function stringifyToolInput(event: { toolName: string; input: Record<string, unknown> }): string {
+function stringifyToolInput(event: {
+  toolName: string;
+  input: Record<string, unknown>;
+}): string {
   if (event.toolName === "bash" && typeof event.input.command === "string") {
     return event.input.command;
   }
   if (
-    (event.toolName === "read" || event.toolName === "write" || event.toolName === "edit") &&
+    (event.toolName === "read" ||
+      event.toolName === "write" ||
+      event.toolName === "edit") &&
     typeof event.input.path === "string"
   ) {
     return event.input.path;
@@ -118,9 +126,13 @@ function resolveSymlinkedPaths(paths: string[], cwd: string): string[] {
   const resolved = [...paths];
   for (const p of paths) {
     try {
-      const full = p.startsWith("/") || p.startsWith("~")
-        ? join(p.startsWith("~") ? process.env.HOME ?? "/home" : "/", p.replace(/^~/, ""))
-        : join(cwd, p);
+      const full =
+        p.startsWith("/") || p.startsWith("~")
+          ? join(
+              p.startsWith("~") ? (process.env.HOME ?? "/home") : "/",
+              p.replace(/^~/, ""),
+            )
+          : join(cwd, p);
       const real = realpathSync(full);
       if (real !== full) {
         resolved.push(real);

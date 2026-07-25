@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import myHtml from "./index";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import myHtml from "./index";
 
 vi.mock("open", () => ({ default: vi.fn(() => Promise.resolve()) }));
 vi.mock("./server", async (importOriginal) => {
@@ -11,7 +11,11 @@ vi.mock("./server", async (importOriginal) => {
   return {
     ...actual,
     ensurePreviewServer: vi.fn(() =>
-      Promise.resolve({ port: 3456, url: "http://localhost:3456", server: {} as any }),
+      Promise.resolve({
+        port: 3456,
+        url: "http://localhost:3456",
+        server: {} as any,
+      }),
     ),
   };
 });
@@ -24,9 +28,9 @@ vi.mock("node:fs", async (importOriginal) => {
   };
 });
 
+import { mkdirSync, writeFileSync } from "node:fs";
 import open from "open";
 import { ensurePreviewServer } from "./server";
-import { mkdirSync, writeFileSync } from "node:fs";
 
 describe("myHtml extension", () => {
   let registeredCommands: Map<string, any>;
@@ -84,25 +88,28 @@ describe("myHtml extension", () => {
     myHtml(mockApi);
     const cmd = registeredCommands.get("html");
 
-    mockCtx.sessionManager!.getEntries = vi.fn(() => [
-      {
-        id: "ignored",
-        parentId: null,
-        timestamp: new Date().toISOString(),
-        type: "message",
-        message: { role: "user", content: [{ type: "text", text: "hi" }] },
-      },
-      {
-        id: "entry-42",
-        parentId: "ignored",
-        timestamp: new Date().toISOString(),
-        type: "message",
-        message: {
-          role: "assistant",
-          content: [{ type: "text", text: "# Hello\n\nWorld" }],
-        },
-      },
-    ] as any);
+    mockCtx.sessionManager!.getEntries = vi.fn(
+      () =>
+        [
+          {
+            id: "ignored",
+            parentId: null,
+            timestamp: new Date().toISOString(),
+            type: "message",
+            message: { role: "user", content: [{ type: "text", text: "hi" }] },
+          },
+          {
+            id: "entry-42",
+            parentId: "ignored",
+            timestamp: new Date().toISOString(),
+            type: "message",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "# Hello\n\nWorld" }],
+            },
+          },
+        ] as any,
+    );
     mockCtx.sessionManager!.getSessionId = vi.fn(() => "session-xyz");
 
     await cmd.handler("", mockCtx as ExtensionCommandContext);
@@ -134,18 +141,21 @@ describe("myHtml extension", () => {
     myHtml(mockApi);
     const cmd = registeredCommands.get("html");
 
-    mockCtx.sessionManager!.getEntries = vi.fn(() => [
-      {
-        id: "entry-43",
-        parentId: null,
-        timestamp: new Date().toISOString(),
-        type: "message",
-        message: {
-          role: "assistant",
-          content: [{ type: "thinking", thinking: "some thought" }],
-        },
-      },
-    ] as any);
+    mockCtx.sessionManager!.getEntries = vi.fn(
+      () =>
+        [
+          {
+            id: "entry-43",
+            parentId: null,
+            timestamp: new Date().toISOString(),
+            type: "message",
+            message: {
+              role: "assistant",
+              content: [{ type: "thinking", thinking: "some thought" }],
+            },
+          },
+        ] as any,
+    );
     mockCtx.sessionManager!.getSessionId = vi.fn(() => "session-abc");
 
     await cmd.handler("", mockCtx as ExtensionCommandContext);
@@ -161,18 +171,21 @@ describe("myHtml extension", () => {
     myHtml(mockApi);
     const cmd = registeredCommands.get("html");
 
-    mockCtx.sessionManager!.getEntries = vi.fn(() => [
-      {
-        id: "entry-44",
-        parentId: null,
-        timestamp: new Date().toISOString(),
-        type: "message",
-        message: {
-          role: "assistant",
-          content: [{ type: "text", text: "hello" }],
-        },
-      },
-    ] as any);
+    mockCtx.sessionManager!.getEntries = vi.fn(
+      () =>
+        [
+          {
+            id: "entry-44",
+            parentId: null,
+            timestamp: new Date().toISOString(),
+            type: "message",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "hello" }],
+            },
+          },
+        ] as any,
+    );
     mockCtx.sessionManager!.getSessionId = vi.fn(() => "session-err");
     vi.mocked(ensurePreviewServer).mockRejectedValueOnce(
       new Error("port in use"),
@@ -185,5 +198,4 @@ describe("myHtml extension", () => {
       "error",
     );
   });
-
 });

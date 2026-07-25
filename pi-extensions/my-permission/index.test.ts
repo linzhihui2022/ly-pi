@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeAll, afterEach } from "vitest";
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 // Mock @earendil-works/pi-ai before any imports load it
 vi.mock("@earendil-works/pi-ai", async (importOriginal) => {
@@ -7,7 +7,9 @@ vi.mock("@earendil-works/pi-ai", async (importOriginal) => {
   return {
     ...(actual as object),
     complete: vi.fn().mockResolvedValue({
-      content: [{ type: "text", text: '{"safe":true,"reason":"ok","toolFor":"read"}' }],
+      content: [
+        { type: "text", text: '{"safe":true,"reason":"ok","toolFor":"read"}' },
+      ],
     }),
   };
 });
@@ -44,8 +46,8 @@ vi.mock("./ui", () => ({
   isChildSession: vi.fn().mockReturnValue(false),
 }));
 
-import { decide } from "./rules";
 import { createJudge } from "./judge";
+import { decide } from "./rules";
 import { confirmToolCall, isChildSession } from "./ui";
 
 // Helper: create mock ExtensionAPI + tool_call invocation
@@ -120,10 +122,7 @@ describe("my-permission extension entry", () => {
     await mod.default(api as any);
 
     const handler = api.getHandler("tool_call");
-    const result = await handler(
-      createBashEvent("rm -rf /"),
-      createMockCtx(),
-    );
+    const result = await handler(createBashEvent("rm -rf /"), createMockCtx());
     expect(result).toEqual({
       block: true,
       reason: "dangerous command",
@@ -131,7 +130,10 @@ describe("my-permission extension entry", () => {
   });
 
   it("calls judge when rules return ask and judge says safe", async () => {
-    vi.mocked(decide).mockReturnValue({ action: "ask", source: "defaultPolicy" });
+    vi.mocked(decide).mockReturnValue({
+      action: "ask",
+      source: "defaultPolicy",
+    });
     const mockJudge = vi.fn().mockResolvedValue({
       safe: true,
       reason: "safe operation",
@@ -144,24 +146,27 @@ describe("my-permission extension entry", () => {
     await mod.default(api as any);
 
     const handler = api.getHandler("tool_call");
-    const result = await handler(createBashEvent("cat README.md"), createMockCtx());
+    const result = await handler(
+      createBashEvent("cat README.md"),
+      createMockCtx(),
+    );
     expect(result).toBeUndefined();
     expect(mockJudge).toHaveBeenCalled();
-    expect(api.appendEntry).toHaveBeenCalledWith(
-      "my-permission-judge",
-      {
-        decision: "allowed",
-        toolName: "bash",
-        value: "cat README.md",
-        safe: true,
-        reason: "safe operation",
-        toolFor: "read file",
-      },
-    );
+    expect(api.appendEntry).toHaveBeenCalledWith("my-permission-judge", {
+      decision: "allowed",
+      toolName: "bash",
+      value: "cat README.md",
+      safe: true,
+      reason: "safe operation",
+      toolFor: "read file",
+    });
   });
 
   it("blocks when rules return ask, judge says unsafe, and user denies", async () => {
-    vi.mocked(decide).mockReturnValue({ action: "ask", source: "defaultPolicy" });
+    vi.mocked(decide).mockReturnValue({
+      action: "ask",
+      source: "defaultPolicy",
+    });
     vi.mocked(createJudge).mockReturnValue(
       vi.fn().mockResolvedValue({
         safe: false,
@@ -183,22 +188,22 @@ describe("my-permission extension entry", () => {
       block: true,
       reason: "User denied: potentially destructive",
     });
-    expect(api.appendEntry).toHaveBeenCalledWith(
-      "my-permission-judge",
-      {
-        decision: "denied",
-        toolName: "bash",
-        value: "rm -rf /tmp",
-        safe: false,
-        score: 3,
-        reason: "potentially destructive",
-        toolFor: "delete files",
-      },
-    );
+    expect(api.appendEntry).toHaveBeenCalledWith("my-permission-judge", {
+      decision: "denied",
+      toolName: "bash",
+      value: "rm -rf /tmp",
+      safe: false,
+      score: 3,
+      reason: "potentially destructive",
+      toolFor: "delete files",
+    });
   });
 
   it("blocks in child session when judge says unsafe", async () => {
-    vi.mocked(decide).mockReturnValue({ action: "ask", source: "defaultPolicy" });
+    vi.mocked(decide).mockReturnValue({
+      action: "ask",
+      source: "defaultPolicy",
+    });
     vi.mocked(createJudge).mockReturnValue(
       vi.fn().mockResolvedValue({
         safe: false,
@@ -225,7 +230,10 @@ describe("my-permission extension entry", () => {
   });
 
   it("blocks when judge fails and no UI", async () => {
-    vi.mocked(decide).mockReturnValue({ action: "ask", source: "defaultPolicy" });
+    vi.mocked(decide).mockReturnValue({
+      action: "ask",
+      source: "defaultPolicy",
+    });
     vi.mocked(createJudge).mockReturnValue(
       vi.fn().mockResolvedValue({
         safe: false,

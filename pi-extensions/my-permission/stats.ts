@@ -1,4 +1,7 @@
-import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  SessionEntry,
+} from "@earendil-works/pi-coding-agent";
 import type { JudgeResult } from "./types";
 
 export const JUDGE_STATS_CUSTOM_TYPE = "my-permission-judge";
@@ -77,7 +80,9 @@ export function formatJudgeLog(entries: SessionEntry[]): string {
     const log = logs[i];
     const label = log.safe ? "安全" : "不安全";
     const scoreText = log.score !== undefined ? `（${log.score}/10）` : "";
-    lines.push(`${i + 1}. ${log.toolName}: ${log.value} → ${label}${scoreText}`);
+    lines.push(
+      `${i + 1}. ${log.toolName}: ${log.value} → ${label}${scoreText}`,
+    );
     lines.push(`   用途：${log.toolFor}`);
     lines.push(`   理由：${log.reason}`);
   }

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { playCategory, playOverlay } from "./player";
 
 vi.mock("node:fs", () => ({
@@ -511,7 +511,9 @@ describe("my-bt extension", () => {
         ask_user_question: "question",
       },
     };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithToolEvent));
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify(configWithToolEvent),
+    );
     const mod = await loadModule();
     mod.default(mockPi as any);
     expect(registeredEvents.has("tool_call")).toBe(true);
@@ -538,7 +540,9 @@ describe("my-bt extension", () => {
         },
       },
     };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithToolEvent));
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify(configWithToolEvent),
+    );
     const mod = await loadModule();
     mod.default(mockPi as any);
 
@@ -565,7 +569,9 @@ describe("my-bt extension", () => {
         ask_user_question: "question",
       },
     };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithToolEvent));
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify(configWithToolEvent),
+    );
     const mod = await loadModule();
     mod.default(mockPi as any);
 
@@ -584,7 +590,9 @@ describe("my-bt extension", () => {
         ask_user_question: "question",
       },
     };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithToolEvent));
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify(configWithToolEvent),
+    );
     const mod = await loadModule();
     mod.default(mockPi as any);
 
@@ -608,9 +616,7 @@ describe("my-bt extension", () => {
         ask_user_question: { type: "QUESTION", title: "Question" },
       },
     };
-    vi.mocked(readFileSync).mockReturnValue(
-      JSON.stringify(configWithQuestion),
-    );
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithQuestion));
     const mod = await loadModule();
     mod.default(mockPi as any);
 
@@ -681,9 +687,7 @@ describe("my-bt extension", () => {
         agent_end: { type: "DONE", title: "Complete" },
       },
     };
-    vi.mocked(readFileSync).mockReturnValue(
-      JSON.stringify(configWithQuestion),
-    );
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithQuestion));
     const mod = await loadModule();
     mod.default(mockPi as any);
 

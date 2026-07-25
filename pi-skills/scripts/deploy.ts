@@ -20,4 +20,4 @@
 
 // await rm(dest, { recursive: true, force: true });
 // await copyDir(src, dest);
-console.log("Skill pi-skills")
+console.log("Skill pi-skills");

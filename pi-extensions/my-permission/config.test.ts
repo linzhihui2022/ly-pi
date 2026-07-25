@@ -1,7 +1,7 @@
-import { describe, expect, it, afterAll } from "vitest";
-import { loadConfig } from "./config";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { afterAll, describe, expect, it } from "vitest";
+import { loadConfig } from "./config";
 
 const tmp = join(import.meta.dirname, "tmp-config-test");
 
@@ -21,7 +21,10 @@ describe("loadConfig", () => {
   it("merges provided values", async () => {
     await mkdir(tmp, { recursive: true });
     const path = join(tmp, "cfg.json");
-    await writeFile(path, JSON.stringify({ defaultPolicy: "deny", judgeTimeoutMs: 3000 }));
+    await writeFile(
+      path,
+      JSON.stringify({ defaultPolicy: "deny", judgeTimeoutMs: 3000 }),
+    );
     const cfg = await loadConfig(path);
     expect(cfg.defaultPolicy).toBe("deny");
     expect(cfg.judgeTimeoutMs).toBe(3000);
@@ -71,7 +74,10 @@ describe("loadConfig", () => {
   it("accepts custom judgeModel", async () => {
     await mkdir(tmp, { recursive: true });
     const path = join(tmp, "model.json");
-    await writeFile(path, JSON.stringify({ judgeModel: "anthropic/claude-haiku" }));
+    await writeFile(
+      path,
+      JSON.stringify({ judgeModel: "anthropic/claude-haiku" }),
+    );
     const cfg = await loadConfig(path);
     expect(cfg.judgeModel).toBe("anthropic/claude-haiku");
   });

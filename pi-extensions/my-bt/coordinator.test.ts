@@ -1,25 +1,25 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  readFileSync,
-  writeFileSync,
-  mkdirSync,
-  rmdirSync,
-  existsSync,
-} from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import {
-  spawnSoundProcess,
-  spawnOverlayProcess,
-  acquireGlobalLock,
-  releaseGlobalLock,
-  killPlayingProcesses,
-  recordPids,
-  ensureGlobalDir,
-  withGlobalLock,
-  onExecDone,
-} from "./coordinator";
 import { exec } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmdirSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  acquireGlobalLock,
+  ensureGlobalDir,
+  killPlayingProcesses,
+  onExecDone,
+  recordPids,
+  releaseGlobalLock,
+  spawnOverlayProcess,
+  spawnSoundProcess,
+  withGlobalLock,
+} from "./coordinator";
 
 type ExecCallback = (err: Error | null, stdout: string, stderr: string) => void;
 
@@ -344,7 +344,11 @@ describe("sound and overlay isolation", () => {
     recordPids([11111], overlayPidFile, overlayLockDir);
 
     const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
-    spawnSoundProcess({ soundDir: "/fake/sounds" } as any, "startup.wav", TEST_DIR);
+    spawnSoundProcess(
+      { soundDir: "/fake/sounds" } as any,
+      "startup.wav",
+      TEST_DIR,
+    );
 
     expect(killSpy).not.toHaveBeenCalledWith(11111, "SIGTERM");
     killSpy.mockRestore();

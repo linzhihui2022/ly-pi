@@ -38,12 +38,9 @@ describe("resolvePath", () => {
 
 describe("splitBashCommandUnits", () => {
   it("splits by &&, |, ;, and newline", () => {
-    expect(splitBashCommandUnits("cd /tmp; cat file | grep x && echo done")).toEqual([
-      "cd /tmp",
-      "cat file",
-      "grep x",
-      "echo done",
-    ]);
+    expect(
+      splitBashCommandUnits("cd /tmp; cat file | grep x && echo done"),
+    ).toEqual(["cd /tmp", "cat file", "grep x", "echo done"]);
   });
 
   it("keeps quoted operators as one unit", () => {

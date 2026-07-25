@@ -1,5 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
-import { readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PreviewServer } from "./types";

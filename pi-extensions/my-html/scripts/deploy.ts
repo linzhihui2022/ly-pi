@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import { homedir } from "node:os";
+import { join } from "node:path";
 
 const dest = join(homedir(), ".pi/agent/extensions/my-html");
 await mkdir(dest, { recursive: true });

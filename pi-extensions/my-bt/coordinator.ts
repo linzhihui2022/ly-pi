@@ -1,8 +1,9 @@
-import { exec, type ChildProcess } from "node:child_process";
+import { type ChildProcess, exec } from "node:child_process";
 
 export function onExecDone(): void {
   // exec callback; errors ignored because process may have been killed intentionally
 }
+
 import {
   existsSync,
   mkdirSync,
@@ -18,7 +19,10 @@ export const GLOBAL_BT_DIR = join(homedir(), ".my-bt");
 export const DEFAULT_PID_FILE = join(GLOBAL_BT_DIR, "playing.json");
 export const DEFAULT_LOCK_DIR = join(GLOBAL_BT_DIR, ".lock");
 export const DEFAULT_SOUND_PID_FILE = join(GLOBAL_BT_DIR, "sound-pids.json");
-export const DEFAULT_OVERLAY_PID_FILE = join(GLOBAL_BT_DIR, "overlay-pids.json");
+export const DEFAULT_OVERLAY_PID_FILE = join(
+  GLOBAL_BT_DIR,
+  "overlay-pids.json",
+);
 export const DEFAULT_SOUND_LOCK_DIR = join(GLOBAL_BT_DIR, ".sound-lock");
 export const DEFAULT_OVERLAY_LOCK_DIR = join(GLOBAL_BT_DIR, ".overlay-lock");
 

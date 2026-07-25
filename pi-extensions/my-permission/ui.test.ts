@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
-import { confirmToolCall, createSessionCache, formatConfirmMessage, isChildSession } from "./ui";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it, vi } from "vitest";
+import {
+  confirmToolCall,
+  createSessionCache,
+  formatConfirmMessage,
+  isChildSession,
+} from "./ui";
 
 function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[0-9;]*m/g, "");
@@ -50,7 +55,9 @@ describe("formatConfirmMessage", () => {
     expect(stripAnsi(body)).toContain("输入：ls -la");
     expect(stripAnsi(body)).toContain("工作目录：/repo");
     expect(stripAnsi(body)).toContain("涉及路径：src, dist");
-    expect(stripAnsi(body)).toContain("理由：只读取目录内容，相对安全（安全评分：8/10）");
+    expect(stripAnsi(body)).toContain(
+      "理由：只读取目录内容，相对安全（安全评分：8/10）",
+    );
     expect(body).toContain("\x1b[32m");
     expect(body).toContain("\x1b[36m");
     expect(body).toContain("\x1b[33m");
@@ -112,10 +119,15 @@ describe("confirmToolCall", () => {
       paths: [],
     });
     expect(ok).toBe(true);
-    const calls = (ctx.ui.confirm as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
+    const calls = (ctx.ui.confirm as ReturnType<typeof vi.fn>).mock.calls as [
+      string,
+      string,
+    ][];
     expect(stripAnsi(calls[0][0])).toBe("确认工具调用：read");
     expect(calls[0][1]).toContain("\x1b[32m");
-    expect(stripAnsi(calls[0][1])).toContain("理由：routine read（安全评分：8/10）");
+    expect(stripAnsi(calls[0][1])).toContain(
+      "理由：routine read（安全评分：8/10）",
+    );
   });
 
   it("returns false when user denies", async () => {

@@ -1,11 +1,14 @@
+import type {
+  ExtensionAPI,
+  SessionEntry,
+} from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import {
-  JUDGE_STATS_CUSTOM_TYPE,
   formatJudgeLog,
-  recordJudgeStats,
+  JUDGE_STATS_CUSTOM_TYPE,
   type JudgeLogEntry,
+  recordJudgeStats,
 } from "./stats";
-import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
 
 function createMockPi(): ExtensionAPI {
   return {
@@ -40,18 +43,15 @@ describe("recordJudgeStats", () => {
       { toolName: "bash", value: "git status" },
       { safe: true, score: 8, reason: "只读操作", toolFor: "查看 git 状态" },
     );
-    expect(pi.appendEntry).toHaveBeenCalledWith(
-      JUDGE_STATS_CUSTOM_TYPE,
-      {
-        decision: "allowed",
-        toolName: "bash",
-        value: "git status",
-        safe: true,
-        score: 8,
-        reason: "只读操作",
-        toolFor: "查看 git 状态",
-      },
-    );
+    expect(pi.appendEntry).toHaveBeenCalledWith(JUDGE_STATS_CUSTOM_TYPE, {
+      decision: "allowed",
+      toolName: "bash",
+      value: "git status",
+      safe: true,
+      score: 8,
+      reason: "只读操作",
+      toolFor: "查看 git 状态",
+    });
   });
 
   it("records denied decision without score when judge fails", () => {
@@ -61,17 +61,14 @@ describe("recordJudgeStats", () => {
       { toolName: "bash", value: "rm -rf /" },
       { safe: false, reason: "危险命令", toolFor: "删除根目录" },
     );
-    expect(pi.appendEntry).toHaveBeenCalledWith(
-      JUDGE_STATS_CUSTOM_TYPE,
-      {
-        decision: "denied",
-        toolName: "bash",
-        value: "rm -rf /",
-        safe: false,
-        reason: "危险命令",
-        toolFor: "删除根目录",
-      },
-    );
+    expect(pi.appendEntry).toHaveBeenCalledWith(JUDGE_STATS_CUSTOM_TYPE, {
+      decision: "denied",
+      toolName: "bash",
+      value: "rm -rf /",
+      safe: false,
+      reason: "危险命令",
+      toolFor: "删除根目录",
+    });
   });
 });
 
@@ -83,8 +80,15 @@ describe("formatJudgeLog", () => {
 
   it("ignores non-judge entries", () => {
     const entries: SessionEntry[] = [
-      { type: "custom", customType: "other", data: {} } as unknown as SessionEntry,
-      { type: "message", message: { role: "user", content: "hi" } } as unknown as SessionEntry,
+      {
+        type: "custom",
+        customType: "other",
+        data: {},
+      } as unknown as SessionEntry,
+      {
+        type: "message",
+        message: { role: "user", content: "hi" },
+      } as unknown as SessionEntry,
     ];
     expect(formatJudgeLog(entries)).toBe("当前会话暂无法官判断");
   });
@@ -124,16 +128,21 @@ describe("formatJudgeLog", () => {
 
   it("truncates long values", () => {
     const longValue = "a".repeat(80);
-    const text = formatJudgeLog([
-      createJudgeLogEntry({ value: longValue }),
-    ]);
+    const text = formatJudgeLog([createJudgeLogEntry({ value: longValue })]);
     expect(text).toContain(`bash: ${"a".repeat(60)}... → 安全（8/10）`);
   });
 
   it("formats multiple entries in order", () => {
     const text = formatJudgeLog([
       createJudgeLogEntry({ toolName: "read", value: "a.txt" }),
-      createJudgeLogEntry({ toolName: "write", value: "b.txt", safe: false, score: 2, reason: "写入文件", toolFor: "写入 b.txt" }),
+      createJudgeLogEntry({
+        toolName: "write",
+        value: "b.txt",
+        safe: false,
+        score: 2,
+        reason: "写入文件",
+        toolFor: "写入 b.txt",
+      }),
     ]);
     const lines = text.split("\n");
     expect(lines[0]).toBe("当前会话法官判断（共 2 条）：");

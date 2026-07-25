@@ -80,9 +80,15 @@ export function formatConfirmMessage(options: {
   }
   const scoreText =
     options.score !== undefined
-      ? styled(`（安全评分：${options.score}/10）`, scoreStyle(options.score), ANSI.bold)
+      ? styled(
+          `（安全评分：${options.score}/10）`,
+          scoreStyle(options.score),
+          ANSI.bold,
+        )
       : "";
-  lines.push(`${label("理由：")}${styled(options.reason, ANSI.bold)}${scoreText}`);
+  lines.push(
+    `${label("理由：")}${styled(options.reason, ANSI.bold)}${scoreText}`,
+  );
   return {
     title: `${label("确认工具调用：")}${styled(options.toolName, ANSI.bold, ANSI.cyan)}`,
     body: lines.join("\n"),

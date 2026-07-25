@@ -179,7 +179,7 @@ function run(argv: string[]): void {
   // The block receives the event and returns it (or null to suppress).
   $.NSEvent.addLocalMonitorForEventsMatchingMaskHandler(
     1 << 1, // NSEventMaskLeftMouseDown
-    function (event: $) {
+    (event: $) => {
       var clickWin: $ = event.window;
       if (clickWin) {
         for (var j: number = 0; j < gOverlayWindows.length; j++) {

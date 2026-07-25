@@ -1,14 +1,14 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as coordinator from "./coordinator";
 import {
+  detectTerminal,
   listCategories,
   pickSoundFile,
-  resolveSoundPath,
   playCategory,
-  playSound,
   playOverlay,
-  detectTerminal,
+  playSound,
+  resolveSoundPath,
 } from "./player";
-import * as coordinator from "./coordinator";
 import type { BtConfig } from "./types";
 
 let nextPid = 1000;

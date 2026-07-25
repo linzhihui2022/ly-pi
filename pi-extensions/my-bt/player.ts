@@ -1,5 +1,5 @@
-import { join, resolve } from "node:path";
 import { exec } from "node:child_process";
+import { join, resolve } from "node:path";
 import { spawnOverlayProcess, spawnSoundProcess } from "./coordinator";
 import type { BtCategory, BtConfig, OverlayColor } from "./types";
 

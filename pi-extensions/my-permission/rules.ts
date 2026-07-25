@@ -1,5 +1,18 @@
-import type { Action, Config, DenyWithReason, PermissionMap, RuleValue, ToolInput, Verdict } from "./types";
-import { expandHome, isExternalPath, splitBashCommandUnits, stripEnvPrefix } from "./utils";
+import type {
+  Action,
+  Config,
+  DenyWithReason,
+  PermissionMap,
+  RuleValue,
+  ToolInput,
+  Verdict,
+} from "./types";
+import {
+  expandHome,
+  isExternalPath,
+  splitBashCommandUnits,
+  stripEnvPrefix,
+} from "./utils";
 
 export function decide(input: ToolInput, cwd: string, config: Config): Verdict {
   const layers: (Verdict | undefined)[] = [];
@@ -10,11 +23,11 @@ export function decide(input: ToolInput, cwd: string, config: Config): Verdict {
       layers.push(evaluatePathLayer(input.paths, pathRules, cwd));
     }
 
-    const extRules = normalizeCrossCuttingRule(config.permission.external_directory);
+    const extRules = normalizeCrossCuttingRule(
+      config.permission.external_directory,
+    );
     if (extRules) {
-      layers.push(
-        evaluateExternalDirectoryLayer(input.paths, extRules, cwd),
-      );
+      layers.push(evaluateExternalDirectoryLayer(input.paths, extRules, cwd));
     }
   }
 
@@ -64,9 +77,15 @@ export function evaluateSurfaceLayer(
   rules: RuleValue | PermissionMap,
   _cwd: string,
 ): Verdict | undefined {
-  if (input.toolName === "bash" && typeof rules === "object" && !("action" in rules)) {
+  if (
+    input.toolName === "bash" &&
+    typeof rules === "object" &&
+    !("action" in rules)
+  ) {
     const units = splitBashCommandUnits(input.value).map(stripEnvPrefix);
-    const verdicts = units.map((unit) => evaluateRuleMap(unit, rules as PermissionMap, "bash"));
+    const verdicts = units.map((unit) =>
+      evaluateRuleMap(unit, rules as PermissionMap, "bash"),
+    );
     return mergeVerdicts(...verdicts) ?? { action: "ask", source: "bash" };
   }
   if (typeof rules === "string") {
@@ -122,7 +141,10 @@ export function matchPattern(pattern: string, value: string): boolean {
   if (expanded === "*") return true;
   const regex = new RegExp(
     "^" +
-      expanded.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") +
+      expanded
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*/g, ".*")
+        .replace(/\?/g, ".") +
       "$",
   );
   return regex.test(value);
