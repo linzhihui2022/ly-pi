@@ -29,6 +29,22 @@ The context icon and color adapt based on window size:
   - 21-50% — warning (yellow)
   - > 50% — error (red)
 
+## Configuration
+
+Optional `my-hud.json` inside the extension directory (reloaded via `/reload`):
+
+```json
+{
+  "modelShortNames": { "kimi-coding/k3": "k3" },
+  "hiddenFields": ["cost", "cacheRate"]
+}
+```
+
+- `modelShortNames` — map full model IDs to short display names (overrides builtins)
+- `hiddenFields` — hide status line fields; valid keys: `project`, `model`, `branch`, `gitStatus`, `context`, `input`, `output`, `cacheRead`, `cost`, `cacheRate`, `permission`
+
+Missing or invalid config falls back to defaults silently.
+
 ## Install
 
 ```bash

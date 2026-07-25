@@ -67,7 +67,7 @@ cd pi-extensions/my-hud && vitest run
 
 ## 配置规范
 
-- JSON 配置文件与扩展目录同级：`pi-extensions/my-xxx.json`
+- JSON 配置文件放在扩展目录内（如 `pi-extensions/my-bt/my-bt.json`），用 `EXT_DIR` 解析加载，部署脚本随 `index.js` 一并拷贝
 - 支持热重载（通过 `/reload`）
 - 纯配置扩展统一放在 `pi-config/`
 - 扩展运行时使用 TypeBox 做类型校验
