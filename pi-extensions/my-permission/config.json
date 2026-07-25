@@ -1,12 +1,10 @@
 {
+  "childPolicy": "deny-on-unsafe",
   "defaultPolicy": "allow",
   "judgeModel": "deepseek/deepseek-v4-flash",
   "judgeTimeoutMs": 8000,
-  "childPolicy": "deny-on-unsafe",
   "permission": {
     "ask_user_question": "allow",
-    "ctx_execute": "allow",
-    "todo": "allow",
     "bash": {
       "*": "ask",
       "awk *": "ask",
@@ -43,6 +41,8 @@
       "npm install *": "allow",
       "npm run *": "allow",
       "npm test *": "allow",
+      "pi update": "allow",
+      "pi update --extensions": "allow",
       "pnpm install *": "allow",
       "pnpm run *": "allow",
       "pnpm sst *": "deny",
@@ -72,6 +72,7 @@
       "tsc *": "allow",
       "vitest *": "allow"
     },
+    "ctx_execute": "allow",
     "external_directory": {
       "*": "ask",
       "/Users/lychee/.pi/agent": "allow",
@@ -99,6 +100,7 @@
       "~/.kube/*": "deny",
       "~/.npmrc": "deny",
       "~/.ssh/*": "deny"
-    }
+    },
+    "todo": "allow"
   }
 }
