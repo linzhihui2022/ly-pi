@@ -7,7 +7,9 @@ export function createJudge(
   deps?: {
     getAuth?: (
       model: Model<Api>,
-    ) => Promise<{ apiKey?: string; headers?: Record<string, string> }>;
+    ) => Promise<
+      { apiKey?: string; headers?: Record<string, string> } | undefined
+    >;
   },
 ) {
   return async function judge(

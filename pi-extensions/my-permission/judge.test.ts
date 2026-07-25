@@ -276,6 +276,30 @@ describe("createJudge", () => {
     });
   });
 
+  it("proceeds without explicit auth when getAuth resolves undefined", async () => {
+    const { complete } = await import("@earendil-works/pi-ai");
+    (complete as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      Promise.resolve({
+        content: [
+          {
+            type: "text" as const,
+            text: '{"safe":true,"score":5,"reason":"no auth","toolFor":"read"}',
+          },
+        ],
+      }),
+    );
+    const judge = createJudge(config, { getAuth: async () => undefined });
+    const result = await judge(input, "/repo", undefined, resolveFnOk);
+    const calls = (complete as ReturnType<typeof vi.fn>).mock.calls;
+    const options = calls[calls.length - 1][2] as {
+      apiKey?: string;
+      headers?: Record<string, string>;
+    };
+    expect(options.apiKey).toBeUndefined();
+    expect(options.headers).toBeUndefined();
+    expect(result.safe).toBe(true);
+  });
+
   it("builds prompt with correct context", async () => {
     let capturedContext: unknown;
     const { complete } = await import("@earendil-works/pi-ai");

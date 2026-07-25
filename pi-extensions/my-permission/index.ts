@@ -27,7 +27,10 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     const judge = createJudge(config, {
       getAuth:
         typeof ctx.modelRegistry.getApiKeyAndHeaders === "function"
-          ? (model) => ctx.modelRegistry.getApiKeyAndHeaders(model)
+          ? async (model) => {
+              const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+              return auth.ok ? auth : undefined;
+            }
           : undefined,
     });
     const toolName = event.toolName;
