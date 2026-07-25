@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { detectInlineScript } from "./detector";
+import { detectFileWriteBypass, detectInlineScript } from "./detector";
 import myScriptGuard, { buildReason } from "./index";
 
 type ToolCallHandler = (
@@ -105,6 +105,42 @@ describe("myScriptGuard tool_call handler", () => {
     }
     expect(ctx.ui.confirm).not.toHaveBeenCalled();
   });
+
+  it("blocks a file write bypass with a write/edit guiding reason", async () => {
+    const handler = setup();
+    const result = await handler(
+      bashEvent("cat <<'EOF' > config.yaml\nfoo: bar\nEOF"),
+      uiCtx(),
+    );
+    expect(result?.block).toBe(true);
+    expect(result?.reason).toContain("write/edit");
+    expect(result?.reason).toContain("config.yaml");
+  });
+
+  it("shares the escalation counter between inline scripts and file write bypasses", async () => {
+    const handler = setup();
+    const ctx = uiCtx();
+    ctx.ui.confirm.mockResolvedValue(false);
+    const WRITE = "cat <<EOF > out.txt\nbody\nEOF";
+    expect((await handler(bashEvent(LONG_EVAL), ctx))?.block).toBe(true);
+    expect((await handler(bashEvent(WRITE), ctx))?.block).toBe(true);
+    expect((await handler(bashEvent(LONG_EVAL), ctx))?.block).toBe(true);
+    expect(ctx.ui.confirm).not.toHaveBeenCalled();
+    // 4th blocked attempt across either rule escalates.
+    await handler(bashEvent(WRITE), ctx);
+    expect(ctx.ui.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("labels the escalation dialog for file write bypasses", async () => {
+    const handler = setup();
+    const ctx = uiCtx();
+    for (let i = 0; i < 3; i++) await handler(bashEvent(LONG_EVAL), ctx);
+    await handler(bashEvent("cat <<EOF > out.txt\nbody\nEOF"), ctx);
+    expect(ctx.ui.confirm).toHaveBeenCalledWith(
+      expect.stringContaining("文件写入"),
+      expect.stringContaining("out.txt"),
+    );
+  });
 });
 
 describe("buildReason", () => {
@@ -115,5 +151,14 @@ describe("buildReason", () => {
     expect(reason).toContain("python3");
     expect(reason).toContain("eval");
     expect(reason).toContain("python3 <file>");
+  });
+
+  it("names the tool and target for a file write bypass", () => {
+    const detection = detectFileWriteBypass("cat <<EOF > out.txt\nbody\nEOF");
+    if (!detection) throw new Error("expected detection");
+    const reason = buildReason(detection);
+    expect(reason).toContain("cat");
+    expect(reason).toContain("out.txt");
+    expect(reason).toContain("write/edit");
   });
 });

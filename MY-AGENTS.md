@@ -95,6 +95,7 @@
 **不要通过 bash 用 `python3 -c`、`node -e` 或 heredoc 运行长段脚本。**
 
 - 文件读写、文本修改、搜索优先使用 read / write / edit / grep 等专用工具。
+- 不要用 `cat <<EOF > file`、`tee file <<EOF`、`echo/printf ... > file` 等 heredoc/重定向写法模拟 write/edit 写文件（80 字符内的单行追加如 `echo "FOO=bar" >> .env` 除外）；heredoc 作为管道数据输入（如 `git commit -F -`）不在此限。
 - 简单处理优先用现成命令（jq、sed、awk 等）的短命令。
 - 确实需要脚本完成计算时：先用 write 把脚本写入文件，再执行 `python3 <文件>`。
 - 短一行流（不超过 80 字符、无换行）不在此限。

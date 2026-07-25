@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectInlineScript } from "./detector";
+import { detectFileWriteBypass, detectInlineScript } from "./detector";
 
 describe("detectInlineScript", () => {
   it("detects python -c with code longer than 80 chars", () => {
@@ -123,6 +123,128 @@ describe("detectInlineScript", () => {
     ).toBeUndefined();
     expect(
       detectInlineScript("uv run python3 scripts/convert.py"),
+    ).toBeUndefined();
+  });
+});
+
+describe("detectFileWriteBypass", () => {
+  it("blocks a cat heredoc redirected to a file", () => {
+    const cmd = "cat <<'EOF' > config.yaml\nfoo: bar\nEOF";
+    expect(detectFileWriteBypass(cmd)).toMatchObject({
+      kind: "file-write",
+      tool: "cat",
+      target: "config.yaml",
+      code: "foo: bar",
+    });
+  });
+
+  it("blocks a cat heredoc appended to a file", () => {
+    const cmd = "cat <<EOF >> notes.md\nextra line\nEOF";
+    expect(detectFileWriteBypass(cmd)).toMatchObject({
+      kind: "file-write",
+      tool: "cat",
+      target: "notes.md",
+    });
+  });
+
+  it("blocks a cat heredoc when the redirect precedes the heredoc", () => {
+    const cmd = "cat > out.txt <<EOF\nbody\nEOF";
+    expect(detectFileWriteBypass(cmd)).toMatchObject({
+      kind: "file-write",
+      tool: "cat",
+      target: "out.txt",
+    });
+  });
+
+  it("blocks a quoted redirect target", () => {
+    const cmd = 'cat <<EOF > "my file.txt"\nbody\nEOF';
+    expect(detectFileWriteBypass(cmd)).toMatchObject({
+      tool: "cat",
+      target: "my file.txt",
+    });
+  });
+
+  it("blocks a tee heredoc writing a file", () => {
+    const cmd = "tee settings.json <<'EOF'\n{}\nEOF";
+    expect(detectFileWriteBypass(cmd)).toMatchObject({
+      kind: "file-write",
+      tool: "tee",
+      target: "settings.json",
+      code: "{}",
+    });
+  });
+
+  it("blocks a tee -a heredoc appending a file", () => {
+    const cmd = "tee -a log.txt <<EOF\nentry\nEOF";
+    expect(detectFileWriteBypass(cmd)).toMatchObject({
+      tool: "tee",
+      target: "log.txt",
+    });
+  });
+
+  it("blocks a cat heredoc piped to tee", () => {
+    const cmd = "cat <<EOF | tee out.txt\nbody\nEOF";
+    expect(detectFileWriteBypass(cmd)).toMatchObject({
+      tool: "tee",
+      target: "out.txt",
+    });
+  });
+
+  it("blocks an echo redirect whose content exceeds 80 chars", () => {
+    const long = "x".repeat(81);
+    expect(detectFileWriteBypass(`echo "${long}" > file.txt`)).toMatchObject({
+      kind: "file-write",
+      tool: "echo",
+      target: "file.txt",
+    });
+  });
+
+  it("blocks a multiline echo redirect even when short", () => {
+    expect(
+      detectFileWriteBypass('echo "line1\nline2" > file.txt'),
+    ).toMatchObject({ kind: "file-write", tool: "echo" });
+  });
+
+  it("blocks a long printf redirect", () => {
+    const long = "x".repeat(81);
+    expect(
+      detectFileWriteBypass(`printf '%s\\n' ${long} > file.txt`),
+    ).toMatchObject({ kind: "file-write", tool: "printf", target: "file.txt" });
+  });
+
+  it("allows a short echo append one-liner", () => {
+    expect(detectFileWriteBypass('echo "FOO=bar" >> .env')).toBeUndefined();
+  });
+
+  it("allows a heredoc used as pipe data", () => {
+    expect(detectFileWriteBypass("cat <<EOF | jq .\n{}\nEOF")).toBeUndefined();
+    expect(
+      detectFileWriteBypass("git commit -F - <<EOF\nmsg\nEOF"),
+    ).toBeUndefined();
+  });
+
+  it("allows tee without a file target (stdout only)", () => {
+    expect(detectFileWriteBypass("cat <<EOF | tee\nbody\nEOF")).toBeUndefined();
+  });
+
+  it("allows plain redirects without inline content", () => {
+    expect(detectFileWriteBypass("cat a.txt b.txt > c.txt")).toBeUndefined();
+    expect(detectFileWriteBypass("grep x app.log > out.txt")).toBeUndefined();
+  });
+
+  it("blocks a cat heredoc with no body", () => {
+    expect(detectFileWriteBypass("cat <<EOF > out.txt")).toMatchObject({
+      kind: "file-write",
+      tool: "cat",
+      target: "out.txt",
+      code: "",
+    });
+  });
+
+  it("allows plain cat and script-file execution", () => {
+    expect(detectFileWriteBypass("cat file.txt")).toBeUndefined();
+    expect(
+      detectFileWriteBypass("python3 scripts/import.py <<EOF\ndata\nEOF"),
     ).toBeUndefined();
   });
 });
