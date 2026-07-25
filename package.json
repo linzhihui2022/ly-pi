@@ -9,10 +9,12 @@
     "pi-themes",
     "pi-agents",
     "mcp",
-    "settings"
+    "settings",
+    "tools/*"
   ],
   "scripts": {
     "deploy": "turbo run deploy",
+    "check-docs": "bun run tools/check-docs/index.ts",
     "format": "biome format --write .",
     "check": "biome check --write ."
   },
