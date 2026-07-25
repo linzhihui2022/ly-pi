@@ -70,27 +70,21 @@ cd pi-extensions/my-hud && vitest run
 - JSON 配置文件与扩展目录同级：`pi-extensions/my-xxx.json`
 - 支持热重载（通过 `/reload`）
 - 纯配置扩展统一放在 `pi-config/`
+- 扩展运行时使用 TypeBox 做类型校验
+- 格式与 lint 使用 Biome：`bun run format` / `bun run check`
+- `pi-skills/skills/` 仅维护仓库自有技能，不镜像或迁移外部技能副本；部署为快照式，会清除本机已删除的旧副本
+- 子代理运行时为 `npm:pi-subagents`，不得与 `npm:@gotgenes/pi-subagents` 并装；`pi-agents/` 仅保留 5 个 PR 审查角色，通用角色由官方包提供
 - `pi-themes/scripts/deploy.ts` 只部署 `*.json` 主题文件，排除 `package.json`（Pi 会把目录下所有 `.json` 当主题加载，非主题文件会导致校验错误）
 
-### 需求文档同步
+### 需求与规格工作流
 
-项目中若存在 `SPEC.md` 和 `REQUIREMENTS.md`（或同级/同目录下的规格与需求文件），**任何需求变动都必须先更新文档，再改代码**。
+本仓库的需求与规格由 Matt Pocock skills 工作流管理，**不再维护 `REQUIREMENTS.md` / `SPEC.md`**（2026-07 废除，历史内容见 git）。
 
-触发条件：
-
-- 用户主动提出新需求或变更现有需求
-- 实现过程中发现需求与文档不符，需要调整
-- 讨论后确认需求范围发生变化
-
-执行顺序：
-
-1. 发现需求变动 → 立即停下手头编码
-2. 更新 `REQUIREMENTS.md`（「要什么 / 不做什么」清单）
-3. 若变动影响设计决策或模块职责，同步更新 `SPEC.md`
-4. 请用户确认（或至少通读确认无误）
-5. 确认后再继续实现
-
-不允许：先改代码，事后补文档。
+- 新需求：先跑 `/to-spec` 产出规格到 `.scratch/<feature-slug>/spec.md`，经用户确认后 `/to-tickets` 拆票到 `.scratch/<feature-slug>/issues/`
+- 票据约定（`NN-slug` 编号、`Status:` 行、认领/解决流程）见 `docs/agents/issue-tracker.md`
+- `.scratch/` 纳入 git，即本仓库的本地 issue tracker
+- 文档修正类变更（README、AGENTS.md 等耐久文档的内容更新）直接修改，不需要走 spec
+- 一致性防线：`bun run check-docs` 校验文档与仓库现实对齐（README 扩展表、相对链接、`.scratch/` 票据约定、旧体系文件复活），turbo `test` 流水线强制执行
 
 ## Agent skills
 

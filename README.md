@@ -4,7 +4,7 @@
 
 > 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 5 个 Pi 扩展、6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
 
-项目级需求文档见 [`REQUIREMENTS.md`](./REQUIREMENTS.md)，架构与流程规格见 [`SPEC.md`](./SPEC.md)。
+> 需求与规格的管理方式见下文「文档系统」一节。
 
 ---
 
@@ -24,17 +24,28 @@ configure/
 ├── pi-agents/              # 子代理定义（5 个 PR 审查角色）
 ├── mcp/                    # MCP 服务器配置
 ├── settings/               # Pi 设置（子代理模型映射）
+├── tools/check-docs/       # 文档一致性校验（turbo test 流水线强制）
+├── docs/agents/            # Matt skills 配置（issue tracker、标签、domain docs）
+├── .scratch/               # 本地 issue tracker：需求规格与票据
 │
 ├── starship.toml           # Starship 终端提示符
 ├── wezterm.lua             # WezTerm 终端配置
 ├── MY-AGENTS.md            # 全局 Agent 指令 → ~/.pi/agent/AGENTS.md
 ├── AGENTS.md               # configure 仓库自身的开发指南
-├── REQUIREMENTS.md         # 项目级需求索引
-├── SPEC.md                 # 项目级架构与流程规格
 ├── turbo.json              # Turborepo 流水线（build → test → deploy）
 ├── install.sh              # 一键部署入口
 └── package.json            # Monorepo 根配置
 ```
+
+---
+
+## 📚 文档系统
+
+本仓库的需求与规格由 [mattpocock/skills](https://github.com/mattpocock/skills) 工作流管理，不维护传统的 REQUIREMENTS/SPEC 文档：
+
+- **需求规格**：`/to-spec` 产出到 `.scratch/<feature-slug>/spec.md`，`/to-tickets` 拆票到 `.scratch/<feature-slug>/issues/`
+- **耐久文档**：`README.md`（本文件）、`AGENTS.md` / `MY-AGENTS.md`（开发规范）、`docs/agents/`（skill 配置）
+- **一致性防线**：`bun run check-docs` 校验文档与仓库现实对齐，turbo `test` 流水线强制执行
 
 ---
 
