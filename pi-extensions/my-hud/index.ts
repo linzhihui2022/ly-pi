@@ -9,24 +9,24 @@
  *   - dist/modes/interactive/components/footer.js (token aggregation, color thresholds)
  */
 
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { getLastUserMessage } from "./session";
 import { Bar } from "./bar";
-import { icon } from "./icons";
-import { pickRandomMessage } from "./working";
-import { checkMemoryPressure } from "./memory";
-import { findVitestProcesses } from "./vitest-process";
-import { buildMemoryWarningLines } from "./memory-widget";
-import { getPullRequestForCurrentBranch, openUrl } from "./pr";
 import { loadHudConfig } from "./config";
 import { setModelShortNames } from "./format";
+import { icon } from "./icons";
+import { checkMemoryPressure } from "./memory";
+import { buildMemoryWarningLines } from "./memory-widget";
+import { getPullRequestForCurrentBranch, openUrl } from "./pr";
 import { setHiddenFields } from "./render";
+import { getLastUserMessage } from "./session";
+import { findVitestProcesses } from "./vitest-process";
+import { pickRandomMessage } from "./working";
 
 // Resolve extension directory — prefer __dirname, fall back to CWD-relative
 const EXT_DIR = (() => {
@@ -39,23 +39,22 @@ const EXT_DIR = (() => {
   return process.cwd();
 })();
 
+export { Bar } from "./bar";
+export {
+  contextColored,
+  formatCacheRate,
+  formatTokens,
+  shortModelName,
+} from "./format";
 // Re-export pure helpers for consumers / tests
 export { icon } from "./icons";
-export {
-  formatTokens,
-  contextColored,
-  shortModelName,
-  formatCacheRate,
-} from "./format";
-export { aggregateSessionUsage, getLastUserMessage } from "./session";
-export { buildStatusLine, formatGitStatus } from "./render";
-export { pickRandomMessage, WORKING_MESSAGES } from "./working";
-export { Bar } from "./bar";
-export type { TokenUsage, StatusLineData } from "./types";
-
 export { checkMemoryPressure } from "./memory";
-export { findVitestProcesses } from "./vitest-process";
 export { buildMemoryWarningLines } from "./memory-widget";
+export { buildStatusLine, formatGitStatus } from "./render";
+export { aggregateSessionUsage, getLastUserMessage } from "./session";
+export type { StatusLineData, TokenUsage } from "./types";
+export { findVitestProcesses } from "./vitest-process";
+export { pickRandomMessage, WORKING_MESSAGES } from "./working";
 
 const MEMORY_WIDGET_KEY = "my-hud-memory-warning";
 

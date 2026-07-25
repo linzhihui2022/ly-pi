@@ -46,8 +46,8 @@ describe("findLastUserMessageEntry", () => {
     ]);
     const result = findLastUserMessageEntry(branch);
     expect(result).toBeDefined();
-    expect(result!.id).toBe("c");
-    expect(result!.message.content).toBe("second");
+    expect(result?.id).toBe("c");
+    expect(result?.message.content).toBe("second");
   });
 
   it("finds user message in the middle", () => {
@@ -65,7 +65,7 @@ describe("findLastUserMessageEntry", () => {
     ]);
     const result = findLastUserMessageEntry(branch);
     expect(result).toBeDefined();
-    expect(result!.id).toBe("a");
+    expect(result?.id).toBe("a");
   });
 
   it("finds user message as first entry", () => {
@@ -74,7 +74,7 @@ describe("findLastUserMessageEntry", () => {
     ]);
     const result = findLastUserMessageEntry(branch);
     expect(result).toBeDefined();
-    expect(result!.id).toBe("a");
+    expect(result?.id).toBe("a");
   });
 
   it("ignores custom_message entries", () => {
@@ -90,6 +90,6 @@ describe("findLastUserMessageEntry", () => {
     ]);
     const result = findLastUserMessageEntry(branch);
     expect(result).toBeDefined();
-    expect(result!.id).toBe("a");
+    expect(result?.id).toBe("a");
   });
 });

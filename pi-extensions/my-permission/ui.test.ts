@@ -8,6 +8,7 @@ import {
 } from "./ui";
 
 function stripAnsi(text: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI codes requires the ESC byte
   return text.replace(/\x1b\[[0-9;]*m/g, "");
 }
 

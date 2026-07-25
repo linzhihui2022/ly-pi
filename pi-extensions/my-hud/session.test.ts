@@ -1,6 +1,6 @@
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { aggregateJudgeStats, aggregateSessionUsage } from "./session";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 describe("aggregateJudgeStats", () => {
   it("returns zeros for empty entries", () => {
@@ -9,9 +9,21 @@ describe("aggregateJudgeStats", () => {
 
   it("counts allowed and denied decisions", () => {
     const entries: SessionEntry[] = [
-      { type: "custom", customType: "my-permission-judge", data: { decision: "allowed" } },
-      { type: "custom", customType: "my-permission-judge", data: { decision: "denied" } },
-      { type: "custom", customType: "my-permission-judge", data: { decision: "allowed" } },
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: { decision: "allowed" },
+      },
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: { decision: "denied" },
+      },
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: { decision: "allowed" },
+      },
       { type: "custom", customType: "other-extension", data: {} },
     ] as SessionEntry[];
     expect(aggregateJudgeStats(entries)).toEqual({ allowed: 2, denied: 1 });
@@ -26,8 +38,16 @@ describe("aggregateJudgeStats", () => {
 
   it("ignores decisions with unknown values", () => {
     const entries: SessionEntry[] = [
-      { type: "custom", customType: "my-permission-judge", data: { decision: "allowed" } },
-      { type: "custom", customType: "my-permission-judge", data: { decision: "unknown" } },
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: { decision: "allowed" },
+      },
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: { decision: "unknown" },
+      },
       { type: "custom", customType: "my-permission-judge", data: {} },
     ] as SessionEntry[];
     expect(aggregateJudgeStats(entries)).toEqual({ allowed: 1, denied: 0 });

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
 import { execSync } from "node:child_process";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(),
@@ -32,7 +32,11 @@ describe("findVitestProcesses", () => {
         "  PID COMMAND          RSS",
         psLine(1, "/sbin/launchd", 1024),
         psLine(44124, "node /path/to/vitest.mjs run", 1249328),
-        psLine(44126, "/usr/local/bin/node node_modules/vitest/vitest.mjs", 858240),
+        psLine(
+          44126,
+          "/usr/local/bin/node node_modules/vitest/vitest.mjs",
+          858240,
+        ),
         psLine(100, "node index.js", 51200),
       ].join("\n"),
     );
@@ -41,8 +45,16 @@ describe("findVitestProcesses", () => {
     const processes = findVitestProcesses();
 
     expect(processes).toHaveLength(2);
-    expect(processes).toContainEqual({ pid: 44124, rssBytes: 1249328 * 1024, command: "node /path/to/vitest.mjs run" });
-    expect(processes).toContainEqual({ pid: 44126, rssBytes: 858240 * 1024, command: "/usr/local/bin/node node_modules/vitest/vitest.mjs" });
+    expect(processes).toContainEqual({
+      pid: 44124,
+      rssBytes: 1249328 * 1024,
+      command: "node /path/to/vitest.mjs run",
+    });
+    expect(processes).toContainEqual({
+      pid: 44126,
+      rssBytes: 858240 * 1024,
+      command: "/usr/local/bin/node node_modules/vitest/vitest.mjs",
+    });
   });
 
   it("ignores processes whose command contains vitest but is not node", async () => {

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
 import { execSync } from "node:child_process";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(),
@@ -35,7 +35,12 @@ describe("checkMemoryPressure", () => {
   it("returns ok when memory usage is below 80%", async () => {
     vi.mocked(execSync).mockImplementation((cmd: string) => {
       if (cmd === "vm_stat") {
-        return buildVmStat({ free: 100000, active: 10000, inactive: 10000, wired: 10000 });
+        return buildVmStat({
+          free: 100000,
+          active: 10000,
+          inactive: 10000,
+          wired: 10000,
+        });
       }
       if (cmd === "sysctl -n hw.memsize") {
         return String(16 * 1024 * 1024 * 1024);
@@ -53,7 +58,12 @@ describe("checkMemoryPressure", () => {
   it("returns not ok when memory usage is at or above 80%", async () => {
     vi.mocked(execSync).mockImplementation((cmd: string) => {
       if (cmd === "vm_stat") {
-        return buildVmStat({ free: 1000, active: 400000, inactive: 400000, wired: 100000 });
+        return buildVmStat({
+          free: 1000,
+          active: 400000,
+          inactive: 400000,
+          wired: 100000,
+        });
       }
       if (cmd === "sysctl -n hw.memsize") {
         return String(16 * 1024 * 1024 * 1024);

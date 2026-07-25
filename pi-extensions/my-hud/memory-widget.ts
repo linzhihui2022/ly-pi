@@ -5,7 +5,8 @@ import type { VitestProcess } from "./vitest-process";
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
 }
 
@@ -20,7 +21,9 @@ export function buildMemoryWarningLines(
 
   if (vitestProcesses.length > 0) {
     const sorted = [...vitestProcesses].sort((a, b) => a.pid - b.pid);
-    const procs = sorted.map((p) => `${p.pid}(${formatBytes(p.rssBytes)})`).join(", ");
+    const procs = sorted
+      .map((p) => `${p.pid}(${formatBytes(p.rssBytes)})`)
+      .join(", ");
     text += ` · vitest ${procs}`;
   }
 

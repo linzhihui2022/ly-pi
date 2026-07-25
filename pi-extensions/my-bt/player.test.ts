@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as coordinator from "./coordinator";
 import {
-  detectTerminal,
   listCategories,
   pickSoundFile,
   playCategory,
@@ -128,7 +127,7 @@ describe("pickSoundFile", () => {
     for (let i = 0; i < 20; i++) {
       const file = pickSoundFile(mockConfig, "affirmative");
       expect(file).toBeDefined();
-      results.add(file!);
+      if (file) results.add(file);
     }
     // With 2 files, both should appear over 20 runs
     expect(results.has("affirm_1.mp3")).toBe(true);

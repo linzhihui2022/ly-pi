@@ -457,6 +457,7 @@ function escapeHtml(text: string): string {
 export function ansiToHtml(text: string): string {
   // Match both standard ANSI (\x1b[38;2;R;G;Bm) and bare bracket sequences
   // produced by pi's thinking output ([38;2;R;G;Bm, [39m, [0m).
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI output requires the ESC byte
   const ANSI_RE = /(?:\x1b)?\[(38;2;\d+;\d+;\d+|39|0)m/g;
 
   let result = "";

@@ -36,16 +36,14 @@ export function aggregateSessionUsage(entries: SessionEntry[]): TokenUsage {
     );
 }
 
-export function aggregateJudgeStats(
-  entries: SessionEntry[],
-): { allowed: number; denied: number } {
+export function aggregateJudgeStats(entries: SessionEntry[]): {
+  allowed: number;
+  denied: number;
+} {
   let allowed = 0;
   let denied = 0;
   for (const entry of entries) {
-    if (
-      entry.type === "custom" &&
-      entry.customType === "my-permission-judge"
-    ) {
+    if (entry.type === "custom" && entry.customType === "my-permission-judge") {
       const decision = (entry.data as { decision?: string } | undefined)
         ?.decision;
       if (decision === "allowed") allowed++;

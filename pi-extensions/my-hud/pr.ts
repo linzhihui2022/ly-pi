@@ -29,10 +29,7 @@ export function parseGhPrOutput(stdout: string): PullRequestInfo | null {
   if (!trimmed) return null;
   try {
     const parsed = JSON.parse(trimmed) as { number?: unknown; url?: unknown };
-    if (
-      typeof parsed.number === "number" &&
-      typeof parsed.url === "string"
-    ) {
+    if (typeof parsed.number === "number" && typeof parsed.url === "string") {
       return { number: parsed.number, url: parsed.url };
     }
     return null;
@@ -51,9 +48,14 @@ export function parseRemoteUrl(
   if (!trimmed) return null;
 
   // HTTPS: https://github.com/owner/repo.git
-  const httpsMatch = trimmed.match(/^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/);
+  const httpsMatch = trimmed.match(
+    /^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/,
+  );
   if (httpsMatch) {
-    return { owner: httpsMatch[1]!, repo: httpsMatch[2]!.replace(/\.git$/, "") };
+    return {
+      owner: httpsMatch[1]!,
+      repo: httpsMatch[2]!.replace(/\.git$/, ""),
+    };
   }
 
   // SSH: git@github.com:owner/repo.git
@@ -103,10 +105,10 @@ export async function getPullRequestNumber(
   token?: string,
 ): Promise<PullRequestInfo | null> {
   try {
-    const { stdout } = await execAsync(
-      "gh pr view --json number,url",
-      { cwd, timeout: 5000 },
-    );
+    const { stdout } = await execAsync("gh pr view --json number,url", {
+      cwd,
+      timeout: 5000,
+    });
     const pr = parseGhPrOutput(stdout);
     if (pr) return pr;
   } catch {
@@ -152,10 +154,10 @@ export async function getPullRequestNumber(
  */
 export async function getCurrentBranch(cwd: string): Promise<string | null> {
   try {
-    const { stdout } = await execAsync(
-      "git branch --show-current",
-      { cwd, timeout: 3000 },
-    );
+    const { stdout } = await execAsync("git branch --show-current", {
+      cwd,
+      timeout: 3000,
+    });
     return stdout.trim() || null;
   } catch {
     return null;
@@ -188,9 +190,11 @@ export async function getPullRequestForCurrentBranch(
  */
 export function openUrl(url: string): Promise<void> {
   const command =
-    process.platform === "darwin" ? "open" :
-    process.platform === "win32" ? "start" :
-    "xdg-open";
+    process.platform === "darwin"
+      ? "open"
+      : process.platform === "win32"
+        ? "start"
+        : "xdg-open";
 
   return new Promise((resolve, reject) => {
     execFile(command, [url], (error) => {

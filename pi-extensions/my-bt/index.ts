@@ -31,7 +31,7 @@ function saveConfig(config: BtConfig): void {
   const raw = readFileSync(CONFIG_PATH, "utf-8");
   const existing = JSON.parse(raw) as BtConfig;
   const payload = { ...existing, enabled: config.enabled };
-  writeFileSync(CONFIG_PATH, JSON.stringify(payload, null, 2) + "\n", "utf-8");
+  writeFileSync(CONFIG_PATH, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
 }
 
 export default function myBt(pi: ExtensionAPI): void {
@@ -58,6 +58,7 @@ export default function myBt(pi: ExtensionAPI): void {
 
   for (const [eventName, category] of Object.entries(config.eventMap)) {
     if (!VALID_EVENTS.has(eventName)) continue;
+    // biome-ignore lint/suspicious/noExplicitAny: dynamic event name validated against VALID_EVENTS above
     pi.on(eventName as any, (_event, ctx) => {
       if (!config.enabled) return;
       if (eventName === "agent_end" && lastPlayedCategory === "question") {
@@ -73,7 +74,7 @@ export default function myBt(pi: ExtensionAPI): void {
   // ── Tool-driven playback ──
 
   if (config.toolEventMap) {
-    pi.on("tool_call", (event: any, ctx) => {
+    pi.on("tool_call", (event, ctx) => {
       if (!config.enabled) return;
       const category = config.toolEventMap?.[event.toolName];
       if (!category) return;

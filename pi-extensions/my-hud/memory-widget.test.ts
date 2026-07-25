@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
 import type { Theme } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it, vi } from "vitest";
 
 function createTheme(): Theme {
   return {
@@ -23,7 +23,11 @@ describe("buildMemoryWarningLines", () => {
     const { buildMemoryWarningLines } = await import("./memory-widget");
     const theme = createTheme();
 
-    const result = buildMemoryWarningLines(theme, { percent: 42, ok: true }, []);
+    const result = buildMemoryWarningLines(
+      theme,
+      { percent: 42, ok: true },
+      [],
+    );
 
     expect(result).toBeNull();
   });
@@ -32,7 +36,11 @@ describe("buildMemoryWarningLines", () => {
     const { buildMemoryWarningLines } = await import("./memory-widget");
     const theme = createTheme();
 
-    const result = buildMemoryWarningLines(theme, { percent: 87, ok: false }, []);
+    const result = buildMemoryWarningLines(
+      theme,
+      { percent: 87, ok: false },
+      [],
+    );
 
     expect(result).toEqual(["⚠️ 内存 87%"]);
     expect(theme.fg).toHaveBeenCalledWith("error", "⚠️ 内存 87%");
@@ -44,7 +52,11 @@ describe("buildMemoryWarningLines", () => {
 
     const result = buildMemoryWarningLines(theme, { percent: 87, ok: false }, [
       { pid: 44124, rssBytes: 1249328 * 1024, command: "node vitest.mjs run" },
-      { pid: 44126, rssBytes: 1500 * 1024 * 1024, command: "node vitest.mjs run" },
+      {
+        pid: 44126,
+        rssBytes: 1500 * 1024 * 1024,
+        command: "node vitest.mjs run",
+      },
     ]);
 
     expect(result).toEqual(["⚠️ 内存 87% · vitest 44124(1.2GB), 44126(1.5GB)"]);
@@ -59,8 +71,16 @@ describe("buildMemoryWarningLines", () => {
     const theme = createTheme();
 
     const result = buildMemoryWarningLines(theme, { percent: 87, ok: false }, [
-      { pid: 50000, rssBytes: 1024 * 1024 * 1024, command: "node vitest.mjs run" },
-      { pid: 10000, rssBytes: 1024 * 1024 * 1024, command: "node vitest.mjs run" },
+      {
+        pid: 50000,
+        rssBytes: 1024 * 1024 * 1024,
+        command: "node vitest.mjs run",
+      },
+      {
+        pid: 10000,
+        rssBytes: 1024 * 1024 * 1024,
+        command: "node vitest.mjs run",
+      },
     ]);
 
     expect(result).toEqual(["⚠️ 内存 87% · vitest 10000(1.0GB), 50000(1.0GB)"]);

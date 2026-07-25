@@ -437,7 +437,10 @@ async function myPermission(pi) {
   });
   pi.on("tool_call", async (event, ctx) => {
     const judge = createJudge(config, {
-      getAuth: typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? (model) => ctx.modelRegistry.getApiKeyAndHeaders(model) : undefined
+      getAuth: typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
+        const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+        return auth.ok ? auth : undefined;
+      } : undefined
     });
     const toolName = event.toolName;
     const value2 = stringifyToolInput(event);

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { parseGitStatus, getGitStatus } from "./git";
+import { describe, expect, it, vi } from "vitest";
+import { getGitStatus, parseGitStatus } from "./git";
 
 describe("parseGitStatus", () => {
   it("returns clean for repo with no changes", () => {

@@ -30,14 +30,14 @@ const subagentDir = join(homedir(), ".pi/agent/extensions/subagent");
 await mkdir(subagentDir, { recursive: true });
 await Bun.write(
   join(subagentDir, "config.json"),
-  JSON.stringify(piSubagents.runtime, null, 2) + "\n",
+  `${JSON.stringify(piSubagents.runtime, null, 2)}\n`,
 );
 
 // 2) subagents → ~/.pi/agent/settings.json (merge, preserving other keys)
 const settingsPath = join(homedir(), ".pi/agent/settings.json");
 const settings = await Bun.file(settingsPath).json();
 settings.subagents = piSubagents.subagents;
-await Bun.write(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+await Bun.write(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 
 // pi-goal: config → ~/.pi/agent/pi-goal.json
 await Bun.write(

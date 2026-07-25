@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Bar } from "./bar";
 
 vi.mock("./git", () => ({
@@ -17,7 +17,9 @@ vi.mock("./git", () => ({
 }));
 
 vi.mock("./pr", () => ({
-  getRemoteUrl: vi.fn(() => Promise.resolve("https://github.com/owner/repo.git")),
+  getRemoteUrl: vi.fn(() =>
+    Promise.resolve("https://github.com/owner/repo.git"),
+  ),
   parseRemoteUrl: vi.fn(() => ({ owner: "owner", repo: "repo" })),
   getPullRequestNumber: vi.fn(() =>
     Promise.resolve({
@@ -50,7 +52,6 @@ describe("Bar PR caching", () => {
     vi.clearAllMocks();
   });
 
-
   it("renders PR number when pull request is found", async () => {
     const bar = new Bar();
     const setWidget = vi.fn();
@@ -73,7 +74,9 @@ describe("Bar PR caching", () => {
   });
 
   it("handles PR fetch failure gracefully", async () => {
-    vi.mocked(getPullRequestNumber).mockRejectedValueOnce(new Error("api failed"));
+    vi.mocked(getPullRequestNumber).mockRejectedValueOnce(
+      new Error("api failed"),
+    );
     const bar = new Bar();
     const setWidget = vi.fn();
     const theme = createMockTheme();
@@ -134,7 +137,9 @@ describe("Bar PR caching", () => {
   });
 
   it("handles non-GitHub remote URL gracefully", async () => {
-    vi.mocked(getRemoteUrl).mockResolvedValueOnce("https://gitlab.com/owner/repo.git");
+    vi.mocked(getRemoteUrl).mockResolvedValueOnce(
+      "https://gitlab.com/owner/repo.git",
+    );
     vi.mocked(parseRemoteUrl).mockReturnValueOnce(null);
     const bar = new Bar();
     const setWidget = vi.fn();
@@ -157,10 +162,17 @@ describe("Bar PR caching", () => {
 
   it("does not start duplicate PR fetches while one is pending", async () => {
     vi.mocked(getPullRequestNumber).mockImplementationOnce(
-      () => new Promise((resolve) => setTimeout(() => resolve({
-        number: 42,
-        url: "https://github.com/owner/repo/pull/42",
-      }), 100)),
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                number: 42,
+                url: "https://github.com/owner/repo/pull/42",
+              }),
+            100,
+          ),
+        ),
     );
 
     const bar = new Bar();

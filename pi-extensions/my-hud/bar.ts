@@ -2,18 +2,18 @@
  * aboveEditor widget bar — displays session stats (project, model, tokens, cost, git status).
  */
 
+import { basename } from "node:path";
 import type {
   ExtensionContext,
   ExtensionUIContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
-import { basename } from "node:path";
-import { aggregateSessionUsage, aggregateJudgeStats } from "./session";
 import { contextColored } from "./format";
-import { buildStatusLine } from "./render";
 import { getGitStatus } from "./git";
 import { getPullRequestNumber, getRemoteUrl, parseRemoteUrl } from "./pr";
+import { buildStatusLine } from "./render";
+import { aggregateJudgeStats, aggregateSessionUsage } from "./session";
 import type { GitStatus, PullRequestInfo } from "./types";
 
 const WIDGET_KEY = "my-hud-bar";

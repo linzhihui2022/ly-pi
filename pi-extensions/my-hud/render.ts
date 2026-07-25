@@ -2,20 +2,20 @@
  * Status line assembly.
  */
 
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   getCapabilities,
   hyperlink,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import { icon } from "./icons";
 import {
-  formatTokens,
-  shortModelName,
   formatCacheRate,
   formatPermissionStats,
+  formatTokens,
+  shortModelName,
 } from "./format";
-import type { StatusLineData, GitStatus } from "./types";
+import { icon } from "./icons";
+import type { GitStatus, StatusLineData } from "./types";
 
 let hiddenFields = new Set<string>();
 
@@ -48,7 +48,10 @@ export function buildStatusLine(
   }
   if (show("model")) {
     parts.push(
-      theme.fg("mdHeading", `${icon("model")}${shortModelName(modelName.trim())}`),
+      theme.fg(
+        "mdHeading",
+        `${icon("model")}${shortModelName(modelName.trim())}`,
+      ),
     );
   }
 

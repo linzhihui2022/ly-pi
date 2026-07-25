@@ -124,7 +124,7 @@ function createOverlay(
 
   // ── Subtitle (optional, muted gray) ──
   if (subtitle && subtitle.length > 0) {
-    var subField: $ = $.NSTextField.alloc.initWithFrame(
+    const subField: $ = $.NSTextField.alloc.initWithFrame(
       $.NSMakeRect(16, winH - 72, winW - 32, 16),
     );
     subField.setStringValue(subtitle);
@@ -169,8 +169,8 @@ function run(argv: string[]): void {
   // ── Create overlay on every screen ──
   var screens: $ = $.NSScreen.screens;
   var count: number = screens.count;
-  for (var i: number = 0; i < count; i++) {
-    var screen: $ = screens.objectAtIndex(i);
+  for (let i: number = 0; i < count; i++) {
+    const screen: $ = screens.objectAtIndex(i);
     createOverlay(screen, typeLabel, title, subtitle, duration, color, slot);
   }
 
@@ -182,7 +182,7 @@ function run(argv: string[]): void {
     (event: $) => {
       var clickWin: $ = event.window;
       if (clickWin) {
-        for (var j: number = 0; j < gOverlayWindows.length; j++) {
+        for (let j: number = 0; j < gOverlayWindows.length; j++) {
           if (clickWin.isEqual(gOverlayWindows[j])) {
             if (gTargetAppName) {
               $.NSWorkspace.sharedWorkspace().launchApplication(gTargetAppName);

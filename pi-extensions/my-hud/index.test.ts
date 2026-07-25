@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { openUrl, getPullRequestForCurrentBranch } from "./pr";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getGitStatus } from "./git";
 import { checkMemoryPressure } from "./memory";
+import { getPullRequestForCurrentBranch, openUrl } from "./pr";
 import { findVitestProcesses } from "./vitest-process";
 
 vi.mock("@earendil-works/pi-tui", () => ({
@@ -24,7 +24,9 @@ vi.mock("./git", () => ({
 }));
 
 vi.mock("./pr", () => ({
-  getRemoteUrl: vi.fn(() => Promise.resolve("https://github.com/owner/repo.git")),
+  getRemoteUrl: vi.fn(() =>
+    Promise.resolve("https://github.com/owner/repo.git"),
+  ),
   parseRemoteUrl: vi.fn(() => ({ owner: "owner", repo: "repo" })),
   getPullRequestNumber: vi.fn(() =>
     Promise.resolve({
@@ -1675,7 +1677,9 @@ describe("my-hud extension", () => {
     const command = registeredCommands.get("open-pr")!;
     await command.handler("", ctx);
 
-    expect(openUrl).toHaveBeenCalledWith("https://github.com/owner/repo/pull/42");
+    expect(openUrl).toHaveBeenCalledWith(
+      "https://github.com/owner/repo/pull/42",
+    );
   });
 
   it("/open-pr command notifies when no PR exists", async () => {
@@ -1741,7 +1745,11 @@ describe("my-hud extension", () => {
     vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 87, ok: false });
     vi.mocked(findVitestProcesses).mockReturnValue([
       { pid: 44124, rssBytes: 1249328 * 1024, command: "node vitest.mjs run" },
-      { pid: 44126, rssBytes: 1500 * 1024 * 1024, command: "node vitest.mjs run" },
+      {
+        pid: 44126,
+        rssBytes: 1500 * 1024 * 1024,
+        command: "node vitest.mjs run",
+      },
     ]);
 
     const mod = await loadModule();
@@ -1757,14 +1765,13 @@ describe("my-hud extension", () => {
     );
 
     const factory = mockCtx.ui.setWidget.mock.calls.find(
-      (call) => call[0] === "my-hud-memory-warning" && typeof call[1] === "function",
+      (call) =>
+        call[0] === "my-hud-memory-warning" && typeof call[1] === "function",
     )![1] as any;
     const component = factory(mockTui, mockTheme);
     const lines = component.render(200);
 
-    expect(lines).toEqual([
-      "⚠️ 内存 87% · vitest 44124(1.2GB), 44126(1.5GB)",
-    ]);
+    expect(lines).toEqual(["⚠️ 内存 87% · vitest 44124(1.2GB), 44126(1.5GB)"]);
   });
 
   it("agent_end also updates memory warning widget", async () => {

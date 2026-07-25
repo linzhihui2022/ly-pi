@@ -1,11 +1,16 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { buildStatusLine, setHiddenFields } from "./render";
 import { getCapabilities } from "@earendil-works/pi-tui";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildStatusLine, setHiddenFields } from "./render";
 
 vi.mock("@earendil-works/pi-tui", () => ({
   truncateToWidth: (text: string, _width: number) => text,
-  hyperlink: (text: string, url: string) => `\u001b]8;;${url}\u0007${text}\u001b]8;;\u0007`,
-  getCapabilities: vi.fn(() => ({ images: null, trueColor: true, hyperlinks: true })),
+  hyperlink: (text: string, url: string) =>
+    `\u001b]8;;${url}\u0007${text}\u001b]8;;\u0007`,
+  getCapabilities: vi.fn(() => ({
+    images: null,
+    trueColor: true,
+    hyperlinks: true,
+  })),
 }));
 
 function createMockTheme(): any {
@@ -67,12 +72,18 @@ describe("buildStatusLine with PR", () => {
       ...baseData,
       pullRequest: { number: 42, url: "https://github.com/owner/repo/pull/42" },
     });
-    expect(line).toContain("\u001b]8;;https://github.com/owner/repo/pull/42\u0007");
+    expect(line).toContain(
+      "\u001b]8;;https://github.com/owner/repo/pull/42\u0007",
+    );
     expect(line).toContain("\u001b]8;;\u0007");
   });
 
   it("falls back to plain PR number when hyperlinks are not supported", () => {
-    vi.mocked(getCapabilities).mockReturnValue({ images: null, trueColor: true, hyperlinks: false });
+    vi.mocked(getCapabilities).mockReturnValue({
+      images: null,
+      trueColor: true,
+      hyperlinks: false,
+    });
     const theme = createMockTheme();
     const line = buildStatusLine(theme, 200, {
       ...baseData,
@@ -125,7 +136,13 @@ describe("hiddenFields", () => {
 
   const richData = {
     ...baseData,
-    usage: { input: 1234, output: 5678, cacheRead: 999, cacheWrite: 0, cost: 1.5 },
+    usage: {
+      input: 1234,
+      output: 5678,
+      cacheRead: 999,
+      cacheWrite: 0,
+      cost: 1.5,
+    },
     gitStatus: dirtyGitStatus,
     judgeStats: { allowed: 12, denied: 3 },
   };

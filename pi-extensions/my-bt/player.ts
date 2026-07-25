@@ -1,7 +1,6 @@
-import { exec } from "node:child_process";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { spawnOverlayProcess, spawnSoundProcess } from "./coordinator";
-import type { BtCategory, BtConfig, OverlayColor } from "./types";
+import type { BtConfig, OverlayColor } from "./types";
 
 /**
  * Detect the terminal emulator running the current process.
@@ -65,7 +64,7 @@ export function playOverlay(
   config: BtConfig,
   eventName: string,
   extDir: string,
-  onError?: (message: string) => void,
+  _onError?: (message: string) => void,
 ): void {
   if (!config.overlayTextMap) return;
 
@@ -77,7 +76,6 @@ export function playOverlay(
   const slot = overlaySlot % MAX_OVERLAY_SLOTS;
   overlaySlot++;
 
-  const scriptPath = resolve(extDir, "dist", "mac-overlay.js");
   const terminalApp = detectTerminal();
   spawnOverlayProcess(
     extDir,

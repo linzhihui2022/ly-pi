@@ -11,7 +11,7 @@ import {
   rmdirSync,
   writeFileSync,
 } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { BtConfig } from "./types";
 
@@ -143,7 +143,7 @@ export function spawnOverlayProcess(
   extDir: string,
   type: string,
   title: string,
-  subtitle: string,
+  subtitle: string | undefined,
   duration: number,
   color: string,
   slot: number,
