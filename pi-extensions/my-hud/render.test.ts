@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { buildStatusLine } from "./render";
+import { buildStatusLine, setHiddenFields } from "./render";
 import { getCapabilities } from "@earendil-works/pi-tui";
 
 vi.mock("@earendil-works/pi-tui", () => ({
@@ -103,6 +103,102 @@ describe("buildStatusLine with PR", () => {
       ...baseData,
       judgeStats: { allowed: 12, denied: 3 },
     });
+    expect(line).toContain("12/3");
+  });
+});
+
+describe("hiddenFields", () => {
+  afterEach(() => {
+    setHiddenFields([]);
+  });
+
+  const dirtyGitStatus = {
+    ahead: 0,
+    behind: 0,
+    staged: 2,
+    unstaged: 0,
+    untracked: 0,
+    stashed: 0,
+    conflicted: 0,
+    isClean: false,
+  };
+
+  const richData = {
+    ...baseData,
+    usage: { input: 1234, output: 5678, cacheRead: 999, cacheWrite: 0, cost: 1.5 },
+    gitStatus: dirtyGitStatus,
+    judgeStats: { allowed: 12, denied: 3 },
+  };
+
+  it("shows all fields by default", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, richData);
+    expect(line).toContain("my-project");
+    expect(line).toContain("gpt-4");
+    expect(line).toContain("main");
+    expect(line).toContain("++2");
+    expect(line).toContain("42%");
+    expect(line).toContain("1.2k");
+    expect(line).toContain("5.7k");
+    expect(line).toContain("999");
+    expect(line).toContain("1.50");
+    expect(line).toContain("45%");
+    expect(line).toContain("12/3");
+  });
+
+  it("hides every configured field", () => {
+    setHiddenFields([
+      "project",
+      "model",
+      "branch",
+      "gitStatus",
+      "context",
+      "input",
+      "output",
+      "cacheRead",
+      "cost",
+      "cacheRate",
+      "permission",
+    ]);
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, richData);
+    expect(line).not.toContain("my-project");
+    expect(line).not.toContain("gpt-4");
+    expect(line).not.toContain("main");
+    expect(line).not.toContain("++2");
+    expect(line).not.toContain("42%");
+    expect(line).not.toContain("1.2k");
+    expect(line).not.toContain("5.7k");
+    expect(line).not.toContain("999");
+    expect(line).not.toContain("1.50");
+    expect(line).not.toContain("45%");
+    expect(line).not.toContain("12/3");
+  });
+
+  it("hides git status independently of branch", () => {
+    setHiddenFields(["gitStatus"]);
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, richData);
+    expect(line).toContain("main");
+    expect(line).not.toContain("++2");
+  });
+
+  it("hides branch but keeps git status", () => {
+    setHiddenFields(["branch"]);
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, richData);
+    expect(line).not.toContain("main");
+    expect(line).toContain("++2");
+  });
+
+  it("ignores unknown field names", () => {
+    setHiddenFields(["bogus"]);
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, richData);
+    expect(line).toContain("my-project");
+    expect(line).toContain("gpt-4");
+    expect(line).toContain("main");
+    expect(line).toContain("1.50");
     expect(line).toContain("12/3");
   });
 });

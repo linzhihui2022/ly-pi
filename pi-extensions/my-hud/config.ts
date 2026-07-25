@@ -9,15 +9,23 @@ import { join } from "node:path";
 
 export interface HudConfig {
   modelShortNames: Record<string, string>;
+  hiddenFields: string[];
 }
 
-export const DEFAULT_HUD_CONFIG: HudConfig = { modelShortNames: {} };
+export const DEFAULT_HUD_CONFIG: HudConfig = {
+  modelShortNames: {},
+  hiddenFields: [],
+};
 
 function isStringMap(value: unknown): value is Record<string, string> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
   return Object.values(value).every((v) => typeof v === "string");
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === "string");
 }
 
 export function loadHudConfig(dir: string): HudConfig {
@@ -28,6 +36,9 @@ export function loadHudConfig(dir: string): HudConfig {
       modelShortNames: isStringMap(parsed?.modelShortNames)
         ? parsed.modelShortNames
         : {},
+      hiddenFields: isStringArray(parsed?.hiddenFields)
+        ? parsed.hiddenFields
+        : [],
     };
   } catch {
     return { ...DEFAULT_HUD_CONFIG };

@@ -26,6 +26,7 @@ import { buildMemoryWarningLines } from "./memory-widget";
 import { getPullRequestForCurrentBranch, openUrl } from "./pr";
 import { loadHudConfig } from "./config";
 import { setModelShortNames } from "./format";
+import { setHiddenFields } from "./render";
 
 // Resolve extension directory — prefer __dirname, fall back to CWD-relative
 const EXT_DIR = (() => {
@@ -64,7 +65,9 @@ export default function myHud(pi: ExtensionAPI): void {
   let currentTui: { requestRender(): void } | null = null;
   let bar: Bar | undefined;
 
-  setModelShortNames(loadHudConfig(EXT_DIR).modelShortNames);
+  const hudConfig = loadHudConfig(EXT_DIR);
+  setModelShortNames(hudConfig.modelShortNames);
+  setHiddenFields(hudConfig.hiddenFields);
 
   // Refresh both footer and widget on lifecycle events
   function requestRender(): void {

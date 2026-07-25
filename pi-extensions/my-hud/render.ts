@@ -17,6 +17,13 @@ import {
 } from "./format";
 import type { StatusLineData, GitStatus } from "./types";
 
+let hiddenFields = new Set<string>();
+
+/** Install fields to hide from the status line (from my-hud.json). */
+export function setHiddenFields(fields: string[]): void {
+  hiddenFields = new Set(fields);
+}
+
 export function buildStatusLine(
   theme: Theme,
   width: number,
@@ -32,17 +39,20 @@ export function buildStatusLine(
     pullRequest,
     judgeStats,
   } = data;
+  const show = (field: string): boolean => !hiddenFields.has(field);
   const project =
     rawProject.length > 10 ? rawProject.slice(0, 8) + ".." : rawProject;
-  const parts: string[] = [
-    theme.fg("mdCode", `${icon("project")}${project}`),
-    theme.fg(
-      "mdHeading",
-      `${icon("model")}${shortModelName(modelName.trim())}`,
-    ),
-  ];
+  const parts: string[] = [];
+  if (show("project")) {
+    parts.push(theme.fg("mdCode", `${icon("project")}${project}`));
+  }
+  if (show("model")) {
+    parts.push(
+      theme.fg("mdHeading", `${icon("model")}${shortModelName(modelName.trim())}`),
+    );
+  }
 
-  if (branch) {
+  if (branch && show("branch")) {
     const branchPrefix = theme.fg(
       "customMessageLabel",
       `${icon("branch")}${branch}`,
@@ -59,29 +69,51 @@ export function buildStatusLine(
     }
 
     parts.push(branchText);
+  }
+  if (branch && show("gitStatus")) {
     const gitStatusStr = formatGitStatus(theme, gitStatus);
     if (gitStatusStr) {
       parts.push(gitStatusStr);
     }
   }
 
-  parts.push(
-    ctxColored,
-    theme.fg("mdListBullet", `${icon("input")}${formatTokens(usage.input)}`),
-    theme.fg("thinkingLow", `${icon("output")}${formatTokens(usage.output)}`),
-    theme.fg(
-      "thinkingMedium",
-      `${icon("cacheRead")}${formatTokens(usage.cacheRead)}`,
-    ),
-    theme.fg("toolDiffRemoved", `${icon("cost")}${usage.cost.toFixed(2)}`),
-    theme.fg(
-      "accent",
-      `${icon("cacheRate")}${formatCacheRate(usage.input, usage.cacheRead)}`,
-    ),
-  );
+  if (show("context")) {
+    parts.push(ctxColored);
+  }
+  if (show("input")) {
+    parts.push(
+      theme.fg("mdListBullet", `${icon("input")}${formatTokens(usage.input)}`),
+    );
+  }
+  if (show("output")) {
+    parts.push(
+      theme.fg("thinkingLow", `${icon("output")}${formatTokens(usage.output)}`),
+    );
+  }
+  if (show("cacheRead")) {
+    parts.push(
+      theme.fg(
+        "thinkingMedium",
+        `${icon("cacheRead")}${formatTokens(usage.cacheRead)}`,
+      ),
+    );
+  }
+  if (show("cost")) {
+    parts.push(
+      theme.fg("toolDiffRemoved", `${icon("cost")}${usage.cost.toFixed(2)}`),
+    );
+  }
+  if (show("cacheRate")) {
+    parts.push(
+      theme.fg(
+        "accent",
+        `${icon("cacheRate")}${formatCacheRate(usage.input, usage.cacheRead)}`,
+      ),
+    );
+  }
 
   const permissionStats = formatPermissionStats(judgeStats);
-  if (permissionStats) {
+  if (show("permission") && permissionStats) {
     parts.push(
       theme.fg("accent", `${icon("shield")}${judgeStats!.allowed}`) +
         theme.fg("dim", "/") +
