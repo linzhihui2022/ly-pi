@@ -1,5 +1,9 @@
 {
-  "extensions": ["extensions/my-script-guard", "extensions/my-permission"],
+  "extensions": [
+    "extensions/my-cd-guard",
+    "extensions/my-script-guard",
+    "extensions/my-permission"
+  ],
   "subagents": {
     "agentOverrides": {
       "worker": {
