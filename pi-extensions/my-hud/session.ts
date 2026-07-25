@@ -43,7 +43,7 @@ export function aggregateJudgeStats(
   let denied = 0;
   for (const entry of entries) {
     if (
-      "customType" in entry &&
+      entry.type === "custom" &&
       entry.customType === "my-permission-judge"
     ) {
       const decision = (entry.data as { decision?: string } | undefined)
