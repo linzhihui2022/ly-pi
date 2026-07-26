@@ -4,6 +4,21 @@ import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import { stripRedundantCd } from "./detector";
 
 export default function myCdGuard(pi: ExtensionAPI): void {
+  let projectRoot = "";
+
+  pi.on("session_start", (_event, ctx) => {
+    projectRoot = ctx.cwd;
+  });
+
+  pi.on("before_agent_start", async (event) => {
+    if (!projectRoot) return;
+    return {
+      systemPrompt:
+        event.systemPrompt +
+        `\n\nThe shell starts in ${projectRoot}. Do not prepend \`cd ${projectRoot} &&\` before commands — it is redundant.`,
+    };
+  });
+
   pi.on("tool_call", (event, ctx) => {
     if (!isToolCallEventType("bash", event)) return undefined;
     const result = stripRedundantCd(event.input.command, ctx.cwd, realpathSync);
