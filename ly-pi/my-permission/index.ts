@@ -12,6 +12,7 @@ import { resolveExtDir } from "../src/shared/ext-dir";
 import { loadFile } from "../src/shared/file";
 import {
   servePreviewFile,
+  stopPreviewServer,
 } from "../src/shared/preview";
 import { loadConfig } from "./config";
 import { createJudge } from "./judge";
@@ -329,6 +330,10 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         emoji: "⚖️",
       });
     },
+  });
+
+  pi.on("session_shutdown", async () => {
+    await stopPreviewServer();
   });
 
   pi.on("tool_call", async (event, ctx) => {

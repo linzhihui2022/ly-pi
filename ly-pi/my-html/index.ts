@@ -5,6 +5,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   servePreviewFile,
+  stopPreviewServer,
 } from "../src/shared/preview";
 import {
   buildHtmlDocument,
@@ -66,5 +67,10 @@ export default function myHtml(pi: ExtensionAPI): void {
         );
       }
     },
+  });
+
+  // ── Lifecycle ──
+  pi.on("session_shutdown", async () => {
+    await stopPreviewServer();
   });
 }

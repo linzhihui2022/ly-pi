@@ -52879,6 +52879,9 @@ function myHtml(pi) {
       }
     }
   });
+  pi.on("session_shutdown", async () => {
+    await stopPreviewServer();
+  });
 }
 
 // my-hud/index.ts
@@ -59203,6 +59206,9 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
       });
     }
   });
+  pi.on("session_shutdown", async () => {
+    await stopPreviewServer();
+  });
   pi.on("tool_call", async (event, ctx) => {
     const judge = createJudge(config, {
       judgePrompt,
@@ -59404,9 +59410,6 @@ async function ly_pi_default(pi) {
   myHtml(pi);
   myBt(pi);
   myHud(pi);
-  pi.on("session_shutdown", async () => {
-    await stopPreviewServer();
-  });
 }
 export {
   ly_pi_default as default
