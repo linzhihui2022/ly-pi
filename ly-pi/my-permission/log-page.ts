@@ -1,4 +1,4 @@
-import { buildHtmlDocument } from "web-preview";
+import { buildHtmlDocument } from "../web-preview/index";
 import type { JudgeLogEntry } from "./stats";
 
 const PAGE_CSS = `body {

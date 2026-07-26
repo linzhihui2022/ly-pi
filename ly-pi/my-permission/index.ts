@@ -6,13 +6,13 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 import open from "open";
 import {
   ensurePreviewServer,
   PREVIEW_DIR,
   stopPreviewServer,
-} from "../../ly-pi/web-preview/index";
+} from "../web-preview/index";
 import { loadConfig } from "./config";
 import { createJudge } from "./judge";
 import { renderJudgeLogPage } from "./log-page";
