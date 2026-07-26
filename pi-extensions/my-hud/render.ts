@@ -106,6 +106,11 @@ export function buildStatusLine(
       theme.fg("toolDiffRemoved", `${icon("cost")}${usage.cost.toFixed(2)}`),
     );
   }
+  if (typeof data.judgeCost === "number" && data.judgeCost > 0 && show("cost")) {
+    parts.push(
+      theme.fg("thinkingMedium", `${icon("shield")}${data.judgeCost.toFixed(4)}`),
+    );
+  }
   if (show("cacheRate")) {
     parts.push(
       theme.fg(

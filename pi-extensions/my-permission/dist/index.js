@@ -3249,7 +3249,13 @@ function createJudge(config, deps) {
         headers: auth?.headers
       });
       clearTimeout(timeout);
-      return parseJudgeResponse(response) ?? failureResult("法官模型返回格式不正确，请手动确认", input);
+      const cost = response.usage?.cost?.total;
+      const parsed = parseJudgeResponse(response);
+      if (parsed) {
+        parsed.cost = cost;
+        return parsed;
+      }
+      return failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
       clearTimeout(timeout);
       console.warn("[my-permission] judge call failed:", error);
@@ -3578,6 +3584,7 @@ function createAdvocate(config) {
         apiKey: auth?.apiKey,
         headers: auth?.headers
       });
+      const cost = response.usage?.cost?.total;
       const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
         return { error: "教授模型返回了空内容" };
@@ -3586,7 +3593,7 @@ function createAdvocate(config) {
       if (!parsed) {
         return { error: "教授模型返回了无法解析的 JSON" };
       }
-      return { suggestion: parsed };
+      return { suggestion: parsed, cost };
     } catch (err) {
       return {
         error: `教授模型调用失败: ${err.message}`
@@ -3708,11 +3715,12 @@ function createMerger(config) {
         apiKey: auth?.apiKey,
         headers: auth?.headers
       });
+      const cost = response.usage?.cost?.total;
       const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
         return { error: "融合模型返回了空内容" };
       }
-      return { mergedText: text.trim() };
+      return { mergedText: text.trim(), cost };
     } catch (err) {
       return { error: `融合模型调用失败: ${err.message}` };
     }
@@ -3792,6 +3800,7 @@ function createProsecutor(config) {
         apiKey: auth?.apiKey,
         headers: auth?.headers
       });
+      const cost = response.usage?.cost?.total;
       const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
         return { error: "审查模型返回了空内容" };
@@ -3800,7 +3809,7 @@ function createProsecutor(config) {
       if (!parsed) {
         return { error: "审查模型返回了无法解析的 JSON" };
       }
-      return { suggestion: parsed };
+      return { suggestion: parsed, cost };
     } catch (err) {
       return {
         error: `审查模型调用失败: ${err.message}`
@@ -4113,6 +4122,9 @@ function recordJudgeStats(pi, input, result) {
   if (result.score !== undefined) {
     entry.score = result.score;
   }
+  if (result.cost !== undefined) {
+    entry.cost = result.cost;
+  }
   pi.appendEntry(JUDGE_STATS_CUSTOM_TYPE, entry);
 }
 function collectAllowed(entries) {
@@ -4337,6 +4349,8 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
           details: {}
         };
       }
+      const totalCost = (result.cost ?? 0) + (mergeResult.cost ?? 0);
+      ctx.ui.notify(`\uD83C\uDF93 辩护人费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
       const write = await ctx.ui.confirm(`\uD83C\uDF93 辩护人融合完成 — 确认写入？`, `${C.green}${mergeResult.mergedText}${C.reset}`);
       if (write) {
         writeFileSync(join2(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
@@ -4441,6 +4455,8 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
           details: {}
         };
       }
+      const totalCost = (result.cost ?? 0) + (mergeResult.cost ?? 0);
+      ctx.ui.notify(`⚖️ 检察官费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
       const write = await ctx.ui.confirm(`⚖️ 检察官融合完成 — 确认写入？`, `${C.green}${mergeResult.mergedText}${C.reset}`);
       if (write) {
         writeFileSync(join2(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");

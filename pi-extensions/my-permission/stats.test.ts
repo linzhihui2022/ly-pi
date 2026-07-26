@@ -74,6 +74,43 @@ describe("recordJudgeStats", () => {
       toolFor: "删除根目录",
     });
   });
+
+  it("records cost when present", () => {
+    const pi = createMockPi();
+    recordJudgeStats(
+      pi,
+      { toolName: "bash", value: "git status" },
+      {
+        safe: true,
+        score: 8,
+        reason: "安全",
+        toolFor: "git状态",
+        cost: 0.000085,
+      },
+    );
+    expect(pi.appendEntry).toHaveBeenCalledWith(JUDGE_STATS_CUSTOM_TYPE, {
+      decision: "allowed",
+      toolName: "bash",
+      value: "git status",
+      safe: true,
+      score: 8,
+      reason: "安全",
+      toolFor: "git状态",
+      cost: 0.000085,
+    });
+  });
+
+  it("omits cost when undefined", () => {
+    const pi = createMockPi();
+    recordJudgeStats(
+      pi,
+      { toolName: "bash", value: "ls" },
+      { safe: true, reason: "安全", toolFor: "列表" },
+    );
+    const callArg = (pi.appendEntry as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as Record<string, unknown>;
+    expect(callArg).not.toHaveProperty("cost");
+  });
 });
 
 describe("collectJudgeLogs", () => {

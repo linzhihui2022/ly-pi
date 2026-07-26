@@ -11,6 +11,8 @@ export interface ProsecutorSuggestion {
 export interface ProsecutorResult {
   suggestion?: ProsecutorSuggestion;
   error?: string;
+  /** Cost in USD from the analysis LLM call. */
+  cost?: number;
 }
 
 export type ProsecutorFn = (
@@ -118,6 +120,8 @@ export function createProsecutor(config: Config): ProsecutorFn {
         headers: auth?.headers,
       });
 
+      const cost = response.usage?.cost?.total;
+
       const text =
         response.content.find((c) => c.type === "text")?.text ??
         response.content
@@ -139,7 +143,7 @@ export function createProsecutor(config: Config): ProsecutorFn {
       if (!parsed) {
         return { error: "审查模型返回了无法解析的 JSON" };
       }
-      return { suggestion: parsed };
+      return { suggestion: parsed, cost };
     } catch (err) {
       return {
         error: `审查模型调用失败: ${(err as Error).message}`,

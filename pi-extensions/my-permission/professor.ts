@@ -12,6 +12,8 @@ export interface AdvocateResult {
   suggestion?: AdvocateSuggestion;
   mergedText?: string;
   error?: string;
+  /** Total cost in USD (analysis + merge calls). */
+  cost?: number;
 }
 
 export type AdvocateFn = (
@@ -128,6 +130,8 @@ export function createAdvocate(config: Config): AdvocateFn {
         headers: auth?.headers,
       });
 
+      const cost = response.usage?.cost?.total;
+
       const text =
         response.content.find((c) => c.type === "text")?.text ??
         response.content
@@ -149,7 +153,7 @@ export function createAdvocate(config: Config): AdvocateFn {
       if (!parsed) {
         return { error: "教授模型返回了无法解析的 JSON" };
       }
-      return { suggestion: parsed };
+      return { suggestion: parsed, cost };
     } catch (err) {
       return {
         error: `教授模型调用失败: ${(err as Error).message}`,
@@ -302,6 +306,8 @@ export function createMerger(config: Config): MergerFn {
         headers: auth?.headers,
       });
 
+      const cost = response.usage?.cost?.total;
+
       const text =
         response.content.find((c) => c.type === "text")?.text ??
         response.content
@@ -319,7 +325,7 @@ export function createMerger(config: Config): MergerFn {
         return { error: "融合模型返回了空内容" };
       }
 
-      return { mergedText: text.trim() };
+      return { mergedText: text.trim(), cost };
     } catch (err) {
       return { error: `融合模型调用失败: ${(err as Error).message}` };
     }

@@ -37,6 +37,8 @@ export interface JudgeResult {
   score?: number;
   reason: string;
   toolFor: string;
+  /** Cost in USD from the judge LLM call. */
+  cost?: number;
 }
 
 export interface ToolInput {

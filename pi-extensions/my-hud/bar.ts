@@ -13,7 +13,7 @@ import { contextColored } from "./format";
 import { getGitStatus } from "./git";
 import { getPullRequestNumber, getRemoteUrl, parseRemoteUrl } from "./pr";
 import { buildStatusLine } from "./render";
-import { aggregateJudgeStats, aggregateSessionUsage } from "./session";
+import { aggregateJudgeCost, aggregateJudgeStats, aggregateSessionUsage } from "./session";
 import type { GitStatus, PullRequestInfo } from "./types";
 
 const WIDGET_KEY = "my-hud-bar";
@@ -148,6 +148,7 @@ export class Bar {
     const entries = this.ctx.sessionManager.getEntries();
     const usage = aggregateSessionUsage(entries);
     const judgeStats = aggregateJudgeStats(entries);
+    const judgeCost = aggregateJudgeCost(entries);
 
     const cu = this.ctx.getContextUsage();
     const ctxColored = contextColored(
@@ -168,6 +169,7 @@ export class Bar {
       gitStatus: this.gitStatus,
       pullRequest: this.pullRequest,
       judgeStats,
+      judgeCost,
     });
     return [line];
   }

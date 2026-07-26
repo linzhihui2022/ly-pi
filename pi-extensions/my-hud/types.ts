@@ -35,4 +35,6 @@ export interface StatusLineData {
   gitStatus?: GitStatus | null;
   pullRequest?: PullRequestInfo | null;
   judgeStats?: { allowed: number; denied: number };
+  /** Judge cost in CNY. */
+  judgeCost?: number;
 }

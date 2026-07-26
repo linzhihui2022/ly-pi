@@ -385,4 +385,33 @@ describe("createJudge", () => {
       failureReason(input, "法官模型调用超时（1ms），请手动确认"),
     );
   });
+
+  it("captures cost from response usage", async () => {
+    await mockComplete({
+      content: [
+        {
+          type: "text",
+          text: '{"safe":true,"score":8,"reason":"ok","toolFor":"read"}',
+        },
+      ],
+      usage: { cost: { total: 0.000085 } },
+    });
+    const judge = createJudge(config, judgeDeps);
+    const result = await judge(input, "/repo", undefined, resolveFnOk);
+    expect(result.cost).toBe(0.000085);
+  });
+
+  it("handles missing usage gracefully", async () => {
+    await mockComplete({
+      content: [
+        {
+          type: "text",
+          text: '{"safe":true,"score":9,"reason":"ok","toolFor":"read"}',
+        },
+      ],
+    });
+    const judge = createJudge(config, judgeDeps);
+    const result = await judge(input, "/repo", undefined, resolveFnOk);
+    expect(result.cost).toBeUndefined();
+  });
 });

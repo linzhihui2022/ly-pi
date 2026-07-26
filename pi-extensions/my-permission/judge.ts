@@ -53,10 +53,13 @@ export function createJudge(
         headers: auth?.headers,
       });
       clearTimeout(timeout);
-      return (
-        parseJudgeResponse(response) ??
-        failureResult("法官模型返回格式不正确，请手动确认", input)
-      );
+      const cost = response.usage?.cost?.total;
+      const parsed = parseJudgeResponse(response);
+      if (parsed) {
+        parsed.cost = cost;
+        return parsed;
+      }
+      return failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
       clearTimeout(timeout);
       console.warn("[my-permission] judge call failed:", error);

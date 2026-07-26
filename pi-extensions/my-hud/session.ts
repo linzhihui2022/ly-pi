@@ -53,6 +53,20 @@ export function aggregateJudgeStats(entries: SessionEntry[]): {
   return { allowed, denied };
 }
 
+/** Aggregate total cost from all judge LLM calls (USD stored, returned in CNY). */
+export function aggregateJudgeCost(entries: SessionEntry[]): number {
+  let total = 0;
+  for (const entry of entries) {
+    if (entry.type === "custom" && entry.customType === "my-permission-judge") {
+      const cost = (entry.data as { cost?: number } | undefined)?.cost;
+      if (typeof cost === "number") {
+        total += cost;
+      }
+    }
+  }
+  return total * USD_TO_CNY;
+}
+
 /**
  * Strip skill XML blocks from a message, returning only the user's actual input.
  */

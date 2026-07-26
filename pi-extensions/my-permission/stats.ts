@@ -137,6 +137,8 @@ export interface JudgeLogEntry {
   score?: number;
   reason: string;
   toolFor: string;
+  /** USD cost of the judge LLM call. */
+  cost?: number;
   /** Present only when judge denied — whether the user later approved. */
   userApproved?: boolean;
 }
@@ -161,6 +163,9 @@ export function recordJudgeStats(
   };
   if (result.score !== undefined) {
     entry.score = result.score;
+  }
+  if (result.cost !== undefined) {
+    entry.cost = result.cost;
   }
   pi.appendEntry(JUDGE_STATS_CUSTOM_TYPE, entry);
 }

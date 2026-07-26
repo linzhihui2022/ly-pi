@@ -200,6 +200,12 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
+      const totalCost = (result.cost ?? 0) + (mergeResult.cost ?? 0);
+      ctx.ui.notify(
+        `🎓 辩护人费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`,
+        "info",
+      );
+
       const write = await ctx.ui.confirm(
         `🎓 辩护人融合完成 — 确认写入？`,
         `${C.green}${mergeResult.mergedText}${C.reset}`,
@@ -342,6 +348,12 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
           details: {},
         };
       }
+
+      const totalCost = (result.cost ?? 0) + (mergeResult.cost ?? 0);
+      ctx.ui.notify(
+        `⚖️ 检察官费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`,
+        "info",
+      );
 
       const write = await ctx.ui.confirm(
         `⚖️ 检察官融合完成 — 确认写入？`,
