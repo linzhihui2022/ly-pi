@@ -80,12 +80,14 @@ export class Bar {
   }
 
   private ensureGitStatus(): void {
+    if (!this.ctx) return;
     const now = Date.now();
     if (now - this.gitStatusCacheTime <= GIT_STATUS_CACHE_TTL) return;
     if (this.gitStatusRefreshPending) return;
 
     this.gitStatusRefreshPending = true;
-    getGitStatus(this.ctx?.cwd)
+    const cwd = this.ctx.cwd;
+    getGitStatus(cwd)
       .then((status) => {
         this.gitStatus = status;
         this.gitStatusCacheTime = Date.now();
@@ -102,19 +104,22 @@ export class Bar {
 
   private ensurePullRequest(): void {
     if (!this.branch) return;
+    if (!this.ctx) return;
     const now = Date.now();
     if (now - this.pullRequestCacheTime <= PR_CACHE_TTL) return;
     if (this.pullRequestRefreshPending) return;
 
     this.pullRequestRefreshPending = true;
-    getRemoteUrl(this.ctx?.cwd, this.branch)
+    const cwd = this.ctx.cwd;
+    const branch = this.branch;
+    getRemoteUrl(cwd, branch)
       .then((remoteUrl) => {
         if (!remoteUrl) return null;
         const repo = parseRemoteUrl(remoteUrl);
         if (!repo) return null;
         return getPullRequestNumber(
-          this.ctx?.cwd,
-          this.branch!,
+          cwd,
+          branch,
           repo.owner,
           repo.repo,
           process.env.GITHUB_TOKEN,
