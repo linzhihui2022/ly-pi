@@ -54,14 +54,14 @@ export function parseRemoteUrl(
   if (httpsMatch) {
     return {
       owner: httpsMatch[1]!,
-      repo: httpsMatch[2]!.replace(/\.git$/, ""),
+      repo: httpsMatch[2]?.replace(/\.git$/, ""),
     };
   }
 
   // SSH: git@github.com:owner/repo.git
   const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
   if (sshMatch) {
-    return { owner: sshMatch[1]!, repo: sshMatch[2]!.replace(/\.git$/, "") };
+    return { owner: sshMatch[1]!, repo: sshMatch[2]?.replace(/\.git$/, "") };
   }
 
   return null;

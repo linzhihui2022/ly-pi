@@ -41,7 +41,7 @@ export function buildStatusLine(
   } = data;
   const show = (field: string): boolean => !hiddenFields.has(field);
   const project =
-    rawProject.length > 10 ? rawProject.slice(0, 8) + ".." : rawProject;
+    rawProject.length > 10 ? `${rawProject.slice(0, 8)}..` : rawProject;
   const parts: string[] = [];
   if (show("project")) {
     parts.push(theme.fg("mdCode", `${icon("project")}${project}`));
@@ -118,9 +118,9 @@ export function buildStatusLine(
   const permissionStats = formatPermissionStats(judgeStats);
   if (show("permission") && permissionStats) {
     parts.push(
-      theme.fg("accent", `${icon("shield")}${judgeStats!.allowed}`) +
+      theme.fg("accent", `${icon("shield")}${judgeStats?.allowed}`) +
         theme.fg("dim", "/") +
-        theme.fg("error", `${judgeStats!.denied}`),
+        theme.fg("error", `${judgeStats?.denied}`),
     );
   }
 
@@ -140,19 +140,19 @@ export function formatGitStatus(
   const parts: string[] = [];
 
   if (status.staged > 0) {
-    parts.push(theme.fg("accent", `++${status.staged}`) + "|");
+    parts.push(`${theme.fg("accent", `++${status.staged}`)}|`);
   }
   if (status.unstaged > 0) {
-    parts.push(theme.fg("warning", `~${status.unstaged}`) + "|");
+    parts.push(`${theme.fg("warning", `~${status.unstaged}`)}|`);
   }
   if (status.untracked > 0) {
-    parts.push(theme.fg("dim", `?${status.untracked}`) + "|");
+    parts.push(`${theme.fg("dim", `?${status.untracked}`)}|`);
   }
   if (status.stashed > 0) {
-    parts.push(theme.fg("warning", `*${status.stashed}`) + "|");
+    parts.push(`${theme.fg("warning", `*${status.stashed}`)}|`);
   }
   if (status.conflicted > 0) {
-    parts.push(theme.fg("error", `!!${status.conflicted}`) + "|");
+    parts.push(`${theme.fg("error", `!!${status.conflicted}`)}|`);
   }
   if (status.ahead > 0 && status.behind > 0) {
     parts.push(theme.fg("warning", `⇕⇡${status.ahead}⇣${status.behind}`));

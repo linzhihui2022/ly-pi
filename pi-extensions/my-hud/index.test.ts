@@ -628,7 +628,7 @@ describe("getLastUserMessage", () => {
 });
 
 describe("formatGitStatus", () => {
-  const mockTheme = { fg: vi.fn((_c: string, text: string) => text) };
+  const _mockTheme = { fg: vi.fn((_c: string, text: string) => text) };
 
   it("returns empty for null status", async () => {
     const { formatGitStatus } = await loadModule();
@@ -1767,7 +1767,7 @@ describe("my-hud extension", () => {
     const factory = mockCtx.ui.setWidget.mock.calls.find(
       (call) =>
         call[0] === "my-hud-memory-warning" && typeof call[1] === "function",
-    )![1] as any;
+    )?.[1] as any;
     const component = factory(mockTui, mockTheme);
     const lines = component.render(200);
 
