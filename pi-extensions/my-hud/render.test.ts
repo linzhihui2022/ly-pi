@@ -13,7 +13,7 @@ vi.mock("@earendil-works/pi-tui", () => ({
   })),
 }));
 
-function createMockTheme(): Record<string, (...args: unknown[]) => unknown> {
+function createMockTheme(): any {
   return {
     fg: vi.fn((_c: string, text: string) => text),
   };

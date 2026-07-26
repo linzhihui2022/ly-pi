@@ -15,7 +15,7 @@ function createTheme(): Theme {
     getColorMode: vi.fn(() => "truecolor"),
     getThinkingBorderColor: vi.fn(() => (str: string) => str),
     getBashModeBorderColor: vi.fn(() => (str: string) => str),
-  } as unknown as Record<string, unknown>;
+  } as any;
 }
 
 describe("buildMemoryWarningLines", () => {
