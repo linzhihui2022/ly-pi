@@ -19,4 +19,11 @@ if (existsSync("my-back/my-back.json")) {
 if (existsSync("my-bt/sounds")) {
   cpSync("my-bt/sounds", join(dest, "sounds"), { recursive: true });
 }
+// my-permission static files
+if (existsSync("my-permission/config.json")) {
+  await Bun.write(join(dest, "config.json"), Bun.file("my-permission/config.json"));
+}
+if (existsSync("my-permission/judge-prompt.md")) {
+  await Bun.write(join(dest, "judge-prompt.md"), Bun.file("my-permission/judge-prompt.md"));
+}
 console.log("ly-pi deployed to", dest);
