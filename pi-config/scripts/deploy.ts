@@ -33,10 +33,12 @@ await Bun.write(
   `${JSON.stringify(piSubagents.runtime, null, 2)}\n`,
 );
 
-// 2) subagents → ~/.pi/agent/settings.json (merge, preserving other keys)
+// 2) subagents + pi-settings → ~/.pi/agent/settings.json (merge, preserving other keys)
 const settingsPath = join(homedir(), ".pi/agent/settings.json");
 const settings = await Bun.file(settingsPath).json();
 settings.subagents = piSubagents.subagents;
+const piSettings = await Bun.file("pi-settings.json").json();
+Object.assign(settings, piSettings);
 await Bun.write(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 
 // pi-goal: config → ~/.pi/agent/pi-goal.json
@@ -63,6 +65,12 @@ await Bun.write(
 await Bun.write(
   join(homedir(), ".pi/web-search.json"),
   Bun.file("web-search.json"),
+);
+
+// APPEND_SYSTEM.md → ~/.pi/agent/APPEND_SYSTEM.md
+await Bun.write(
+  join(homedir(), ".pi/agent/APPEND_SYSTEM.md"),
+  Bun.file("append-system.md"),
 );
 
 // rtk: install/refresh the Pi extension (skipped if rtk is not installed)
