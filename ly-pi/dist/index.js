@@ -49221,9 +49221,23 @@ function myBack(pi) {
 }
 
 // my-bt/index.ts
-import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname, join as join3, resolve } from "node:path";
+import { readFileSync as readFileSync2, writeFileSync as writeFileSync3 } from "node:fs";
+import { join as join3, resolve } from "node:path";
+
+// src/shared/ext-dir.ts
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+var __dirname = "/Users/lychee/Documents/configure/ly-pi/src/shared";
+function resolveExtDir(importMeta) {
+  if (typeof __dirname !== "undefined")
+    return __dirname;
+  if (importMeta) {
+    try {
+      return dirname(fileURLToPath(importMeta.url));
+    } catch {}
+  }
+  return process.cwd();
+}
 
 // my-bt/player.ts
 import { join as join2 } from "node:path";
@@ -49235,7 +49249,7 @@ import {
   mkdirSync,
   readFileSync,
   rmdirSync,
-  writeFileSync
+  writeFileSync as writeFileSync2
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -49302,7 +49316,7 @@ function recordPids(pids, pidFile = DEFAULT_PID_FILE, lockDir = DEFAULT_LOCK_DIR
       version: 1,
       updatedAt: Date.now()
     };
-    writeFileSync(pidFile, JSON.stringify(state, null, 2));
+    writeFileSync2(pidFile, JSON.stringify(state, null, 2));
   }, lockDir);
 }
 function spawnSoundProcess(_config, filePath, runtimeDir = GLOBAL_BT_DIR) {
@@ -49349,15 +49363,7 @@ function playCategory(config, category, _onError) {
 }
 
 // my-bt/index.ts
-var __dirname = "/Users/lychee/Documents/configure/ly-pi/my-bt";
-var EXT_DIR = (() => {
-  if (typeof __dirname !== "undefined")
-    return __dirname;
-  try {
-    return dirname(fileURLToPath(import.meta.url));
-  } catch {}
-  return process.cwd();
-})();
+var EXT_DIR = resolveExtDir(import.meta);
 var CONFIG_PATH = join3(EXT_DIR, "my-bt.json");
 function loadConfig() {
   const raw = readFileSync2(CONFIG_PATH, "utf-8");
@@ -49368,7 +49374,7 @@ function saveConfig(config) {
   const raw = readFileSync2(CONFIG_PATH, "utf-8");
   const existing = JSON.parse(raw);
   const payload = { ...existing, enabled: config.enabled };
-  writeFileSync2(CONFIG_PATH, `${JSON.stringify(payload, null, 2)}
+  writeFileSync3(CONFIG_PATH, `${JSON.stringify(payload, null, 2)}
 `, "utf-8");
 }
 function myBt(pi) {
@@ -49557,9 +49563,9 @@ The shell starts in ${projectRoot}. Do not prepend \`cd ${projectRoot} &&\` befo
   });
 }
 
-// my-html/index.ts
-import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync3 } from "node:fs";
-import { join as join6 } from "node:path";
+// src/shared/preview.ts
+import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync4 } from "node:fs";
+import { join as join5 } from "node:path";
 
 // ../node_modules/.bun/open@10.2.0/node_modules/open/index.js
 import process7 from "node:process";
@@ -50169,9 +50175,25 @@ async function stopPreviewServer() {
     server.close(() => resolve2());
   });
 }
+// src/shared/preview.ts
+async function servePreviewFile(sessionId, fileName, content, options = {}) {
+  const sessionDir = join5(PREVIEW_DIR, sessionId);
+  mkdirSync2(sessionDir, { recursive: true });
+  const filePath = join5(sessionDir, fileName);
+  writeFileSync4(filePath, content, "utf-8");
+  const server = await ensurePreviewServer({
+    host: options.host ?? "127.0.0.1",
+    urlHost: options.urlHost ?? "localhost",
+    port: options.port ?? 3456
+  });
+  const fileUrl = `${server.url}/${sessionId}/${fileName}`;
+  open_default(fileUrl).catch(() => {});
+  return fileUrl;
+}
+
 // my-html/render.ts
 import { readFileSync as readFileSync4 } from "node:fs";
-import { join as join5 } from "node:path";
+import { join as join6 } from "node:path";
 
 // ../node_modules/.bun/highlight.js@11.11.1/node_modules/highlight.js/es/index.js
 var import_lib = __toESM(require_lib(), 1);
@@ -52440,7 +52462,7 @@ var CATPPUCCIN_MOCHA_HLJS = `/* Catppuccin Mocha for Highlight.js */
 .markdown-body .hljs-deletion { color: #f38ba8; background: rgba(243,139,168,0.15); }`;
 function loadCss(cssDir = EXT_DIR2) {
   try {
-    const githubPath = join5(cssDir, "node_modules", "github-markdown-css", "github-markdown-dark.css");
+    const githubPath = join6(cssDir, "node_modules", "github-markdown-css", "github-markdown-dark.css");
     return {
       github: readFileSync4(githubPath, "utf-8"),
       highlight: CATPPUCCIN_MOCHA_HLJS
@@ -52850,17 +52872,7 @@ function myHtml(pi) {
       try {
         const sessionId = ctx.sessionManager.getSessionId();
         const fileName = `${message.entryId}.html`;
-        const sessionDir = join6(PREVIEW_DIR, sessionId);
-        mkdirSync2(sessionDir, { recursive: true });
-        const filePath = join6(sessionDir, fileName);
-        writeFileSync3(filePath, html2, "utf-8");
-        const server = await ensurePreviewServer({
-          host: "127.0.0.1",
-          urlHost: "localhost",
-          port: 3456
-        });
-        const fileUrl = `${server.url}/${sessionId}/${fileName}`;
-        open_default(fileUrl).catch(() => {});
+        const fileUrl = await servePreviewFile(sessionId, fileName, html2);
         ctx.ui.notify(`Preview: ${fileUrl}`, "info");
       } catch (err) {
         ctx.ui.notify(`Failed to start preview server: ${err.message}`, "error");
@@ -52873,8 +52885,6 @@ function myHtml(pi) {
 }
 
 // my-hud/index.ts
-import { dirname as dirname2 } from "node:path";
-import { fileURLToPath as fileURLToPath3 } from "node:url";
 import { truncateToWidth as truncateToWidth2 } from "@earendil-works/pi-tui";
 
 // my-hud/bar.ts
@@ -53612,15 +53622,7 @@ function pickRandomMessage() {
 }
 
 // my-hud/index.ts
-var __dirname = "/Users/lychee/Documents/configure/ly-pi/my-hud";
-var EXT_DIR3 = (() => {
-  if (typeof __dirname !== "undefined")
-    return __dirname;
-  try {
-    return dirname2(fileURLToPath3(import.meta.url));
-  } catch {}
-  return process.cwd();
-})();
+var EXT_DIR3 = resolveExtDir(import.meta);
 var MEMORY_WIDGET_KEY = "my-hud-memory-warning";
 function myHud(pi) {
   let currentTui = null;
@@ -53736,9 +53738,8 @@ function myHud(pi) {
 }
 
 // my-permission/index.ts
-import { mkdirSync as mkdirSync3, readFileSync as readFileSync6, realpathSync as realpathSync2, writeFileSync as writeFileSync4 } from "node:fs";
-import { dirname as dirname3, join as join8 } from "node:path";
-import { fileURLToPath as fileURLToPath4 } from "node:url";
+import { realpathSync as realpathSync2 } from "node:fs";
+import { join as join8 } from "node:path";
 
 // ../node_modules/.bun/typebox@1.2.2/node_modules/typebox/build/system/memory/memory.mjs
 var exports_memory = {};
@@ -57873,6 +57874,42 @@ __export(exports_typebox, {
   Array: () => _Array_,
   Any: () => Any
 });
+// src/shared/ansi.ts
+var ANSI = {
+  reset: "\x1B[0m",
+  bold: "\x1B[1m",
+  red: "\x1B[31m",
+  green: "\x1B[32m",
+  yellow: "\x1B[33m",
+  cyan: "\x1B[36m"
+};
+function style(text, ...codes) {
+  return `${codes.join("")}${text}${ANSI.reset}`;
+}
+
+// src/shared/auth.ts
+function createAuthResolver(getApiKeyAndHeaders) {
+  if (typeof getApiKeyAndHeaders === "function") {
+    return async (model) => {
+      const auth = await getApiKeyAndHeaders(model);
+      return auth.ok ? { apiKey: auth.apiKey, headers: auth.headers } : undefined;
+    };
+  }
+  return async () => {
+    return;
+  };
+}
+
+// src/shared/file.ts
+import { readFileSync as readFileSync6 } from "node:fs";
+function loadFile(path2) {
+  try {
+    return readFileSync6(path2, "utf-8");
+  } catch {
+    return "";
+  }
+}
+
 // my-permission/config.ts
 import { readFile } from "node:fs/promises";
 var ACTIONS = ["allow", "ask", "deny"];
@@ -58865,22 +58902,11 @@ function collectJudgeLogs(entries) {
 }
 
 // my-permission/ui.ts
-var ANSI = {
-  reset: "\x1B[0m",
-  bold: "\x1B[1m",
-  red: "\x1B[31m",
-  green: "\x1B[32m",
-  yellow: "\x1B[33m",
-  cyan: "\x1B[36m"
-};
-function styled(text, ...codes) {
-  return `${codes.join("")}${text}${ANSI.reset}`;
-}
 function label(text) {
-  return styled(text, ANSI.bold);
+  return style(text, ANSI.bold);
 }
 function value(text) {
-  return styled(text, ANSI.cyan);
+  return style(text, ANSI.cyan);
 }
 function scoreStyle(score) {
   if (score <= 3)
@@ -58912,32 +58938,25 @@ async function confirmToolCall(ctx, options2) {
 function formatConfirmMessage(options2) {
   const lines = [
     `${label("工具：")}${value(options2.toolName)}`,
-    `${label("操作：")}${styled(options2.toolFor, ANSI.yellow)}`,
+    `${label("操作：")}${style(options2.toolFor, ANSI.yellow)}`,
     `${label("输入：")}${value(options2.value)}`,
     `${label("工作目录：")}${value(options2.cwd)}`
   ];
   if (options2.paths.length > 0) {
     lines.push(`${label("涉及路径：")}${value(options2.paths.join(", "))}`);
   }
-  const scoreText = options2.score !== undefined ? styled(`（安全评分：${options2.score}/10）`, scoreStyle(options2.score), ANSI.bold) : "";
-  lines.push(`${label("理由：")}${styled(options2.reason, ANSI.bold)}${scoreText}`);
+  const scoreText = options2.score !== undefined ? style(`（安全评分：${options2.score}/10）`, scoreStyle(options2.score), ANSI.bold) : "";
+  lines.push(`${label("理由：")}${style(options2.reason, ANSI.bold)}${scoreText}`);
   return {
-    title: `${label("确认工具调用：")}${styled(options2.toolName, ANSI.bold, ANSI.cyan)}`,
+    title: `${label("确认工具调用：")}${style(options2.toolName, ANSI.bold, ANSI.cyan)}`,
     body: lines.join(`
 `)
   };
 }
 
 // my-permission/index.ts
-var C = {
-  reset: "\x1B[0m",
-  bold: "\x1B[1m",
-  cyan: "\x1B[36m",
-  green: "\x1B[32m",
-  yellow: "\x1B[33m"
-};
 async function myPermission(pi) {
-  const extensionDir = dirname3(fileURLToPath4(import.meta.url));
+  const extensionDir = resolveExtDir(import.meta);
   const config = await loadConfig2(join8(extensionDir, "config.json"));
   const judgePrompt = loadPrompt(extensionDir);
   const localJudge = loadFile(join8(process.cwd(), "JUDGE.md"));
@@ -58954,16 +58973,7 @@ async function myPermission(pi) {
       }
       try {
         const sessionId = ctx.sessionManager.getSessionId();
-        const sessionDir = join8(PREVIEW_DIR, sessionId);
-        mkdirSync3(sessionDir, { recursive: true });
-        writeFileSync4(join8(sessionDir, "judge-log.html"), renderJudgeLogPage(logs), "utf-8");
-        const server = await ensurePreviewServer({
-          host: "127.0.0.1",
-          urlHost: "localhost",
-          port: 3456
-        });
-        const fileUrl = `${server.url}/${sessionId}/judge-log.html`;
-        open_default(fileUrl).catch(() => {});
+        const fileUrl = await servePreviewFile(sessionId, "judge-log.html", renderJudgeLogPage(logs));
         ctx.ui.notify(`Preview: ${fileUrl}`, "info");
       } catch (err) {
         ctx.ui.notify(`Failed to start preview server: ${err.message}`, "error");
@@ -58990,12 +59000,7 @@ async function myPermission(pi) {
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const advocate = createAdvocate(config);
       const currentJudgeMd = loadFile(join8(process.cwd(), "JUDGE.md"));
-      const result = await advocate(cases, ctx.cwd, resolveModel, typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
-        const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-        return auth.ok ? auth : undefined;
-      } : async () => {
-        return;
-      }, currentJudgeMd, judgePrompt);
+      const result = await advocate(cases, ctx.cwd, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
           content: [{ type: "text", text: `辩护人分析失败: ${result.error}` }],
@@ -59019,8 +59024,8 @@ async function myPermission(pi) {
         ctx.ui.notify(`\uD83D\uDCA1 辩护人建议手动删除 ${suggestion.remove.length} 条过时规则（需手动处理）`, "info");
       }
       for (const item of suggestion.add) {
-        const keep = await ctx.ui.confirm(`${C.cyan}\uD83C\uDF93 辩护人建议 — 采纳这条规则？${C.reset}`, `${C.bold}${item.rule}${C.reset}
-${C.yellow}原因: ${item.reason}${C.reset}`);
+        const keep = await ctx.ui.confirm(`${ANSI.cyan}\uD83C\uDF93 辩护人建议 — 采纳这条规则？${ANSI.reset}`, `${ANSI.bold}${item.rule}${ANSI.reset}
+${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
         if (keep) {
           selectedRules.push(item.rule);
         }
@@ -59032,12 +59037,7 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
         };
       }
       const merger = createMerger(config);
-      const mergeResult = await merger(currentJudgeMd, selectedRules, resolveModel, typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
-        const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-        return auth.ok ? auth : undefined;
-      } : async () => {
-        return;
-      });
+      const mergeResult = await merger(currentJudgeMd, selectedRules, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders));
       if (mergeResult.error || !mergeResult.mergedText) {
         return {
           content: [
@@ -59051,9 +59051,9 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
       }
       const totalCost = (result.cost ?? 0) + (mergeResult.cost ?? 0);
       ctx.ui.notify(`\uD83C\uDF93 辩护人费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
-      const write = await ctx.ui.confirm(`\uD83C\uDF93 辩护人融合完成 — 确认写入？`, `${C.green}${mergeResult.mergedText}${C.reset}`);
+      const write = await ctx.ui.confirm(`\uD83C\uDF93 辩护人融合完成 — 确认写入？`, `${ANSI.green}${mergeResult.mergedText}${ANSI.reset}`);
       if (write) {
-        writeFileSync4(join8(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
+        writeFileSync(join8(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
         return {
           content: [
             {
@@ -59093,12 +59093,7 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const prosecutor = createProsecutor(config);
       const currentJudgeMd = loadFile(join8(process.cwd(), "JUDGE.md"));
-      const result = await prosecutor(allowed, ctx.cwd, resolveModel, typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
-        const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-        return auth.ok ? auth : undefined;
-      } : async () => {
-        return;
-      }, currentJudgeMd, judgePrompt);
+      const result = await prosecutor(allowed, ctx.cwd, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
           content: [{ type: "text", text: `检察官分析失败: ${result.error}` }],
@@ -59120,8 +59115,8 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
       ctx.ui.notify(`⚖️ 检察官审计: ${suggestion.summary}`, "info");
       const selectedRules = [];
       for (const item of suggestion.add) {
-        const keep = await ctx.ui.confirm(`${C.cyan}⚖️ 检察官建议 — 采纳这条规则？${C.reset}`, `${C.bold}${item.rule}${C.reset}
-${C.yellow}原因: ${item.reason}${C.reset}`);
+        const keep = await ctx.ui.confirm(`${ANSI.cyan}⚖️ 检察官建议 — 采纳这条规则？${ANSI.reset}`, `${ANSI.bold}${item.rule}${ANSI.reset}
+${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
         if (keep) {
           selectedRules.push(item.rule);
         }
@@ -59138,12 +59133,7 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
         };
       }
       const merger = createMerger(config);
-      const mergeResult = await merger(currentJudgeMd, selectedRules, resolveModel, typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
-        const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-        return auth.ok ? auth : undefined;
-      } : async () => {
-        return;
-      });
+      const mergeResult = await merger(currentJudgeMd, selectedRules, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders));
       if (mergeResult.error || !mergeResult.mergedText) {
         return {
           content: [
@@ -59157,9 +59147,9 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
       }
       const totalCost = (result.cost ?? 0) + (mergeResult.cost ?? 0);
       ctx.ui.notify(`⚖️ 检察官费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
-      const write = await ctx.ui.confirm(`⚖️ 检察官融合完成 — 确认写入？`, `${C.green}${mergeResult.mergedText}${C.reset}`);
+      const write = await ctx.ui.confirm(`⚖️ 检察官融合完成 — 确认写入？`, `${ANSI.green}${mergeResult.mergedText}${ANSI.reset}`);
       if (write) {
-        writeFileSync4(join8(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
+        writeFileSync(join8(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
         return {
           content: [
             {
@@ -59183,10 +59173,7 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
     const judge = createJudge(config, {
       judgePrompt,
       localJudge,
-      getAuth: typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
-        const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-        return auth.ok ? auth : undefined;
-      } : undefined
+      getAuth: createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders)
     });
     const toolName = event.toolName;
     const value2 = stringifyToolInput(event);
@@ -59271,13 +59258,6 @@ function loadPrompt(extensionDir) {
     console.warn("[my-permission] judge-prompt.md not found, judge will be disabled");
   }
   return prompt;
-}
-function loadFile(path2) {
-  try {
-    return readFileSync6(path2, "utf-8");
-  } catch {
-    return "";
-  }
 }
 
 // my-script-guard/index.ts

@@ -1,23 +1,14 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { resolveExtDir } from "../src/shared/ext-dir";
 import { listCategories, playCategory } from "./player";
 import type { BtConfig } from "./types";
 
-// Resolve extension directory — prefer __dirname, fall back to CWD-relative
-const EXT_DIR = (() => {
-  if (typeof __dirname !== "undefined") return __dirname;
-  try {
-    return dirname(fileURLToPath(import.meta.url));
-  } catch {
-    /* not ESM */
-  }
-  return process.cwd();
-})();
+const EXT_DIR = resolveExtDir(import.meta);
 
 const CONFIG_PATH = join(EXT_DIR, "my-bt.json");
 

@@ -1,18 +1,19 @@
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
+import { join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import open from "open";
+import { ANSI as C } from "../src/shared/ansi";
+import { createAuthResolver } from "../src/shared/auth";
+import { resolveExtDir } from "../src/shared/ext-dir";
+import { loadFile } from "../src/shared/file";
 import {
-  ensurePreviewServer,
-  PREVIEW_DIR,
+  servePreviewFile,
   stopPreviewServer,
-} from "../web-preview/index";
+} from "../src/shared/preview";
 import { loadConfig } from "./config";
 import { createJudge } from "./judge";
 import { renderJudgeLogPage } from "./log-page";
@@ -29,15 +30,8 @@ import {
 import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
 import { extractPathTokens } from "./utils";
 
-const C = {
-  reset: "\x1b[0m",
-  bold: "\x1b[1m",
-  cyan: "\x1b[36m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-};
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
-  const extensionDir = dirname(fileURLToPath(import.meta.url));
+  const extensionDir = resolveExtDir(import.meta);
   const config = await loadConfig(join(extensionDir, "config.json"));
 
   const judgePrompt = loadPrompt(extensionDir);
@@ -57,24 +51,11 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
 
       try {
         const sessionId = ctx.sessionManager.getSessionId();
-        const sessionDir = join(PREVIEW_DIR, sessionId);
-        mkdirSync(sessionDir, { recursive: true });
-        writeFileSync(
-          join(sessionDir, "judge-log.html"),
+        const fileUrl = await servePreviewFile(
+          sessionId,
+          "judge-log.html",
           renderJudgeLogPage(logs),
-          "utf-8",
         );
-
-        const server = await ensurePreviewServer({
-          host: "127.0.0.1",
-          urlHost: "localhost",
-          port: 3456,
-        });
-
-        const fileUrl = `${server.url}/${sessionId}/judge-log.html`;
-        open(fileUrl).catch(() => {
-          // Browser open failures are non-fatal
-        });
         ctx.ui.notify(`Preview: ${fileUrl}`, "info");
       } catch (err) {
         ctx.ui.notify(
@@ -114,12 +95,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         cases,
         ctx.cwd,
         resolveModel,
-        typeof ctx.modelRegistry.getApiKeyAndHeaders === "function"
-          ? async (model: Model<Api>) => {
-              const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-              return auth.ok ? auth : undefined;
-            }
-          : async () => undefined,
+        createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
         currentJudgeMd,
         judgePrompt,
       );
@@ -180,12 +156,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         currentJudgeMd,
         selectedRules,
         resolveModel,
-        typeof ctx.modelRegistry.getApiKeyAndHeaders === "function"
-          ? async (model) => {
-              const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-              return auth.ok ? auth : undefined;
-            }
-          : async () => undefined,
+        createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
       );
 
       if (mergeResult.error || !mergeResult.mergedText) {
@@ -268,12 +239,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         allowed,
         ctx.cwd,
         resolveModel,
-        typeof ctx.modelRegistry.getApiKeyAndHeaders === "function"
-          ? async (model: Model<Api>) => {
-              const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-              return auth.ok ? auth : undefined;
-            }
-          : async () => undefined,
+        createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
         currentJudgeMd,
         judgePrompt,
       );
@@ -329,12 +295,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         currentJudgeMd,
         selectedRules,
         resolveModel,
-        typeof ctx.modelRegistry.getApiKeyAndHeaders === "function"
-          ? async (model: Model<Api>) => {
-              const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-              return auth.ok ? auth : undefined;
-            }
-          : async () => undefined,
+        createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
       );
 
       if (mergeResult.error || !mergeResult.mergedText) {
@@ -392,13 +353,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     const judge = createJudge(config, {
       judgePrompt,
       localJudge,
-      getAuth:
-        typeof ctx.modelRegistry.getApiKeyAndHeaders === "function"
-          ? async (model) => {
-              const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-              return auth.ok ? auth : undefined;
-            }
-          : undefined,
+      getAuth: createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
     });
     const toolName = event.toolName;
     const value = stringifyToolInput(event);
@@ -523,12 +478,4 @@ function loadPrompt(extensionDir: string): string {
     );
   }
   return prompt;
-}
-
-function loadFile(path: string): string {
-  try {
-    return readFileSync(path, "utf-8");
-  } catch {
-    return "";
-  }
 }

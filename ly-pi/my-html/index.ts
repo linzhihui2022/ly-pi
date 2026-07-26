@@ -1,16 +1,12 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import open from "open";
 import {
-  ensurePreviewServer,
-  PREVIEW_DIR,
+  servePreviewFile,
   stopPreviewServer,
-} from "../web-preview/index";
+} from "../src/shared/preview";
 import {
   buildHtmlDocument,
   extractAssistantText,
@@ -62,21 +58,7 @@ export default function myHtml(pi: ExtensionAPI): void {
       try {
         const sessionId = ctx.sessionManager.getSessionId();
         const fileName = `${message.entryId}.html`;
-        const sessionDir = join(PREVIEW_DIR, sessionId);
-        mkdirSync(sessionDir, { recursive: true });
-        const filePath = join(sessionDir, fileName);
-        writeFileSync(filePath, html, "utf-8");
-
-        const server = await ensurePreviewServer({
-          host: "127.0.0.1",
-          urlHost: "localhost",
-          port: 3456,
-        });
-
-        const fileUrl = `${server.url}/${sessionId}/${fileName}`;
-        open(fileUrl).catch(() => {
-          // Browser open failures are non-fatal
-        });
+        const fileUrl = await servePreviewFile(sessionId, fileName, html);
         ctx.ui.notify(`Preview: ${fileUrl}`, "info");
       } catch (err) {
         ctx.ui.notify(

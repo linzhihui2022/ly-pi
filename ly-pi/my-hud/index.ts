@@ -9,13 +9,12 @@
  *   - dist/modes/interactive/components/footer.js (token aggregation, color thresholds)
  */
 
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { resolveExtDir } from "../src/shared/ext-dir";
 import { Bar } from "./bar";
 import { loadHudConfig } from "./config";
 import { setModelShortNames } from "./format";
@@ -28,16 +27,7 @@ import { getLastUserMessage } from "./session";
 import { findVitestProcesses } from "./vitest-process";
 import { pickRandomMessage } from "./working";
 
-// Resolve extension directory — prefer __dirname, fall back to CWD-relative
-const EXT_DIR = (() => {
-  if (typeof __dirname !== "undefined") return __dirname;
-  try {
-    return dirname(fileURLToPath(import.meta.url));
-  } catch {
-    /* not ESM */
-  }
-  return process.cwd();
-})();
+const EXT_DIR = resolveExtDir(import.meta);
 
 export { Bar } from "./bar";
 export {
