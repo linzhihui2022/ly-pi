@@ -49530,6 +49530,19 @@ function stripRedundantCd(command, cwd, realpath = identity) {
 
 // my-cd-guard/index.ts
 function myCdGuard(pi) {
+  let projectRoot = "";
+  pi.on("session_start", (_event, ctx) => {
+    projectRoot = ctx.cwd;
+  });
+  pi.on("before_agent_start", async (event) => {
+    if (!projectRoot)
+      return;
+    return {
+      systemPrompt: event.systemPrompt + `
+
+The shell starts in ${projectRoot}. Do not prepend \`cd ${projectRoot} &&\` before commands — it is redundant.`
+    };
+  });
   pi.on("tool_call", (event, ctx) => {
     if (!isToolCallEventType("bash", event))
       return;
