@@ -23,8 +23,7 @@ import { checkMemoryPressure } from "./memory";
 import { buildMemoryWarningLines } from "./memory-widget";
 import { getPullRequestForCurrentBranch, openUrl } from "./pr";
 import { setHiddenFields } from "./render";
-import { getLastUserMessage } from "./session";
-import { findVitestProcesses } from "./vitest-process";
+import { extractEntryUsage, getLastUserMessage } from "./session";
 import { pickRandomMessage } from "./working";
 
 const EXT_DIR = resolveExtDir(import.meta);
@@ -44,10 +43,10 @@ export { buildStatusLine, formatGitStatus } from "./render";
 export {
   aggregateJudgeCost,
   aggregateSessionUsage,
+  extractEntryUsage,
   getLastUserMessage,
 } from "./session";
 export type { StatusLineData, TokenUsage } from "./types";
-export { findVitestProcesses } from "./vitest-process";
 export { pickRandomMessage, WORKING_MESSAGES } from "./working";
 
 const MEMORY_WIDGET_KEY = "my-hud-memory-warning";
@@ -70,10 +69,9 @@ export default function myHud(pi: ExtensionAPI): void {
 
   function updateMemoryWarning(ctx: ExtensionContext): void {
     const memoryStatus = checkMemoryPressure();
-    const vitestProcesses = findVitestProcesses();
     const theme = ctx.ui.getTheme("catppuccin-mocha");
     const lines = theme
-      ? buildMemoryWarningLines(theme, memoryStatus, vitestProcesses)
+      ? buildMemoryWarningLines(theme, memoryStatus)
       : null;
 
     if (lines) {
@@ -117,8 +115,6 @@ export default function myHud(pi: ExtensionAPI): void {
       theme?.fg("accent", pickRandomMessage()) ?? pickRandomMessage();
     ctx.ui.setWorkingMessage(message);
   });
-  pi.on("agent_end", (_event, ctx) => updateMemoryWarning(ctx));
-
   // ── /open-pr command ──
   pi.registerCommand("open-pr", {
     description: "Open the current branch's GitHub Pull Request in browser",

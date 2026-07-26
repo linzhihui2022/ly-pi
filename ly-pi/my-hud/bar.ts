@@ -13,11 +13,7 @@ import { contextColored } from "./format";
 import { getGitStatus } from "./git";
 import { getPullRequestNumber, getRemoteUrl, parseRemoteUrl } from "./pr";
 import { buildStatusLine } from "./render";
-import {
-  aggregateJudgeCost,
-  aggregateJudgeStats,
-  aggregateSessionUsage,
-} from "./session";
+import { extractEntryUsage } from "./session";
 import type { GitStatus, PullRequestInfo, TokenUsage } from "./types";
 
 const WIDGET_KEY = "my-hud-bar";
@@ -36,11 +32,15 @@ export class Bar {
   private pullRequestCacheTime = 0;
   private pullRequestRefreshPending = false;
 
-  // Session aggregation cache — recompute only when entries count changes.
-  private cachedEntryCount = -1;
-  private cachedUsage: TokenUsage | null = null;
-  private cachedJudgeStats: { allowed: number; denied: number } | null = null;
-  private cachedJudgeCost: number | null = null;
+  // Incremental session aggregation — only process new entries.
+  private lastSeenIndex = 0;
+  private runningUsage: TokenUsage = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: 0,
+  };
 
   setBranch(branch: string | null): void {
     this.branch = branch;
@@ -156,17 +156,30 @@ export class Bar {
     this.ensurePullRequest();
 
     const entries = this.ctx.sessionManager.getEntries();
-    if (entries.length !== this.cachedEntryCount) {
-      this.cachedUsage = aggregateSessionUsage(entries);
-      this.cachedJudgeStats = aggregateJudgeStats(entries);
-      this.cachedJudgeCost = aggregateJudgeCost(entries);
-      this.cachedEntryCount = entries.length;
+    if (entries.length < this.lastSeenIndex) {
+      // Entries were truncated (e.g. session reset) — restart accumulation.
+      this.runningUsage = {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: 0,
+      };
+      this.lastSeenIndex = 0;
     }
-    const usage =
-      this.cachedUsage ??
-      ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 } as TokenUsage);
-    const judgeStats = this.cachedJudgeStats ?? { allowed: 0, denied: 0 };
-    const judgeCost = this.cachedJudgeCost ?? 0;
+    // Only process entries we haven't seen yet.
+    for (let i = this.lastSeenIndex; i < entries.length; i++) {
+      const usage = extractEntryUsage(entries[i]);
+      if (usage) {
+        this.runningUsage.input += usage.input;
+        this.runningUsage.output += usage.output;
+        this.runningUsage.cacheRead += usage.cacheRead;
+        this.runningUsage.cacheWrite += usage.cacheWrite;
+        this.runningUsage.cost += usage.cost;
+      }
+    }
+    this.lastSeenIndex = entries.length;
+    const usage = this.runningUsage;
 
     const cu = this.ctx.getContextUsage();
     const ctxColored = contextColored(
@@ -186,8 +199,6 @@ export class Bar {
       usage,
       gitStatus: this.gitStatus,
       pullRequest: this.pullRequest,
-      judgeStats,
-      judgeCost,
     });
     return [line];
   }
@@ -206,9 +217,13 @@ export class Bar {
     this.pullRequest = null;
     this.pullRequestCacheTime = 0;
     this.pullRequestRefreshPending = false;
-    this.cachedEntryCount = -1;
-    this.cachedUsage = null;
-    this.cachedJudgeStats = null;
-    this.cachedJudgeCost = null;
+    this.lastSeenIndex = 0;
+    this.runningUsage = {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: 0,
+    };
   }
 }

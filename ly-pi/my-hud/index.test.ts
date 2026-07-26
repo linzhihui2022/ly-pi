@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getGitStatus } from "./git";
 import { checkMemoryPressure } from "./memory";
 import { getPullRequestForCurrentBranch, openUrl } from "./pr";
-import { findVitestProcesses } from "./vitest-process";
 
 vi.mock("@earendil-works/pi-tui", () => ({
   truncateToWidth: (text: string, _width: number) => text,
@@ -46,10 +45,6 @@ vi.mock("./pr", () => ({
 
 vi.mock("./memory", () => ({
   checkMemoryPressure: vi.fn(),
-}));
-
-vi.mock("./vitest-process", () => ({
-  findVitestProcesses: vi.fn(),
 }));
 
 // ── Mocks ──
@@ -1505,7 +1500,6 @@ describe("my-hud extension", () => {
 
   it("agent_start handler sets working message with theme", async () => {
     vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
-    vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
     mod.default(mockPi as any);
@@ -1526,7 +1520,6 @@ describe("my-hud extension", () => {
 
   it("agent_start handler falls back to plain message when theme is undefined", async () => {
     vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
-    vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
     mod.default(mockPi as any);
@@ -1549,7 +1542,6 @@ describe("my-hud extension", () => {
 
   it("keeps working message stable across turn_start events within an agent run", async () => {
     vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
-    vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
     mod.default(mockPi as any);
@@ -1588,7 +1580,6 @@ describe("my-hud extension", () => {
 
   it("agent_start handler propagates when setWorkingMessage throws", async () => {
     vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
-    vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
     mod.default(mockPi as any);
@@ -1719,15 +1710,8 @@ describe("my-hud extension", () => {
     );
   });
 
-  it("registers agent_end handler", async () => {
-    const mod = await loadModule();
-    mod.default(mockPi as any);
-    expect(registeredEvents.has("agent_end")).toBe(true);
-  });
-
   it("agent_start hides memory warning widget when memory is ok", async () => {
     vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
-    vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
     mod.default(mockPi as any);
@@ -1743,14 +1727,6 @@ describe("my-hud extension", () => {
 
   it("agent_start shows memory warning widget when memory is high", async () => {
     vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 87, ok: false });
-    vi.mocked(findVitestProcesses).mockReturnValue([
-      { pid: 44124, rssBytes: 1249328 * 1024, command: "node vitest.mjs run" },
-      {
-        pid: 44126,
-        rssBytes: 1500 * 1024 * 1024,
-        command: "node vitest.mjs run",
-      },
-    ]);
 
     const mod = await loadModule();
     mod.default(mockPi as any);
@@ -1771,29 +1747,11 @@ describe("my-hud extension", () => {
     const component = factory(mockTui, mockTheme);
     const lines = component.render(200);
 
-    expect(lines).toEqual(["⚠️ 内存 87% · vitest 44124(1.2GB), 44126(1.5GB)"]);
-  });
-
-  it("agent_end also updates memory warning widget", async () => {
-    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 87, ok: false });
-    vi.mocked(findVitestProcesses).mockReturnValue([]);
-
-    const mod = await loadModule();
-    mod.default(mockPi as any);
-
-    const agentEndHandler = registeredEvents.get("agent_end")!;
-    agentEndHandler({}, mockCtx);
-
-    expect(mockCtx.ui.setWidget).toHaveBeenCalledWith(
-      "my-hud-memory-warning",
-      expect.any(Function),
-      { placement: "aboveEditor" },
-    );
+    expect(lines).toEqual(["⚠️ 内存 87%"]);
   });
 
   it("agent_start hides widget when theme is unavailable", async () => {
     vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 87, ok: false });
-    vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
     mod.default(mockPi as any);

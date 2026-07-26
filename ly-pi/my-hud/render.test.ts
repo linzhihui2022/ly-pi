@@ -93,29 +93,6 @@ describe("buildStatusLine with PR", () => {
     expect(line).not.toContain("\u001b]8;;");
   });
 
-  it("hides permission stats when judgeStats is undefined", () => {
-    const theme = createMockTheme();
-    const line = buildStatusLine(theme, 200, baseData);
-    expect(line).not.toContain("/");
-  });
-
-  it("hides permission stats when both counts are zero", () => {
-    const theme = createMockTheme();
-    const line = buildStatusLine(theme, 200, {
-      ...baseData,
-      judgeStats: { allowed: 0, denied: 0 },
-    });
-    expect(line).not.toContain("/");
-  });
-
-  it("shows permission stats when counts are non-zero", () => {
-    const theme = createMockTheme();
-    const line = buildStatusLine(theme, 200, {
-      ...baseData,
-      judgeStats: { allowed: 12, denied: 3 },
-    });
-    expect(line).toContain("12/3");
-  });
 });
 
 describe("hiddenFields", () => {
@@ -144,7 +121,6 @@ describe("hiddenFields", () => {
       cost: 1.5,
     },
     gitStatus: dirtyGitStatus,
-    judgeStats: { allowed: 12, denied: 3 },
   };
 
   it("shows all fields by default", () => {
@@ -160,7 +136,6 @@ describe("hiddenFields", () => {
     expect(line).toContain("999");
     expect(line).toContain("1.50");
     expect(line).toContain("45%");
-    expect(line).toContain("12/3");
   });
 
   it("hides every configured field", () => {
@@ -189,7 +164,6 @@ describe("hiddenFields", () => {
     expect(line).not.toContain("999");
     expect(line).not.toContain("1.50");
     expect(line).not.toContain("45%");
-    expect(line).not.toContain("12/3");
   });
 
   it("hides git status independently of branch", () => {
@@ -216,6 +190,5 @@ describe("hiddenFields", () => {
     expect(line).toContain("gpt-4");
     expect(line).toContain("main");
     expect(line).toContain("1.50");
-    expect(line).toContain("12/3");
   });
 });

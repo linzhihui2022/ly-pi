@@ -52956,13 +52956,6 @@ function setModelShortNames(map) {
 function shortModelName(modelName) {
   return userShortNames[modelName] ?? SHORT_NAMES[modelName] ?? modelName;
 }
-function formatPermissionStats(stats) {
-  if (!stats)
-    return "";
-  if (stats.allowed === 0 && stats.denied === 0)
-    return "";
-  return `${stats.allowed}/${stats.denied}`;
-}
 function formatCacheRate(input, cacheRead) {
   const total = cacheRead + input;
   if (total === 0)
@@ -53177,8 +53170,7 @@ function buildStatusLine(theme, width, data) {
     ctxColored,
     usage,
     gitStatus,
-    pullRequest,
-    judgeStats
+    pullRequest
   } = data;
   const show = (field) => !hiddenFields.has(field);
   const project = rawProject.length > 10 ? `${rawProject.slice(0, 8)}..` : rawProject;
@@ -53224,14 +53216,6 @@ function buildStatusLine(theme, width, data) {
   if (show("cacheRate")) {
     parts.push(theme.fg("accent", `${icon("cacheRate")}${formatCacheRate(usage.input, usage.cacheRead)}`));
   }
-  const permissionStats = formatPermissionStats(judgeStats);
-  if (show("permission") && permissionStats) {
-    let stat = theme.fg("accent", `${icon("shield")}${judgeStats?.allowed}`) + theme.fg("dim", "/") + theme.fg("error", `${judgeStats?.denied}`);
-    if (typeof data.judgeCost === "number" && data.judgeCost > 0 && show("cost")) {
-      stat += theme.fg("dim", "/") + theme.fg("thinkingMedium", data.judgeCost.toFixed(2));
-    }
-    parts.push(stat);
-  }
   return truncateToWidth(parts.join(" "), width);
 }
 function formatGitStatus(theme, status) {
@@ -53265,55 +53249,17 @@ function formatGitStatus(theme, status) {
 
 // my-hud/session.ts
 var USD_TO_CNY = 7;
-function aggregateSessionUsage(entries) {
-  return entries.map((entry) => {
-    if (entry.type === "message" && entry.message?.role === "assistant") {
-      return {
-        input: entry.message.usage.input,
-        output: entry.message.usage.output,
-        cacheRead: entry.message.usage.cacheRead,
-        cacheWrite: entry.message.usage.cacheWrite,
-        cost: entry.message.usage.cost.total * USD_TO_CNY
-      };
-    }
-    return null;
-  }).reduce((acc, session) => {
-    if (session === null)
-      return acc;
+function extractEntryUsage(entry) {
+  if (entry.type === "message" && entry.message?.role === "assistant") {
     return {
-      input: acc.input + session.input,
-      output: acc.output + session.output,
-      cacheRead: acc.cacheRead + session.cacheRead,
-      cacheWrite: acc.cacheWrite + session.cacheWrite,
-      cost: acc.cost + session.cost
+      input: entry.message.usage.input,
+      output: entry.message.usage.output,
+      cacheRead: entry.message.usage.cacheRead,
+      cacheWrite: entry.message.usage.cacheWrite,
+      cost: entry.message.usage.cost.total * USD_TO_CNY
     };
-  }, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
-}
-function aggregateJudgeStats(entries) {
-  let allowed = 0;
-  let denied = 0;
-  for (const entry of entries) {
-    if (entry.type === "custom" && entry.customType === "my-permission-judge") {
-      const decision = entry.data?.decision;
-      if (decision === "allowed")
-        allowed++;
-      else if (decision === "denied")
-        denied++;
-    }
   }
-  return { allowed, denied };
-}
-function aggregateJudgeCost(entries) {
-  let total = 0;
-  for (const entry of entries) {
-    if (entry.type === "custom" && entry.customType === "my-permission-judge") {
-      const cost = entry.data?.cost;
-      if (typeof cost === "number") {
-        total += cost;
-      }
-    }
-  }
-  return total * USD_TO_CNY;
+  return null;
 }
 function stripSkillTags(text) {
   return text.replace(/<skill[^>]*>[\s\S]*?<\/skill>/g, "").trim();
@@ -53366,10 +53312,14 @@ class Bar {
   pullRequest = null;
   pullRequestCacheTime = 0;
   pullRequestRefreshPending = false;
-  cachedEntryCount = -1;
-  cachedUsage = null;
-  cachedJudgeStats = null;
-  cachedJudgeCost = null;
+  lastSeenIndex = 0;
+  runningUsage = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: 0
+  };
   setBranch(branch) {
     this.branch = branch;
   }
@@ -53462,15 +53412,28 @@ class Bar {
     this.ensureGitStatus();
     this.ensurePullRequest();
     const entries = this.ctx.sessionManager.getEntries();
-    if (entries.length !== this.cachedEntryCount) {
-      this.cachedUsage = aggregateSessionUsage(entries);
-      this.cachedJudgeStats = aggregateJudgeStats(entries);
-      this.cachedJudgeCost = aggregateJudgeCost(entries);
-      this.cachedEntryCount = entries.length;
+    if (entries.length < this.lastSeenIndex) {
+      this.runningUsage = {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: 0
+      };
+      this.lastSeenIndex = 0;
     }
-    const usage = this.cachedUsage ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
-    const judgeStats = this.cachedJudgeStats ?? { allowed: 0, denied: 0 };
-    const judgeCost = this.cachedJudgeCost ?? 0;
+    for (let i = this.lastSeenIndex;i < entries.length; i++) {
+      const usage2 = extractEntryUsage(entries[i]);
+      if (usage2) {
+        this.runningUsage.input += usage2.input;
+        this.runningUsage.output += usage2.output;
+        this.runningUsage.cacheRead += usage2.cacheRead;
+        this.runningUsage.cacheWrite += usage2.cacheWrite;
+        this.runningUsage.cost += usage2.cost;
+      }
+    }
+    this.lastSeenIndex = entries.length;
+    const usage = this.runningUsage;
     const cu = this.ctx.getContextUsage();
     const ctxColored = contextColored(theme, cu?.percent ?? null, cu?.contextWindow ?? null);
     const modelName = this.ctx.model?.id ?? "no-model";
@@ -53482,9 +53445,7 @@ class Bar {
       ctxColored,
       usage,
       gitStatus: this.gitStatus,
-      pullRequest: this.pullRequest,
-      judgeStats,
-      judgeCost
+      pullRequest: this.pullRequest
     });
     return [line];
   }
@@ -53502,10 +53463,14 @@ class Bar {
     this.pullRequest = null;
     this.pullRequestCacheTime = 0;
     this.pullRequestRefreshPending = false;
-    this.cachedEntryCount = -1;
-    this.cachedUsage = null;
-    this.cachedJudgeStats = null;
-    this.cachedJudgeCost = null;
+    this.lastSeenIndex = 0;
+    this.runningUsage = {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: 0
+    };
   }
 }
 
@@ -53562,57 +53527,10 @@ function checkMemoryPressure() {
 }
 
 // my-hud/memory-widget.ts
-function formatBytes(bytes) {
-  if (bytes < 1024)
-    return `${bytes}B`;
-  if (bytes < 1024 * 1024)
-    return `${(bytes / 1024).toFixed(1)}KB`;
-  if (bytes < 1024 * 1024 * 1024)
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
-}
-function buildMemoryWarningLines(theme, memoryStatus, vitestProcesses) {
+function buildMemoryWarningLines(theme, memoryStatus) {
   if (memoryStatus.ok)
     return null;
-  let text = `⚠️ 内存 ${memoryStatus.percent}%`;
-  if (vitestProcesses.length > 0) {
-    const sorted = [...vitestProcesses].sort((a, b) => a.pid - b.pid);
-    const procs = sorted.map((p) => `${p.pid}(${formatBytes(p.rssBytes)})`).join(", ");
-    text += ` · vitest ${procs}`;
-  }
-  return [theme.fg("error", text)];
-}
-
-// my-hud/vitest-process.ts
-import { execSync as execSync2 } from "node:child_process";
-function findVitestProcesses() {
-  try {
-    const output = execSync2("ps -axo pid,command,rss", { encoding: "utf-8" });
-    const lines = output.trim().split(`
-`);
-    const dataLines = lines.slice(1);
-    const processes = [];
-    for (const line of dataLines) {
-      const trimmed = line.trim();
-      if (!trimmed)
-        continue;
-      const match = trimmed.match(/^(\d+)\s+(.+?)\s+(\d+)$/);
-      if (!match)
-        continue;
-      const pid = parseInt(match[1], 10);
-      const command = match[2].trim();
-      const rss = parseInt(match[3], 10);
-      const lowerCommand = command.toLowerCase();
-      const isNode = lowerCommand.includes("node");
-      const isVitest = lowerCommand.includes("vitest");
-      if (isNode && isVitest) {
-        processes.push({ pid, rssBytes: rss * 1024, command });
-      }
-    }
-    return processes;
-  } catch {
-    return [];
-  }
+  return [theme.fg("error", `⚠️ 内存 ${memoryStatus.percent}%`)];
 }
 
 // my-hud/working.ts
@@ -53651,9 +53569,8 @@ function myHud(pi) {
   }
   function updateMemoryWarning(ctx) {
     const memoryStatus = checkMemoryPressure();
-    const vitestProcesses = findVitestProcesses();
     const theme = ctx.ui.getTheme("catppuccin-mocha");
-    const lines = theme ? buildMemoryWarningLines(theme, memoryStatus, vitestProcesses) : null;
+    const lines = theme ? buildMemoryWarningLines(theme, memoryStatus) : null;
     if (lines) {
       ctx.ui.setWidget(MEMORY_WIDGET_KEY, (_tui, _theme) => ({
         render: (_width) => lines,
@@ -53683,7 +53600,6 @@ function myHud(pi) {
     const message = theme?.fg("accent", pickRandomMessage()) ?? pickRandomMessage();
     ctx.ui.setWorkingMessage(message);
   });
-  pi.on("agent_end", (_event, ctx) => updateMemoryWarning(ctx));
   pi.registerCommand("open-pr", {
     description: "Open the current branch's GitHub Pull Request in browser",
     handler: async (_args, ctx) => {

@@ -41,7 +41,7 @@ Optional `my-hud.json` inside the extension directory (reloaded via `/reload`):
 ```
 
 - `modelShortNames` — map full model IDs to short display names (overrides builtins)
-- `hiddenFields` — hide status line fields; valid keys: `project`, `model`, `branch`, `gitStatus`, `context`, `input`, `output`, `cacheRead`, `cost`, `cacheRate`, `permission`
+- `hiddenFields` — hide status line fields; valid keys: `project`, `model`, `branch`, `gitStatus`, `context`, `input`, `output`, `cacheRead`, `cost`, `cacheRate`
 
 Missing or invalid config falls back to defaults silently.
 

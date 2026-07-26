@@ -39,73 +39,9 @@ describe("buildMemoryWarningLines", () => {
     const result = buildMemoryWarningLines(
       theme,
       { percent: 87, ok: false },
-      [],
     );
 
     expect(result).toEqual(["⚠️ 内存 87%"]);
     expect(theme.fg).toHaveBeenCalledWith("error", "⚠️ 内存 87%");
-  });
-
-  it("returns a warning line with memory percent and vitest processes", async () => {
-    const { buildMemoryWarningLines } = await import("./memory-widget");
-    const theme = createTheme();
-
-    const result = buildMemoryWarningLines(theme, { percent: 87, ok: false }, [
-      { pid: 44124, rssBytes: 1249328 * 1024, command: "node vitest.mjs run" },
-      {
-        pid: 44126,
-        rssBytes: 1500 * 1024 * 1024,
-        command: "node vitest.mjs run",
-      },
-    ]);
-
-    expect(result).toEqual(["⚠️ 内存 87% · vitest 44124(1.2GB), 44126(1.5GB)"]);
-    expect(theme.fg).toHaveBeenCalledWith(
-      "error",
-      "⚠️ 内存 87% · vitest 44124(1.2GB), 44126(1.5GB)",
-    );
-  });
-
-  it("sorts vitest processes by pid ascending", async () => {
-    const { buildMemoryWarningLines } = await import("./memory-widget");
-    const theme = createTheme();
-
-    const result = buildMemoryWarningLines(theme, { percent: 87, ok: false }, [
-      {
-        pid: 50000,
-        rssBytes: 1024 * 1024 * 1024,
-        command: "node vitest.mjs run",
-      },
-      {
-        pid: 10000,
-        rssBytes: 1024 * 1024 * 1024,
-        command: "node vitest.mjs run",
-      },
-    ]);
-
-    expect(result).toEqual(["⚠️ 内存 87% · vitest 10000(1.0GB), 50000(1.0GB)"]);
-  });
-
-  it("formats vitest rss in bytes and kilobytes when small", async () => {
-    const { buildMemoryWarningLines } = await import("./memory-widget");
-    const theme = createTheme();
-
-    const result = buildMemoryWarningLines(theme, { percent: 87, ok: false }, [
-      { pid: 1, rssBytes: 512, command: "node vitest.mjs run" },
-      { pid: 2, rssBytes: 1536, command: "node vitest.mjs run" },
-    ]);
-
-    expect(result).toEqual(["⚠️ 内存 87% · vitest 1(512B), 2(1.5KB)"]);
-  });
-
-  it("formats vitest rss in megabytes", async () => {
-    const { buildMemoryWarningLines } = await import("./memory-widget");
-    const theme = createTheme();
-
-    const result = buildMemoryWarningLines(theme, { percent: 87, ok: false }, [
-      { pid: 1, rssBytes: 5 * 1024 * 1024, command: "node vitest.mjs run" },
-    ]);
-
-    expect(result).toEqual(["⚠️ 内存 87% · vitest 1(5.0MB)"]);
   });
 });

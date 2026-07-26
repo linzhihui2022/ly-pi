@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   formatCacheRate,
-  formatPermissionStats,
   formatTokens,
   setModelShortNames,
   shortModelName,
@@ -28,20 +27,6 @@ describe("formatCacheRate", () => {
 
   it("rounds to nearest percent", () => {
     expect(formatCacheRate(100, 25)).toBe("20%");
-  });
-});
-
-describe("formatPermissionStats", () => {
-  it("returns empty string when stats are undefined", () => {
-    expect(formatPermissionStats(undefined)).toBe("");
-  });
-
-  it("returns empty string when both counts are zero", () => {
-    expect(formatPermissionStats({ allowed: 0, denied: 0 })).toBe("");
-  });
-
-  it("returns allowed/denied pair", () => {
-    expect(formatPermissionStats({ allowed: 12, denied: 3 })).toBe("12/3");
   });
 });
 
