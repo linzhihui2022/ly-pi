@@ -10,7 +10,7 @@ import {
   ensurePreviewServer,
   PREVIEW_DIR,
   stopPreviewServer,
-} from "web-preview";
+} from "../../ly-pi/web-preview/index";
 import {
   buildHtmlDocument,
   extractAssistantText,

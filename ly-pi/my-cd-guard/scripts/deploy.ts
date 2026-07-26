@@ -1,0 +1,8 @@
+import { mkdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+const dest = join(homedir(), ".pi/agent/extensions/my-cd-guard");
+await mkdir(dest, { recursive: true });
+await Bun.write(join(dest, "index.js"), Bun.file("dist/index.js"));
+console.log("my-cd-guard deployed to", dest);
