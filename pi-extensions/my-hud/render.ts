@@ -106,11 +106,6 @@ export function buildStatusLine(
       theme.fg("toolDiffRemoved", `${icon("cost")}${usage.cost.toFixed(2)}`),
     );
   }
-  if (typeof data.judgeCost === "number" && data.judgeCost > 0 && show("cost")) {
-    parts.push(
-      theme.fg("thinkingMedium", `${icon("shield")}${data.judgeCost.toFixed(4)}`),
-    );
-  }
   if (show("cacheRate")) {
     parts.push(
       theme.fg(
@@ -122,11 +117,17 @@ export function buildStatusLine(
 
   const permissionStats = formatPermissionStats(judgeStats);
   if (show("permission") && permissionStats) {
-    parts.push(
-      theme.fg("accent", `${icon("shield")}${judgeStats?.allowed}`) +
-        theme.fg("dim", "/") +
-        theme.fg("error", `${judgeStats?.denied}`),
-    );
+    let stat = theme.fg("accent", `${icon("shield")}${judgeStats?.allowed}`) +
+      theme.fg("dim", "/") +
+      theme.fg("error", `${judgeStats?.denied}`);
+    if (
+      typeof data.judgeCost === "number" &&
+      data.judgeCost > 0 &&
+      show("cost")
+    ) {
+      stat += theme.fg("dim", "/") + theme.fg("thinkingMedium", data.judgeCost.toFixed(2));
+    }
+    parts.push(stat);
   }
 
   return truncateToWidth(parts.join(" "), width);
