@@ -3504,7 +3504,7 @@ function escapeHtml(text) {
 
 // professor.ts
 import { complete as complete2 } from "@earendil-works/pi-ai";
-function createProfessor(config) {
+function createAdvocate(config) {
   return async function analyze(cases, cwd, resolveModel, getAuth, currentJudgeMd, judgePrompt) {
     if (cases.length === 0) {
       return { error: "当前会话没有法官误判案例" };
@@ -3521,7 +3521,7 @@ function createProfessor(config) {
         error: `未找到教授模型: ${config.professorModel}`
       };
     }
-    const prompt = buildProfessorPrompt(cases, currentJudgeMd, judgePrompt, cwd);
+    const prompt = buildAdvocatePrompt(cases, currentJudgeMd, judgePrompt, cwd);
     const auth = await getAuth(model);
     try {
       const context = {
@@ -3582,7 +3582,7 @@ function createProfessor(config) {
       if (!text) {
         return { error: "教授模型返回了空内容" };
       }
-      const parsed = parseProfessorJson(text);
+      const parsed = parseAdvocateJson(text);
       if (!parsed) {
         return { error: "教授模型返回了无法解析的 JSON" };
       }
@@ -3594,7 +3594,7 @@ function createProfessor(config) {
     }
   };
 }
-function parseProfessorJson(text) {
+function parseAdvocateJson(text) {
   const jsonMatch = /\{[\s\S]*\}/.exec(text);
   if (!jsonMatch)
     return;
@@ -3615,7 +3615,7 @@ function parseProfessorJson(text) {
     return;
   }
 }
-function buildProfessorPrompt(cases, currentJudgeMd, judgePrompt, cwd) {
+function buildAdvocatePrompt(cases, currentJudgeMd, judgePrompt, cwd) {
   const caseList = cases.map((c, i) => {
     const contextStr = c.context.length > 0 ? c.context.map((m) => `  [${m.role}] ${m.content.slice(0, 200)}`).join(`
 `) : "  （无上下文）";
@@ -3863,7 +3863,7 @@ function buildProsecutorPrompt(allowedEntries, currentJudgeMd, judgePrompt, cwd)
     "",
     "---",
     "",
-    "## 被放行的操作（共 ${allowedEntries.length} 条）",
+    `## 被放行的操作（共 ${allowedEntries.length} 条）`,
     entryList
   ].join(`
 `);
@@ -4259,10 +4259,10 @@ async function myPermission(pi) {
     }
   });
   pi.registerTool({
-    name: "judge_professor",
-    label: "法官教授",
-    description: "分析法官误判案例（假阳性），交互式优化 JUDGE.md 规则。当用户提到法官、误判、规则优化、JUDGE.md 相关操作时调用此工具。",
-    promptSnippet: "judge_professor — 交互式分析法官误判并优化 JUDGE.md",
+    name: "permission_advocate",
+    label: "辩护人",
+    description: "分析法官误判案例（假阳性），交互式优化 JUDGE.md 规则。当用户提到辩护人、误判、假阳性、规则优化、JUDGE.md 相关操作时调用此工具。",
+    promptSnippet: "permission_advocate — 交互式分析法官误判并优化 JUDGE.md",
     parameters: Type.Object({}),
     execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
       const entries = ctx.sessionManager.getEntries();
@@ -4276,9 +4276,9 @@ async function myPermission(pi) {
         };
       }
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
-      const professor = createProfessor(config);
+      const advocate = createAdvocate(config);
       const currentJudgeMd = loadFile(join2(process.cwd(), "JUDGE.md"));
-      const result = await professor(cases, ctx.cwd, resolveModel, typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
+      const result = await advocate(cases, ctx.cwd, resolveModel, typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
         const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
         return auth.ok ? auth : undefined;
       } : async () => {
@@ -4286,7 +4286,7 @@ async function myPermission(pi) {
       }, currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
-          content: [{ type: "text", text: `教授分析失败: ${result.error}` }],
+          content: [{ type: "text", text: `辩护人分析失败: ${result.error}` }],
           details: {}
         };
       }
@@ -4296,7 +4296,7 @@ async function myPermission(pi) {
           content: [
             {
               type: "text",
-              text: "教授认为当前 JUDGE.md 已覆盖所有误判模式，无需修改"
+              text: "辩护人认为当前 JUDGE.md 已覆盖所有误判模式，无需修改"
             }
           ],
           details: {}
@@ -4304,10 +4304,10 @@ async function myPermission(pi) {
       }
       const selectedRules = [];
       if (suggestion.remove.length > 0) {
-        ctx.ui.notify(`\uD83D\uDCA1 教授建议手动删除 ${suggestion.remove.length} 条过时规则（需手动处理）`, "info");
+        ctx.ui.notify(`\uD83D\uDCA1 辩护人建议手动删除 ${suggestion.remove.length} 条过时规则（需手动处理）`, "info");
       }
       for (const item of suggestion.add) {
-        const keep = await ctx.ui.confirm(`${C.cyan}\uD83C\uDF93 教授建议 — 采纳这条规则？${C.reset}`, `${C.bold}${item.rule}${C.reset}
+        const keep = await ctx.ui.confirm(`${C.cyan}\uD83C\uDF93 辩护人建议 — 采纳这条规则？${C.reset}`, `${C.bold}${item.rule}${C.reset}
 ${C.yellow}原因: ${item.reason}${C.reset}`);
         if (keep) {
           selectedRules.push(item.rule);
@@ -4337,7 +4337,7 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
           details: {}
         };
       }
-      const write = await ctx.ui.confirm(`\uD83C\uDF93 教授融合完成 — 确认写入？`, `${C.green}${mergeResult.mergedText}${C.reset}`);
+      const write = await ctx.ui.confirm(`\uD83C\uDF93 辩护人融合完成 — 确认写入？`, `${C.green}${mergeResult.mergedText}${C.reset}`);
       if (write) {
         writeFileSync(join2(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
         return {
@@ -4387,9 +4387,7 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
       }, currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
-          content: [
-            { type: "text", text: `检察官分析失败: ${result.error}` }
-          ],
+          content: [{ type: "text", text: `检察官分析失败: ${result.error}` }],
           details: {}
         };
       }
