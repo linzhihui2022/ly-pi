@@ -1,11 +1,5 @@
 import { type ChildProcess, exec } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmdirSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,7 +41,7 @@ vi.mock("node:process", async () => {
     await vi.importActual<typeof import("node:process")>("node:process");
   return {
     ...actual,
-    kill: vi.fn((pid: number, signal: string) => true),
+    kill: vi.fn((_pid: number, _signal: string) => true),
   };
 });
 

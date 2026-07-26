@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import hljs from "highlight.js";
 import { Marked } from "marked";
 import { markedHighlight } from "marked-highlight";
@@ -459,7 +458,7 @@ export function ansiToHtml(text: string): string {
   for (const match of text.matchAll(ANSI_RE)) {
     const fullMatch = match[0];
     const params = match[1];
-    const start = match.index!;
+    const start = match.index ?? 0;
 
     // Append text before this escape sequence (escape it)
     if (start > lastIndex) {

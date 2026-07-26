@@ -33,7 +33,8 @@ const config: Config = {
   permission: {},
 };
 
-const JUDGE_PROMPT = "工作目录：{{cwd}}\n工具：{{toolName}}\n输入：{{toolInput}}\n\n只回复 JSON：{\n  \"safe\": boolean,\n  \"score\": number,\n  \"reason\": \"...\",\n  \"toolFor\": \"...\"\n}\n\n判断标准：只读操作安全，破坏性操作不安全。";
+const JUDGE_PROMPT =
+  '工作目录：{{cwd}}\n工具：{{toolName}}\n输入：{{toolInput}}\n\n只回复 JSON：{\n  "safe": boolean,\n  "score": number,\n  "reason": "...",\n  "toolFor": "..."\n}\n\n判断标准：只读操作安全，破坏性操作不安全。';
 
 const judgeDeps = { judgePrompt: JUDGE_PROMPT };
 
@@ -250,7 +251,7 @@ describe("createJudge", () => {
       (
         _model: unknown,
         _context: unknown,
-        options?: { apiKey?: string; headers?: Record<string, string> },
+        _options?: { apiKey?: string; headers?: Record<string, string> },
       ) =>
         Promise.resolve({
           content: [
@@ -289,7 +290,10 @@ describe("createJudge", () => {
         ],
       }),
     );
-    const judge = createJudge(config, { ...judgeDeps, getAuth: async () => undefined });
+    const judge = createJudge(config, {
+      ...judgeDeps,
+      getAuth: async () => undefined,
+    });
     const result = await judge(input, "/repo", undefined, resolveFnOk);
     const calls = (complete as ReturnType<typeof vi.fn>).mock.calls;
     const options = calls[calls.length - 1][2] as {

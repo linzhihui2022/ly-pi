@@ -18,7 +18,7 @@ export function isExternalPath(path: string, cwd: string): boolean {
       ? resolve(expandHome(path))
       : resolve(cwd, path);
   const cwdAbsolute = resolve(cwd);
-  return !absolute.startsWith(cwdAbsolute + "/") && absolute !== cwdAbsolute;
+  return !absolute.startsWith(`${cwdAbsolute}/`) && absolute !== cwdAbsolute;
 }
 
 export function splitBashCommandUnits(command: string): string[] {

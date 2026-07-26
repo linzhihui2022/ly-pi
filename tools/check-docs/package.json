@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "lint": "biome check .",
     "typecheck": "bun x tsgo --noEmit",
     "test": "npx vitest run --coverage && bun run index.ts",
     "check-docs": "bun run index.ts"

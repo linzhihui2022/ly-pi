@@ -2,9 +2,6 @@
 // Compiled to .js for osascript -l JavaScript
 // JXA constraints: no import/export, no arrow functions, no async/await
 
-// ═══ Type annotations (stripped during build) ═══
-type OverlayColor = "blue" | "orange" | "green" | "red";
-
 ObjC.import("Cocoa");
 
 // Initialize AppKit for osascript/JXA context
@@ -22,7 +19,7 @@ function createOverlay(
   typeLabel: string,
   title: string,
   subtitle: string,
-  duration: number,
+  _duration: number,
   color: string,
   slot: number,
 ): void {
@@ -157,7 +154,7 @@ function createOverlay(
 }
 
 // deno-lint-ignore no-unused-vars
-function run(argv: string[]): void {
+function _run(argv: string[]): void {
   var typeLabel: string = argv[0] || "BT-7274";
   var title: string = argv[1] || "";
   var subtitle: string = argv[2] || "";

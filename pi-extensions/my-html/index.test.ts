@@ -14,7 +14,7 @@ vi.mock("web-preview", async (importOriginal) => {
       Promise.resolve({
         port: 3456,
         url: "http://localhost:3456",
-        server: {} as any,
+        server: {} as unknown as Record<string, never>,
       }),
     ),
   };
@@ -33,10 +33,10 @@ import open from "open";
 import { ensurePreviewServer } from "web-preview";
 
 describe("myHtml extension", () => {
-  let registeredCommands: Map<string, any>;
-  let registeredEvents: Map<string, any>;
+  let registeredCommands: Map<string, unknown>;
+  let registeredEvents: Map<string, unknown>;
   let mockApi: ExtensionAPI;
-  let mockCtx: Partial<ExtensionCommandContext>;
+  let mockCtx: ExtensionCommandContext;
 
   beforeEach(() => {
     registeredCommands = new Map();
@@ -49,15 +49,15 @@ describe("myHtml extension", () => {
       on: vi.fn((event, handler) => {
         registeredEvents.set(event, handler);
       }),
-    } as any;
+    } as unknown as ExtensionAPI;
 
     mockCtx = {
       ui: {
         notify: vi.fn(),
-      } as any,
+      } as unknown as ExtensionAPI,
       sessionManager: {
         getEntries: vi.fn(),
-      } as any,
+      } as unknown as ExtensionAPI,
     };
   });
 
@@ -75,10 +75,10 @@ describe("myHtml extension", () => {
     myHtml(mockApi);
     const cmd = registeredCommands.get("html");
 
-    mockCtx.sessionManager!.getEntries = vi.fn(() => []);
+    mockCtx.sessionManager.getEntries = vi.fn(() => []);
 
     await cmd.handler("", mockCtx as ExtensionCommandContext);
-    expect(mockCtx.ui!.notify).toHaveBeenCalledWith(
+    expect(mockCtx.ui?.notify).toHaveBeenCalledWith(
       "No agent reply to preview.",
       "warning",
     );
@@ -88,7 +88,7 @@ describe("myHtml extension", () => {
     myHtml(mockApi);
     const cmd = registeredCommands.get("html");
 
-    mockCtx.sessionManager!.getEntries = vi.fn(
+    mockCtx.sessionManager.getEntries = vi.fn(
       () =>
         [
           {
@@ -108,9 +108,9 @@ describe("myHtml extension", () => {
               content: [{ type: "text", text: "# Hello\n\nWorld" }],
             },
           },
-        ] as any,
+        ] as unknown as Entry[],
     );
-    mockCtx.sessionManager!.getSessionId = vi.fn(() => "session-xyz");
+    mockCtx.sessionManager.getSessionId = vi.fn(() => "session-xyz");
 
     await cmd.handler("", mockCtx as ExtensionCommandContext);
 
@@ -131,7 +131,7 @@ describe("myHtml extension", () => {
     expect(open).toHaveBeenCalledWith(
       "http://localhost:3456/session-xyz/entry-42.html",
     );
-    expect(mockCtx.ui!.notify).toHaveBeenCalledWith(
+    expect(mockCtx.ui?.notify).toHaveBeenCalledWith(
       "Preview: http://localhost:3456/session-xyz/entry-42.html",
       "info",
     );
@@ -141,7 +141,7 @@ describe("myHtml extension", () => {
     myHtml(mockApi);
     const cmd = registeredCommands.get("html");
 
-    mockCtx.sessionManager!.getEntries = vi.fn(
+    mockCtx.sessionManager.getEntries = vi.fn(
       () =>
         [
           {
@@ -154,9 +154,9 @@ describe("myHtml extension", () => {
               content: [{ type: "thinking", thinking: "some thought" }],
             },
           },
-        ] as any,
+        ] as unknown as Entry[],
     );
-    mockCtx.sessionManager!.getSessionId = vi.fn(() => "session-abc");
+    mockCtx.sessionManager.getSessionId = vi.fn(() => "session-abc");
 
     await cmd.handler("", mockCtx as ExtensionCommandContext);
 
@@ -171,7 +171,7 @@ describe("myHtml extension", () => {
     myHtml(mockApi);
     const cmd = registeredCommands.get("html");
 
-    mockCtx.sessionManager!.getEntries = vi.fn(
+    mockCtx.sessionManager.getEntries = vi.fn(
       () =>
         [
           {
@@ -184,16 +184,16 @@ describe("myHtml extension", () => {
               content: [{ type: "text", text: "hello" }],
             },
           },
-        ] as any,
+        ] as unknown as Entry[],
     );
-    mockCtx.sessionManager!.getSessionId = vi.fn(() => "session-err");
+    mockCtx.sessionManager.getSessionId = vi.fn(() => "session-err");
     vi.mocked(ensurePreviewServer).mockRejectedValueOnce(
       new Error("port in use"),
     );
 
     await cmd.handler("", mockCtx as ExtensionCommandContext);
 
-    expect(mockCtx.ui!.notify).toHaveBeenCalledWith(
+    expect(mockCtx.ui?.notify).toHaveBeenCalledWith(
       "Failed to start preview server: port in use",
       "error",
     );

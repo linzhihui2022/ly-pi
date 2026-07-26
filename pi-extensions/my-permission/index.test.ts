@@ -1,4 +1,5 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 // Mock @earendil-works/pi-ai before any imports load it
@@ -56,7 +57,7 @@ vi.mock("web-preview", async (importOriginal) => {
       Promise.resolve({
         port: 3456,
         url: "http://localhost:3456",
-        server: {} as any,
+        server: {} as unknown as Record<string, never>,
       }),
     ),
     stopPreviewServer: vi.fn(() => Promise.resolve()),
@@ -81,15 +82,17 @@ import { confirmToolCall, isChildSession } from "./ui";
 
 // Helper: create mock ExtensionAPI + tool_call invocation
 function createMockApi() {
-  const handlers: Record<string, Function> = {};
-  const commands: Record<string, Function> = {};
+  const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+  const commands: Record<string, (...args: unknown[]) => unknown> = {};
   return {
-    on: vi.fn((event: string, handler: Function) => {
+    on: vi.fn((event: string, handler: (...args: unknown[]) => unknown) => {
       handlers[event] = handler;
     }),
-    registerCommand: vi.fn((name: string, options: { handler: Function }) => {
-      commands[name] = options.handler;
-    }),
+    registerCommand: vi.fn(
+      (name: string, options: { handler: (...args: unknown[]) => unknown }) => {
+        commands[name] = options.handler;
+      },
+    ),
     getHandler: (event: string) => handlers[event],
     getCommand: (name: string) => commands[name],
     appendEntry: vi.fn(),
@@ -118,7 +121,7 @@ function createBashEvent(command: string) {
 describe("my-permission extension entry", () => {
   beforeAll(async () => {
     // load the extension factory (only once)
-    const mod = await import("./index");
+    const _mod = await import("./index");
     // Reset mocks in case other tests ran
     vi.clearAllMocks();
   });
@@ -132,7 +135,7 @@ describe("my-permission extension entry", () => {
 
     const api = createMockApi();
     const mod = await import("./index");
-    await mod.default(api as any);
+    await mod.default(api as unknown as ExtensionAPI);
 
     const handler = api.getHandler("tool_call");
     const result = await handler(createBashEvent("ls"), createMockCtx());
@@ -148,7 +151,7 @@ describe("my-permission extension entry", () => {
 
     const api = createMockApi();
     const mod = await import("./index");
-    await mod.default(api as any);
+    await mod.default(api as unknown as ExtensionAPI);
 
     const handler = api.getHandler("tool_call");
     const result = await handler(createBashEvent("rm -rf /"), createMockCtx());
@@ -172,7 +175,7 @@ describe("my-permission extension entry", () => {
 
     const api = createMockApi();
     const mod = await import("./index");
-    await mod.default(api as any);
+    await mod.default(api as unknown as ExtensionAPI);
 
     const handler = api.getHandler("tool_call");
     const result = await handler(
@@ -208,7 +211,7 @@ describe("my-permission extension entry", () => {
 
     const api = createMockApi();
     const mod = await import("./index");
-    await mod.default(api as any);
+    await mod.default(api as unknown as ExtensionAPI);
 
     const handler = api.getHandler("tool_call");
     const ctx = createMockCtx();
@@ -245,7 +248,7 @@ describe("my-permission extension entry", () => {
 
     const api = createMockApi();
     const mod = await import("./index");
-    await mod.default(api as any);
+    await mod.default(api as unknown as ExtensionAPI);
 
     const handler = api.getHandler("tool_call");
     const result = await handler(
@@ -273,7 +276,7 @@ describe("my-permission extension entry", () => {
 
     const api = createMockApi();
     const mod = await import("./index");
-    await mod.default(api as any);
+    await mod.default(api as unknown as ExtensionAPI);
 
     const handler = api.getHandler("tool_call");
     const result = await handler(
@@ -329,7 +332,7 @@ describe("/judge-log command", () => {
   it("notifies empty message and writes no file when no judge entries", async () => {
     const api = createMockApi();
     const mod = await import("./index");
-    await mod.default(api as any);
+    await mod.default(api as unknown as ExtensionAPI);
 
     const cmd = api.getCommand("judge-log");
     const ctx = createMockCtxWithEntries([]);
@@ -342,7 +345,7 @@ describe("/judge-log command", () => {
   it("renders judge log page, writes fixed file and opens preview", async () => {
     const api = createMockApi();
     const mod = await import("./index");
-    await mod.default(api as any);
+    await mod.default(api as unknown as ExtensionAPI);
 
     const ctx = createMockCtxWithEntries(judgeEntries);
     const cmd = api.getCommand("judge-log");
@@ -377,7 +380,7 @@ describe("/judge-log command", () => {
   it("notifies error when preview server fails to start", async () => {
     const api = createMockApi();
     const mod = await import("./index");
-    await mod.default(api as any);
+    await mod.default(api as unknown as ExtensionAPI);
 
     vi.mocked(ensurePreviewServer).mockRejectedValueOnce(
       new Error("port in use"),
@@ -395,7 +398,7 @@ describe("/judge-log command", () => {
   it("stops the preview server on session_shutdown", async () => {
     const api = createMockApi();
     const mod = await import("./index");
-    await mod.default(api as any);
+    await mod.default(api as unknown as ExtensionAPI);
 
     await api.getHandler("session_shutdown")();
     expect(stopPreviewServer).toHaveBeenCalled();

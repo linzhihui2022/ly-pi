@@ -181,7 +181,12 @@ describe("collectDeniedThenApproved", () => {
 
   it("returns empty when judge denied but no user override", () => {
     const entries: SessionEntry[] = [
-      createJudgeLogEntry({ safe: false, toolName: "bash", value: "rm file", reason: "危险" }),
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "bash",
+        value: "rm file",
+        reason: "危险",
+      }),
     ];
     expect(collectDeniedThenApproved(entries)).toEqual([]);
   });

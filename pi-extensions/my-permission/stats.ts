@@ -73,10 +73,7 @@ export function collectDeniedThenApproved(
         data.safe === false &&
         typeof data.reason === "string"
       ) {
-        deniedContext.set(
-          `${data.toolName}:${data.value}`,
-          [...buffer],
-        );
+        deniedContext.set(`${data.toolName}:${data.value}`, [...buffer]);
       }
     }
   }
@@ -121,9 +118,7 @@ export function collectDeniedThenApproved(
         typeof data.reason === "string"
       ) {
         const key = `${data.toolName}:${data.value}`;
-        const item = result.find(
-          (r) => `${r.toolName}:${r.value}` === key,
-        );
+        const item = result.find((r) => `${r.toolName}:${r.value}` === key);
         if (item) {
           item.judgeReason = data.reason;
         }
@@ -210,9 +205,7 @@ export function collectJudgeLogs(entries: SessionEntry[]): JudgeLogEntry[] {
           toolFor: data.toolFor,
         };
         if (!data.safe) {
-          log.userApproved = overrideKeys.has(
-            `${data.toolName}:${data.value}`,
-          );
+          log.userApproved = overrideKeys.has(`${data.toolName}:${data.value}`);
         }
         logs.push(log);
       }

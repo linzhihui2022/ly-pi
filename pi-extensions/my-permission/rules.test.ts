@@ -10,7 +10,7 @@ import {
   mergeVerdicts,
   toVerdict,
 } from "./rules";
-import type { Config, PermissionMap, ToolInput } from "./types";
+import type { Config, PermissionMap } from "./types";
 
 function cfg(
   permission: Config["permission"],

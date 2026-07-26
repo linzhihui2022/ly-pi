@@ -1,3 +1,7 @@
+import type {
+  ExtensionContext,
+  ExtensionUIContext,
+} from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Bar } from "./bar";
 
@@ -31,7 +35,7 @@ vi.mock("./pr", () => ({
 
 import { getPullRequestNumber, getRemoteUrl, parseRemoteUrl } from "./pr";
 
-function createMockTheme(): any {
+function createMockTheme(): Record<string, (...args: unknown[]) => unknown> {
   return {
     fg: vi.fn((_c: string, text: string) => text),
   };
@@ -58,8 +62,8 @@ describe("Bar PR caching", () => {
     const theme = createMockTheme();
     const ctx = createCtx({ branch: "feature-x" });
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(ctx as unknown as ExtensionContext);
     bar.setBranch("feature-x");
     bar.update();
 
@@ -82,8 +86,8 @@ describe("Bar PR caching", () => {
     const theme = createMockTheme();
     const ctx = createCtx({ branch: "feature-x" });
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(ctx as unknown as ExtensionContext);
     bar.setBranch("feature-x");
     bar.update();
 
@@ -102,8 +106,10 @@ describe("Bar PR caching", () => {
     const setWidget = vi.fn();
     const theme = createMockTheme();
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(createCtx({ branch: undefined }) as any);
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(
+      createCtx({ branch: undefined }) as unknown as ExtensionContext,
+    );
     bar.setBranch(null);
     bar.update();
 
@@ -122,8 +128,8 @@ describe("Bar PR caching", () => {
     const theme = createMockTheme();
     const ctx = createCtx({ branch: "feature-x" });
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(ctx as unknown as ExtensionContext);
     bar.setBranch("feature-x");
     bar.update();
 
@@ -146,8 +152,8 @@ describe("Bar PR caching", () => {
     const theme = createMockTheme();
     const ctx = createCtx({ branch: "feature-x" });
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(ctx as unknown as ExtensionContext);
     bar.setBranch("feature-x");
     bar.update();
 
@@ -180,8 +186,8 @@ describe("Bar PR caching", () => {
     const theme = createMockTheme();
     const ctx = createCtx({ branch: "feature-x" });
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(ctx as unknown as ExtensionContext);
     bar.setBranch("feature-x");
     bar.update();
 
@@ -201,8 +207,8 @@ describe("Bar PR caching", () => {
     const theme = createMockTheme();
     const ctx = createCtx({ branch: "feature-x" });
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(ctx as unknown as ExtensionContext);
     bar.setBranch("feature-x");
     bar.update();
 
@@ -224,8 +230,8 @@ describe("Bar PR caching", () => {
     const theme = createMockTheme();
     const ctx = createCtx({ branch: "feature-x" });
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(ctx as unknown as ExtensionContext);
     bar.setBranch("feature-x");
     bar.update();
 

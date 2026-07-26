@@ -2,10 +2,8 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
-  AgentToolResult,
   ExtensionAPI,
   ExtensionCommandContext,
-  ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import open from "open";
@@ -19,7 +17,12 @@ import { createJudge } from "./judge";
 import { renderJudgeLogPage } from "./log-page";
 import { createMerger, createProfessor } from "./professor";
 import { decide } from "./rules";
-import { collectDeniedThenApproved, collectJudgeLogs, recordJudgeStats, recordUserOverride } from "./stats";
+import {
+  collectDeniedThenApproved,
+  collectJudgeLogs,
+  recordJudgeStats,
+  recordUserOverride,
+} from "./stats";
 import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
 import { extractPathTokens } from "./utils";
 
@@ -86,13 +89,15 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       "分析法官误判案例（假阳性），交互式优化 JUDGE.md 规则。当用户提到法官、误判、规则优化、JUDGE.md 相关操作时调用此工具。",
     promptSnippet: "judge_professor — 交互式分析法官误判并优化 JUDGE.md",
     parameters: Type.Object({}),
-    execute: async (toolCallId, _params, signal, _onUpdate, ctx) => {
+    execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
       const entries = ctx.sessionManager.getEntries();
       const cases = collectDeniedThenApproved(entries);
 
       if (cases.length === 0) {
         return {
-          content: [{ type: "text", text: "当前会话没有法官误判案例，法官表现完美！" }],
+          content: [
+            { type: "text", text: "当前会话没有法官误判案例，法官表现完美！" },
+          ],
           details: {},
         };
       }
@@ -371,5 +376,3 @@ function loadFile(path: string): string {
     return "";
   }
 }
-
-

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PreviewServer } from "./types";
@@ -28,7 +28,7 @@ export async function findAvailablePort(
       }
 
       const testServer = createServer();
-      testServer.once("error", (err: any) => {
+      testServer.once("error", (err: Error) => {
         if (err.code === "EADDRINUSE") {
           currentPort++;
           tryPort();
@@ -62,7 +62,7 @@ export async function ensurePreviewServer(options: {
   const url = `http://${options.urlHost}:${port}`;
 
   const server = createServer((req, res) => {
-    const urlPath = req.url!;
+    const urlPath = req.url ?? "/";
 
     if (req.method !== "GET") {
       res.writeHead(405);

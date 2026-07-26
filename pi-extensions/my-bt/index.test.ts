@@ -1,4 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+} from "@earendil-works/pi-coding-agent";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { playCategory, playOverlay } from "./player";
 
@@ -31,31 +35,39 @@ const DEFAULT_CONFIG = {
   },
 };
 
-const registeredEvents = new Map<string, (...args: any[]) => any>();
-const registeredCommands = new Map<string, any>();
-const registeredPermissionEvents = new Map<string, (...args: any[]) => any>();
+const registeredEvents = new Map<string, (...args: unknown[]) => unknown>();
+const registeredCommands = new Map<
+  string,
+  { handler: (...args: unknown[]) => unknown }
+>();
+const registeredPermissionEvents = new Map<
+  string,
+  (...args: unknown[]) => unknown
+>();
 const mockNotify = vi.fn();
 
 const mockEvents = {
-  on: vi.fn((channel: string, handler: (...args: any[]) => any) => {
+  on: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
     registeredPermissionEvents.set(channel, handler);
   }),
   emit: vi.fn(),
 };
 
 const mockPi = {
-  on: vi.fn((event: string, handler: (...args: any[]) => any) => {
+  on: vi.fn((event: string, handler: (...args: unknown[]) => unknown) => {
     registeredEvents.set(event, handler);
   }),
-  registerCommand: vi.fn((name: string, opts: any) => {
-    registeredCommands.set(name, opts);
-  }),
+  registerCommand: vi.fn(
+    (name: string, opts: { handler: (...args: unknown[]) => unknown }) => {
+      registeredCommands.set(name, opts);
+    },
+  ),
   events: mockEvents,
-};
+} as unknown as ExtensionAPI;
 
 const mockCtx = {
   ui: { notify: mockNotify },
-};
+} as unknown as ExtensionCommandContext;
 
 async function loadModule() {
   return await import("./index");
@@ -87,38 +99,38 @@ describe("my-bt extension", () => {
   it("registers /bt command", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredCommands.has("bt")).toBe(true);
   });
 
   it("registers session_start handler", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredEvents.has("session_start")).toBe(true);
   });
 
   it("registers agent_start handler", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredEvents.has("agent_start")).toBe(true);
   });
 
   it("registers agent_end handler", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredEvents.has("agent_end")).toBe(true);
   });
 
   it("plays sound on event when enabled", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredEvents.get("session_start");
-    handler?.({}, mockCtx as any);
+    handler?.({}, mockCtx);
     expect(playCategory).toHaveBeenCalled();
   });
 
@@ -127,20 +139,20 @@ describe("my-bt extension", () => {
       JSON.stringify({ ...DEFAULT_CONFIG, enabled: false }),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredEvents.get("session_start");
-    handler?.({}, mockCtx as any);
+    handler?.({}, mockCtx);
     expect(playCategory).not.toHaveBeenCalled();
   });
 
   it("toggles off via /bt off and persists", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler("off", mockCtx as any);
+    await cmd.handler("off", mockCtx);
 
     expect(mockNotify).toHaveBeenCalledWith(
       expect.stringContaining("已关闭"),
@@ -158,10 +170,10 @@ describe("my-bt extension", () => {
       JSON.stringify({ ...DEFAULT_CONFIG, enabled: false }),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler("on", mockCtx as any);
+    await cmd.handler("on", mockCtx);
 
     expect(mockNotify).toHaveBeenCalledWith(
       expect.stringContaining("已开启"),
@@ -179,10 +191,10 @@ describe("my-bt extension", () => {
       JSON.stringify({ ...DEFAULT_CONFIG, enabled: false }),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler("startup", mockCtx as any);
+    await cmd.handler("startup", mockCtx);
     expect(playCategory).not.toHaveBeenCalled();
   });
 
@@ -191,7 +203,7 @@ describe("my-bt extension", () => {
       throw new Error("not found");
     });
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredCommands.has("bt")).toBe(false);
     expect(registeredEvents.size).toBe(0);
   });
@@ -199,10 +211,10 @@ describe("my-bt extension", () => {
   it("lists categories when /bt is called without args", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler(undefined, mockCtx as any);
+    await cmd.handler(undefined, mockCtx);
 
     expect(mockNotify).toHaveBeenCalledOnce();
     const msg = mockNotify.mock.calls[0][0] as string;
@@ -217,10 +229,10 @@ describe("my-bt extension", () => {
     vi.useFakeTimers();
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler("all", mockCtx as any);
+    await cmd.handler("all", mockCtx);
 
     expect(playCategory).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(1500);
@@ -236,10 +248,10 @@ describe("my-bt extension", () => {
       JSON.stringify({ ...DEFAULT_CONFIG, enabled: false }),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler("all", mockCtx as any);
+    await cmd.handler("all", mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
     expect(mockNotify).toHaveBeenCalledWith(
@@ -251,10 +263,10 @@ describe("my-bt extension", () => {
   it("plays specific category when enabled", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler("startup", mockCtx as any);
+    await cmd.handler("startup", mockCtx);
 
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ soundDir: expect.any(String) }),
@@ -266,10 +278,10 @@ describe("my-bt extension", () => {
   it("warns for unknown category", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler("nope", mockCtx as any);
+    await cmd.handler("nope", mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
     expect(mockNotify).toHaveBeenCalledWith(
@@ -281,7 +293,7 @@ describe("my-bt extension", () => {
   it("notifies error when reloading config fails in handler", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     // Now make loadConfig fail on next call
     vi.mocked(readFileSync).mockImplementation(() => {
@@ -289,7 +301,7 @@ describe("my-bt extension", () => {
     });
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler("startup", mockCtx as any);
+    await cmd.handler("startup", mockCtx);
 
     expect(mockNotify).toHaveBeenCalledWith(
       expect.stringContaining("Config not found or invalid"),
@@ -310,10 +322,10 @@ describe("my-bt extension", () => {
     };
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredEvents.get("session_start");
-    handler?.({}, mockCtx as any);
+    handler?.({}, mockCtx);
     expect(playOverlay).toHaveBeenCalledWith(
       expect.objectContaining({ overlayTextMap: expect.any(Object) }),
       "session_start",
@@ -332,10 +344,10 @@ describe("my-bt extension", () => {
     };
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredEvents.get("session_start");
-    handler?.({}, mockCtx as any);
+    handler?.({}, mockCtx);
     expect(playOverlay).not.toHaveBeenCalled();
   });
 
@@ -348,10 +360,10 @@ describe("my-bt extension", () => {
     };
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler("startup", mockCtx as any);
+    await cmd.handler("startup", mockCtx);
 
     expect(playCategory).toHaveBeenCalled();
     expect(playOverlay).not.toHaveBeenCalled();
@@ -367,10 +379,10 @@ describe("my-bt extension", () => {
     };
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const cmd = registeredCommands.get("bt");
-    await cmd.handler("all", mockCtx as any);
+    await cmd.handler("all", mockCtx);
     vi.advanceTimersByTime(1500);
     vi.advanceTimersByTime(1500);
 
@@ -384,10 +396,10 @@ describe("my-bt extension", () => {
     // DEFAULT_CONFIG has no overlayTextMap — should work as before
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredEvents.get("session_start");
-    expect(() => handler?.({}, mockCtx as any)).not.toThrow();
+    expect(() => handler?.({}, mockCtx)).not.toThrow();
     expect(playCategory).toHaveBeenCalled();
   });
 
@@ -404,7 +416,7 @@ describe("my-bt extension", () => {
       JSON.stringify(configWithPermission),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(mockEvents.on).toHaveBeenCalledWith(
       "permissions:ui_prompt",
       expect.any(Function),
@@ -429,7 +441,7 @@ describe("my-bt extension", () => {
       JSON.stringify(configWithPermission),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredPermissionEvents.get("permissions:ui_prompt");
     handler?.({
@@ -465,7 +477,7 @@ describe("my-bt extension", () => {
       JSON.stringify(configWithPermission),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredPermissionEvents.get("permissions:ui_prompt");
     handler?.({
@@ -485,7 +497,7 @@ describe("my-bt extension", () => {
   it("does not play on permissions:ui_prompt when permissionEventMap is missing", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredPermissionEvents.get("permissions:ui_prompt");
     handler?.({
@@ -515,14 +527,14 @@ describe("my-bt extension", () => {
       JSON.stringify(configWithToolEvent),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredEvents.has("tool_call")).toBe(true);
   });
 
   it("does not subscribe to tool_call when toolEventMap is missing", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredEvents.has("tool_call")).toBe(false);
   });
 
@@ -544,10 +556,10 @@ describe("my-bt extension", () => {
       JSON.stringify(configWithToolEvent),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredEvents.get("tool_call");
-    handler?.({ toolName: "ask_user_question" }, mockCtx as any);
+    handler?.({ toolName: "ask_user_question" }, mockCtx);
 
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ toolEventMap: expect.any(Object) }),
@@ -573,10 +585,10 @@ describe("my-bt extension", () => {
       JSON.stringify(configWithToolEvent),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredEvents.get("tool_call");
-    handler?.({ toolName: "bash" }, mockCtx as any);
+    handler?.({ toolName: "bash" }, mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
     expect(playOverlay).not.toHaveBeenCalled();
@@ -594,10 +606,10 @@ describe("my-bt extension", () => {
       JSON.stringify(configWithToolEvent),
     );
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const handler = registeredEvents.get("tool_call");
-    handler?.({ toolName: "ask_user_question" }, mockCtx as any);
+    handler?.({ toolName: "ask_user_question" }, mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
     expect(playOverlay).not.toHaveBeenCalled();
@@ -618,12 +630,12 @@ describe("my-bt extension", () => {
     };
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithQuestion));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const toolHandler = registeredEvents.get("tool_call");
     const agentEndHandler = registeredEvents.get("agent_end");
 
-    toolHandler?.({ toolName: "ask_user_question" }, mockCtx as any);
+    toolHandler?.({ toolName: "ask_user_question" }, mockCtx);
     expect(playCategory).toHaveBeenLastCalledWith(
       expect.objectContaining({ toolEventMap: expect.any(Object) }),
       "question",
@@ -632,7 +644,7 @@ describe("my-bt extension", () => {
 
     vi.mocked(playCategory).mockClear();
     vi.mocked(playOverlay).mockClear();
-    agentEndHandler?.({}, mockCtx as any);
+    agentEndHandler?.({}, mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
     expect(playOverlay).not.toHaveBeenCalled();
@@ -648,12 +660,12 @@ describe("my-bt extension", () => {
     };
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const agentStartHandler = registeredEvents.get("agent_start");
     const agentEndHandler = registeredEvents.get("agent_end");
 
-    agentStartHandler?.({}, mockCtx as any);
+    agentStartHandler?.({}, mockCtx);
     expect(playCategory).toHaveBeenLastCalledWith(
       expect.objectContaining({ eventMap: expect.any(Object) }),
       "engaging",
@@ -662,7 +674,7 @@ describe("my-bt extension", () => {
 
     vi.mocked(playCategory).mockClear();
     vi.mocked(playOverlay).mockClear();
-    agentEndHandler?.({}, mockCtx as any);
+    agentEndHandler?.({}, mockCtx);
 
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ eventMap: expect.any(Object) }),
@@ -689,17 +701,17 @@ describe("my-bt extension", () => {
     };
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithQuestion));
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const toolHandler = registeredEvents.get("tool_call");
     const agentEndHandler = registeredEvents.get("agent_end");
 
-    toolHandler?.({ toolName: "ask_user_question" }, mockCtx as any);
+    toolHandler?.({ toolName: "ask_user_question" }, mockCtx);
     vi.mocked(playCategory).mockClear();
     vi.mocked(playOverlay).mockClear();
 
-    agentEndHandler?.({}, mockCtx as any);
-    agentEndHandler?.({}, mockCtx as any);
+    agentEndHandler?.({}, mockCtx);
+    agentEndHandler?.({}, mockCtx);
 
     expect(playCategory).toHaveBeenCalledOnce();
     expect(playCategory).toHaveBeenCalledWith(

@@ -30,7 +30,12 @@ export function createJudge(
     }
 
     const auth = deps?.getAuth ? await deps.getAuth(resolved) : undefined;
-    const prompt = buildJudgePrompt(input, cwd, deps.judgePrompt, deps.localJudge);
+    const prompt = buildJudgePrompt(
+      input,
+      cwd,
+      deps.judgePrompt,
+      deps.localJudge,
+    );
     const context = {
       systemPrompt: "You are a security gate. Reply with strict JSON only.",
       messages: [

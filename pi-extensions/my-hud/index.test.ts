@@ -1,3 +1,4 @@
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getGitStatus } from "./git";
 import { checkMemoryPressure } from "./memory";
@@ -54,18 +55,30 @@ vi.mock("./vitest-process", () => ({
 
 // ── Mocks ──
 
-const registeredEvents = new Map<string, (...args: any[]) => any>();
+const registeredEvents = new Map<string, (...args: unknown[]) => unknown>();
 
-const registeredCommands = new Map<string, any>();
+const registeredCommands = new Map<
+  string,
+  { handler: (...args: unknown[]) => unknown }
+>();
+
+function mustGet<T>(map: Map<string, T>, key: string): T {
+  const value = map.get(key);
+  if (value === undefined)
+    throw new Error(`Expected '${key}' to be registered`);
+  return value;
+}
 
 const mockPi = {
-  on: vi.fn((event: string, handler: (...args: any[]) => any) => {
+  on: vi.fn((event: string, handler: (...args: unknown[]) => unknown) => {
     registeredEvents.set(event, handler);
   }),
-  registerCommand: vi.fn((name: string, config: any) => {
-    registeredCommands.set(name, config);
-  }),
-};
+  registerCommand: vi.fn(
+    (name: string, config: { handler: (...args: unknown[]) => unknown }) => {
+      registeredCommands.set(name, config);
+    },
+  ),
+} as unknown as ExtensionAPI;
 
 const mockTui = { requestRender: vi.fn() };
 const mockTheme = {
@@ -81,9 +94,9 @@ const mockTheme = {
   getColorMode: vi.fn(() => "truecolor"),
   getThinkingBorderColor: vi.fn(() => (str: string) => str),
   getBashModeBorderColor: vi.fn(() => (str: string) => str),
-} as any;
+} as unknown as Record<string, (...args: unknown[]) => unknown>;
 
-function createMockTheme(): any {
+function createMockTheme(): Record<string, (...args: unknown[]) => unknown> {
   return {
     fg: vi.fn((_c: string, text: string) => text),
     bg: vi.fn((_c: string, text: string) => text),
@@ -115,7 +128,7 @@ const mockCtx = {
   sessionManager: { getEntries: vi.fn(() => []) },
   getContextUsage: vi.fn(() => ({ percent: 42, contextWindow: 128000 })),
   ui: {
-    setFooter: vi.fn((factory: any) => {
+    setFooter: vi.fn((factory: unknown) => {
       return factory(mockTui, mockTheme, mockFooterData);
     }),
     setWidget: vi.fn(),
@@ -325,7 +338,7 @@ describe("aggregateSessionUsage", () => {
         },
       },
     ];
-    expect(aggregateSessionUsage(entries as any)).toEqual({
+    expect(aggregateSessionUsage(entries)).toEqual({
       input: 0,
       output: 0,
       cacheRead: 0,
@@ -352,7 +365,7 @@ describe("aggregateSessionUsage", () => {
         },
       },
     ];
-    expect(aggregateSessionUsage(entries as any)).toEqual({
+    expect(aggregateSessionUsage(entries)).toEqual({
       input: 100,
       output: 50,
       cacheRead: 10,
@@ -391,7 +404,7 @@ describe("aggregateSessionUsage", () => {
         },
       },
     ];
-    expect(aggregateSessionUsage(entries as any)).toEqual({
+    expect(aggregateSessionUsage(entries)).toEqual({
       input: 4000,
       output: 2000,
       cacheRead: 300,
@@ -412,7 +425,7 @@ describe("getLastUserMessage", () => {
     const entries = [
       { type: "message", message: { role: "assistant", content: "hello" } },
     ];
-    expect(getLastUserMessage(entries as any)).toBeNull();
+    expect(getLastUserMessage(entries)).toBeNull();
   });
 
   it("returns string content from last user message", async () => {
@@ -421,7 +434,7 @@ describe("getLastUserMessage", () => {
       { type: "message", message: { role: "user", content: "first" } },
       { type: "message", message: { role: "user", content: "second" } },
     ];
-    expect(getLastUserMessage(entries as any)).toBe("second");
+    expect(getLastUserMessage(entries)).toBe("second");
   });
 
   it("skips empty or whitespace-only messages", async () => {
@@ -430,7 +443,7 @@ describe("getLastUserMessage", () => {
       { type: "message", message: { role: "user", content: "   " } },
       { type: "message", message: { role: "user", content: "valid" } },
     ];
-    expect(getLastUserMessage(entries as any)).toBe("valid");
+    expect(getLastUserMessage(entries)).toBe("valid");
   });
 
   it("joins array content parts", async () => {
@@ -447,7 +460,7 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBe("hello world");
+    expect(getLastUserMessage(entries)).toBe("hello world");
   });
 
   it("marks non-text parts as [MEDIA]", async () => {
@@ -464,7 +477,7 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBe("look at [MEDIA]");
+    expect(getLastUserMessage(entries)).toBe("look at [MEDIA]");
   });
 
   it("searches from the end of entries", async () => {
@@ -474,7 +487,7 @@ describe("getLastUserMessage", () => {
       { type: "message", message: { role: "assistant", content: "reply" } },
       { type: "message", message: { role: "user", content: "newest" } },
     ];
-    expect(getLastUserMessage(entries as any)).toBe("newest");
+    expect(getLastUserMessage(entries)).toBe("newest");
   });
 
   it("returns null when entries have non-message types", async () => {
@@ -483,7 +496,7 @@ describe("getLastUserMessage", () => {
       { type: "other" },
       { type: "tool_call", message: { role: "user", content: "test" } },
     ];
-    expect(getLastUserMessage(entries as any)).toBeNull();
+    expect(getLastUserMessage(entries)).toBeNull();
   });
 
   it("returns null when user message content is an empty array", async () => {
@@ -497,7 +510,7 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBeNull();
+    expect(getLastUserMessage(entries)).toBeNull();
   });
 
   it("skips user messages with null content", async () => {
@@ -511,13 +524,13 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBeNull();
+    expect(getLastUserMessage(entries)).toBeNull();
   });
 
   it("skips entries with undefined message", async () => {
     const { getLastUserMessage } = await loadModule();
     const entries = [{ type: "message", message: undefined }];
-    expect(getLastUserMessage(entries as any)).toBeNull();
+    expect(getLastUserMessage(entries)).toBeNull();
   });
 
   it("strips skill XML tags from string content", async () => {
@@ -531,7 +544,7 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBe("actual message");
+    expect(getLastUserMessage(entries)).toBe("actual message");
   });
 
   it("strips multiline skill XML tags", async () => {
@@ -546,7 +559,7 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBe("user text");
+    expect(getLastUserMessage(entries)).toBe("user text");
   });
 
   it("returns null when only skill tags are present", async () => {
@@ -560,7 +573,7 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBeNull();
+    expect(getLastUserMessage(entries)).toBeNull();
   });
 
   it("strips skill XML tags from array content parts", async () => {
@@ -577,7 +590,7 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBe("hello");
+    expect(getLastUserMessage(entries)).toBe("hello");
   });
 
   it("handles array with raw string parts and skill tags", async () => {
@@ -591,7 +604,7 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBe("raw string");
+    expect(getLastUserMessage(entries)).toBe("raw string");
   });
 
   it("handles array with [MEDIA] and skill tags", async () => {
@@ -609,7 +622,7 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBe("[MEDIA]  after media");
+    expect(getLastUserMessage(entries)).toBe("[MEDIA]  after media");
   });
 
   it("returns null when array only contains skill tags", async () => {
@@ -623,12 +636,12 @@ describe("getLastUserMessage", () => {
         },
       },
     ];
-    expect(getLastUserMessage(entries as any)).toBeNull();
+    expect(getLastUserMessage(entries)).toBeNull();
   });
 });
 
 describe("formatGitStatus", () => {
-  const mockTheme = { fg: vi.fn((_c: string, text: string) => text) };
+  const _mockTheme = { fg: vi.fn((_c: string, text: string) => text) };
 
   it("returns empty for null status", async () => {
     const { formatGitStatus } = await loadModule();
@@ -882,7 +895,7 @@ describe("Bar", () => {
     const { Bar } = await loadModule();
     const bar = new Bar();
     const setWidget = vi.fn();
-    const uiCtx = { setWidget } as any;
+    const uiCtx = { setWidget };
 
     bar.setUICtx(uiCtx);
     bar.update();
@@ -897,7 +910,7 @@ describe("Bar", () => {
     const bar = new Bar();
     const setWidget = vi.fn();
     const theme = createMockTheme();
-    const mockEntries: any[] = [];
+    const mockEntries: unknown[] = [];
     const ctx = {
       cwd: "/home/user/my-project",
       model: { id: "gpt-4" },
@@ -905,8 +918,8 @@ describe("Bar", () => {
       getContextUsage: () => ({ percent: 10, contextWindow: 128000 }),
     };
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget });
+    bar.setContext(ctx);
     bar.setBranch("feature-x");
     bar.update();
 
@@ -922,7 +935,7 @@ describe("Bar", () => {
     const { Bar } = await loadModule();
     const bar = new Bar();
     const setWidget = vi.fn();
-    bar.setUICtx({ setWidget } as any);
+    bar.setUICtx({ setWidget });
     bar.dispose();
 
     expect(setWidget).toHaveBeenCalledWith("my-hud-bar", undefined);
@@ -940,8 +953,8 @@ describe("Bar", () => {
       getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
     };
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget });
+    bar.setContext(ctx);
     bar.update();
 
     const factory = setWidget.mock.calls[0][1];
@@ -966,8 +979,8 @@ describe("Bar", () => {
       getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
     };
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget });
+    bar.setContext(ctx);
     bar.update();
 
     const factory = setWidget.mock.calls[0][1];
@@ -989,7 +1002,7 @@ describe("Bar", () => {
     const { Bar } = await loadModule();
     const bar = new Bar();
     const setWidget = vi.fn();
-    const uiCtx = { setWidget } as any;
+    const uiCtx = { setWidget };
 
     bar.setUICtx(uiCtx);
     bar.setUICtx(uiCtx);
@@ -1016,7 +1029,7 @@ describe("Bar", () => {
     const setWidget = vi.fn();
     const theme = createMockTheme();
 
-    bar.setUICtx({ setWidget } as any);
+    bar.setUICtx({ setWidget });
     // ctx is not set
     bar.update();
 
@@ -1039,8 +1052,8 @@ describe("Bar", () => {
       getContextUsage: () => undefined,
     };
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget });
+    bar.setContext(ctx);
     bar.update();
 
     const factory = setWidget.mock.calls[0][1];
@@ -1063,8 +1076,8 @@ describe("Bar", () => {
       getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
     };
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget });
+    bar.setContext(ctx);
     bar.update();
 
     const factory = setWidget.mock.calls[0][1];
@@ -1088,8 +1101,8 @@ describe("Bar", () => {
       getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
     };
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget });
+    bar.setContext(ctx);
     bar.update();
 
     const factory = setWidget.mock.calls[0][1];
@@ -1117,8 +1130,8 @@ describe("Bar", () => {
       getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
     };
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget });
+    bar.setContext(ctx);
     bar.update();
 
     const factory = setWidget.mock.calls[0][1];
@@ -1148,8 +1161,8 @@ describe("Bar", () => {
       getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
     };
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget });
+    bar.setContext(ctx);
     bar.update();
 
     const factory = setWidget.mock.calls[0][1];
@@ -1181,8 +1194,8 @@ describe("Bar", () => {
       getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
     };
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget });
+    bar.setContext(ctx);
     bar.update();
 
     const factory = setWidget.mock.calls[0][1];
@@ -1225,8 +1238,8 @@ describe("Bar", () => {
       getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
     };
 
-    bar.setUICtx({ setWidget } as any);
-    bar.setContext(ctx as any);
+    bar.setUICtx({ setWidget });
+    bar.setContext(ctx);
     bar.update();
 
     const factory = setWidget.mock.calls[0][1];
@@ -1284,27 +1297,27 @@ describe("my-hud extension", () => {
 
   it("registers turn_start handler", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredEvents.has("turn_start")).toBe(true);
   });
 
   it("registers model_select handler", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredEvents.has("model_select")).toBe(true);
   });
 
   it("registers session_start handler", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredEvents.has("session_start")).toBe(true);
   });
 
   it("session_start skips widget and footer when hasUI is false", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     const ctxNoUI = { ...mockCtx, hasUI: false };
     sessionStartHandler({}, ctxNoUI);
 
@@ -1314,21 +1327,21 @@ describe("my-hud extension", () => {
 
   it("model_select handler no-ops when currentTui is null", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const modelSelectHandler = registeredEvents.get("model_select")!;
+    const modelSelectHandler = mustGet(registeredEvents, "model_select");
     modelSelectHandler();
     expect(mockTui.requestRender).not.toHaveBeenCalled();
   });
 
   it("model_select handler triggers requestRender when currentTui is set", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, { ...mockCtx, hasUI: true });
 
-    const modelSelectHandler = registeredEvents.get("model_select")!;
+    const modelSelectHandler = mustGet(registeredEvents, "model_select");
     mockTui.requestRender.mockClear();
     modelSelectHandler();
     expect(mockTui.requestRender).toHaveBeenCalled();
@@ -1336,9 +1349,9 @@ describe("my-hud extension", () => {
 
   it("session_start installs footer via setFooter", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, { ...mockCtx, hasUI: true });
 
     expect(mockCtx.ui.setFooter).toHaveBeenCalled();
@@ -1346,7 +1359,7 @@ describe("my-hud extension", () => {
 
   it("footer render shows last user message", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const ctx = {
       ...mockCtx,
@@ -1361,7 +1374,7 @@ describe("my-hud extension", () => {
       },
     };
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, ctx);
 
     const component = ctx.ui.setFooter.mock.results[0].value;
@@ -1373,7 +1386,7 @@ describe("my-hud extension", () => {
 
   it("footer render truncates multi-line message to first line only", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const ctx = {
       ...mockCtx,
@@ -1391,7 +1404,7 @@ describe("my-hud extension", () => {
       },
     };
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, ctx);
 
     const component = ctx.ui.setFooter.mock.results[0].value;
@@ -1404,9 +1417,9 @@ describe("my-hud extension", () => {
 
   it("footer render returns empty array when no user message", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, mockCtx);
 
     const component = mockCtx.ui.setFooter.mock.results[0].value;
@@ -1417,7 +1430,7 @@ describe("my-hud extension", () => {
 
   it("footer render handles user message with array content", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const ctx = {
       ...mockCtx,
@@ -1438,7 +1451,7 @@ describe("my-hud extension", () => {
       },
     };
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, ctx);
 
     const component = ctx.ui.setFooter.mock.results[0].value;
@@ -1449,9 +1462,9 @@ describe("my-hud extension", () => {
 
   it("dispose cleans up branch subscription, currentTui and bar", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, { ...mockCtx, hasUI: true });
 
     const component = mockCtx.ui.setFooter.mock.results[0].value;
@@ -1463,16 +1476,16 @@ describe("my-hud extension", () => {
     // After dispose, requestRender should no-op for currentTui
     mockTui.requestRender.mockClear();
     // model_select handler still exists and can be called safely
-    const modelSelectHandler = registeredEvents.get("model_select")!;
+    const modelSelectHandler = mustGet(registeredEvents, "model_select");
     modelSelectHandler();
     expect(mockTui.requestRender).not.toHaveBeenCalled();
   });
 
   it("invalidate is a no-op", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, mockCtx);
 
     const component = mockCtx.ui.setFooter.mock.results[0].value;
@@ -1481,7 +1494,7 @@ describe("my-hud extension", () => {
 
   it("render returns error line when an exception is thrown", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const ctx = {
       ...mockCtx,
@@ -1493,7 +1506,7 @@ describe("my-hud extension", () => {
       },
     };
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, ctx);
 
     const component = ctx.ui.setFooter.mock.results[0].value;
@@ -1508,9 +1521,9 @@ describe("my-hud extension", () => {
     vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const agentStartHandler = registeredEvents.get("agent_start")!;
+    const agentStartHandler = mustGet(registeredEvents, "agent_start");
     const setWorkingMessage = vi.fn();
     const theme = createMockTheme();
     const ctx = {
@@ -1529,9 +1542,9 @@ describe("my-hud extension", () => {
     vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const agentStartHandler = registeredEvents.get("agent_start")!;
+    const agentStartHandler = mustGet(registeredEvents, "agent_start");
     const setWorkingMessage = vi.fn();
     const ctx = {
       ...mockCtx,
@@ -1552,10 +1565,10 @@ describe("my-hud extension", () => {
     vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const agentStartHandler = registeredEvents.get("agent_start")!;
-    const turnStartHandler = registeredEvents.get("turn_start")!;
+    const agentStartHandler = mustGet(registeredEvents, "agent_start");
+    const turnStartHandler = mustGet(registeredEvents, "turn_start");
     const setWorkingMessage = vi.fn();
     const ctx = {
       ...mockCtx,
@@ -1574,12 +1587,12 @@ describe("my-hud extension", () => {
 
   it("turn_start handler triggers requestRender when currentTui is set", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, { ...mockCtx, hasUI: true });
 
-    const turnStartHandler = registeredEvents.get("turn_start")!;
+    const turnStartHandler = mustGet(registeredEvents, "turn_start");
     mockTui.requestRender.mockClear();
     turnStartHandler();
 
@@ -1591,9 +1604,9 @@ describe("my-hud extension", () => {
     vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const agentStartHandler = registeredEvents.get("agent_start")!;
+    const agentStartHandler = mustGet(registeredEvents, "agent_start");
     const setWorkingMessage = vi.fn(() => {
       throw new Error("ui fail");
     });
@@ -1607,12 +1620,12 @@ describe("my-hud extension", () => {
 
   it("turn_end handler triggers requestRender when currentTui is set", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const sessionStartHandler = registeredEvents.get("session_start")!;
+    const sessionStartHandler = mustGet(registeredEvents, "session_start");
     sessionStartHandler({}, { ...mockCtx, hasUI: true });
 
-    const turnEndHandler = registeredEvents.get("turn_end")!;
+    const turnEndHandler = mustGet(registeredEvents, "turn_end");
     mockTui.requestRender.mockClear();
     turnEndHandler();
 
@@ -1621,7 +1634,7 @@ describe("my-hud extension", () => {
 
   it("registers /mem command", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredCommands.has("mem")).toBe(true);
   });
 
@@ -1629,11 +1642,11 @@ describe("my-hud extension", () => {
     vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const notify = vi.fn();
     const ctx = { ui: { notify } };
-    const command = registeredCommands.get("mem")!;
+    const command = mustGet(registeredCommands, "mem");
     await command.handler("", ctx);
 
     expect(notify).toHaveBeenCalledWith("内存使用: 42%", "info");
@@ -1643,11 +1656,11 @@ describe("my-hud extension", () => {
     vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 87, ok: false });
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const notify = vi.fn();
     const ctx = { ui: { notify } };
-    const command = registeredCommands.get("mem")!;
+    const command = mustGet(registeredCommands, "mem");
     await command.handler("", ctx);
 
     expect(notify).toHaveBeenCalledWith("内存使用: 87%", "warning");
@@ -1655,26 +1668,26 @@ describe("my-hud extension", () => {
 
   it("registers agent_start handler", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredEvents.has("agent_start")).toBe(true);
   });
 
   it("registers /open-pr command", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredCommands.has("open-pr")).toBe(true);
   });
 
   it("/open-pr command opens PR URL when PR exists", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const notify = vi.fn();
     const ctx = {
       ui: { notify },
       cwd: "/x",
     };
-    const command = registeredCommands.get("open-pr")!;
+    const command = mustGet(registeredCommands, "open-pr");
     await command.handler("", ctx);
 
     expect(openUrl).toHaveBeenCalledWith(
@@ -1686,14 +1699,14 @@ describe("my-hud extension", () => {
     vi.mocked(getPullRequestForCurrentBranch).mockResolvedValueOnce(null);
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const notify = vi.fn();
     const ctx = {
       ui: { notify },
       cwd: "/x",
     };
-    const command = registeredCommands.get("open-pr")!;
+    const command = mustGet(registeredCommands, "open-pr");
     await command.handler("", ctx);
 
     expect(notify).toHaveBeenCalledWith("当前分支没有关联的 PR", "info");
@@ -1703,14 +1716,14 @@ describe("my-hud extension", () => {
     vi.mocked(openUrl).mockRejectedValueOnce(new Error("no browser"));
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
     const notify = vi.fn();
     const ctx = {
       ui: { notify },
       cwd: "/x",
     };
-    const command = registeredCommands.get("open-pr")!;
+    const command = mustGet(registeredCommands, "open-pr");
     await command.handler("", ctx);
 
     expect(notify).toHaveBeenCalledWith(
@@ -1721,7 +1734,7 @@ describe("my-hud extension", () => {
 
   it("registers agent_end handler", async () => {
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
     expect(registeredEvents.has("agent_end")).toBe(true);
   });
 
@@ -1730,9 +1743,9 @@ describe("my-hud extension", () => {
     vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const agentStartHandler = registeredEvents.get("agent_start")!;
+    const agentStartHandler = mustGet(registeredEvents, "agent_start");
     agentStartHandler({}, mockCtx);
 
     expect(mockCtx.ui.setWidget).toHaveBeenCalledWith(
@@ -1753,9 +1766,9 @@ describe("my-hud extension", () => {
     ]);
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const agentStartHandler = registeredEvents.get("agent_start")!;
+    const agentStartHandler = mustGet(registeredEvents, "agent_start");
     agentStartHandler({}, mockCtx);
 
     expect(mockCtx.ui.setWidget).toHaveBeenCalledWith(
@@ -1767,7 +1780,7 @@ describe("my-hud extension", () => {
     const factory = mockCtx.ui.setWidget.mock.calls.find(
       (call) =>
         call[0] === "my-hud-memory-warning" && typeof call[1] === "function",
-    )![1] as any;
+    )?.[1];
     const component = factory(mockTui, mockTheme);
     const lines = component.render(200);
 
@@ -1779,9 +1792,9 @@ describe("my-hud extension", () => {
     vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const agentEndHandler = registeredEvents.get("agent_end")!;
+    const agentEndHandler = mustGet(registeredEvents, "agent_end");
     agentEndHandler({}, mockCtx);
 
     expect(mockCtx.ui.setWidget).toHaveBeenCalledWith(
@@ -1796,9 +1809,9 @@ describe("my-hud extension", () => {
     vi.mocked(findVitestProcesses).mockReturnValue([]);
 
     const mod = await loadModule();
-    mod.default(mockPi as any);
+    mod.default(mockPi);
 
-    const agentStartHandler = registeredEvents.get("agent_start")!;
+    const agentStartHandler = mustGet(registeredEvents, "agent_start");
     const ctx = {
       ...mockCtx,
       ui: { ...mockCtx.ui, getTheme: vi.fn(() => undefined) },

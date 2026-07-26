@@ -1,9 +1,6 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
-import {
-  buildProfessorPrompt,
-  createProfessor,
-} from "./professor";
+import { buildProfessorPrompt, createProfessor } from "./professor";
 import type { DeniedThenApproved } from "./stats";
 import type { Config } from "./types";
 
@@ -67,9 +64,7 @@ describe("buildProfessorPrompt", () => {
         toolName: "bash",
         value: "git commit -m 'feat: add x'",
         judgeReason: "may modify repo",
-        context: [
-          { role: "assistant", content: "let me commit the changes" },
-        ],
+        context: [{ role: "assistant", content: "let me commit the changes" }],
       },
       {
         toolName: "bash",
@@ -131,14 +126,21 @@ describe("buildProfessorPrompt", () => {
     const lines = prompt.split("\n");
     const contextLine = lines.find((l) => l.includes("a".repeat(200)));
     expect(contextLine).toBeDefined();
-    expect(contextLine!.length).toBeLessThanOrEqual(209);
+    expect(contextLine?.length).toBeLessThanOrEqual(209);
   });
 });
 
 describe("createProfessor", () => {
   it("returns error when no cases", async () => {
     const professor = createProfessor(config);
-    const result = await professor([], "/repo", resolveModelOk, getAuthOk, "", JUDGE_PROMPT);
+    const result = await professor(
+      [],
+      "/repo",
+      resolveModelOk,
+      getAuthOk,
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toBe("当前会话没有法官误判案例");
   });
@@ -158,7 +160,14 @@ describe("createProfessor", () => {
 
     const cases = [makeCase()];
     const professor = createProfessor(config);
-    const result = await professor(cases, "/repo", resolveModelOk, getAuthOk, "", JUDGE_PROMPT);
+    const result = await professor(
+      cases,
+      "/repo",
+      resolveModelOk,
+      getAuthOk,
+      "",
+      JUDGE_PROMPT,
+    );
 
     expect(result.error).toBeUndefined();
     expect(result.suggestion).toEqual({
@@ -171,7 +180,14 @@ describe("createProfessor", () => {
     await mockComplete({ content: [{ type: "text", text: "not json" }] });
     const cases = [makeCase()];
     const professor = createProfessor(config);
-    const result = await professor(cases, "/repo", resolveModelOk, getAuthOk, "", JUDGE_PROMPT);
+    const result = await professor(
+      cases,
+      "/repo",
+      resolveModelOk,
+      getAuthOk,
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("无法解析");
   });
@@ -182,7 +198,14 @@ describe("createProfessor", () => {
     });
     const cases = [makeCase()];
     const professor = createProfessor(config);
-    const result = await professor(cases, "/repo", resolveModelOk, getAuthOk, "", JUDGE_PROMPT);
+    const result = await professor(
+      cases,
+      "/repo",
+      resolveModelOk,
+      getAuthOk,
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("无法解析");
   });
@@ -191,7 +214,14 @@ describe("createProfessor", () => {
     const badConfig: Config = { ...config, professorModel: "some-model" };
     const cases = [makeCase()];
     const professor = createProfessor(badConfig);
-    const result = await professor(cases, "/repo", resolveModelOk, getAuthOk, "", JUDGE_PROMPT);
+    const result = await professor(
+      cases,
+      "/repo",
+      resolveModelOk,
+      getAuthOk,
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("professorModel 格式无效");
   });
@@ -199,17 +229,33 @@ describe("createProfessor", () => {
   it("returns error when professor model not found", async () => {
     const cases = [makeCase()];
     const professor = createProfessor(config);
-    const result = await professor(cases, "/repo", resolveModelNotFound, getAuthOk, "", JUDGE_PROMPT);
+    const result = await professor(
+      cases,
+      "/repo",
+      resolveModelNotFound,
+      getAuthOk,
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("未找到教授模型");
   });
 
   it("returns error when LLM call fails", async () => {
     const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("network error"));
+    (complete as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("network error"),
+    );
     const cases = [makeCase()];
     const professor = createProfessor(config);
-    const result = await professor(cases, "/repo", resolveModelOk, getAuthOk, "", JUDGE_PROMPT);
+    const result = await professor(
+      cases,
+      "/repo",
+      resolveModelOk,
+      getAuthOk,
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("教授模型调用失败");
   });
@@ -218,7 +264,14 @@ describe("createProfessor", () => {
     await mockComplete({ content: [] });
     const cases = [makeCase()];
     const professor = createProfessor(config);
-    const result = await professor(cases, "/repo", resolveModelOk, getAuthOk, "", JUDGE_PROMPT);
+    const result = await professor(
+      cases,
+      "/repo",
+      resolveModelOk,
+      getAuthOk,
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("空内容");
   });
@@ -240,7 +293,14 @@ describe("createProfessor", () => {
     });
     const cases = [makeCase()];
     const professor = createProfessor(config);
-    const result = await professor(cases, "/repo", resolveModelOk, getAuthOk, "", JUDGE_PROMPT);
+    const result = await professor(
+      cases,
+      "/repo",
+      resolveModelOk,
+      getAuthOk,
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toEqual({
       add: [{ rule: "规则", reason: "原因" }],
       remove: [],

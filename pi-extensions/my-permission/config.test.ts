@@ -85,10 +85,7 @@ describe("loadConfig", () => {
   it("accepts custom professorModel", async () => {
     await mkdir(tmp, { recursive: true });
     const path = join(tmp, "prof-model.json");
-    await writeFile(
-      path,
-      JSON.stringify({ professorModel: "openai/gpt-4o" }),
-    );
+    await writeFile(path, JSON.stringify({ professorModel: "openai/gpt-4o" }));
     const cfg = await loadConfig(path);
     expect(cfg.professorModel).toBe("openai/gpt-4o");
   });
@@ -112,10 +109,7 @@ describe("loadConfig", () => {
   it("accepts custom professorThinking", async () => {
     await mkdir(tmp, { recursive: true });
     const path = join(tmp, "think.json");
-    await writeFile(
-      path,
-      JSON.stringify({ professorThinking: "high" }),
-    );
+    await writeFile(path, JSON.stringify({ professorThinking: "high" }));
     const cfg = await loadConfig(path);
     expect(cfg.professorThinking).toBe("high");
   });

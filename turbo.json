@@ -5,13 +5,16 @@
     "typecheck": {
       "inputs": ["$TURBO_DEFAULT$"]
     },
+    "lint": {
+      "cache": false
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "!*.test.ts", "!*.spec.ts"],
       "outputs": ["dist/**"]
     },
     "test": {
-      "dependsOn": ["build"],
+      "dependsOn": ["build", "lint"],
       "inputs": ["$TURBO_DEFAULT$", "dist/**"],
       "outputs": ["coverage/**"]
     },

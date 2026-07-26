@@ -91,7 +91,7 @@ describe("isExternalPath", () => {
   });
 
   it("returns true for tilde path outside cwd", () => {
-    const home = process.env.HOME ?? "/tmp";
+    const _home = process.env.HOME ?? "/tmp";
     expect(isExternalPath("~/.ssh", "/home/user/project")).toBe(true);
   });
 

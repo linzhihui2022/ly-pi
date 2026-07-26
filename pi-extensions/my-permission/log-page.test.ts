@@ -55,7 +55,12 @@ describe("renderJudgeLogPage", () => {
 
   it("renders unsafe verdict with score and user denied", () => {
     const html = renderJudgeLogPage([
-      createLog({ safe: false, decision: "denied", score: 2, userApproved: false }),
+      createLog({
+        safe: false,
+        decision: "denied",
+        score: 2,
+        userApproved: false,
+      }),
     ]);
     expect(html).toContain("✗ 不安全（2/10）");
     expect(html).toContain("✗ 拒绝");
@@ -63,14 +68,24 @@ describe("renderJudgeLogPage", () => {
 
   it("renders unsafe verdict with user approved override", () => {
     const html = renderJudgeLogPage([
-      createLog({ safe: false, decision: "denied", score: 3, userApproved: true }),
+      createLog({
+        safe: false,
+        decision: "denied",
+        score: 3,
+        userApproved: true,
+      }),
     ]);
     expect(html).toContain("✓ 批准");
   });
 
   it("renders unsafe verdict without score when judge failed", () => {
     const html = renderJudgeLogPage([
-      createLog({ safe: false, decision: "denied", score: undefined, userApproved: false }),
+      createLog({
+        safe: false,
+        decision: "denied",
+        score: undefined,
+        userApproved: false,
+      }),
     ]);
     expect(html).toContain("✗ 不安全");
     expect(html).not.toContain("✗ 不安全（");

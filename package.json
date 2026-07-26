@@ -16,7 +16,8 @@
     "deploy": "turbo run deploy",
     "check-docs": "bun run tools/check-docs/index.ts",
     "format": "biome format --write .",
-    "check": "biome check --write ."
+    "check": "biome check --write .",
+    "lint": "biome check ."
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",

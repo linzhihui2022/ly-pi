@@ -3,6 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
+    "lint": "biome check .",
     "build": "bun build ./index.ts --outdir dist --target node --format esm --external '@earendil-works/*'",
     "typecheck": "bun x tsgo --noEmit",
     "test": "npx vitest run --coverage",

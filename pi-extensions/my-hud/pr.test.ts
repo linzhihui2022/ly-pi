@@ -1,3 +1,4 @@
+import type { ChildProcess } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getCurrentBranch,
@@ -92,7 +93,11 @@ describe("parseRemoteUrl", () => {
 describe("getRemoteUrl", () => {
   it("returns tracking remote URL when branch has upstream", async () => {
     vi.mocked(exec).mockImplementation(
-      (cmd: string, _opts: any, callback: any) => {
+      (
+        cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         if (cmd.includes("branch.feature-x.remote")) {
           callback(null, "upstream\n", "");
         } else if (cmd.includes("remote get-url")) {
@@ -100,7 +105,7 @@ describe("getRemoteUrl", () => {
         } else {
           callback(new Error("unexpected command"), "", "");
         }
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -110,7 +115,11 @@ describe("getRemoteUrl", () => {
 
   it("falls back to origin when branch has no tracking remote", async () => {
     vi.mocked(exec).mockImplementation(
-      (cmd: string, _opts: any, callback: any) => {
+      (
+        cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         if (cmd.includes("branch.feature-x.remote")) {
           callback(null, "\n", ""); // empty -> no tracking
         } else if (cmd.includes("remote get-url")) {
@@ -118,7 +127,7 @@ describe("getRemoteUrl", () => {
         } else {
           callback(new Error("unexpected command"), "", "");
         }
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -128,7 +137,11 @@ describe("getRemoteUrl", () => {
 
   it("returns null when git remote get-url fails", async () => {
     vi.mocked(exec).mockImplementation(
-      (cmd: string, _opts: any, callback: any) => {
+      (
+        cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         if (cmd.includes("branch.feature-x.remote")) {
           callback(null, "upstream\n", "");
         } else if (cmd.includes("remote get-url")) {
@@ -136,7 +149,7 @@ describe("getRemoteUrl", () => {
         } else {
           callback(new Error("unexpected command"), "", "");
         }
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -146,13 +159,17 @@ describe("getRemoteUrl", () => {
 
   it("returns null when git config returns invalid remote name", async () => {
     vi.mocked(exec).mockImplementation(
-      (cmd: string, _opts: any, callback: any) => {
+      (
+        cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         if (cmd.includes("branch.feature-x.remote")) {
           callback(new Error("no such config"), "", "");
         } else {
           callback(new Error("unexpected command"), "", "");
         }
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -171,13 +188,17 @@ describe("getPullRequestNumber", () => {
 
   it("returns PR from gh CLI when available", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(
           null,
           '{"number": 42, "url": "https://github.com/owner/repo/pull/42"}',
           "",
         );
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -195,9 +216,13 @@ describe("getPullRequestNumber", () => {
 
   it("falls back to GitHub API when gh CLI fails", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(new Error("gh not found"), "", "");
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -212,7 +237,7 @@ describe("getPullRequestNumber", () => {
             },
           ]),
       }),
-    ) as any;
+    ) as unknown as ChildProcess;
 
     const result = await getPullRequestNumber(
       "/x",
@@ -229,9 +254,13 @@ describe("getPullRequestNumber", () => {
 
   it("falls back to API when gh CLI returns invalid PR JSON", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(null, "{}", "");
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -246,7 +275,7 @@ describe("getPullRequestNumber", () => {
             },
           ]),
       }),
-    ) as any;
+    ) as unknown as ChildProcess;
 
     const result = await getPullRequestNumber(
       "/x",
@@ -263,13 +292,19 @@ describe("getPullRequestNumber", () => {
 
   it("returns null when both gh and API fail", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(new Error("gh not found"), "", "");
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
-    global.fetch = vi.fn(() => Promise.reject(new Error("network"))) as any;
+    global.fetch = vi.fn(() =>
+      Promise.reject(new Error("network")),
+    ) as unknown as ChildProcess;
 
     const result = await getPullRequestNumber(
       "/x",
@@ -283,9 +318,13 @@ describe("getPullRequestNumber", () => {
 
   it("returns null when API returns no PRs", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(new Error("gh not found"), "", "");
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -294,7 +333,7 @@ describe("getPullRequestNumber", () => {
         ok: true,
         json: () => Promise.resolve([]),
       }),
-    ) as any;
+    ) as unknown as ChildProcess;
 
     const result = await getPullRequestNumber(
       "/x",
@@ -308,9 +347,13 @@ describe("getPullRequestNumber", () => {
 
   it("returns null when API responds with non-ok status", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(new Error("gh not found"), "", "");
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -319,7 +362,7 @@ describe("getPullRequestNumber", () => {
         ok: false,
         status: 404,
       }),
-    ) as any;
+    ) as unknown as ChildProcess;
 
     const result = await getPullRequestNumber(
       "/x",
@@ -333,13 +376,17 @@ describe("getPullRequestNumber", () => {
 
   it("returns null when API token is missing", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(new Error("gh not found"), "", "");
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
-    global.fetch = vi.fn() as any;
+    global.fetch = vi.fn() as unknown as ChildProcess;
 
     const result = await getPullRequestNumber(
       "/x",
@@ -353,9 +400,13 @@ describe("getPullRequestNumber", () => {
 
   it("returns null when API returns PR with missing fields", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(new Error("gh not found"), "", "");
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -369,7 +420,7 @@ describe("getPullRequestNumber", () => {
             },
           ]),
       }),
-    ) as any;
+    ) as unknown as ChildProcess;
 
     const result = await getPullRequestNumber(
       "/x",
@@ -385,9 +436,13 @@ describe("getPullRequestNumber", () => {
 describe("getCurrentBranch", () => {
   it("returns the current branch name", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(null, "feature-x\n", "");
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -397,9 +452,13 @@ describe("getCurrentBranch", () => {
 
   it("returns null when current branch output is empty", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(null, "\n", "");
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -411,7 +470,11 @@ describe("getCurrentBranch", () => {
 describe("getPullRequestForCurrentBranch", () => {
   it("returns PR for the current branch", async () => {
     vi.mocked(exec).mockImplementation(
-      (cmd: string, _opts: any, callback: any) => {
+      (
+        cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         if (cmd.includes("branch --show-current")) {
           callback(null, "feature-x\n", "");
         } else if (cmd.includes("branch.feature-x.remote")) {
@@ -427,7 +490,7 @@ describe("getPullRequestForCurrentBranch", () => {
         } else {
           callback(new Error("unexpected command"), "", "");
         }
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -440,7 +503,11 @@ describe("getPullRequestForCurrentBranch", () => {
 
   it("returns null when current branch has no PR", async () => {
     vi.mocked(exec).mockImplementation(
-      (cmd: string, _opts: any, callback: any) => {
+      (
+        cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         if (cmd.includes("branch --show-current")) {
           callback(null, "feature-x\n", "");
         } else if (cmd.includes("branch.feature-x.remote")) {
@@ -452,7 +519,7 @@ describe("getPullRequestForCurrentBranch", () => {
         } else {
           callback(new Error("unexpected command"), "", "");
         }
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -461,7 +528,7 @@ describe("getPullRequestForCurrentBranch", () => {
         ok: true,
         json: () => Promise.resolve([]),
       }),
-    ) as any;
+    ) as unknown as ChildProcess;
 
     const result = await getPullRequestForCurrentBranch("/x", "token");
     expect(result).toBeNull();
@@ -469,9 +536,13 @@ describe("getPullRequestForCurrentBranch", () => {
 
   it("returns null when not in a git repo", async () => {
     vi.mocked(exec).mockImplementation(
-      (_cmd: string, _opts: any, callback: any) => {
+      (
+        _cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(new Error("not a git repo"), "", "");
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -481,7 +552,11 @@ describe("getPullRequestForCurrentBranch", () => {
 
   it("returns null when branch has no remote", async () => {
     vi.mocked(exec).mockImplementation(
-      (cmd: string, _opts: any, callback: any) => {
+      (
+        cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         if (cmd.includes("branch --show-current")) {
           callback(null, "feature-x\n", "");
         } else if (cmd.includes("branch.feature-x.remote")) {
@@ -489,7 +564,7 @@ describe("getPullRequestForCurrentBranch", () => {
         } else {
           callback(new Error("unexpected command"), "", "");
         }
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -499,7 +574,11 @@ describe("getPullRequestForCurrentBranch", () => {
 
   it("returns null when remote is not GitHub", async () => {
     vi.mocked(exec).mockImplementation(
-      (cmd: string, _opts: any, callback: any) => {
+      (
+        cmd: string,
+        _opts: unknown,
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         if (cmd.includes("branch --show-current")) {
           callback(null, "feature-x\n", "");
         } else if (cmd.includes("branch.feature-x.remote")) {
@@ -509,7 +588,7 @@ describe("getPullRequestForCurrentBranch", () => {
         } else {
           callback(new Error("unexpected command"), "", "");
         }
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -528,9 +607,13 @@ describe("openUrl", () => {
   it("opens URL on macOS", async () => {
     Object.defineProperty(process, "platform", { value: "darwin" });
     vi.mocked(execFile).mockImplementation(
-      (_cmd: string, _args: any, callback: any) => {
+      (
+        _cmd: string,
+        _args: readonly string[],
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(null);
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -545,9 +628,13 @@ describe("openUrl", () => {
   it("opens URL on Linux", async () => {
     Object.defineProperty(process, "platform", { value: "linux" });
     vi.mocked(execFile).mockImplementation(
-      (_cmd: string, _args: any, callback: any) => {
+      (
+        _cmd: string,
+        _args: readonly string[],
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(null);
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -562,9 +649,13 @@ describe("openUrl", () => {
   it("opens URL on Windows", async () => {
     Object.defineProperty(process, "platform", { value: "win32" });
     vi.mocked(execFile).mockImplementation(
-      (_cmd: string, _args: any, callback: any) => {
+      (
+        _cmd: string,
+        _args: readonly string[],
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(null);
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 
@@ -579,9 +670,13 @@ describe("openUrl", () => {
   it("rejects when open command fails", async () => {
     Object.defineProperty(process, "platform", { value: "darwin" });
     vi.mocked(execFile).mockImplementation(
-      (_cmd: string, _args: any, callback: any) => {
+      (
+        _cmd: string,
+        _args: readonly string[],
+        callback: (err: Error | null, stdout: string, stderr: string) => void,
+      ) => {
         callback(new Error("command not found"));
-        return undefined as any;
+        return undefined as unknown as ChildProcess;
       },
     );
 

@@ -26,7 +26,7 @@ function isValidChildPolicy(
 }
 
 function isValidPositiveNumber(value: unknown): value is number {
-  return typeof value === "number" && isFinite(value) && value >= 0;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
 export async function loadConfig(configPath: string): Promise<Config> {

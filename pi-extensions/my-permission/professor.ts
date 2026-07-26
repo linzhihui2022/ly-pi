@@ -1,7 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai";
-import type { Config } from "./types";
 import type { DeniedThenApproved } from "./stats";
+import type { Config } from "./types";
 
 export interface ProfessorSuggestion {
   add: Array<{ rule: string; reason: string }>;
@@ -18,7 +18,11 @@ export type ProfessorFn = (
   cases: DeniedThenApproved[],
   cwd: string,
   resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (model: Model<Api>) => Promise<{ apiKey?: string; headers?: Record<string, string> } | undefined>,
+  getAuth: (
+    model: Model<Api>,
+  ) => Promise<
+    { apiKey?: string; headers?: Record<string, string> } | undefined
+  >,
   currentJudgeMd: string,
   judgePrompt: string,
 ) => Promise<ProfessorResult>;
@@ -27,7 +31,11 @@ export type MergerFn = (
   currentJudgeMd: string,
   selectedRules: string[],
   resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (model: Model<Api>) => Promise<{ apiKey?: string; headers?: Record<string, string> } | undefined>,
+  getAuth: (
+    model: Model<Api>,
+  ) => Promise<
+    { apiKey?: string; headers?: Record<string, string> } | undefined
+  >,
 ) => Promise<ProfessorResult>;
 
 export function createProfessor(config: Config): ProfessorFn {
@@ -35,7 +43,11 @@ export function createProfessor(config: Config): ProfessorFn {
     cases: DeniedThenApproved[],
     cwd: string,
     resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (model: Model<Api>) => Promise<{ apiKey?: string; headers?: Record<string, string> } | undefined>,
+    getAuth: (
+      model: Model<Api>,
+    ) => Promise<
+      { apiKey?: string; headers?: Record<string, string> } | undefined
+    >,
     currentJudgeMd: string,
     judgePrompt: string,
   ): Promise<ProfessorResult> {
@@ -57,7 +69,12 @@ export function createProfessor(config: Config): ProfessorFn {
       };
     }
 
-    const prompt = buildProfessorPrompt(cases, currentJudgeMd, judgePrompt, cwd);
+    const prompt = buildProfessorPrompt(
+      cases,
+      currentJudgeMd,
+      judgePrompt,
+      cwd,
+    );
     const auth = await getAuth(model);
 
     try {
@@ -85,8 +102,8 @@ export function createProfessor(config: Config): ProfessorFn {
           '  "remove": ["应删除的规则原文"]',
           "}",
           "",
-          'add: 建议新增的规则，每条包含 rule（一行祈使句）和 reason（一句话原因）。如果没有新增，设为空数组 []。',
-          'remove: 当前 JUDGE.md 中过时或错误的规则（必须匹配原文）。如果没有需删除的，设为空数组 []。',
+          "add: 建议新增的规则，每条包含 rule（一行祈使句）和 reason（一句话原因）。如果没有新增，设为空数组 []。",
+          "remove: 当前 JUDGE.md 中过时或错误的规则（必须匹配原文）。如果没有需删除的，设为空数组 []。",
           "",
           "注意：当前 JUDGE.md 中未出现在 remove 里的规则将自动保留，不需要在 JSON 中列出。",
           "关键：不要建议当前 JUDGE.md 中已存在的规则。如果案例已被现有规则覆盖，则不需要添加。",
@@ -101,7 +118,7 @@ export function createProfessor(config: Config): ProfessorFn {
           "",
           "- 只从可归纳的简单案例中提取模式，忽略多行长脚本等复杂案例",
           "- 每条 rule 一句话，用祈使句，不超过一行",
-          "- reason 一句话说明原因（如\"被误判 5 次\"）",
+          '- reason 一句话说明原因（如"被误判 5 次"）',
           "- 如果当前 JUDGE.md 已完美，所有数组为空",
           "- 直接输出 JSON，不要 markdown 代码块",
         ].join("\n"),
@@ -165,7 +182,9 @@ function parseProfessorJson(text: string): ProfessorSuggestion | undefined {
     );
     return {
       add,
-      remove: (p.remove as unknown[]).filter((v): v is string => typeof v === "string"),
+      remove: (p.remove as unknown[]).filter(
+        (v): v is string => typeof v === "string",
+      ),
     };
   } catch {
     return undefined;
@@ -233,7 +252,11 @@ export function createMerger(config: Config): MergerFn {
     currentJudgeMd: string,
     selectedRules: string[],
     resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (model: Model<Api>) => Promise<{ apiKey?: string; headers?: Record<string, string> } | undefined>,
+    getAuth: (
+      model: Model<Api>,
+    ) => Promise<
+      { apiKey?: string; headers?: Record<string, string> } | undefined
+    >,
   ): Promise<ProfessorResult> {
     const parts = config.professorModel.split("/");
     if (parts.length !== 2) {
@@ -257,7 +280,8 @@ export function createMerger(config: Config): MergerFn {
           "- 保留现有 JUDGE.md 的所有有效内容，不要丢失任何条目",
           "- 将新规则追加到末尾，或插入到合适的位置",
           "- 去除重复：如果新规则和现有规则意思相同或被已有规则语义覆盖，只保留表述更清晰的那条，不要两者都保留",
-          "- 如果新规则只是已有规则的特例（如已有「允许执行部署命令」，不要再保留「允许执行 bun run scripts/deploy.ts」），直接丢弃新规则",,
+          "- 如果新规则只是已有规则的特例（如已有「允许执行部署命令」，不要再保留「允许执行 bun run scripts/deploy.ts」），直接丢弃新规则",
+          undefined,
           "- 保持简短精炼",
           "- 直接输出完整的 JUDGE.md 文本，不要包含解释或 markdown 代码块",
         ].join("\n"),
