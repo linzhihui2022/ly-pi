@@ -4,10 +4,13 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import {
+  collectDeniedThenApproved,
   collectJudgeLogs,
+  JUDGE_OVERRIDE_CUSTOM_TYPE,
   JUDGE_STATS_CUSTOM_TYPE,
   type JudgeLogEntry,
   recordJudgeStats,
+  recordUserOverride,
 } from "./stats";
 
 function createMockPi(): ExtensionAPI {
@@ -112,12 +115,254 @@ describe("collectJudgeLogs", () => {
     expect(logs).toHaveLength(2);
     expect(logs[0].value).toBe(longValue);
     expect(logs[0].toolName).toBe("bash");
+    expect(logs[0].userApproved).toBeUndefined();
     expect(logs[1].toolName).toBe("write");
     expect(logs[1].safe).toBe(false);
+    expect(logs[1].userApproved).toBe(false);
   });
 
   it("omits score when not a number", () => {
     const logs = collectJudgeLogs([createJudgeLogEntry({ score: undefined })]);
     expect(logs[0].score).toBeUndefined();
+  });
+
+  it("marks userApproved true when override entry exists", () => {
+    const entries: SessionEntry[] = [
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "bash",
+        value: "rm -rf dist",
+        reason: "危险",
+      }),
+      {
+        type: "custom",
+        customType: JUDGE_OVERRIDE_CUSTOM_TYPE,
+        data: { toolName: "bash", value: "rm -rf dist" },
+      } as unknown as SessionEntry,
+    ];
+    const logs = collectJudgeLogs(entries);
+    expect(logs).toHaveLength(1);
+    expect(logs[0].userApproved).toBe(true);
+  });
+
+  it("marks userApproved false when no override entry", () => {
+    const logs = collectJudgeLogs([
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "bash",
+        value: "sudo rm /",
+        reason: "危险",
+      }),
+    ]);
+    expect(logs).toHaveLength(1);
+    expect(logs[0].userApproved).toBe(false);
+  });
+});
+
+describe("recordUserOverride", () => {
+  it("records user override after judge denial", () => {
+    const pi = createMockPi();
+    recordUserOverride(pi, {
+      toolName: "bash",
+      value: "rm -rf dist",
+      paths: ["dist/"],
+    });
+    expect(pi.appendEntry).toHaveBeenCalledWith(JUDGE_OVERRIDE_CUSTOM_TYPE, {
+      toolName: "bash",
+      value: "rm -rf dist",
+    });
+  });
+});
+
+describe("collectDeniedThenApproved", () => {
+  it("returns empty when no judge entries", () => {
+    expect(collectDeniedThenApproved([])).toEqual([]);
+  });
+
+  it("returns empty when judge denied but no user override", () => {
+    const entries: SessionEntry[] = [
+      createJudgeLogEntry({ safe: false, toolName: "bash", value: "rm file", reason: "危险" }),
+    ];
+    expect(collectDeniedThenApproved(entries)).toEqual([]);
+  });
+
+  it("returns empty when user override without prior judge denial", () => {
+    const entries: SessionEntry[] = [
+      {
+        type: "custom",
+        customType: JUDGE_OVERRIDE_CUSTOM_TYPE,
+        data: { toolName: "bash", value: "some cmd" },
+      } as unknown as SessionEntry,
+    ];
+    expect(collectDeniedThenApproved(entries)).toEqual([]);
+  });
+
+  it("matches judge denied with user override by toolName and value", () => {
+    const entries: SessionEntry[] = [
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "bash",
+        value: "rm -rf dist",
+        reason: "删除操作",
+      }),
+      {
+        type: "custom",
+        customType: JUDGE_OVERRIDE_CUSTOM_TYPE,
+        data: { toolName: "bash", value: "rm -rf dist" },
+      } as unknown as SessionEntry,
+    ];
+    const result = collectDeniedThenApproved(entries);
+    expect(result).toHaveLength(1);
+    expect(result[0].toolName).toBe("bash");
+    expect(result[0].value).toBe("rm -rf dist");
+    expect(result[0].judgeReason).toBe("删除操作");
+    expect(result[0].context).toEqual([]);
+  });
+
+  it("does not match judge allowed entries", () => {
+    const entries: SessionEntry[] = [
+      createJudgeLogEntry({
+        safe: true,
+        toolName: "bash",
+        value: "git log",
+        reason: "安全",
+      }),
+      {
+        type: "custom",
+        customType: JUDGE_OVERRIDE_CUSTOM_TYPE,
+        data: { toolName: "bash", value: "git log" },
+      } as unknown as SessionEntry,
+    ];
+    expect(collectDeniedThenApproved(entries)).toEqual([]);
+  });
+
+  it("handles value containing colons", () => {
+    const entries: SessionEntry[] = [
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "bash",
+        value: "echo 'a:b:c'",
+        reason: "含冒号",
+      }),
+      {
+        type: "custom",
+        customType: JUDGE_OVERRIDE_CUSTOM_TYPE,
+        data: { toolName: "bash", value: "echo 'a:b:c'" },
+      } as unknown as SessionEntry,
+    ];
+    const result = collectDeniedThenApproved(entries);
+    expect(result).toHaveLength(1);
+    expect(result[0].value).toBe("echo 'a:b:c'");
+  });
+
+  it("captures preceding 3 messages as context", () => {
+    const entries: SessionEntry[] = [
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "帮我清理 dist 目录" }],
+        },
+      } as unknown as SessionEntry,
+      {
+        type: "message",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "好的，我来执行 rm -rf dist" }],
+        },
+      } as unknown as SessionEntry,
+      {
+        type: "message",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "确认" }],
+        },
+      } as unknown as SessionEntry,
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "bash",
+        value: "rm -rf dist",
+        reason: "删除操作",
+      }),
+      {
+        type: "custom",
+        customType: JUDGE_OVERRIDE_CUSTOM_TYPE,
+        data: { toolName: "bash", value: "rm -rf dist" },
+      } as unknown as SessionEntry,
+    ];
+    const result = collectDeniedThenApproved(entries);
+    expect(result).toHaveLength(1);
+    expect(result[0].context).toHaveLength(3);
+    expect(result[0].context[0].role).toBe("user");
+    expect(result[0].context[0].content).toBe("帮我清理 dist 目录");
+    expect(result[0].context[2].role).toBe("user");
+    expect(result[0].context[2].content).toBe("确认");
+  });
+
+  it("keeps only the last 3 messages as context", () => {
+    const entries: SessionEntry[] = [
+      {
+        type: "message",
+        message: { role: "user", content: [{ type: "text", text: "msg1" }] },
+      } as unknown as SessionEntry,
+      {
+        type: "message",
+        message: { role: "user", content: [{ type: "text", text: "msg2" }] },
+      } as unknown as SessionEntry,
+      {
+        type: "message",
+        message: { role: "user", content: [{ type: "text", text: "msg3" }] },
+      } as unknown as SessionEntry,
+      {
+        type: "message",
+        message: { role: "user", content: [{ type: "text", text: "msg4" }] },
+      } as unknown as SessionEntry,
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "bash",
+        value: "rm file",
+        reason: "危险",
+      }),
+      {
+        type: "custom",
+        customType: JUDGE_OVERRIDE_CUSTOM_TYPE,
+        data: { toolName: "bash", value: "rm file" },
+      } as unknown as SessionEntry,
+    ];
+    const result = collectDeniedThenApproved(entries);
+    expect(result[0].context).toHaveLength(3);
+    expect(result[0].context[0].content).toBe("msg2");
+    expect(result[0].context[2].content).toBe("msg4");
+  });
+
+  it("matches multiple denied-then-approved pairs", () => {
+    const entries: SessionEntry[] = [
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "bash",
+        value: "rm -rf dist",
+        reason: "删除操作",
+      }),
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "write",
+        value: "/etc/hosts",
+        reason: "系统文件",
+      }),
+      {
+        type: "custom",
+        customType: JUDGE_OVERRIDE_CUSTOM_TYPE,
+        data: { toolName: "bash", value: "rm -rf dist" },
+      } as unknown as SessionEntry,
+      {
+        type: "custom",
+        customType: JUDGE_OVERRIDE_CUSTOM_TYPE,
+        data: { toolName: "write", value: "/etc/hosts" },
+      } as unknown as SessionEntry,
+    ];
+    const result = collectDeniedThenApproved(entries);
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.toolName)).toEqual(["bash", "write"]);
+    expect(result[0].context).toEqual([]);
   });
 });

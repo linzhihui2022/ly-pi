@@ -7,6 +7,8 @@ function createDefaultConfig(): Config {
   return {
     defaultPolicy: "ask",
     judgeModel: "deepseek/deepseek-v4-flash",
+    professorModel: "deepseek/deepseek-v4-pro",
+    professorThinking: "max",
     judgeTimeoutMs: 8000,
     childPolicy: "deny-on-unsafe",
     permission: {},
@@ -45,6 +47,14 @@ export async function loadConfig(configPath: string): Promise<Config> {
         : def.defaultPolicy,
       judgeModel:
         typeof p.judgeModel === "string" ? p.judgeModel : def.judgeModel,
+      professorModel:
+        typeof p.professorModel === "string"
+          ? p.professorModel
+          : def.professorModel,
+      professorThinking:
+        typeof p.professorThinking === "string"
+          ? p.professorThinking
+          : def.professorThinking,
       judgeTimeoutMs: isValidPositiveNumber(p.judgeTimeoutMs)
         ? p.judgeTimeoutMs
         : def.judgeTimeoutMs,

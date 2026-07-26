@@ -18,6 +18,8 @@ export interface PermissionConfig {
 export interface Config {
   defaultPolicy: Action;
   judgeModel: string;
+  professorModel: string;
+  professorThinking: string;
   judgeTimeoutMs: number;
   childPolicy: "deny-on-unsafe" | "allow-on-safe";
   permission: PermissionConfig;

@@ -10,6 +10,8 @@ export function createJudge(
     ) => Promise<
       { apiKey?: string; headers?: Record<string, string> } | undefined
     >;
+    judgePrompt?: string;
+    localJudge?: string;
   },
 ) {
   return async function judge(
@@ -23,8 +25,12 @@ export function createJudge(
       return failureResult("未找到可用的法官模型，请手动确认", input);
     }
 
+    if (!deps?.judgePrompt) {
+      return failureResult("法官提示词未加载，请手动确认", input);
+    }
+
     const auth = deps?.getAuth ? await deps.getAuth(resolved) : undefined;
-    const prompt = buildJudgePrompt(input, cwd);
+    const prompt = buildJudgePrompt(input, cwd, deps.judgePrompt, deps.localJudge);
     const context = {
       systemPrompt: "You are a security gate. Reply with strict JSON only.",
       messages: [
@@ -82,25 +88,21 @@ function resolveJudgeModel(
   return fallback;
 }
 
-function buildJudgePrompt(input: ToolInput, cwd: string): string {
-  return `你是一名编码助手的安全门禁。评估以下工具调用是否可以自动执行。
+function buildJudgePrompt(
+  input: ToolInput,
+  cwd: string,
+  template: string,
+  localJudge?: string,
+): string {
+  let prompt = template
+    .replace(/\{\{cwd\}\}/g, cwd)
+    .replace(/\{\{toolName\}\}/g, input.toolName)
+    .replace(/\{\{toolInput\}\}/g, JSON.stringify(input.value));
 
-当前工作目录：${cwd}
-工具名：${input.toolName}
-工具输入（已脱敏）：${JSON.stringify(input.value)}
-
-只回复严格 JSON：
-{
-  "safe": boolean,
-  "score": number, // 1-10，分数越高越安全
-  "reason": "一句话说明为什么安全或不安全",
-  "toolFor": "一句话说明该工具调用会做什么"
-}
-
-判断标准：
-- 安全：只读操作、git status/diff/log、运行测试、构建项目、安装项目依赖等。
-- 不安全：rm -rf、sudo、chmod/chown 777、写入密钥（.env、.pem、ssh 密钥）、无明确理由访问项目外文件、通过网络发送凭证、任意代码执行等。
-- 保持简洁。不要包含 markdown 格式。`;
+  if (localJudge) {
+    prompt += `\n\n项目级判断规则：\n${localJudge}`;
+  }
+  return prompt;
 }
 
 function parseJudgeResponse(response: {

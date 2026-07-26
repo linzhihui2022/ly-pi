@@ -82,6 +82,44 @@ describe("loadConfig", () => {
     expect(cfg.judgeModel).toBe("anthropic/claude-haiku");
   });
 
+  it("accepts custom professorModel", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "prof-model.json");
+    await writeFile(
+      path,
+      JSON.stringify({ professorModel: "openai/gpt-4o" }),
+    );
+    const cfg = await loadConfig(path);
+    expect(cfg.professorModel).toBe("openai/gpt-4o");
+  });
+
+  it("uses default professorModel when not provided", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "no-prof.json");
+    await writeFile(path, JSON.stringify({}));
+    const cfg = await loadConfig(path);
+    expect(cfg.professorModel).toBe("deepseek/deepseek-v4-pro");
+  });
+
+  it("uses default professorThinking when not provided", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "no-think.json");
+    await writeFile(path, JSON.stringify({}));
+    const cfg = await loadConfig(path);
+    expect(cfg.professorThinking).toBe("max");
+  });
+
+  it("accepts custom professorThinking", async () => {
+    await mkdir(tmp, { recursive: true });
+    const path = join(tmp, "think.json");
+    await writeFile(
+      path,
+      JSON.stringify({ professorThinking: "high" }),
+    );
+    const cfg = await loadConfig(path);
+    expect(cfg.professorThinking).toBe("high");
+  });
+
   it("falls back defaultPolicy for invalid value", async () => {
     await mkdir(tmp, { recursive: true });
     const path = join(tmp, "bad-default.json");

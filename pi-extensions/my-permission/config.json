@@ -2,6 +2,8 @@
   "childPolicy": "deny-on-unsafe",
   "defaultPolicy": "allow",
   "judgeModel": "deepseek/deepseek-v4-flash",
+  "professorModel": "deepseek/deepseek-v4-pro",
+  "professorThinking": "max",
   "judgeTimeoutMs": 8000,
   "permission": {
     "ask_user_question": "allow",

@@ -28,11 +28,12 @@ describe("renderJudgeLogPage", () => {
     expect(html).toContain("当前会话法官判断（共 2 条）");
   });
 
-  it("renders a table row per log with tool, command, verdict, toolFor and reason", () => {
+  it("renders a table row per log with tool, command, verdict, user, toolFor and reason", () => {
     const html = renderJudgeLogPage([createLog()]);
     expect(html).toContain("<td>bash</td>");
     expect(html).toContain("git status");
     expect(html).toContain("✓ 安全（8/10）");
+    expect(html).toContain(">—</td>");
     expect(html).toContain("查看 git 状态");
     expect(html).toContain("只读操作");
   });
@@ -52,16 +53,24 @@ describe("renderJudgeLogPage", () => {
     expect(readRow).toContain('<td class="num">1</td>');
   });
 
-  it("renders unsafe verdict with score", () => {
+  it("renders unsafe verdict with score and user denied", () => {
     const html = renderJudgeLogPage([
-      createLog({ safe: false, decision: "denied", score: 2 }),
+      createLog({ safe: false, decision: "denied", score: 2, userApproved: false }),
     ]);
     expect(html).toContain("✗ 不安全（2/10）");
+    expect(html).toContain("✗ 拒绝");
+  });
+
+  it("renders unsafe verdict with user approved override", () => {
+    const html = renderJudgeLogPage([
+      createLog({ safe: false, decision: "denied", score: 3, userApproved: true }),
+    ]);
+    expect(html).toContain("✓ 批准");
   });
 
   it("renders unsafe verdict without score when judge failed", () => {
     const html = renderJudgeLogPage([
-      createLog({ safe: false, decision: "denied", score: undefined }),
+      createLog({ safe: false, decision: "denied", score: undefined, userApproved: false }),
     ]);
     expect(html).toContain("✗ 不安全");
     expect(html).not.toContain("✗ 不安全（");
@@ -90,7 +99,7 @@ describe("renderJudgeLogPage", () => {
   it("marks rows with data-safe for filtering", () => {
     const html = renderJudgeLogPage([
       createLog({ safe: true }),
-      createLog({ safe: false, decision: "denied" }),
+      createLog({ safe: false, decision: "denied", userApproved: false }),
     ]);
     expect(html).toContain('data-safe="true"');
     expect(html).toContain('data-safe="false"');

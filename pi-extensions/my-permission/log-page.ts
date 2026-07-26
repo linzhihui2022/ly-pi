@@ -111,6 +111,20 @@ td.unsafe {
   font-weight: 600;
   white-space: nowrap;
 }
+td.approved {
+  color: #a6e3a1;
+  font-weight: 600;
+  white-space: nowrap;
+}
+td.denied {
+  color: #f38ba8;
+  font-weight: 600;
+  white-space: nowrap;
+}
+td.na {
+  color: #585b70;
+  white-space: nowrap;
+}
 .page-footer {
   text-align: center;
   padding: 1rem 1rem 2rem;
@@ -154,7 +168,7 @@ export function renderJudgeLogPage(logs: JudgeLogEntry[]): string {
   <main>
     <table>
       <thead>
-        <tr><th>#</th><th>工具</th><th>命令</th><th>判定</th><th>用途</th><th>理由</th></tr>
+        <tr><th>#</th><th>工具</th><th>命令</th><th>判定</th><th>用户</th><th>用途</th><th>理由</th></tr>
       </thead>
       <tbody>
 ${rows}
@@ -171,11 +185,18 @@ function renderRow(log: JudgeLogEntry, num: number): string {
   const verdictClass = log.safe ? "safe" : "unsafe";
   const verdictLabel = log.safe ? "✓ 安全" : "✗ 不安全";
   const scoreText = log.score !== undefined ? `（${log.score}/10）` : "";
+  const userCell =
+    log.safe !== false
+      ? '<td class="na">—</td>'
+      : log.userApproved
+        ? '<td class="approved">✓ 批准</td>'
+        : '<td class="denied">✗ 拒绝</td>';
   return `        <tr data-safe="${log.safe}">
           <td class="num">${num}</td>
           <td>${escapeHtml(log.toolName)}</td>
           <td class="command"><code>${escapeHtml(log.value)}</code></td>
           <td class="${verdictClass}">${verdictLabel}${scoreText}</td>
+          ${userCell}
           <td>${escapeHtml(log.toolFor)}</td>
           <td>${escapeHtml(log.reason)}</td>
         </tr>`;
