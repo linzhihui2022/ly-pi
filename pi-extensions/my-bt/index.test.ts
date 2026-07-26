@@ -71,7 +71,8 @@ const mockCtx = {
 
 function mustGet<T>(map: Map<string, T>, key: string): T {
   const value = map.get(key);
-  if (value === undefined) throw new Error(`Expected '${key}' to be registered`);
+  if (value === undefined)
+    throw new Error(`Expected '${key}' to be registered`);
   return value;
 }
 

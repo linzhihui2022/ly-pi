@@ -34,14 +34,18 @@ import open from "open";
 import { ensurePreviewServer } from "web-preview";
 
 describe("myHtml extension", () => {
-  let registeredCommands: Map<string, { handler: (...args: unknown[]) => unknown }>;
+  let registeredCommands: Map<
+    string,
+    { handler: (...args: unknown[]) => unknown }
+  >;
   let registeredEvents: Map<string, (...args: unknown[]) => unknown>;
   let mockApi: ExtensionAPI;
   let mockCtx: ExtensionCommandContext;
 
   function mustGet<T>(map: Map<string, T>, key: string): T {
     const value = map.get(key);
-    if (value === undefined) throw new Error(`Expected '${key}' to be registered`);
+    if (value === undefined)
+      throw new Error(`Expected '${key}' to be registered`);
     return value;
   }
 

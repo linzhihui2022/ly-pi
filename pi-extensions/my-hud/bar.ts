@@ -13,7 +13,11 @@ import { contextColored } from "./format";
 import { getGitStatus } from "./git";
 import { getPullRequestNumber, getRemoteUrl, parseRemoteUrl } from "./pr";
 import { buildStatusLine } from "./render";
-import { aggregateJudgeCost, aggregateJudgeStats, aggregateSessionUsage } from "./session";
+import {
+  aggregateJudgeCost,
+  aggregateJudgeStats,
+  aggregateSessionUsage,
+} from "./session";
 import type { GitStatus, PullRequestInfo } from "./types";
 
 const WIDGET_KEY = "my-hud-bar";

@@ -51,7 +51,11 @@ export { icon } from "./icons";
 export { checkMemoryPressure } from "./memory";
 export { buildMemoryWarningLines } from "./memory-widget";
 export { buildStatusLine, formatGitStatus } from "./render";
-export { aggregateJudgeCost, aggregateSessionUsage, getLastUserMessage } from "./session";
+export {
+  aggregateJudgeCost,
+  aggregateSessionUsage,
+  getLastUserMessage,
+} from "./session";
 export type { StatusLineData, TokenUsage } from "./types";
 export { findVitestProcesses } from "./vitest-process";
 export { pickRandomMessage, WORKING_MESSAGES } from "./working";

@@ -12,3 +12,5 @@
 允许 git add 和 git commit 在项目内提交变更
 允许 biome check --write 自动修复项目内文件
 允许 git push 在 git add/commit 之后执行，仅限已完成提交确认的推送
+禁止编辑 /Users/lychee/.pi/agent/extensions/ 目录下的 .js 文件
+禁止在项目外执行代码检查后触发 build/deploy 组合命令
