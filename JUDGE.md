@@ -1,5 +1,6 @@
-允许读取 /Users/lychee/.pi/agent/ 目录下的配置文件（.md, .json）
+允许读取 /Users/lychee/.pi/agent/ 目录下的配置文件（.md, .json），但禁止读取 /Users/lychee/.pi/agent/auth.json 文件
 允许在项目内执行 bun build / bun test / bun run deploy 及其组合命令
+允许在项目内子目录（ly-pi/、pi-extensions/ 等）执行 bun run build 构建命令
 允许使用 sed -i 修改项目内的测试文件（*.test.ts）
 允许在项目内执行 git stash / git stash pop 管理临时变更
 允许删除项目内的临时文件及临时标记文件
