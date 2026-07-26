@@ -1,5 +1,5 @@
-import { realpathSync } from "node:fs";
 import { join } from "node:path";
+import { writeFileSync } from "node:fs";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
@@ -12,7 +12,6 @@ import { resolveExtDir } from "../src/shared/ext-dir";
 import { loadFile } from "../src/shared/file";
 import {
   servePreviewFile,
-  stopPreviewServer,
 } from "../src/shared/preview";
 import { loadConfig } from "./config";
 import { createJudge } from "./judge";
@@ -28,16 +27,92 @@ import {
   recordUserOverride,
 } from "./stats";
 import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
-import { extractPathTokens } from "./utils";
+import {
+  collectPaths,
+  extractPathTokens,
+  resolveSymlinkedPaths,
+  stringifyToolInput,
+} from "./utils";
 
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const extensionDir = resolveExtDir(import.meta);
   const config = await loadConfig(join(extensionDir, "config.json"));
 
-  const judgePrompt = loadPrompt(extensionDir);
+  const judgePrompt = (() => {
+    const prompt = loadFile(join(extensionDir, "judge-prompt.md"));
+    if (!prompt) {
+      console.warn(
+        "[my-permission] judge-prompt.md not found, judge will be disabled",
+      );
+    }
+    return prompt;
+  })();
   const localJudge = loadFile(join(process.cwd(), "JUDGE.md"));
   const cache = createSessionCache();
   const child = isChildSession();
+
+  /** Shared Phase 2: merge selected rules → confirm → write JUDGE.md */
+  async function mergeAndWriteJudgeMd(ctx: ExtensionCommandContext, opts: {
+    currentJudgeMd: string;
+    selectedRules: string[];
+    resolveModel: (provider: string, id: string) => Model<Api> | undefined;
+    analysisCost?: number;
+    label: string;
+    emoji: string;
+  }) {
+    const merger = createMerger(config);
+    const mergeResult = await merger(
+      opts.currentJudgeMd,
+      opts.selectedRules,
+      opts.resolveModel,
+      createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
+    );
+
+    if (mergeResult.error || !mergeResult.mergedText) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `融合失败: ${mergeResult.error || "空内容"}`,
+          },
+        ],
+        details: {},
+      };
+    }
+
+    const totalCost = (opts.analysisCost ?? 0) + (mergeResult.cost ?? 0);
+    ctx.ui.notify(
+      `${opts.emoji} ${opts.label}费用: $${totalCost.toFixed(6)} (分析 $${(opts.analysisCost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`,
+      "info",
+    );
+
+    const write = await ctx.ui.confirm(
+      `${opts.emoji} ${opts.label}融合完成 — 确认写入？`,
+      `${C.green}${mergeResult.mergedText}${C.reset}`,
+    );
+
+    if (write) {
+      writeFileSync(
+        join(process.cwd(), "JUDGE.md"),
+        mergeResult.mergedText,
+        "utf-8",
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ JUDGE.md 已更新，共 ${opts.selectedRules.length} 条规则`,
+          },
+        ],
+        details: {},
+      };
+    }
+
+    return {
+      content: [{ type: "text", text: "已放弃，JUDGE.md 未修改" }],
+      details: {},
+    };
+  }
 
   pi.registerCommand("judge-log", {
     description: "查看当前会话的每一次法官判断",
@@ -149,60 +224,15 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      // Phase 2: merge
-
-      const merger = createMerger(config);
-      const mergeResult = await merger(
+      // Phase 2: merge → write
+      return await mergeAndWriteJudgeMd(ctx, {
         currentJudgeMd,
         selectedRules,
         resolveModel,
-        createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
-      );
-
-      if (mergeResult.error || !mergeResult.mergedText) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `融合失败: ${mergeResult.error || "空内容"}`,
-            },
-          ],
-          details: {},
-        };
-      }
-
-      const totalCost = (result.cost ?? 0) + (mergeResult.cost ?? 0);
-      ctx.ui.notify(
-        `🎓 辩护人费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`,
-        "info",
-      );
-
-      const write = await ctx.ui.confirm(
-        `🎓 辩护人融合完成 — 确认写入？`,
-        `${C.green}${mergeResult.mergedText}${C.reset}`,
-      );
-
-      if (write) {
-        writeFileSync(
-          join(process.cwd(), "JUDGE.md"),
-          mergeResult.mergedText,
-          "utf-8",
-        );
-        return {
-          content: [
-            {
-              type: "text",
-              text: `✅ JUDGE.md 已更新，共 ${selectedRules.length} 条规则`,
-            },
-          ],
-          details: {},
-        };
-      }
-
-      return {
-        content: [{ type: "text", text: "已放弃，JUDGE.md 未修改" }],
-        details: {},
-      };
+        analysisCost: result.cost,
+        label: "辩护人",
+        emoji: "🎓",
+      });
     },
   });
 
@@ -290,63 +320,15 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      const merger = createMerger(config);
-      const mergeResult = await merger(
+      return await mergeAndWriteJudgeMd(ctx, {
         currentJudgeMd,
         selectedRules,
         resolveModel,
-        createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
-      );
-
-      if (mergeResult.error || !mergeResult.mergedText) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `融合失败: ${mergeResult.error || "空内容"}`,
-            },
-          ],
-          details: {},
-        };
-      }
-
-      const totalCost = (result.cost ?? 0) + (mergeResult.cost ?? 0);
-      ctx.ui.notify(
-        `⚖️ 检察官费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`,
-        "info",
-      );
-
-      const write = await ctx.ui.confirm(
-        `⚖️ 检察官融合完成 — 确认写入？`,
-        `${C.green}${mergeResult.mergedText}${C.reset}`,
-      );
-
-      if (write) {
-        writeFileSync(
-          join(process.cwd(), "JUDGE.md"),
-          mergeResult.mergedText,
-          "utf-8",
-        );
-        return {
-          content: [
-            {
-              type: "text",
-              text: `✅ JUDGE.md 已更新，共 ${selectedRules.length} 条规则`,
-            },
-          ],
-          details: {},
-        };
-      }
-
-      return {
-        content: [{ type: "text", text: "已放弃，JUDGE.md 未修改" }],
-        details: {},
-      };
+        analysisCost: result.cost,
+        label: "检察官",
+        emoji: "⚖️",
+      });
     },
-  });
-
-  pi.on("session_shutdown", async () => {
-    await stopPreviewServer();
   });
 
   pi.on("tool_call", async (event, ctx) => {
@@ -407,75 +389,4 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     }
     return { block: true, reason: `User denied: ${judgeResult.reason}` };
   });
-}
-
-function stringifyToolInput(event: {
-  toolName: string;
-  input: Record<string, unknown>;
-}): string {
-  if (event.toolName === "bash" && typeof event.input.command === "string") {
-    return event.input.command;
-  }
-  if (
-    (event.toolName === "read" ||
-      event.toolName === "write" ||
-      event.toolName === "edit") &&
-    typeof event.input.path === "string"
-  ) {
-    return event.input.path;
-  }
-  return JSON.stringify(event.input);
-}
-
-function collectPaths(
-  toolName: string,
-  value: string,
-  event: { toolName: string; input: Record<string, unknown> },
-  cwd: string,
-): string[] {
-  if (toolName === "bash") return extractPathTokens(value, cwd);
-  if (
-    toolName === "read" ||
-    toolName === "write" ||
-    toolName === "edit" ||
-    toolName === "ls"
-  ) {
-    return typeof event.input.path === "string" ? [event.input.path] : [];
-  }
-  if (toolName === "grep" || toolName === "find") {
-    return typeof event.input.path === "string" ? [event.input.path] : [];
-  }
-  return [];
-}
-
-function resolveSymlinkedPaths(paths: string[], cwd: string): string[] {
-  const resolved = [...paths];
-  for (const p of paths) {
-    try {
-      const full =
-        p.startsWith("/") || p.startsWith("~")
-          ? join(
-              p.startsWith("~") ? (process.env.HOME ?? "/home") : "/",
-              p.replace(/^~/, ""),
-            )
-          : join(cwd, p);
-      const real = realpathSync(full);
-      if (real !== full) {
-        resolved.push(real);
-      }
-    } catch {
-      // symlink resolution failed (e.g. file doesn't exist), skip
-    }
-  }
-  return resolved;
-}
-
-function loadPrompt(extensionDir: string): string {
-  const prompt = loadFile(join(extensionDir, "judge-prompt.md"));
-  if (!prompt) {
-    console.warn(
-      "[my-permission] judge-prompt.md not found, judge will be disabled",
-    );
-  }
-  return prompt;
 }

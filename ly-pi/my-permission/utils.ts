@@ -1,5 +1,6 @@
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 export function expandHome(path: string): string {
   if (path === "~" || path.startsWith("~/")) {
@@ -79,4 +80,65 @@ export function extractPathTokens(command: string, _cwd: string): string[] {
     }
   }
   return Array.from(tokens);
+}
+
+export function stringifyToolInput(event: {
+  toolName: string;
+  input: Record<string, unknown>;
+}): string {
+  if (event.toolName === "bash" && typeof event.input.command === "string") {
+    return event.input.command;
+  }
+  if (
+    (event.toolName === "read" ||
+      event.toolName === "write" ||
+      event.toolName === "edit") &&
+    typeof event.input.path === "string"
+  ) {
+    return event.input.path;
+  }
+  return JSON.stringify(event.input);
+}
+
+export function collectPaths(
+  toolName: string,
+  value: string,
+  event: { toolName: string; input: Record<string, unknown> },
+  cwd: string,
+): string[] {
+  if (toolName === "bash") return extractPathTokens(value, cwd);
+  if (
+    toolName === "read" ||
+    toolName === "write" ||
+    toolName === "edit" ||
+    toolName === "ls"
+  ) {
+    return typeof event.input.path === "string" ? [event.input.path] : [];
+  }
+  if (toolName === "grep" || toolName === "find") {
+    return typeof event.input.path === "string" ? [event.input.path] : [];
+  }
+  return [];
+}
+
+export function resolveSymlinkedPaths(paths: string[], cwd: string): string[] {
+  const resolved = [...paths];
+  for (const p of paths) {
+    try {
+      const full =
+        p.startsWith("/") || p.startsWith("~")
+          ? join(
+              p.startsWith("~") ? (process.env.HOME ?? "/home") : "/",
+              p.replace(/^~/, ""),
+            )
+          : join(cwd, p);
+      const real = realpathSync(full);
+      if (real !== full) {
+        resolved.push(real);
+      }
+    } catch {
+      // symlink resolution failed (e.g. file doesn't exist), skip
+    }
+  }
+  return resolved;
 }

@@ -49221,7 +49221,7 @@ function myBack(pi) {
 }
 
 // my-bt/index.ts
-import { readFileSync as readFileSync2, writeFileSync as writeFileSync3 } from "node:fs";
+import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { join as join3, resolve } from "node:path";
 
 // src/shared/ext-dir.ts
@@ -49249,7 +49249,7 @@ import {
   mkdirSync,
   readFileSync,
   rmdirSync,
-  writeFileSync as writeFileSync2
+  writeFileSync
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -49316,7 +49316,7 @@ function recordPids(pids, pidFile = DEFAULT_PID_FILE, lockDir = DEFAULT_LOCK_DIR
       version: 1,
       updatedAt: Date.now()
     };
-    writeFileSync2(pidFile, JSON.stringify(state, null, 2));
+    writeFileSync(pidFile, JSON.stringify(state, null, 2));
   }, lockDir);
 }
 function spawnSoundProcess(_config, filePath, runtimeDir = GLOBAL_BT_DIR) {
@@ -49374,7 +49374,7 @@ function saveConfig(config) {
   const raw = readFileSync2(CONFIG_PATH, "utf-8");
   const existing = JSON.parse(raw);
   const payload = { ...existing, enabled: config.enabled };
-  writeFileSync3(CONFIG_PATH, `${JSON.stringify(payload, null, 2)}
+  writeFileSync2(CONFIG_PATH, `${JSON.stringify(payload, null, 2)}
 `, "utf-8");
 }
 function myBt(pi) {
@@ -49564,7 +49564,7 @@ The shell starts in ${projectRoot}. Do not prepend \`cd ${projectRoot} &&\` befo
 }
 
 // src/shared/preview.ts
-import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync4 } from "node:fs";
+import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync3 } from "node:fs";
 import { join as join5 } from "node:path";
 
 // ../node_modules/.bun/open@10.2.0/node_modules/open/index.js
@@ -50180,7 +50180,7 @@ async function servePreviewFile(sessionId, fileName, content, options = {}) {
   const sessionDir = join5(PREVIEW_DIR, sessionId);
   mkdirSync2(sessionDir, { recursive: true });
   const filePath = join5(sessionDir, fileName);
-  writeFileSync4(filePath, content, "utf-8");
+  writeFileSync3(filePath, content, "utf-8");
   const server = await ensurePreviewServer({
     host: options.host ?? "127.0.0.1",
     urlHost: options.urlHost ?? "localhost",
@@ -52879,9 +52879,6 @@ function myHtml(pi) {
       }
     }
   });
-  pi.on("session_shutdown", async () => {
-    await stopPreviewServer();
-  });
 }
 
 // my-hud/index.ts
@@ -53366,6 +53363,10 @@ class Bar {
   pullRequest = null;
   pullRequestCacheTime = 0;
   pullRequestRefreshPending = false;
+  cachedEntryCount = -1;
+  cachedUsage = null;
+  cachedJudgeStats = null;
+  cachedJudgeCost = null;
   setBranch(branch) {
     this.branch = branch;
   }
@@ -53458,9 +53459,15 @@ class Bar {
     this.ensureGitStatus();
     this.ensurePullRequest();
     const entries = this.ctx.sessionManager.getEntries();
-    const usage = aggregateSessionUsage(entries);
-    const judgeStats = aggregateJudgeStats(entries);
-    const judgeCost = aggregateJudgeCost(entries);
+    if (entries.length !== this.cachedEntryCount) {
+      this.cachedUsage = aggregateSessionUsage(entries);
+      this.cachedJudgeStats = aggregateJudgeStats(entries);
+      this.cachedJudgeCost = aggregateJudgeCost(entries);
+      this.cachedEntryCount = entries.length;
+    }
+    const usage = this.cachedUsage ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+    const judgeStats = this.cachedJudgeStats ?? { allowed: 0, denied: 0 };
+    const judgeCost = this.cachedJudgeCost ?? 0;
     const cu = this.ctx.getContextUsage();
     const ctxColored = contextColored(theme, cu?.percent ?? null, cu?.contextWindow ?? null);
     const modelName = this.ctx.model?.id ?? "no-model";
@@ -53492,6 +53499,10 @@ class Bar {
     this.pullRequest = null;
     this.pullRequestCacheTime = 0;
     this.pullRequestRefreshPending = false;
+    this.cachedEntryCount = -1;
+    this.cachedUsage = null;
+    this.cachedJudgeStats = null;
+    this.cachedJudgeCost = null;
   }
 }
 
@@ -53738,8 +53749,8 @@ function myHud(pi) {
 }
 
 // my-permission/index.ts
-import { realpathSync as realpathSync2 } from "node:fs";
-import { join as join8 } from "node:path";
+import { join as join9 } from "node:path";
+import { writeFileSync as writeFileSync4 } from "node:fs";
 
 // ../node_modules/.bun/typebox@1.2.2/node_modules/typebox/build/system/memory/memory.mjs
 var exports_memory = {};
@@ -58616,8 +58627,9 @@ function buildProsecutorPrompt(allowedEntries, currentJudgeMd, judgePrompt, cwd)
 }
 
 // my-permission/utils.ts
+import { realpathSync as realpathSync2 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { resolve as resolve2 } from "node:path";
+import { join as join8, resolve as resolve2 } from "node:path";
 function expandHome(path2) {
   if (path2 === "~" || path2.startsWith("~/")) {
     return path2.replace("~", homedir2());
@@ -58678,6 +58690,39 @@ function extractPathTokens(command, _cwd) {
     }
   }
   return Array.from(tokens);
+}
+function stringifyToolInput(event) {
+  if (event.toolName === "bash" && typeof event.input.command === "string") {
+    return event.input.command;
+  }
+  if ((event.toolName === "read" || event.toolName === "write" || event.toolName === "edit") && typeof event.input.path === "string") {
+    return event.input.path;
+  }
+  return JSON.stringify(event.input);
+}
+function collectPaths(toolName, value, event, cwd) {
+  if (toolName === "bash")
+    return extractPathTokens(value, cwd);
+  if (toolName === "read" || toolName === "write" || toolName === "edit" || toolName === "ls") {
+    return typeof event.input.path === "string" ? [event.input.path] : [];
+  }
+  if (toolName === "grep" || toolName === "find") {
+    return typeof event.input.path === "string" ? [event.input.path] : [];
+  }
+  return [];
+}
+function resolveSymlinkedPaths(paths, cwd) {
+  const resolved = [...paths];
+  for (const p of paths) {
+    try {
+      const full = p.startsWith("/") || p.startsWith("~") ? join8(p.startsWith("~") ? process.env.HOME ?? "/home" : "/", p.replace(/^~/, "")) : join8(cwd, p);
+      const real = realpathSync2(full);
+      if (real !== full) {
+        resolved.push(real);
+      }
+    } catch {}
+  }
+  return resolved;
 }
 
 // my-permission/rules.ts
@@ -58957,11 +59002,51 @@ function formatConfirmMessage(options2) {
 // my-permission/index.ts
 async function myPermission(pi) {
   const extensionDir = resolveExtDir(import.meta);
-  const config = await loadConfig2(join8(extensionDir, "config.json"));
-  const judgePrompt = loadPrompt(extensionDir);
-  const localJudge = loadFile(join8(process.cwd(), "JUDGE.md"));
+  const config = await loadConfig2(join9(extensionDir, "config.json"));
+  const judgePrompt = (() => {
+    const prompt = loadFile(join9(extensionDir, "judge-prompt.md"));
+    if (!prompt) {
+      console.warn("[my-permission] judge-prompt.md not found, judge will be disabled");
+    }
+    return prompt;
+  })();
+  const localJudge = loadFile(join9(process.cwd(), "JUDGE.md"));
   const cache = createSessionCache();
   const child = isChildSession();
+  async function mergeAndWriteJudgeMd(ctx, opts) {
+    const merger = createMerger(config);
+    const mergeResult = await merger(opts.currentJudgeMd, opts.selectedRules, opts.resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders));
+    if (mergeResult.error || !mergeResult.mergedText) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `融合失败: ${mergeResult.error || "空内容"}`
+          }
+        ],
+        details: {}
+      };
+    }
+    const totalCost = (opts.analysisCost ?? 0) + (mergeResult.cost ?? 0);
+    ctx.ui.notify(`${opts.emoji} ${opts.label}费用: $${totalCost.toFixed(6)} (分析 $${(opts.analysisCost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
+    const write = await ctx.ui.confirm(`${opts.emoji} ${opts.label}融合完成 — 确认写入？`, `${ANSI.green}${mergeResult.mergedText}${ANSI.reset}`);
+    if (write) {
+      writeFileSync4(join9(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ JUDGE.md 已更新，共 ${opts.selectedRules.length} 条规则`
+          }
+        ],
+        details: {}
+      };
+    }
+    return {
+      content: [{ type: "text", text: "已放弃，JUDGE.md 未修改" }],
+      details: {}
+    };
+  }
   pi.registerCommand("judge-log", {
     description: "查看当前会话的每一次法官判断",
     handler: async (_args, ctx) => {
@@ -58999,7 +59084,7 @@ async function myPermission(pi) {
       }
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const advocate = createAdvocate(config);
-      const currentJudgeMd = loadFile(join8(process.cwd(), "JUDGE.md"));
+      const currentJudgeMd = loadFile(join9(process.cwd(), "JUDGE.md"));
       const result = await advocate(cases, ctx.cwd, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
@@ -59036,38 +59121,14 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
           details: {}
         };
       }
-      const merger = createMerger(config);
-      const mergeResult = await merger(currentJudgeMd, selectedRules, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders));
-      if (mergeResult.error || !mergeResult.mergedText) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `融合失败: ${mergeResult.error || "空内容"}`
-            }
-          ],
-          details: {}
-        };
-      }
-      const totalCost = (result.cost ?? 0) + (mergeResult.cost ?? 0);
-      ctx.ui.notify(`\uD83C\uDF93 辩护人费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
-      const write = await ctx.ui.confirm(`\uD83C\uDF93 辩护人融合完成 — 确认写入？`, `${ANSI.green}${mergeResult.mergedText}${ANSI.reset}`);
-      if (write) {
-        writeFileSync(join8(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
-        return {
-          content: [
-            {
-              type: "text",
-              text: `✅ JUDGE.md 已更新，共 ${selectedRules.length} 条规则`
-            }
-          ],
-          details: {}
-        };
-      }
-      return {
-        content: [{ type: "text", text: "已放弃，JUDGE.md 未修改" }],
-        details: {}
-      };
+      return await mergeAndWriteJudgeMd(ctx, {
+        currentJudgeMd,
+        selectedRules,
+        resolveModel,
+        analysisCost: result.cost,
+        label: "辩护人",
+        emoji: "\uD83C\uDF93"
+      });
     }
   });
   pi.registerTool({
@@ -59092,7 +59153,7 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
       }
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const prosecutor = createProsecutor(config);
-      const currentJudgeMd = loadFile(join8(process.cwd(), "JUDGE.md"));
+      const currentJudgeMd = loadFile(join9(process.cwd(), "JUDGE.md"));
       const result = await prosecutor(allowed, ctx.cwd, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
@@ -59132,42 +59193,15 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
           details: {}
         };
       }
-      const merger = createMerger(config);
-      const mergeResult = await merger(currentJudgeMd, selectedRules, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders));
-      if (mergeResult.error || !mergeResult.mergedText) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `融合失败: ${mergeResult.error || "空内容"}`
-            }
-          ],
-          details: {}
-        };
-      }
-      const totalCost = (result.cost ?? 0) + (mergeResult.cost ?? 0);
-      ctx.ui.notify(`⚖️ 检察官费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
-      const write = await ctx.ui.confirm(`⚖️ 检察官融合完成 — 确认写入？`, `${ANSI.green}${mergeResult.mergedText}${ANSI.reset}`);
-      if (write) {
-        writeFileSync(join8(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
-        return {
-          content: [
-            {
-              type: "text",
-              text: `✅ JUDGE.md 已更新，共 ${selectedRules.length} 条规则`
-            }
-          ],
-          details: {}
-        };
-      }
-      return {
-        content: [{ type: "text", text: "已放弃，JUDGE.md 未修改" }],
-        details: {}
-      };
+      return await mergeAndWriteJudgeMd(ctx, {
+        currentJudgeMd,
+        selectedRules,
+        resolveModel,
+        analysisCost: result.cost,
+        label: "检察官",
+        emoji: "⚖️"
+      });
     }
-  });
-  pi.on("session_shutdown", async () => {
-    await stopPreviewServer();
   });
   pi.on("tool_call", async (event, ctx) => {
     const judge = createJudge(config, {
@@ -59218,46 +59252,6 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
     }
     return { block: true, reason: `User denied: ${judgeResult.reason}` };
   });
-}
-function stringifyToolInput(event) {
-  if (event.toolName === "bash" && typeof event.input.command === "string") {
-    return event.input.command;
-  }
-  if ((event.toolName === "read" || event.toolName === "write" || event.toolName === "edit") && typeof event.input.path === "string") {
-    return event.input.path;
-  }
-  return JSON.stringify(event.input);
-}
-function collectPaths(toolName, value2, event, cwd) {
-  if (toolName === "bash")
-    return extractPathTokens(value2, cwd);
-  if (toolName === "read" || toolName === "write" || toolName === "edit" || toolName === "ls") {
-    return typeof event.input.path === "string" ? [event.input.path] : [];
-  }
-  if (toolName === "grep" || toolName === "find") {
-    return typeof event.input.path === "string" ? [event.input.path] : [];
-  }
-  return [];
-}
-function resolveSymlinkedPaths(paths, cwd) {
-  const resolved = [...paths];
-  for (const p of paths) {
-    try {
-      const full = p.startsWith("/") || p.startsWith("~") ? join8(p.startsWith("~") ? process.env.HOME ?? "/home" : "/", p.replace(/^~/, "")) : join8(cwd, p);
-      const real = realpathSync2(full);
-      if (real !== full) {
-        resolved.push(real);
-      }
-    } catch {}
-  }
-  return resolved;
-}
-function loadPrompt(extensionDir) {
-  const prompt = loadFile(join8(extensionDir, "judge-prompt.md"));
-  if (!prompt) {
-    console.warn("[my-permission] judge-prompt.md not found, judge will be disabled");
-  }
-  return prompt;
 }
 
 // my-script-guard/index.ts
@@ -59410,6 +59404,9 @@ async function ly_pi_default(pi) {
   myHtml(pi);
   myBt(pi);
   myHud(pi);
+  pi.on("session_shutdown", async () => {
+    await stopPreviewServer();
+  });
 }
 export {
   ly_pi_default as default

@@ -18,7 +18,7 @@ import {
   aggregateJudgeStats,
   aggregateSessionUsage,
 } from "./session";
-import type { GitStatus, PullRequestInfo } from "./types";
+import type { GitStatus, PullRequestInfo, TokenUsage } from "./types";
 
 const WIDGET_KEY = "my-hud-bar";
 const GIT_STATUS_CACHE_TTL = 5000;
@@ -35,6 +35,12 @@ export class Bar {
   private pullRequest: PullRequestInfo | null = null;
   private pullRequestCacheTime = 0;
   private pullRequestRefreshPending = false;
+
+  // Session aggregation cache — recompute only when entries count changes.
+  private cachedEntryCount = -1;
+  private cachedUsage: TokenUsage | null = null;
+  private cachedJudgeStats: { allowed: number; denied: number } | null = null;
+  private cachedJudgeCost: number | null = null;
 
   setBranch(branch: string | null): void {
     this.branch = branch;
@@ -150,9 +156,17 @@ export class Bar {
     this.ensurePullRequest();
 
     const entries = this.ctx.sessionManager.getEntries();
-    const usage = aggregateSessionUsage(entries);
-    const judgeStats = aggregateJudgeStats(entries);
-    const judgeCost = aggregateJudgeCost(entries);
+    if (entries.length !== this.cachedEntryCount) {
+      this.cachedUsage = aggregateSessionUsage(entries);
+      this.cachedJudgeStats = aggregateJudgeStats(entries);
+      this.cachedJudgeCost = aggregateJudgeCost(entries);
+      this.cachedEntryCount = entries.length;
+    }
+    const usage =
+      this.cachedUsage ??
+      ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 } as TokenUsage);
+    const judgeStats = this.cachedJudgeStats ?? { allowed: 0, denied: 0 };
+    const judgeCost = this.cachedJudgeCost ?? 0;
 
     const cu = this.ctx.getContextUsage();
     const ctxColored = contextColored(
@@ -192,5 +206,9 @@ export class Bar {
     this.pullRequest = null;
     this.pullRequestCacheTime = 0;
     this.pullRequestRefreshPending = false;
+    this.cachedEntryCount = -1;
+    this.cachedUsage = null;
+    this.cachedJudgeStats = null;
+    this.cachedJudgeCost = null;
   }
 }
