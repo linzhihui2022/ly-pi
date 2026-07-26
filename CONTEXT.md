@@ -33,13 +33,25 @@ _Avoid_: 评审模型、审核、裁判
 _Avoid_: 审判日志、判断历史、判定记录
 
 **False Positive / 假阳性**:
-法官将安全操作误判为不安全（`safe: false`），但用户随后手动批准的情况。是法官误判的主要表现形式。与之相对的是假阴性（危险操作被判安全后静默放行），当前系统难以自动检测。
+法官将安全操作误判为不安全（`safe: false`），但用户随后手动批准的情况。由 Advocate 事后审查并修正。
 _Avoid_: 误拦、误报、false alarm
 
-**Professor（教授 / 法官教授）**:
-事后分析器，读取当前会话的法官日志，找出假阳性案例，输出三层分析：统计报告（误判频次排序）、规则建议（config.json 新增 allow 规则）、JUDGE.md 优化建议（LLM 分析共性原因）。通过 `/judge-professor` 命令手动触发，不改变实时判断流程。
-_Avoid_: 分析器、审计、复盘
+**False Negative / 假阴性**:
+危险操作被判安全（`safe: true`）后静默放行的情况。由 Prosecutor 事后审计全部放行记录，用更强模型二次审查发现。
+_Avoid_: 漏网、miss
 
-**Professor Report（教授报告）**:
-教授的三层输出结构：(1) 统计摘要——误判最多的命令模式 Top N；(2) 规则建议——可直接加入 config.json 的 allow 条目；(3) JUDGE.md 建议——LLM 生成的项目级判断指导，帮助法官理解项目内哪些操作是安全的。
-_Avoid_: 分析结果、优化建议
+**Advocate（辩护人）**:
+事后审查假阳性案例的角色。读取法官日志中法官判 unsafe 但用户手动批准的记录，输出 allow 规则建议和 JUDGE.md 优化建议。通过 `/permission-advocate` 手动触发。不改变实时判断流程。
+_Avoid_: 教授、professor、分析器
+
+**Prosecutor（检察官）**:
+事后审计假阴性的角色。读取法官日志中全部被判 safe 的放行记录，用更强模型二次审查，找出漏网的危险操作，输出 deny/检测规则建议和 JUDGE.md 优化建议。通过 `/permission-prosecutor` 手动触发。
+_Avoid_: 反向审查、auditor
+
+**JUDGE.md**:
+项目根目录的法官规则扩展文件。包含 Advocate 和 Prosecutor 输出的规则建议（一行一条），在法官判定时注入 prompt 末尾作为项目级指导。写入前自动去重，随时间累积。
+_Avoid_: 项目规则、local rule
+
+**Intent Chain Analysis（意图链分析）**:
+安全判定的方法论：不按工具名称分类（只读=安全、破坏性=不安全），而是追踪工具调用的完整语义链——数据最终落点、侧效果是否超出项目边界、是否通过间接方式执行代码。用于对抗管道注入、heredoc 写入、外部依赖等攻击模式。
+_Avoid_: 语义分析、上下文判断

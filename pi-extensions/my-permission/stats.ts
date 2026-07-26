@@ -165,6 +165,11 @@ export function recordJudgeStats(
   pi.appendEntry(JUDGE_STATS_CUSTOM_TYPE, entry);
 }
 
+/** Collects all judge entries where safe=true (allowed through without user intervention). */
+export function collectAllowed(entries: SessionEntry[]): JudgeLogEntry[] {
+  return collectJudgeLogs(entries).filter((log) => log.safe);
+}
+
 export function collectJudgeLogs(entries: SessionEntry[]): JudgeLogEntry[] {
   const overrideKeys = new Set<string>();
   for (const entry of entries) {

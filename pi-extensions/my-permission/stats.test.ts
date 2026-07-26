@@ -4,6 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import {
+  collectAllowed,
   collectDeniedThenApproved,
   collectJudgeLogs,
   JUDGE_OVERRIDE_CUSTOM_TYPE,
@@ -369,5 +370,106 @@ describe("collectDeniedThenApproved", () => {
     expect(result).toHaveLength(2);
     expect(result.map((r) => r.toolName)).toEqual(["bash", "write"]);
     expect(result[0].context).toEqual([]);
+  });
+});
+
+describe("collectAllowed", () => {
+  it("returns empty array when no entries", () => {
+    expect(collectAllowed([])).toEqual([]);
+  });
+
+  it("returns empty array when no judge entries", () => {
+    const entries: SessionEntry[] = [
+      {
+        type: "message",
+        message: { role: "user", content: "hi" },
+      } as unknown as SessionEntry,
+    ];
+    expect(collectAllowed(entries)).toEqual([]);
+  });
+
+  it("returns only allowed (safe=true) judge entries", () => {
+    const entries: SessionEntry[] = [
+      createJudgeLogEntry({
+        safe: true,
+        toolName: "bash",
+        value: "git status",
+        score: 8,
+      }),
+    ];
+    const result = collectAllowed(entries);
+    expect(result).toHaveLength(1);
+    expect(result[0].safe).toBe(true);
+    expect(result[0].toolName).toBe("bash");
+    expect(result[0].value).toBe("git status");
+  });
+
+  it("excludes denied (safe=false) judge entries", () => {
+    const entries: SessionEntry[] = [
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "bash",
+        value: "rm -rf /",
+      }),
+    ];
+    expect(collectAllowed(entries)).toEqual([]);
+  });
+
+  it("filters mixed safe/unsafe entries", () => {
+    const entries: SessionEntry[] = [
+      createJudgeLogEntry({
+        safe: true,
+        toolName: "bash",
+        value: "git log",
+        score: 9,
+      }),
+      createJudgeLogEntry({
+        safe: false,
+        toolName: "bash",
+        value: "sudo rm /",
+      }),
+      createJudgeLogEntry({
+        safe: true,
+        toolName: "read",
+        value: "src/main.ts",
+        score: 10,
+      }),
+    ];
+    const result = collectAllowed(entries);
+    expect(result).toHaveLength(2);
+    expect(result[0].value).toBe("git log");
+    expect(result[1].value).toBe("src/main.ts");
+  });
+
+  it("ignores entries with invalid data", () => {
+    const entries: SessionEntry[] = [
+      {
+        type: "custom",
+        customType: JUDGE_STATS_CUSTOM_TYPE,
+        data: { decision: "allowed" },
+      } as unknown as SessionEntry,
+      createJudgeLogEntry({
+        safe: true,
+        toolName: "read",
+        value: "ok.txt",
+        score: 7,
+      }),
+    ];
+    const result = collectAllowed(entries);
+    expect(result).toHaveLength(1);
+    expect(result[0].value).toBe("ok.txt");
+  });
+
+  it("preserves score when present", () => {
+    const entries: SessionEntry[] = [
+      createJudgeLogEntry({
+        safe: true,
+        toolName: "bash",
+        value: "bun test",
+        score: 6,
+      }),
+    ];
+    const result = collectAllowed(entries);
+    expect(result[0].score).toBe(6);
   });
 });

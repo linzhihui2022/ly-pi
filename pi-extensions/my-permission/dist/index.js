@@ -3128,7 +3128,7 @@ async function ensurePreviewServer(options) {
   const port = await findAvailablePort(options.port ?? DEFAULT_PORT, options.host);
   const url = `http://${options.urlHost}:${port}`;
   const server = createServer((req, res) => {
-    const urlPath = req.url;
+    const urlPath = req.url ?? "/";
     if (req.method !== "GET") {
       res.writeHead(405);
       res.end("Method not allowed");
@@ -3194,7 +3194,7 @@ function isValidChildPolicy(value) {
   return value === "deny-on-unsafe" || value === "allow-on-safe";
 }
 function isValidPositiveNumber(value) {
-  return typeof value === "number" && isFinite(value) && value >= 0;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 async function loadConfig(configPath) {
   try {
@@ -3682,7 +3682,7 @@ function createMerger(config) {
           "- 将新规则追加到末尾，或插入到合适的位置",
           "- 去除重复：如果新规则和现有规则意思相同或被已有规则语义覆盖，只保留表述更清晰的那条，不要两者都保留",
           "- 如果新规则只是已有规则的特例（如已有「允许执行部署命令」，不要再保留「允许执行 bun run scripts/deploy.ts」），直接丢弃新规则",
-          ,
+          undefined,
           "- 保持简短精炼",
           "- 直接输出完整的 JUDGE.md 文本，不要包含解释或 markdown 代码块"
         ].join(`
@@ -3719,6 +3719,156 @@ function createMerger(config) {
   };
 }
 
+// prosecutor.ts
+import { complete as complete3 } from "@earendil-works/pi-ai";
+function createProsecutor(config) {
+  return async function analyze(allowedEntries, cwd, resolveModel, getAuth, currentJudgeMd, judgePrompt) {
+    if (allowedEntries.length === 0) {
+      return { error: "当前会话没有法官放行的记录" };
+    }
+    const parts = config.professorModel.split("/");
+    if (parts.length !== 2) {
+      return {
+        error: `professorModel 格式无效: ${config.professorModel}，需要 provider/model 格式`
+      };
+    }
+    const model = resolveModel(parts[0], parts[1]);
+    if (!model) {
+      return {
+        error: `未找到审查模型: ${config.professorModel}`
+      };
+    }
+    const prompt = buildProsecutorPrompt(allowedEntries, currentJudgeMd, judgePrompt, cwd);
+    const auth = await getAuth(model);
+    try {
+      const context = {
+        systemPrompt: [
+          "你是 my-permission 权限系统的安全审计员（检察官）。",
+          "",
+          "## 系统架构",
+          "",
+          "权限系统分两层：",
+          "1. 规则层：模式匹配，直接 allow/deny",
+          "2. 法官：LLM 判定者，对规则层未命中的操作做出 safe/unsafe 判定",
+          "",
+          "## 你的任务",
+          "",
+          "审计法官放行的所有操作，找出假阴性——即危险操作被法官误判为 safe 的情况。",
+          "",
+          "## 危险操作判定标准（意图链分析）",
+          "",
+          "不要只看工具名，要追踪工具调用的完整语义链：",
+          "- 数据外泄：数据通过管道、重定向流向项目外部（curl、wget 等网络请求）",
+          "- 不可逆副作用：删除文件（rm -rf）、修改系统配置（sudo、chmod 777）",
+          "- 间接代码执行：-e/-c 参数传入代码、heredoc 管道给解释器",
+          "- 不可信依赖：从外部 URL 安装包、未签名的 tgz/git 源",
+          "",
+          "## 输出格式",
+          "",
+          "只回复严格 JSON，不要包含其他文字：",
+          "{",
+          '  "add": [',
+          '    { "rule": "新规则文本", "reason": "添加原因" }',
+          "  ],",
+          '  "summary": "一句话统计摘要"',
+          "}",
+          "",
+          "add: 建议新增的安全规则（应 deny 或需要检察的模式），每条包含 rule（一行祈使句）和 reason（一句话原因）。如果没有假阴性，设为空数组 []。",
+          'summary: 统计摘要，格式如 "审查 X 条放行记录，发现 Y 条假阴性：管道外泄 N 次、heredoc 注入 M 次"。如果没有假阴性，写"未发现假阴性"。',
+          "",
+          "关键：",
+          "- 不要建议当前 JUDGE.md 中已覆盖的规则",
+          "- 只报告确实危险的操作，正常安全操作不要误报",
+          "- 如果所有操作都安全，add 为空数组",
+          "- 直接输出 JSON，不要 markdown 代码块"
+        ].join(`
+`),
+        messages: [
+          { role: "user", content: prompt, timestamp: Date.now() }
+        ]
+      };
+      const response = await complete3(model, context, {
+        thinking: config.professorThinking,
+        apiKey: auth?.apiKey,
+        headers: auth?.headers
+      });
+      const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
+      if (!text) {
+        return { error: "审查模型返回了空内容" };
+      }
+      const parsed = parseProsecutorJson(text);
+      if (!parsed) {
+        return { error: "审查模型返回了无法解析的 JSON" };
+      }
+      return { suggestion: parsed };
+    } catch (err) {
+      return {
+        error: `审查模型调用失败: ${err.message}`
+      };
+    }
+  };
+}
+function parseProsecutorJson(text) {
+  const jsonMatch = /\{[\s\S]*\}/.exec(text);
+  if (!jsonMatch)
+    return;
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed || typeof parsed !== "object")
+      return;
+    const p = parsed;
+    if (!Array.isArray(p.add) || typeof p.summary !== "string") {
+      return;
+    }
+    const add = p.add.filter((item) => typeof item === "object" && item !== null && typeof item.rule === "string" && typeof item.reason === "string");
+    return { add, summary: p.summary };
+  } catch {
+    return;
+  }
+}
+function buildProsecutorPrompt(allowedEntries, currentJudgeMd, judgePrompt, cwd) {
+  const entryList = allowedEntries.map((e, i) => {
+    return [
+      `### 操作 ${i + 1}`,
+      `- 工具: ${e.toolName}`,
+      `- 命令: ${e.value}`,
+      `- 法官判定: 安全 (score=${e.score ?? "?"})`,
+      `- 法官理由: ${e.reason}`,
+      `- 用途推断: ${e.toolFor}`
+    ].join(`
+`);
+  }).join(`
+
+`);
+  return [
+    "以下是我的权限系统（my-permission）中法官放行的所有操作。",
+    "请审计这些操作，找出假阴性——即危险但被误判为安全的操作。",
+    "",
+    `当前项目工作目录: ${cwd}`,
+    "",
+    "---",
+    "",
+    "## 法官的原始判断提示词",
+    "",
+    "```",
+    judgePrompt || "（法官提示词未加载）",
+    "```",
+    "",
+    "---",
+    "",
+    "## 当前 JUDGE.md 内容",
+    currentJudgeMd ? currentJudgeMd.split(`
+`).map((line, i) => `${i + 1}. ${line}`).join(`
+`) : "（空，尚未编写项目级判断规则）",
+    "",
+    "---",
+    "",
+    "## 被放行的操作（共 ${allowedEntries.length} 条）",
+    entryList
+  ].join(`
+`);
+}
+
 // utils.ts
 import { homedir } from "node:os";
 import { resolve } from "node:path";
@@ -3731,7 +3881,7 @@ function expandHome(path2) {
 function isExternalPath(path2, cwd) {
   const absolute = path2.startsWith("/") || path2.startsWith("~") ? resolve(expandHome(path2)) : resolve(cwd, path2);
   const cwdAbsolute = resolve(cwd);
-  return !absolute.startsWith(cwdAbsolute + "/") && absolute !== cwdAbsolute;
+  return !absolute.startsWith(`${cwdAbsolute}/`) && absolute !== cwdAbsolute;
 }
 function splitBashCommandUnits(command) {
   const units = [];
@@ -3965,6 +4115,9 @@ function recordJudgeStats(pi, input, result) {
   }
   pi.appendEntry(JUDGE_STATS_CUSTOM_TYPE, entry);
 }
+function collectAllowed(entries) {
+  return collectJudgeLogs(entries).filter((log) => log.safe);
+}
 function collectJudgeLogs(entries) {
   const overrideKeys = new Set;
   for (const entry of entries) {
@@ -4111,12 +4264,14 @@ async function myPermission(pi) {
     description: "分析法官误判案例（假阳性），交互式优化 JUDGE.md 规则。当用户提到法官、误判、规则优化、JUDGE.md 相关操作时调用此工具。",
     promptSnippet: "judge_professor — 交互式分析法官误判并优化 JUDGE.md",
     parameters: Type.Object({}),
-    execute: async (toolCallId, _params, signal, _onUpdate, ctx) => {
+    execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
       const entries = ctx.sessionManager.getEntries();
       const cases = collectDeniedThenApproved(entries);
       if (cases.length === 0) {
         return {
-          content: [{ type: "text", text: "当前会话没有法官误判案例，法官表现完美！" }],
+          content: [
+            { type: "text", text: "当前会话没有法官误判案例，法官表现完美！" }
+          ],
           details: {}
         };
       }
@@ -4183,6 +4338,112 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
         };
       }
       const write = await ctx.ui.confirm(`\uD83C\uDF93 教授融合完成 — 确认写入？`, `${C.green}${mergeResult.mergedText}${C.reset}`);
+      if (write) {
+        writeFileSync(join2(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ JUDGE.md 已更新，共 ${selectedRules.length} 条规则`
+            }
+          ],
+          details: {}
+        };
+      }
+      return {
+        content: [{ type: "text", text: "已放弃，JUDGE.md 未修改" }],
+        details: {}
+      };
+    }
+  });
+  pi.registerTool({
+    name: "permission_prosecutor",
+    label: "检察官",
+    description: "审计法官放行的操作，发现假阴性（危险操作被误放行）并优化 JUDGE.md 规则。当用户提到检察官、假阴性、漏审、审计放行操作时调用此工具。",
+    promptSnippet: "permission_prosecutor — 审计法官放行记录，发现假阴性并优化规则",
+    parameters: Type.Object({}),
+    execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
+      const entries = ctx.sessionManager.getEntries();
+      const allowed = collectAllowed(entries);
+      if (allowed.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "当前会话没有法官放行的记录，无需审计。"
+            }
+          ],
+          details: {}
+        };
+      }
+      const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
+      const prosecutor = createProsecutor(config);
+      const currentJudgeMd = loadFile(join2(process.cwd(), "JUDGE.md"));
+      const result = await prosecutor(allowed, ctx.cwd, resolveModel, typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
+        const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+        return auth.ok ? auth : undefined;
+      } : async () => {
+        return;
+      }, currentJudgeMd, judgePrompt);
+      if (result.error) {
+        return {
+          content: [
+            { type: "text", text: `检察官分析失败: ${result.error}` }
+          ],
+          details: {}
+        };
+      }
+      const suggestion = result.suggestion;
+      if (!suggestion || suggestion.add.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `检察官审计完成：${suggestion?.summary ?? "未发现假阴性"}`
+            }
+          ],
+          details: {}
+        };
+      }
+      ctx.ui.notify(`⚖️ 检察官审计: ${suggestion.summary}`, "info");
+      const selectedRules = [];
+      for (const item of suggestion.add) {
+        const keep = await ctx.ui.confirm(`${C.cyan}⚖️ 检察官建议 — 采纳这条规则？${C.reset}`, `${C.bold}${item.rule}${C.reset}
+${C.yellow}原因: ${item.reason}${C.reset}`);
+        if (keep) {
+          selectedRules.push(item.rule);
+        }
+      }
+      if (selectedRules.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "未采纳任何规则，JUDGE.md 未修改"
+            }
+          ],
+          details: {}
+        };
+      }
+      const merger = createMerger(config);
+      const mergeResult = await merger(currentJudgeMd, selectedRules, resolveModel, typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
+        const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+        return auth.ok ? auth : undefined;
+      } : async () => {
+        return;
+      });
+      if (mergeResult.error || !mergeResult.mergedText) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `融合失败: ${mergeResult.error || "空内容"}`
+            }
+          ],
+          details: {}
+        };
+      }
+      const write = await ctx.ui.confirm(`⚖️ 检察官融合完成 — 确认写入？`, `${C.green}${mergeResult.mergedText}${C.reset}`);
       if (write) {
         writeFileSync(join2(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
         return {

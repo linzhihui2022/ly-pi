@@ -1,6 +1,6 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
-import { buildProfessorPrompt, createProfessor } from "./professor";
+import { buildAdvocatePrompt, createAdvocate } from "./professor";
 import type { DeniedThenApproved } from "./stats";
 import type { Config } from "./types";
 
@@ -57,7 +57,7 @@ async function mockComplete(value: unknown): Promise<void> {
   (complete as ReturnType<typeof vi.fn>).mockResolvedValue(value);
 }
 
-describe("buildProfessorPrompt", () => {
+describe("buildAdvocatePrompt", () => {
   it("includes all cases with their details", () => {
     const cases: DeniedThenApproved[] = [
       {
@@ -74,7 +74,7 @@ describe("buildProfessorPrompt", () => {
       },
     ];
 
-    const prompt = buildProfessorPrompt(cases, "", JUDGE_PROMPT, "/my-project");
+    const prompt = buildAdvocatePrompt(cases, "", JUDGE_PROMPT, "/my-project");
 
     expect(prompt).toContain("### 案例 1");
     expect(prompt).toContain("git commit");
@@ -89,20 +89,20 @@ describe("buildProfessorPrompt", () => {
 
   it("includes judge prompt in the output", () => {
     const cases = [makeCase()];
-    const prompt = buildProfessorPrompt(cases, "", JUDGE_PROMPT, "/repo");
+    const prompt = buildAdvocatePrompt(cases, "", JUDGE_PROMPT, "/repo");
     expect(prompt).toContain("## 法官的原始判断提示词");
     expect(prompt).toContain(JUDGE_PROMPT);
   });
 
   it("shows empty placeholder when no current judgeMd", () => {
     const cases = [makeCase()];
-    const prompt = buildProfessorPrompt(cases, "", JUDGE_PROMPT, "/repo");
+    const prompt = buildAdvocatePrompt(cases, "", JUDGE_PROMPT, "/repo");
     expect(prompt).toContain("（空，尚未编写项目级判断规则）");
   });
 
   it("includes current JUDGE.md content with line numbers", () => {
     const cases = [makeCase()];
-    const prompt = buildProfessorPrompt(
+    const prompt = buildAdvocatePrompt(
       cases,
       "规则一\n规则二",
       JUDGE_PROMPT,
@@ -122,7 +122,7 @@ describe("buildProfessorPrompt", () => {
         context: [{ role: "user", content: longContent }],
       },
     ];
-    const prompt = buildProfessorPrompt(cases, "", JUDGE_PROMPT, "/repo");
+    const prompt = buildAdvocatePrompt(cases, "", JUDGE_PROMPT, "/repo");
     const lines = prompt.split("\n");
     const contextLine = lines.find((l) => l.includes("a".repeat(200)));
     expect(contextLine).toBeDefined();
@@ -130,10 +130,10 @@ describe("buildProfessorPrompt", () => {
   });
 });
 
-describe("createProfessor", () => {
+describe("createAdvocate", () => {
   it("returns error when no cases", async () => {
-    const professor = createProfessor(config);
-    const result = await professor(
+    const advocate = createAdvocate(config);
+    const result = await advocate(
       [],
       "/repo",
       resolveModelOk,
@@ -159,8 +159,8 @@ describe("createProfessor", () => {
     });
 
     const cases = [makeCase()];
-    const professor = createProfessor(config);
-    const result = await professor(
+    const advocate = createAdvocate(config);
+    const result = await advocate(
       cases,
       "/repo",
       resolveModelOk,
@@ -179,8 +179,8 @@ describe("createProfessor", () => {
   it("returns error on invalid JSON response", async () => {
     await mockComplete({ content: [{ type: "text", text: "not json" }] });
     const cases = [makeCase()];
-    const professor = createProfessor(config);
-    const result = await professor(
+    const advocate = createAdvocate(config);
+    const result = await advocate(
       cases,
       "/repo",
       resolveModelOk,
@@ -197,8 +197,8 @@ describe("createProfessor", () => {
       content: [{ type: "text", text: JSON.stringify({ add: [] }) }],
     });
     const cases = [makeCase()];
-    const professor = createProfessor(config);
-    const result = await professor(
+    const advocate = createAdvocate(config);
+    const result = await advocate(
       cases,
       "/repo",
       resolveModelOk,
@@ -213,8 +213,8 @@ describe("createProfessor", () => {
   it("returns error when professorModel has no provider separator", async () => {
     const badConfig: Config = { ...config, professorModel: "some-model" };
     const cases = [makeCase()];
-    const professor = createProfessor(badConfig);
-    const result = await professor(
+    const advocate = createAdvocate(badConfig);
+    const result = await advocate(
       cases,
       "/repo",
       resolveModelOk,
@@ -226,10 +226,10 @@ describe("createProfessor", () => {
     expect(result.error).toContain("professorModel 格式无效");
   });
 
-  it("returns error when professor model not found", async () => {
+  it("returns error when advocate model not found", async () => {
     const cases = [makeCase()];
-    const professor = createProfessor(config);
-    const result = await professor(
+    const advocate = createAdvocate(config);
+    const result = await advocate(
       cases,
       "/repo",
       resolveModelNotFound,
@@ -247,8 +247,8 @@ describe("createProfessor", () => {
       new Error("network error"),
     );
     const cases = [makeCase()];
-    const professor = createProfessor(config);
-    const result = await professor(
+    const advocate = createAdvocate(config);
+    const result = await advocate(
       cases,
       "/repo",
       resolveModelOk,
@@ -263,8 +263,8 @@ describe("createProfessor", () => {
   it("returns error when LLM response has no text content", async () => {
     await mockComplete({ content: [] });
     const cases = [makeCase()];
-    const professor = createProfessor(config);
-    const result = await professor(
+    const advocate = createAdvocate(config);
+    const result = await advocate(
       cases,
       "/repo",
       resolveModelOk,
@@ -292,8 +292,8 @@ describe("createProfessor", () => {
       ],
     });
     const cases = [makeCase()];
-    const professor = createProfessor(config);
-    const result = await professor(
+    const advocate = createAdvocate(config);
+    const result = await advocate(
       cases,
       "/repo",
       resolveModelOk,

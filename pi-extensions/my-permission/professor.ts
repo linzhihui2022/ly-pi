@@ -3,18 +3,18 @@ import { complete } from "@earendil-works/pi-ai";
 import type { DeniedThenApproved } from "./stats";
 import type { Config } from "./types";
 
-export interface ProfessorSuggestion {
+export interface AdvocateSuggestion {
   add: Array<{ rule: string; reason: string }>;
   remove: string[];
 }
 
-export interface ProfessorResult {
-  suggestion?: ProfessorSuggestion;
+export interface AdvocateResult {
+  suggestion?: AdvocateSuggestion;
   mergedText?: string;
   error?: string;
 }
 
-export type ProfessorFn = (
+export type AdvocateFn = (
   cases: DeniedThenApproved[],
   cwd: string,
   resolveModel: (provider: string, id: string) => Model<Api> | undefined,
@@ -25,7 +25,7 @@ export type ProfessorFn = (
   >,
   currentJudgeMd: string,
   judgePrompt: string,
-) => Promise<ProfessorResult>;
+) => Promise<AdvocateResult>;
 
 export type MergerFn = (
   currentJudgeMd: string,
@@ -36,9 +36,9 @@ export type MergerFn = (
   ) => Promise<
     { apiKey?: string; headers?: Record<string, string> } | undefined
   >,
-) => Promise<ProfessorResult>;
+) => Promise<AdvocateResult>;
 
-export function createProfessor(config: Config): ProfessorFn {
+export function createAdvocate(config: Config): AdvocateFn {
   return async function analyze(
     cases: DeniedThenApproved[],
     cwd: string,
@@ -50,7 +50,7 @@ export function createProfessor(config: Config): ProfessorFn {
     >,
     currentJudgeMd: string,
     judgePrompt: string,
-  ): Promise<ProfessorResult> {
+  ): Promise<AdvocateResult> {
     if (cases.length === 0) {
       return { error: "当前会话没有法官误判案例" };
     }
@@ -69,7 +69,7 @@ export function createProfessor(config: Config): ProfessorFn {
       };
     }
 
-    const prompt = buildProfessorPrompt(
+    const prompt = buildAdvocatePrompt(
       cases,
       currentJudgeMd,
       judgePrompt,
@@ -150,7 +150,7 @@ export function createProfessor(config: Config): ProfessorFn {
         return { error: "教授模型返回了空内容" };
       }
 
-      const parsed = parseProfessorJson(text);
+      const parsed = parseAdvocateJson(text);
       if (!parsed) {
         return { error: "教授模型返回了无法解析的 JSON" };
       }
@@ -163,7 +163,7 @@ export function createProfessor(config: Config): ProfessorFn {
   };
 }
 
-function parseProfessorJson(text: string): ProfessorSuggestion | undefined {
+function parseAdvocateJson(text: string): AdvocateSuggestion | undefined {
   const jsonMatch = /\{[\s\S]*\}/.exec(text);
   if (!jsonMatch) return undefined;
   try {
@@ -191,7 +191,7 @@ function parseProfessorJson(text: string): ProfessorSuggestion | undefined {
   }
 }
 
-export function buildProfessorPrompt(
+export function buildAdvocatePrompt(
   cases: DeniedThenApproved[],
   currentJudgeMd: string,
   judgePrompt: string,
@@ -257,7 +257,7 @@ export function createMerger(config: Config): MergerFn {
     ) => Promise<
       { apiKey?: string; headers?: Record<string, string> } | undefined
     >,
-  ): Promise<ProfessorResult> {
+  ): Promise<AdvocateResult> {
     const parts = config.professorModel.split("/");
     if (parts.length !== 2) {
       return { error: `professorModel 格式无效` };
