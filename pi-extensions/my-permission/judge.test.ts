@@ -28,6 +28,8 @@ const resolvedModel = makeModel();
 const config: Config = {
   defaultPolicy: "ask",
   judgeModel: "deepseek/deepseek-v4-flash",
+  professorModel: "deepseek/deepseek-v4-flash",
+  professorThinking: "low",
   judgeTimeoutMs: 5000,
   childPolicy: "deny-on-unsafe",
   permission: {},

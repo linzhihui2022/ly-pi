@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ColorMode, ExtensionAPI, ExtensionUIContext, SessionEntry, Theme } from "@earendil-works/pi-coding-agent";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getGitStatus } from "./git";
 import { checkMemoryPressure } from "./memory";
@@ -91,12 +91,12 @@ const mockTheme = {
   strikethrough: vi.fn((text: string) => text),
   getFgAnsi: vi.fn(() => ""),
   getBgAnsi: vi.fn(() => ""),
-  getColorMode: vi.fn(() => "truecolor"),
+  getColorMode: vi.fn(() => "truecolor" as unknown as ColorMode),
   getThinkingBorderColor: vi.fn(() => (str: string) => str),
   getBashModeBorderColor: vi.fn(() => (str: string) => str),
-} as unknown as Record<string, (...args: unknown[]) => unknown>;
+} as unknown as Theme;
 
-function createMockTheme(): Record<string, (...args: unknown[]) => unknown> {
+function createMockTheme(): Theme {
   return {
     fg: vi.fn((_c: string, text: string) => text),
     bg: vi.fn((_c: string, text: string) => text),
@@ -107,7 +107,7 @@ function createMockTheme(): Record<string, (...args: unknown[]) => unknown> {
     strikethrough: vi.fn((text: string) => text),
     getFgAnsi: vi.fn(() => ""),
     getBgAnsi: vi.fn(() => ""),
-    getColorMode: vi.fn(() => "truecolor"),
+    getColorMode: vi.fn(() => "truecolor" as unknown as ColorMode),
     getThinkingBorderColor: vi.fn(() => (str: string) => str),
     getBashModeBorderColor: vi.fn(() => (str: string) => str),
   };
@@ -128,7 +128,7 @@ const mockCtx = {
   sessionManager: { getEntries: vi.fn(() => []) },
   getContextUsage: vi.fn(() => ({ percent: 42, contextWindow: 128000 })),
   ui: {
-    setFooter: vi.fn((factory: unknown) => {
+    setFooter: vi.fn((factory: (...args: unknown[]) => unknown) => {
       return factory(mockTui, mockTheme, mockFooterData);
     }),
     setWidget: vi.fn(),

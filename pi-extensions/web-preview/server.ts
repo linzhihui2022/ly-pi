@@ -28,7 +28,7 @@ export async function findAvailablePort(
       }
 
       const testServer = createServer();
-      testServer.once("error", (err: Error) => {
+      testServer.once("error", (err: NodeJS.ErrnoException) => {
         if (err.code === "EADDRINUSE") {
           currentPort++;
           tryPort();

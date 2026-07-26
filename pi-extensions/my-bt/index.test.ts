@@ -69,6 +69,12 @@ const mockCtx = {
   ui: { notify: mockNotify },
 } as unknown as ExtensionCommandContext;
 
+function mustGet<T>(map: Map<string, T>, key: string): T {
+  const value = map.get(key);
+  if (value === undefined) throw new Error(`Expected '${key}' to be registered`);
+  return value;
+}
+
 async function loadModule() {
   return await import("./index");
 }
@@ -79,10 +85,10 @@ describe("my-bt extension", () => {
     registeredCommands.clear();
     registeredPermissionEvents.clear();
     mockNotify.mockClear();
-    mockPi.on.mockClear();
-    mockPi.registerCommand.mockClear();
-    mockEvents.on.mockClear();
-    mockEvents.emit.mockClear();
+    vi.mocked(mockPi.on).mockClear();
+    vi.mocked(mockPi.registerCommand).mockClear();
+    vi.mocked(mockEvents.on).mockClear();
+    vi.mocked(mockEvents.emit).mockClear();
     vi.mocked(readFileSync).mockClear();
     vi.mocked(writeFileSync).mockClear();
     vi.mocked(playCategory).mockClear();
@@ -129,7 +135,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const handler = registeredEvents.get("session_start");
+    const handler = mustGet(registeredEvents, "session_start");
     handler?.({}, mockCtx);
     expect(playCategory).toHaveBeenCalled();
   });
@@ -141,7 +147,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const handler = registeredEvents.get("session_start");
+    const handler = mustGet(registeredEvents, "session_start");
     handler?.({}, mockCtx);
     expect(playCategory).not.toHaveBeenCalled();
   });
@@ -151,7 +157,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler("off", mockCtx);
 
     expect(mockNotify).toHaveBeenCalledWith(
@@ -172,7 +178,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler("on", mockCtx);
 
     expect(mockNotify).toHaveBeenCalledWith(
@@ -193,7 +199,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler("startup", mockCtx);
     expect(playCategory).not.toHaveBeenCalled();
   });
@@ -213,7 +219,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler(undefined, mockCtx);
 
     expect(mockNotify).toHaveBeenCalledOnce();
@@ -231,7 +237,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler("all", mockCtx);
 
     expect(playCategory).toHaveBeenCalledTimes(1);
@@ -250,7 +256,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler("all", mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
@@ -265,7 +271,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler("startup", mockCtx);
 
     expect(playCategory).toHaveBeenCalledWith(
@@ -280,7 +286,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler("nope", mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
@@ -300,7 +306,7 @@ describe("my-bt extension", () => {
       throw new Error("not found");
     });
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler("startup", mockCtx);
 
     expect(mockNotify).toHaveBeenCalledWith(
@@ -324,7 +330,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const handler = registeredEvents.get("session_start");
+    const handler = mustGet(registeredEvents, "session_start");
     handler?.({}, mockCtx);
     expect(playOverlay).toHaveBeenCalledWith(
       expect.objectContaining({ overlayTextMap: expect.any(Object) }),
@@ -346,7 +352,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const handler = registeredEvents.get("session_start");
+    const handler = mustGet(registeredEvents, "session_start");
     handler?.({}, mockCtx);
     expect(playOverlay).not.toHaveBeenCalled();
   });
@@ -362,7 +368,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler("startup", mockCtx);
 
     expect(playCategory).toHaveBeenCalled();
@@ -381,7 +387,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = registeredCommands.get("bt");
+    const cmd = mustGet(registeredCommands, "bt");
     await cmd.handler("all", mockCtx);
     vi.advanceTimersByTime(1500);
     vi.advanceTimersByTime(1500);
@@ -398,7 +404,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const handler = registeredEvents.get("session_start");
+    const handler = mustGet(registeredEvents, "session_start");
     expect(() => handler?.({}, mockCtx)).not.toThrow();
     expect(playCategory).toHaveBeenCalled();
   });

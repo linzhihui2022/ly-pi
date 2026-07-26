@@ -1,6 +1,7 @@
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
+  SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import myHtml from "./index";
@@ -33,10 +34,16 @@ import open from "open";
 import { ensurePreviewServer } from "web-preview";
 
 describe("myHtml extension", () => {
-  let registeredCommands: Map<string, unknown>;
-  let registeredEvents: Map<string, unknown>;
+  let registeredCommands: Map<string, { handler: (...args: unknown[]) => unknown }>;
+  let registeredEvents: Map<string, (...args: unknown[]) => unknown>;
   let mockApi: ExtensionAPI;
   let mockCtx: ExtensionCommandContext;
+
+  function mustGet<T>(map: Map<string, T>, key: string): T {
+    const value = map.get(key);
+    if (value === undefined) throw new Error(`Expected '${key}' to be registered`);
+    return value;
+  }
 
   beforeEach(() => {
     registeredCommands = new Map();
@@ -54,11 +61,12 @@ describe("myHtml extension", () => {
     mockCtx = {
       ui: {
         notify: vi.fn(),
-      } as unknown as ExtensionAPI,
+      },
       sessionManager: {
         getEntries: vi.fn(),
-      } as unknown as ExtensionAPI,
-    };
+        getSessionId: vi.fn(),
+      },
+    } as unknown as ExtensionCommandContext;
   });
 
   it("registers /html command", () => {
@@ -73,7 +81,7 @@ describe("myHtml extension", () => {
 
   it("/html notifies error when no assistant message exists", async () => {
     myHtml(mockApi);
-    const cmd = registeredCommands.get("html");
+    const cmd = mustGet(registeredCommands, "html");
 
     mockCtx.sessionManager.getEntries = vi.fn(() => []);
 
@@ -86,7 +94,7 @@ describe("myHtml extension", () => {
 
   it("/html renders latest assistant reply, writes file and opens preview", async () => {
     myHtml(mockApi);
-    const cmd = registeredCommands.get("html");
+    const cmd = mustGet(registeredCommands, "html");
 
     mockCtx.sessionManager.getEntries = vi.fn(
       () =>
@@ -108,7 +116,7 @@ describe("myHtml extension", () => {
               content: [{ type: "text", text: "# Hello\n\nWorld" }],
             },
           },
-        ] as unknown as Entry[],
+        ] as unknown as SessionEntry[],
     );
     mockCtx.sessionManager.getSessionId = vi.fn(() => "session-xyz");
 
@@ -139,7 +147,7 @@ describe("myHtml extension", () => {
 
   it("/html uses thinking content when no text is present", async () => {
     myHtml(mockApi);
-    const cmd = registeredCommands.get("html");
+    const cmd = mustGet(registeredCommands, "html");
 
     mockCtx.sessionManager.getEntries = vi.fn(
       () =>
@@ -154,7 +162,7 @@ describe("myHtml extension", () => {
               content: [{ type: "thinking", thinking: "some thought" }],
             },
           },
-        ] as unknown as Entry[],
+        ] as unknown as SessionEntry[],
     );
     mockCtx.sessionManager.getSessionId = vi.fn(() => "session-abc");
 
@@ -169,7 +177,7 @@ describe("myHtml extension", () => {
 
   it("/html notifies error when preview server fails to start", async () => {
     myHtml(mockApi);
-    const cmd = registeredCommands.get("html");
+    const cmd = mustGet(registeredCommands, "html");
 
     mockCtx.sessionManager.getEntries = vi.fn(
       () =>
@@ -184,7 +192,7 @@ describe("myHtml extension", () => {
               content: [{ type: "text", text: "hello" }],
             },
           },
-        ] as unknown as Entry[],
+        ] as unknown as SessionEntry[],
     );
     mockCtx.sessionManager.getSessionId = vi.fn(() => "session-err");
     vi.mocked(ensurePreviewServer).mockRejectedValueOnce(

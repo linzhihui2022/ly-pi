@@ -137,7 +137,7 @@ export function createProfessor(config: Config): ProfessorFn {
         response.content.find((c) => c.type === "text")?.text ??
         response.content
           .flatMap((c) =>
-            Object.entries(c as Record<string, unknown>)
+            Object.entries(c as unknown as Record<string, unknown>)
               .filter(
                 ([k, v]) =>
                   k !== "type" && typeof v === "string" && v.length > 0,
@@ -311,7 +311,7 @@ export function createMerger(config: Config): MergerFn {
         response.content.find((c) => c.type === "text")?.text ??
         response.content
           .flatMap((c) =>
-            Object.entries(c as Record<string, unknown>)
+            Object.entries(c as unknown as Record<string, unknown>)
               .filter(
                 ([k, v]) =>
                   k !== "type" && typeof v === "string" && v.length > 0,

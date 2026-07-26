@@ -5,6 +5,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import { Type } from "@sinclair/typebox";
 import open from "open";
 import {
@@ -113,7 +114,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         resolveModel,
         typeof ctx.modelRegistry.getApiKeyAndHeaders === "function"
           ? async (
-              model: Parameters<typeof resolveModel>[0] & { api?: string },
+              model: Model<Api>,
             ) => {
               const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
               return auth.ok ? auth : undefined;
