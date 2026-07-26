@@ -49,33 +49,6 @@
     "agent_start": "engaging",
     "session_start": "startup"
   },
-  "overlayTextMap": {
-    "agent_end": {
-      "subtitle": "做得好，铁御",
-      "title": "任务完成",
-      "type": "COMPLETE"
-    },
-    "agent_start": {
-      "subtitle": "将控制转给铁御",
-      "title": "执行任务中",
-      "type": "MISSION"
-    },
-    "ask_user_question": {
-      "subtitle": "BT-7274 需要你的反馈",
-      "title": "侦测到提问",
-      "type": "QUESTION"
-    },
-    "permissions_ui_prompt": {
-      "subtitle": "铁御，请确认权限",
-      "title": "侦测到危险操作",
-      "type": "WARNING"
-    },
-    "session_start": {
-      "subtitle": "主要系统重启完成",
-      "title": "BT-7274 已上线",
-      "type": "SESSION START"
-    }
-  },
   "permissionEventMap": {
     "permissions:ui_prompt": "question"
   },

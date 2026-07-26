@@ -5,7 +5,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { listCategories, playCategory, playOverlay } from "./player";
+import { listCategories, playCategory } from "./player";
 import type { BtConfig } from "./types";
 
 // Resolve extension directory — prefer __dirname, fall back to CWD-relative
@@ -67,7 +67,6 @@ export default function myBt(pi: ExtensionAPI): void {
       }
       lastPlayedCategory = category;
       playCategory(config, category, ctx.ui.notify);
-      playOverlay(config, eventName, EXT_DIR, ctx.ui.notify);
     });
   }
 
@@ -80,7 +79,6 @@ export default function myBt(pi: ExtensionAPI): void {
       if (!category) return;
       lastPlayedCategory = category;
       playCategory(config, category, ctx.ui.notify);
-      playOverlay(config, event.toolName, EXT_DIR, ctx.ui.notify);
     });
   }
 
@@ -94,7 +92,6 @@ export default function myBt(pi: ExtensionAPI): void {
       // EventBus handlers don't receive a UI context, so errors are silent.
       lastPlayedCategory = category;
       playCategory(config, category);
-      playOverlay(config, "permissions_ui_prompt", EXT_DIR);
     });
   }
 

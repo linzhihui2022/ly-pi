@@ -19,12 +19,7 @@ export const GLOBAL_BT_DIR = join(homedir(), ".my-bt");
 export const DEFAULT_PID_FILE = join(GLOBAL_BT_DIR, "playing.json");
 export const DEFAULT_LOCK_DIR = join(GLOBAL_BT_DIR, ".lock");
 export const DEFAULT_SOUND_PID_FILE = join(GLOBAL_BT_DIR, "sound-pids.json");
-export const DEFAULT_OVERLAY_PID_FILE = join(
-  GLOBAL_BT_DIR,
-  "overlay-pids.json",
-);
 export const DEFAULT_SOUND_LOCK_DIR = join(GLOBAL_BT_DIR, ".sound-lock");
-export const DEFAULT_OVERLAY_LOCK_DIR = join(GLOBAL_BT_DIR, ".overlay-lock");
 
 interface CoordinatorState {
   pids: number[];
@@ -133,33 +128,6 @@ export function spawnSoundProcess(
   const lockDir = join(runtimeDir, ".sound-lock");
   killPlayingProcesses(pidFile, lockDir);
   const child = exec(`afplay "${filePath}"`, onExecDone);
-  if (child.pid) {
-    recordPids([child.pid], pidFile, lockDir);
-  }
-  return child;
-}
-
-export function spawnOverlayProcess(
-  extDir: string,
-  type: string,
-  title: string,
-  subtitle: string | undefined,
-  duration: number,
-  color: string,
-  slot: number,
-  terminalApp: string,
-  runtimeDir: string = GLOBAL_BT_DIR,
-): ChildProcess {
-  const pidFile = join(runtimeDir, "overlay-pids.json");
-  const lockDir = join(runtimeDir, ".overlay-lock");
-  killPlayingProcesses(pidFile, lockDir);
-  const scriptPath = join(extDir, "dist", "mac-overlay.js");
-  const child = exec(
-    `osascript -l JavaScript "${scriptPath}" ` +
-      `"${type}" "${title}" "${subtitle ?? ""}" ` +
-      `${duration} "${color}" ${slot} "${terminalApp}"`,
-    onExecDone,
-  );
   if (child.pid) {
     recordPids([child.pid], pidFile, lockDir);
   }

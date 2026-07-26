@@ -3,14 +3,6 @@ export interface BtCategory {
   files: string[];
 }
 
-export interface OverlayTextConfig {
-  type: string;
-  title: string;
-  subtitle?: string;
-}
-
-export type OverlayColor = "blue" | "orange" | "green" | "red";
-
 export interface BtConfig {
   enabled: boolean;
   soundDir: string;
@@ -20,5 +12,4 @@ export interface BtConfig {
   toolEventMap?: Record<string, string>;
   /** Maps permission event names (e.g. "permissions:ui_prompt") to sound categories */
   permissionEventMap?: Record<string, string>;
-  overlayTextMap?: Record<string, OverlayTextConfig>;
 }

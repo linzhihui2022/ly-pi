@@ -1,26 +1,6 @@
 import { join } from "node:path";
-import { spawnOverlayProcess, spawnSoundProcess } from "./coordinator";
-import type { BtConfig, OverlayColor } from "./types";
-
-/**
- * Detect the terminal emulator running the current process.
- * Caches result after first call.
- */
-let cachedTerminal: string | undefined;
-
-export function detectTerminal(): string {
-  if (cachedTerminal !== undefined) return cachedTerminal;
-
-  const term = process.env.TERM_PROGRAM;
-  if (term === "WezTerm") cachedTerminal = "WezTerm";
-  else if (term === "iTerm.app") cachedTerminal = "iTerm";
-  else if (term === "Apple_Terminal") cachedTerminal = "Terminal";
-  else if (process.env.WEZTERM_PANE) cachedTerminal = "WezTerm";
-  else if (process.env.ITERM_SESSION_ID) cachedTerminal = "iTerm";
-  else cachedTerminal = "WezTerm";
-
-  return cachedTerminal;
-}
+import { spawnSoundProcess } from "./coordinator";
+import type { BtConfig } from "./types";
 
 /**
  * List all available sound categories with their descriptions.
@@ -39,55 +19,6 @@ export function listCategories(
  * Uses a simple round-robin to avoid repeats.
  */
 const lastPicked: Record<string, number> = {};
-
-// ═══ Overlay notification ═══
-
-/** Slot counter for vertical stacking (0–4, wraps) */
-let overlaySlot = 0;
-const MAX_OVERLAY_SLOTS = 5;
-
-/** Color mapping: event name → overlay accent color */
-const EVENT_COLOR_MAP: Record<string, OverlayColor> = {
-  session_start: "blue",
-  agent_start: "orange",
-  agent_end: "green",
-  permissions_ui_prompt: "red",
-};
-
-/**
- * Show overlay notification for a pi event.
- * Spawns osascript with the compiled JXA script.
- * No-ops silently when overlayTextMap is missing or event has no config.
- * Errors are reported via the optional onError callback instead of stderr.
- */
-export function playOverlay(
-  config: BtConfig,
-  eventName: string,
-  extDir: string,
-  _onError?: (message: string) => void,
-): void {
-  if (!config.overlayTextMap) return;
-
-  const textConfig = config.overlayTextMap[eventName];
-  if (!textConfig) return;
-
-  const color = EVENT_COLOR_MAP[eventName] ?? "blue";
-  const duration = 5;
-  const slot = overlaySlot % MAX_OVERLAY_SLOTS;
-  overlaySlot++;
-
-  const terminalApp = detectTerminal();
-  spawnOverlayProcess(
-    extDir,
-    textConfig.type,
-    textConfig.title,
-    textConfig.subtitle ?? "",
-    duration,
-    color,
-    slot,
-    terminalApp,
-  );
-}
 
 export function pickSoundFile(
   config: BtConfig,

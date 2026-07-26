@@ -4,7 +4,7 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { playCategory, playOverlay } from "./player";
+import { playCategory } from "./player";
 
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
@@ -16,7 +16,6 @@ vi.mock("./player", async (importOriginal) => {
   return {
     ...actual,
     playCategory: vi.fn(),
-    playOverlay: vi.fn(),
   };
 });
 
@@ -93,7 +92,6 @@ describe("my-bt extension", () => {
     vi.mocked(readFileSync).mockClear();
     vi.mocked(writeFileSync).mockClear();
     vi.mocked(playCategory).mockClear();
-    vi.mocked(playOverlay).mockClear();
     vi.resetModules();
   });
 
@@ -316,100 +314,6 @@ describe("my-bt extension", () => {
     );
   });
 
-  // ── Overlay integration tests ──
-
-  it("calls playOverlay on event when overlayTextMap is configured", async () => {
-    const configWithOverlay = {
-      ...DEFAULT_CONFIG,
-      overlayTextMap: {
-        session_start: { type: "START", title: "BT online" },
-        agent_start: { type: "GO", title: "Engaging" },
-        agent_end: { type: "DONE", title: "Complete" },
-      },
-    };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
-    const mod = await loadModule();
-    mod.default(mockPi);
-
-    const handler = mustGet(registeredEvents, "session_start");
-    handler?.({}, mockCtx);
-    expect(playOverlay).toHaveBeenCalledWith(
-      expect.objectContaining({ overlayTextMap: expect.any(Object) }),
-      "session_start",
-      expect.any(String),
-      expect.any(Function),
-    );
-  });
-
-  it("does not call playOverlay when disabled", async () => {
-    const configWithOverlay = {
-      ...DEFAULT_CONFIG,
-      enabled: false,
-      overlayTextMap: {
-        session_start: { type: "START", title: "BT online" },
-      },
-    };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
-    const mod = await loadModule();
-    mod.default(mockPi);
-
-    const handler = mustGet(registeredEvents, "session_start");
-    handler?.({}, mockCtx);
-    expect(playOverlay).not.toHaveBeenCalled();
-  });
-
-  it("does not call playOverlay on /bt manual playback", async () => {
-    const configWithOverlay = {
-      ...DEFAULT_CONFIG,
-      overlayTextMap: {
-        session_start: { type: "START", title: "BT online" },
-      },
-    };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
-    const mod = await loadModule();
-    mod.default(mockPi);
-
-    const cmd = mustGet(registeredCommands, "bt");
-    await cmd.handler("startup", mockCtx);
-
-    expect(playCategory).toHaveBeenCalled();
-    expect(playOverlay).not.toHaveBeenCalled();
-  });
-
-  it("does not call playOverlay on /bt all", async () => {
-    vi.useFakeTimers();
-    const configWithOverlay = {
-      ...DEFAULT_CONFIG,
-      overlayTextMap: {
-        startup: { type: "START", title: "BT online" },
-      },
-    };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
-    const mod = await loadModule();
-    mod.default(mockPi);
-
-    const cmd = mustGet(registeredCommands, "bt");
-    await cmd.handler("all", mockCtx);
-    vi.advanceTimersByTime(1500);
-    vi.advanceTimersByTime(1500);
-
-    expect(playCategory).toHaveBeenCalled();
-    expect(playOverlay).not.toHaveBeenCalled();
-
-    vi.useRealTimers();
-  });
-
-  it("still works when overlayTextMap is absent (no regression)", async () => {
-    // DEFAULT_CONFIG has no overlayTextMap — should work as before
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
-    const mod = await loadModule();
-    mod.default(mockPi);
-
-    const handler = mustGet(registeredEvents, "session_start");
-    expect(() => handler?.({}, mockCtx)).not.toThrow();
-    expect(playCategory).toHaveBeenCalled();
-  });
-
   // ── Permission event integration tests ──
 
   it("subscribes to permissions:ui_prompt via pi.events", async () => {
@@ -465,11 +369,6 @@ describe("my-bt extension", () => {
       expect.objectContaining({ permissionEventMap: expect.any(Object) }),
       "warning",
     );
-    expect(playOverlay).toHaveBeenCalledWith(
-      expect.objectContaining({ overlayTextMap: expect.any(Object) }),
-      "permissions_ui_prompt",
-      expect.any(String),
-    );
   });
 
   it("does not play on permissions:ui_prompt when disabled", async () => {
@@ -498,7 +397,6 @@ describe("my-bt extension", () => {
     });
 
     expect(playCategory).not.toHaveBeenCalled();
-    expect(playOverlay).not.toHaveBeenCalled();
   });
 
   it("does not play on permissions:ui_prompt when permissionEventMap is missing", async () => {
@@ -518,7 +416,6 @@ describe("my-bt extension", () => {
     });
 
     expect(playCategory).not.toHaveBeenCalled();
-    expect(playOverlay).not.toHaveBeenCalled();
   });
 
   // ── Tool event integration tests ──
@@ -545,18 +442,11 @@ describe("my-bt extension", () => {
     expect(registeredEvents.has("tool_call")).toBe(false);
   });
 
-  it("plays sound and overlay on tool_call when toolName is mapped", async () => {
+  it("plays sound on tool_call when toolName is mapped", async () => {
     const configWithToolEvent = {
       ...DEFAULT_CONFIG,
       toolEventMap: {
         ask_user_question: "question",
-      },
-      overlayTextMap: {
-        ask_user_question: {
-          type: "QUESTION",
-          title: "侦测到提问",
-          subtitle: "BT-7274 需要你的反馈",
-        },
       },
     };
     vi.mocked(readFileSync).mockReturnValue(
@@ -571,12 +461,6 @@ describe("my-bt extension", () => {
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ toolEventMap: expect.any(Object) }),
       "question",
-      expect.any(Function),
-    );
-    expect(playOverlay).toHaveBeenCalledWith(
-      expect.objectContaining({ overlayTextMap: expect.any(Object) }),
-      "ask_user_question",
-      expect.any(String),
       expect.any(Function),
     );
   });
@@ -598,7 +482,6 @@ describe("my-bt extension", () => {
     handler?.({ toolName: "bash" }, mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
-    expect(playOverlay).not.toHaveBeenCalled();
   });
 
   it("does not play on tool_call when disabled", async () => {
@@ -619,7 +502,6 @@ describe("my-bt extension", () => {
     handler?.({ toolName: "ask_user_question" }, mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
-    expect(playOverlay).not.toHaveBeenCalled();
   });
 
   // ── Agent end suppression after question ──
@@ -629,10 +511,6 @@ describe("my-bt extension", () => {
       ...DEFAULT_CONFIG,
       toolEventMap: {
         ask_user_question: "question",
-      },
-      overlayTextMap: {
-        agent_end: { type: "DONE", title: "Complete" },
-        ask_user_question: { type: "QUESTION", title: "Question" },
       },
     };
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithQuestion));
@@ -650,22 +528,13 @@ describe("my-bt extension", () => {
     );
 
     vi.mocked(playCategory).mockClear();
-    vi.mocked(playOverlay).mockClear();
     agentEndHandler?.({}, mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
-    expect(playOverlay).not.toHaveBeenCalled();
   });
 
   it("plays agent_end when last played category was not question", async () => {
-    const configWithOverlay = {
-      ...DEFAULT_CONFIG,
-      overlayTextMap: {
-        agent_start: { type: "GO", title: "Engaging" },
-        agent_end: { type: "DONE", title: "Complete" },
-      },
-    };
-    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithOverlay));
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
     mod.default(mockPi);
 
@@ -680,18 +549,11 @@ describe("my-bt extension", () => {
     );
 
     vi.mocked(playCategory).mockClear();
-    vi.mocked(playOverlay).mockClear();
     agentEndHandler?.({}, mockCtx);
 
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ eventMap: expect.any(Object) }),
       "completed",
-      expect.any(Function),
-    );
-    expect(playOverlay).toHaveBeenCalledWith(
-      expect.objectContaining({ overlayTextMap: expect.any(Object) }),
-      "agent_end",
-      expect.any(String),
       expect.any(Function),
     );
   });
@@ -701,9 +563,6 @@ describe("my-bt extension", () => {
       ...DEFAULT_CONFIG,
       toolEventMap: {
         ask_user_question: "question",
-      },
-      overlayTextMap: {
-        agent_end: { type: "DONE", title: "Complete" },
       },
     };
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configWithQuestion));
@@ -715,7 +574,6 @@ describe("my-bt extension", () => {
 
     toolHandler?.({ toolName: "ask_user_question" }, mockCtx);
     vi.mocked(playCategory).mockClear();
-    vi.mocked(playOverlay).mockClear();
 
     agentEndHandler?.({}, mockCtx);
     agentEndHandler?.({}, mockCtx);
@@ -726,6 +584,5 @@ describe("my-bt extension", () => {
       "completed",
       expect.any(Function),
     );
-    expect(playOverlay).toHaveBeenCalledOnce();
   });
 });
