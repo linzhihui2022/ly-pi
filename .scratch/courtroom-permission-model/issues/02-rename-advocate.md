@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** done
+**Status:** resolved
 
 - [ ] `index.ts`：工具 name 从 `judge_professor` 改为 `permission_advocate`，label/description/promptSnippet 更新
 - [ ] `professor.ts`：函数名 `createProfessor` → `createAdvocate`，`ProfessorFn` → `AdvocateFn`，`ProfessorResult` → `AdvocateResult`，`ProfessorSuggestion` → `AdvocateSuggestion`

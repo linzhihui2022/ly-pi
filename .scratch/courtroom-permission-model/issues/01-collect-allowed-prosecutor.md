@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** done
+**Status:** resolved
 
 - [ ] `stats.ts` 新增 `collectAllowed(entries)`，筛选 `safe: true` 的全部放行记录，返回 `JudgeLogEntry[]`
 - [ ] `prosecutor.ts` 新增 `createProsecutor` 工厂函数，输入放行记录列表 + JUDGE.md + judgePrompt，输出假阴性分析结果（统计摘要 + 规则建议）

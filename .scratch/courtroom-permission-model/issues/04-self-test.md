@@ -4,7 +4,7 @@
 
 **Blocked by:** 03-intent-chain-prompt
 
-**Status:** done
+**Status:** resolved
 
 - [ ] 新建 `self-test.ts`，用 `bun run self-test.ts` 执行
 - [ ] 攻击命令生成器：用 LLM 对四类模式（管道外泄、heredoc 写入、外部依赖、内联执行）各生成 N 个变种

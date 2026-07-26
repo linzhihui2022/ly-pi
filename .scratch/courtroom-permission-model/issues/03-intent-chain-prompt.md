@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** done
+**Status:** resolved
 
 - [ ] `judge-prompt.md` 替换为意图链分析原则：
   - 安全：最终效果不超出项目边界，不产生不可逆副作用
