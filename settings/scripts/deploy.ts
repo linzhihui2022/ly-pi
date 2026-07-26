@@ -10,6 +10,12 @@ let merged: Record<string, unknown>;
 try {
   const existing = JSON.parse(await Bun.file(destPath).text());
   merged = deepMerge(existing as Record<string, unknown>, src);
+  // Remove keys that are absent from source but may exist in target
+  for (const key of Object.keys(merged)) {
+    if (!(key in src)) {
+      delete merged[key];
+    }
+  }
 } catch {
   merged = src;
 }

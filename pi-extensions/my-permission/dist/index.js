@@ -11,7 +11,7 @@ var __export = (target, all) => {
 
 // index.ts
 import { mkdirSync, readFileSync as readFileSync2, realpathSync, writeFileSync } from "node:fs";
-import { dirname, join as join2 } from "node:path";
+import { dirname, join as join3 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // ../../node_modules/.bun/@sinclair+typebox@0.34.52/node_modules/@sinclair/typebox/build/esm/type/guard/value.mjs
@@ -3065,30 +3065,7 @@ defineLazyProperty(apps, "edge", () => detectPlatformBinary({
 defineLazyProperty(apps, "browser", () => "browser");
 defineLazyProperty(apps, "browserPrivate", () => "browserPrivate");
 var open_default = open;
-
-// ../web-preview/document.ts
-function buildHtmlDocument(options) {
-  const styleBlock = options.css ? `  <style>
-${options.css}
-  </style>
-` : "";
-  const scriptBlock = options.js ? `  <script>
-${options.js}
-  </script>
-` : "";
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${options.title}</title>
-${styleBlock}</head>
-<body>
-${options.bodyHtml}
-${scriptBlock}</body>
-</html>`;
-}
-// ../web-preview/server.ts
+// ../../ly-pi/web-preview/server.ts
 import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -3128,7 +3105,7 @@ async function ensurePreviewServer(options) {
   const port = await findAvailablePort(options.port ?? DEFAULT_PORT, options.host);
   const url = `http://${options.urlHost}:${port}`;
   const server = createServer((req, res) => {
-    const urlPath = req.url ?? "/";
+    const urlPath = req.url;
     if (req.method !== "GET") {
       res.writeHead(405);
       res.end("Method not allowed");
@@ -3314,6 +3291,32 @@ function parseJudgeResponse(response) {
   }
 }
 
+// ../web-preview/document.ts
+function buildHtmlDocument2(options) {
+  const styleBlock = options.css ? `  <style>
+${options.css}
+  </style>
+` : "";
+  const scriptBlock = options.js ? `  <script>
+${options.js}
+  </script>
+` : "";
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${options.title}</title>
+${styleBlock}</head>
+<body>
+${options.bodyHtml}
+${scriptBlock}</body>
+</html>`;
+}
+// ../web-preview/server.ts
+import { tmpdir as tmpdir2 } from "node:os";
+import { join as join2 } from "node:path";
+var PREVIEW_DIR2 = join2(tmpdir2(), "pi-html-preview");
 // log-page.ts
 var PAGE_CSS = `body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -3463,7 +3466,7 @@ var FILTER_JS = `function filterLogs(filter) {
 function renderJudgeLogPage(logs) {
   const rows = logs.map((log, index) => renderRow(log, index + 1)).reverse().join(`
 `);
-  return buildHtmlDocument({
+  return buildHtmlDocument2({
     title: "法官判断日志",
     bodyHtml: `  <header class="page-header">
     <h1>法官判断日志</h1>
@@ -4238,9 +4241,9 @@ var C = {
 };
 async function myPermission(pi) {
   const extensionDir = dirname(fileURLToPath2(import.meta.url));
-  const config = await loadConfig(join2(extensionDir, "config.json"));
+  const config = await loadConfig(join3(extensionDir, "config.json"));
   const judgePrompt = loadPrompt(extensionDir);
-  const localJudge = loadFile(join2(process.cwd(), "JUDGE.md"));
+  const localJudge = loadFile(join3(process.cwd(), "JUDGE.md"));
   const cache = createSessionCache();
   const child = isChildSession();
   pi.registerCommand("judge-log", {
@@ -4254,9 +4257,9 @@ async function myPermission(pi) {
       }
       try {
         const sessionId = ctx.sessionManager.getSessionId();
-        const sessionDir = join2(PREVIEW_DIR, sessionId);
+        const sessionDir = join3(PREVIEW_DIR, sessionId);
         mkdirSync(sessionDir, { recursive: true });
-        writeFileSync(join2(sessionDir, "judge-log.html"), renderJudgeLogPage(logs), "utf-8");
+        writeFileSync(join3(sessionDir, "judge-log.html"), renderJudgeLogPage(logs), "utf-8");
         const server = await ensurePreviewServer({
           host: "127.0.0.1",
           urlHost: "localhost",
@@ -4289,7 +4292,7 @@ async function myPermission(pi) {
       }
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const advocate = createAdvocate(config);
-      const currentJudgeMd = loadFile(join2(process.cwd(), "JUDGE.md"));
+      const currentJudgeMd = loadFile(join3(process.cwd(), "JUDGE.md"));
       const result = await advocate(cases, ctx.cwd, resolveModel, typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
         const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
         return auth.ok ? auth : undefined;
@@ -4353,7 +4356,7 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
       ctx.ui.notify(`\uD83C\uDF93 辩护人费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
       const write = await ctx.ui.confirm(`\uD83C\uDF93 辩护人融合完成 — 确认写入？`, `${C.green}${mergeResult.mergedText}${C.reset}`);
       if (write) {
-        writeFileSync(join2(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
+        writeFileSync(join3(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
         return {
           content: [
             {
@@ -4392,7 +4395,7 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
       }
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const prosecutor = createProsecutor(config);
-      const currentJudgeMd = loadFile(join2(process.cwd(), "JUDGE.md"));
+      const currentJudgeMd = loadFile(join3(process.cwd(), "JUDGE.md"));
       const result = await prosecutor(allowed, ctx.cwd, resolveModel, typeof ctx.modelRegistry.getApiKeyAndHeaders === "function" ? async (model) => {
         const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
         return auth.ok ? auth : undefined;
@@ -4459,7 +4462,7 @@ ${C.yellow}原因: ${item.reason}${C.reset}`);
       ctx.ui.notify(`⚖️ 检察官费用: $${totalCost.toFixed(6)} (分析 $${(result.cost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
       const write = await ctx.ui.confirm(`⚖️ 检察官融合完成 — 确认写入？`, `${C.green}${mergeResult.mergedText}${C.reset}`);
       if (write) {
-        writeFileSync(join2(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
+        writeFileSync(join3(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
         return {
           content: [
             {
@@ -4556,7 +4559,7 @@ function resolveSymlinkedPaths(paths, cwd) {
   const resolved = [...paths];
   for (const p of paths) {
     try {
-      const full = p.startsWith("/") || p.startsWith("~") ? join2(p.startsWith("~") ? process.env.HOME ?? "/home" : "/", p.replace(/^~/, "")) : join2(cwd, p);
+      const full = p.startsWith("/") || p.startsWith("~") ? join3(p.startsWith("~") ? process.env.HOME ?? "/home" : "/", p.replace(/^~/, "")) : join3(cwd, p);
       const real = realpathSync(full);
       if (real !== full) {
         resolved.push(real);
@@ -4566,7 +4569,7 @@ function resolveSymlinkedPaths(paths, cwd) {
   return resolved;
 }
 function loadPrompt(extensionDir) {
-  const prompt = loadFile(join2(extensionDir, "judge-prompt.md"));
+  const prompt = loadFile(join3(extensionDir, "judge-prompt.md"));
   if (!prompt) {
     console.warn("[my-permission] judge-prompt.md not found, judge will be disabled");
   }

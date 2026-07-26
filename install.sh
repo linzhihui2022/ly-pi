@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # install.sh — deploy pi extensions, skills, themes, and settings
-# Thin wrapper over turbo run deploy + shell scripts
+# Thin wrapper over bun run deploy
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 

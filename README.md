@@ -2,7 +2,7 @@
 
 我的终端、Shell、AI 编码 Agent 全家桶 —— Git 版本管理，一键部署。
 
-> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，包含 5 个 Pi 扩展、6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
+> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，所有 7 个 Pi 扩展合并为统一入口 `ly-pi`，包含 6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
 
 > 需求与规格的管理方式见下文「文档系统」一节。
 
@@ -12,30 +12,32 @@
 
 ```
 configure/
-├── pi-extensions/          # Pi 扩展（Bun workspaces，8 个）
-│   ├── my-back/            # /back 命令
-│   ├── my-bt/              # BT-7274 语音包
+├── ly-pi/                  # 统一扩展入口（单包，含全部 7 个子模块）
+│   ├── index.ts            # 入口：按序注册所有子模块
 │   ├── my-cd-guard/        # 冗余 cd 前缀自动纠正
-│   ├── my-html/            # /html 渲染
-│   ├── my-hud/             # 自定义 HUD 状态栏
-│   ├── my-permission/      # 工具调用权限拦截器 + 模型法官
 │   ├── my-script-guard/    # 内联脚本硬拦截 + 急迫升级
-│   └── web-preview/        # 共享包：HTML 预览 server + 文档骨架
+│   ├── my-permission/      # 工具调用权限拦截器 + 模型法官
+│   ├── my-back/            # /back 命令
+│   ├── my-html/            # /html 渲染
+│   ├── my-bt/              # BT-7274 语音包
+│   ├── my-hud/             # 自定义 HUD 状态栏
+│   └── web-preview/        # 内部工具库：HTML 预览 server + 文档骨架
 ├── pi-config/              # 纯配置扩展（权限规则、工具显示、子代理配置）
 ├── pi-skills/skills/       # 自定义技能（6 个）
 ├── pi-themes/              # 自定义主题（Catppuccin Mocha）
 ├── pi-agents/              # 子代理定义（5 个 PR 审查角色）
 ├── mcp/                    # MCP 服务器配置
 ├── settings/               # Pi 设置（子代理模型映射）
-├── tools/check-docs/       # 文档一致性校验（turbo test 流水线强制）
+├── tools/check-docs/       # 文档一致性校验
 ├── docs/agents/            # Matt skills 配置（issue tracker、标签、domain docs）
 ├── .scratch/               # 本地 issue tracker：需求规格与票据
 │
+├── scripts/
+│   └── deploy-all.ts       # 统一部署脚本（build → test → deploy）
 ├── starship.toml           # Starship 终端提示符
 ├── wezterm.lua             # WezTerm 终端配置
 ├── MY-AGENTS.md            # 全局 Agent 指令 → ~/.pi/agent/AGENTS.md
 ├── AGENTS.md               # configure 仓库自身的开发指南
-├── turbo.json              # Turborepo 流水线（build → test → deploy）
 ├── install.sh              # 一键部署入口
 └── package.json            # Monorepo 根配置
 ```
@@ -48,22 +50,23 @@ configure/
 
 - **需求规格**：`/to-spec` 产出到 `.scratch/<feature-slug>/spec.md`，`/to-tickets` 拆票到 `.scratch/<feature-slug>/issues/`
 - **耐久文档**：`README.md`（本文件）、`AGENTS.md` / `MY-AGENTS.md`（开发规范）、`docs/agents/`（skill 配置）
-- **一致性防线**：`bun run check-docs` 校验文档与仓库现实对齐，turbo `test` 流水线强制执行
+- **一致性防线**：`bun run check-docs` 校验文档与仓库现实对齐
 
 ---
 
-## 🧩 Pi 扩展
+## 🧩 Pi 扩展（统一入口 `ly-pi`）
 
-| 扩展 | 功能 |
-|------|------|
-| **my-back** | `/back` 命令：撤销最近一条用户消息并将文本放回编辑器 |
-| **my-bt** | BT-7274 语音包：会话生命周期事件触发音频，TUI 浮层展示文案，`/bt` 命令控制 |
-| **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
-| **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
-| **my-permission** | 工具调用权限拦截器：确定性规则 + `deepseek-v4-flash` 模型法官 + 子代理差异化处理 |
+所有扩展合并为单一 `ly-pi` 包，一个 `index.ts` 按序注册全部子模块，部署到 `~/.pi/agent/extensions/ly-pi/`，由 Pi 自动发现加载。
+
+| 子模块 | 功能 |
+|--------|------|
 | **my-cd-guard** | 冗余 cd 前缀自动纠正：原地剥掉指向会话工作目录的 `cd <cwd> &&` 前缀并通知用户 |
-| **my-script-guard** | 内联脚本 + 写文件旁路硬拦截：拦截 bash 中的 `-c`/`-e`/heredoc 长脚本及 `cat <<EOF > file` 等模拟 write/edit 的写法，被拦 3 次后升级为用户确认 |
-| **web-preview** | 共享包（非独立扩展）：静态 HTML 预览 server 与通用文档骨架，供 my-html 等扩展复用（见 `docs/adr/0004`） |
+| **my-script-guard** | 内联脚本 + 写文件旁路硬拦截：拦截 bash 中的 `-c`/`-e`/heredoc 长脚本，被拦 3 次后升级为用户确认 |
+| **my-permission** | 工具调用权限拦截器：确定性规则 + `deepseek-v4-flash` 模型法官 + 子代理差异化处理 |
+| **my-back** | `/back` 命令：撤销最近一条用户消息并将文本放回编辑器 |
+| **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
+| **my-bt** | BT-7274 语音包：会话生命周期事件触发音频，`/bt` 命令控制 |
+| **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
 
 ---
 
@@ -142,32 +145,23 @@ pi install npm:pi-subagents
 ## 💻 日常开发
 
 ```bash
-# 全量构建
-bunx turbo run build
+# 全量测试（ly-pi 包）
+bun run --cwd ly-pi test
 
-# 全量测试（覆盖率 100% 要求）
-bunx turbo run test
-
-# 完整流水线（build → test → deploy）
-bunx turbo run build test deploy
-
-# 一键部署
+# 完整流水线（build → test → deploy all）
 bun run deploy
 ```
 
-快速测试单个扩展：
+快速测试扩展：
 ```bash
-pi -e pi-extensions/my-hud/index.ts
+pi -e ly-pi/index.ts
 ```
-
-> 详见 `AGENTS.md`（完整开发规范：TDD 流程、Git 提交规范、环境变量安全、覆盖率要求等）
 
 ---
 
 ## 📄 技术栈
 
 - **TypeScript** + **Bun**（运行时、构建、包管理）
-- **Turborepo**（Monorepo 编排，增量缓存）
 - **Vitest**（测试 + v8 覆盖率）
 - **TypeBox**（运行时类型校验）
 - **Pi Extension API**（事件、工具、命令、快捷键、Widget）

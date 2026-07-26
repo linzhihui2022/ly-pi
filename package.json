@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "bun@1.3.8",
   "workspaces": [
-    "pi-extensions/*",
+    "ly-pi",
     "pi-config",
     "pi-skills",
     "pi-themes",
@@ -13,7 +13,7 @@
     "tools/*"
   ],
   "scripts": {
-    "deploy": "turbo run deploy",
+    "deploy": "bun run scripts/deploy-all.ts",
     "check-docs": "bun run tools/check-docs/index.ts",
     "format": "biome format --write .",
     "check": "biome check --write .",
@@ -24,7 +24,6 @@
     "@types/bun": "^1.3.14",
     "@types/node": "^25.9.3",
     "@typescript/native-preview": "^7.0.0-beta",
-    "@vitest/coverage-v8": "^4.1.7",
-    "turbo": "^2"
+    "@vitest/coverage-v8": "^4.1.7"
   }
 }

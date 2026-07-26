@@ -2,15 +2,15 @@
 
 ## 项目概述
 
-这是一个 pi coding agent 的配置仓库，包含 pi-extensions、自定义技能和主题。使用 **Turborepo + Bun workspaces** 管理扩展的构建、测试和部署。
+这是一个 pi coding agent 的配置仓库，包含 ly-pi 统一扩展入口、自定义技能和主题。使用 **Bun workspaces** 管理多包构建、测试和部署。
 
 | 文件/目录 | 说明 |
 |-----------|------|
 | `MY-AGENTS.md` | 全局偏好（软链接到 `~/.pi/agent/AGENTS.md` 和 `~/.claude/CLAUDE.md`） |
-| `pi-extensions/` | 扩展源码（Bun workspaces） |
+| `ly-pi/` | 统一扩展入口（单包，含全部 7 个子模块） |
 | `pi-skills/` | 自定义技能 |
 | `pi-themes/` | 自定义主题 |
-| `turbo.json` | Turborepo 流水线：build → test → deploy |
+| `scripts/deploy-all.ts` | 统一部署流水线（build → test → deploy all） |
 | `install.sh` | 一键部署（`bun run deploy`） |
 | `starship.toml` | Starship 终端提示符 |
 | `wezterm.lua` | WezTerm 终端配置 |
@@ -20,45 +20,36 @@
 ### 构建、测试、部署
 
 ```bash
-# 增量构建（缓存，跳过未变更的包）
-bunx turbo run build
+# 构建
+bun run --cwd ly-pi build
 
-# 增量测试
-bunx turbo run test
+# 测试（含覆盖率）
+bun run --cwd ly-pi test
 
-# 全量流水线
-bunx turbo run build test deploy
-
-# 一键部署（含 skills/themes/settings/mcp）
+# 一键部署（ly-pi + skills + themes + settings）
 bun run deploy
 ```
 
-### 单扩展快速测试
+### 快速测试
 
 ```bash
-pi -e pi-extensions/my-bt/index.ts
-```
-
-### 单扩展运行测试
-
-```bash
-cd pi-extensions/my-hud && bun test
+pi -e ly-pi/index.ts
 ```
 
 ### TDD 流程
 
-pi-extensions 遵循 TDD：
+ly-pi 遵循 TDD：
 
 ```bash
 # 全量测试
-bunx turbo run test
+bun run --cwd ly-pi test
 
-# 单扩展测试
-cd pi-extensions/my-hud && vitest run
+# 单模块测试
+bun run --cwd ly-pi test -- my-hud
 ```
 
 覆盖率硬性要求：branches/functions/lines/statements 全部 100%。
-排除项：types.ts、index.ts（集成测试）、RealGitAdapter（execSync 壳）。
+排除项：types.ts、index.ts（集成测试）。
 
 - 先写测试，确认失败
 - 再写实现
@@ -67,7 +58,7 @@ cd pi-extensions/my-hud && vitest run
 
 ## 配置规范
 
-- JSON 配置文件放在扩展目录内（如 `pi-extensions/my-bt/my-bt.json`），用 `EXT_DIR` 解析加载，部署脚本随 `index.js` 一并拷贝
+- JSON 配置文件放在扩展包根目录（如 `ly-pi/my-bt.json`），用 `EXT_DIR` 解析加载，部署脚本随 `index.js` 一并拷贝
 - 支持热重载（通过 `/reload`）
 - 纯配置扩展统一放在 `pi-config/`
 - 扩展运行时使用 TypeBox 做类型校验
@@ -84,7 +75,7 @@ cd pi-extensions/my-hud && vitest run
 - 票据约定（`NN-slug` 编号、`Status:` 行、认领/解决流程）见 `docs/agents/issue-tracker.md`
 - `.scratch/` 纳入 git，即本仓库的本地 issue tracker
 - 文档修正类变更（README、AGENTS.md 等耐久文档的内容更新）直接修改，不需要走 spec
-- 一致性防线：`bun run check-docs` 校验文档与仓库现实对齐（README 扩展表、相对链接、`.scratch/` 票据约定、旧体系文件复活），turbo `test` 流水线强制执行
+- 一致性防线：`bun run check-docs` 校验文档与仓库现实对齐（README 扩展表、相对链接、`.scratch/` 票据约定、旧体系文件复活）
 
 ## Agent skills
 

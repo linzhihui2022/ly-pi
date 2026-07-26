@@ -10,25 +10,20 @@
         "@types/node": "^25.9.3",
         "@typescript/native-preview": "^7.0.0-beta",
         "@vitest/coverage-v8": "^4.1.7",
-        "turbo": "^2",
       },
     },
-    "mcp": {
-      "name": "mcp",
-    },
-    "pi-agents": {
-      "name": "pi-agents",
-    },
-    "pi-config": {
-      "name": "pi-config",
-    },
-    "pi-extensions/my-back": {
-      "name": "my-back",
+    "ly-pi": {
+      "name": "ly-pi",
       "dependencies": {
         "@earendil-works/pi-ai": "^0.78.0",
         "@earendil-works/pi-coding-agent": "^0.78.0",
         "@earendil-works/pi-tui": "^0.78.0",
         "@types/node": "^25.9.1",
+        "github-markdown-css": "^5.8.1",
+        "highlight.js": "^11.11.0",
+        "marked": "^15.0.0",
+        "marked-highlight": "^2.2.0",
+        "open": "^10.0.0",
         "typebox": "^1.1.39",
       },
       "devDependencies": {
@@ -39,97 +34,14 @@
         "@typescript/native-preview": "^7.0.0-beta",
       },
     },
-    "pi-extensions/my-bt": {
-      "name": "my-bt",
-      "devDependencies": {
-        "@earendil-works/pi-coding-agent": "^0.78.0",
-        "vitest": "^4",
-      },
+    "mcp": {
+      "name": "mcp",
     },
-    "pi-extensions/my-cd-guard": {
-      "name": "my-cd-guard",
-      "dependencies": {
-        "@earendil-works/pi-coding-agent": "^0.78.0",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-        "vitest": "^4",
-      },
+    "pi-agents": {
+      "name": "pi-agents",
     },
-    "pi-extensions/my-html": {
-      "name": "my-html",
-      "dependencies": {
-        "github-markdown-css": "^5.8.1",
-        "highlight.js": "^11.11.0",
-        "marked": "^15.0.0",
-        "marked-highlight": "^2.2.0",
-        "open": "^10.0.0",
-        "web-preview": "workspace:*",
-      },
-      "devDependencies": {
-        "@earendil-works/pi-ai": "^0.78.0",
-        "@earendil-works/pi-coding-agent": "^0.78.0",
-        "@types/node": "^25.9.1",
-        "vitest": "^4",
-      },
-      "peerDependencies": {
-        "@typescript/native-preview": "^7.0.0-beta",
-      },
-    },
-    "pi-extensions/my-hud": {
-      "name": "my-hud",
-      "dependencies": {
-        "@earendil-works/pi-ai": "^0.78.0",
-        "@earendil-works/pi-coding-agent": "^0.78.0",
-        "@earendil-works/pi-tui": "^0.78.0",
-        "@types/node": "^25.9.1",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-        "vitest": "^4",
-      },
-      "peerDependencies": {
-        "@typescript/native-preview": "^7.0.0-beta",
-      },
-    },
-    "pi-extensions/my-permission": {
-      "name": "my-permission",
-      "dependencies": {
-        "@earendil-works/pi-ai": "^0.78.0",
-        "@earendil-works/pi-coding-agent": "^0.78.0",
-        "@sinclair/typebox": "^0.34.52",
-        "@types/node": "^25.9.1",
-        "open": "^10.0.0",
-        "web-preview": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-        "vitest": "^4",
-      },
-      "peerDependencies": {
-        "@typescript/native-preview": "^7.0.0-beta",
-      },
-    },
-    "pi-extensions/my-script-guard": {
-      "name": "my-script-guard",
-      "dependencies": {
-        "@earendil-works/pi-coding-agent": "^0.78.0",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
-        "vitest": "^4",
-      },
-    },
-    "pi-extensions/web-preview": {
-      "name": "web-preview",
-      "devDependencies": {
-        "@types/bun": "latest",
-        "@types/node": "^25.9.1",
-        "vitest": "^4",
-      },
-      "peerDependencies": {
-        "@typescript/native-preview": "^7.0.0-beta",
-      },
+    "pi-config": {
+      "name": "pi-config",
     },
     "pi-skills": {
       "name": "pi-skills",
@@ -343,8 +255,6 @@
 
     "@silvia-odwyer/photon-node": ["@silvia-odwyer/photon-node@0.3.4", "https://registry.npmmirror.com/@silvia-odwyer/photon-node/-/photon-node-0.3.4.tgz", {}, "sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA=="],
 
-    "@sinclair/typebox": ["@sinclair/typebox@0.34.52", "https://registry.npmmirror.com/@sinclair/typebox/-/typebox-0.34.52.tgz", {}, "sha512-XiMQh7qqVlxZzcVD+kkGMNGMzcTrDMLWI7S4x7z1MkCkbDPrekpZXEUK0eZqZFMuHQg2a2DZOcDIh9o5v3Gonw=="],
-
     "@smithy/core": ["@smithy/core@3.24.6", "https://registry.npmmirror.com/@smithy/core/-/core-3.24.6.tgz", { "dependencies": { "@aws-crypto/crc32": "5.2.0", "@smithy/types": "^4.14.3", "tslib": "^2.6.2" } }, "sha512-wBXDRup6UU97VKyaiRo8AssnfStPtG0oAAfpq/bC0a1YYau8pM86YB4kM6ccoVi1mS8l/UHbn9oDM+7uozr/ug=="],
 
     "@smithy/credential-provider-imds": ["@smithy/credential-provider-imds@4.3.8", "https://registry.npmmirror.com/@smithy/credential-provider-imds/-/credential-provider-imds-4.3.8.tgz", { "dependencies": { "@smithy/core": "^3.24.6", "@smithy/types": "^4.14.3", "tslib": "^2.6.2" } }, "sha512-5cAM+KZC02sTqDt6NaLXyu50M/GNMd1eTzDVR8Lb0BBsVtu7RWHo47VPPEEv1vt3Yub6uzr+M5FHC+GtoT0USg=="],
@@ -364,18 +274,6 @@
     "@smithy/util-utf8": ["@smithy/util-utf8@2.3.0", "https://registry.npmmirror.com/@smithy/util-utf8/-/util-utf8-2.3.0.tgz", { "dependencies": { "@smithy/util-buffer-from": "^2.2.0", "tslib": "^2.6.2" } }, "sha512-R8Rdn8Hy72KKcebgLiv8jQcQkXoLMOGGv5uI1/k0l+snqkOzQ1R0ChUBCxWMlBsFMekWjq0wRudIweFs7sKT5A=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "https://registry.npmmirror.com/@standard-schema/spec/-/spec-1.1.0.tgz", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
-
-    "@turbo/darwin-64": ["@turbo/darwin-64@2.9.16", "https://registry.npmmirror.com/@turbo/darwin-64/-/darwin-64-2.9.16.tgz", { "os": "darwin", "cpu": "x64" }, "sha512-jLjApWTSNd7JZ5JaLYfelW1ytnGQOvB7ivl+2RD1xQvJTbi8I9gBjzcga7tDZVPyaxpl10YTfJt3BrYXR18KDw=="],
-
-    "@turbo/darwin-arm64": ["@turbo/darwin-arm64@2.9.16", "https://registry.npmmirror.com/@turbo/darwin-arm64/-/darwin-arm64-2.9.16.tgz", { "os": "darwin", "cpu": "arm64" }, "sha512-YPgrn+5HIGzrx0O2a631SV4MBQUe4W/DafMFUuBVgaU32PW9/OTT0ehviF0QSxTXuRJlHvW2eUTemddF5/spmw=="],
-
-    "@turbo/linux-64": ["@turbo/linux-64@2.9.16", "https://registry.npmmirror.com/@turbo/linux-64/-/linux-64-2.9.16.tgz", { "os": "linux", "cpu": "x64" }, "sha512-vAEf1H6l26lTpl9FJ/peQo1NUB8RC0sbEJJz5mPcUhHA2bPDup2x3CZPgo/bH8S4cUcBLm4FN3UHd5iUO2RAew=="],
-
-    "@turbo/linux-arm64": ["@turbo/linux-arm64@2.9.16", "https://registry.npmmirror.com/@turbo/linux-arm64/-/linux-arm64-2.9.16.tgz", { "os": "linux", "cpu": "arm64" }, "sha512-xDBLR2PZg4BrQOchfG6svgpv5FCNJ2TOtT2psLdEJcdKo1BH+pnPs9Xj6pvUjgfkHbuvBOfeE4R6tvxMoQKDHQ=="],
-
-    "@turbo/windows-64": ["@turbo/windows-64@2.9.16", "https://registry.npmmirror.com/@turbo/windows-64/-/windows-64-2.9.16.tgz", { "os": "win32", "cpu": "x64" }, "sha512-NBAJnaUiGdgkSzQwUIdOvkCkcpTSu58G/sBGa0mvBtzfvFOOgrQwepKOOQ8cp6sWM6OcKDNFj2p1dsZA1OWjPg=="],
-
-    "@turbo/windows-arm64": ["@turbo/windows-arm64@2.9.16", "https://registry.npmmirror.com/@turbo/windows-arm64/-/windows-arm64-2.9.16.tgz", { "os": "win32", "cpu": "arm64" }, "sha512-Y7SJppD0Z8wjO3Ec0ZGd9KQ4Yv0BMnA8CIowj5Vp+OEVsosXDG2weK6/t1RRLfJmc2Ozrnd6y4DOgQys+mn3WQ=="],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.2", "https://registry.npmmirror.com/@tybys/wasm-util/-/wasm-util-0.10.2.tgz", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg=="],
 
@@ -575,6 +473,8 @@
 
     "lru-cache": ["lru-cache@11.5.1", "https://registry.npmmirror.com/lru-cache/-/lru-cache-11.5.1.tgz", {}, "sha512-RPimw/7aMdv2oqRrxKwvZXcPfwBrn/JZ2xYcY9Hus/6LaS3VOAKVWKWgNLCFSiOm1ESXinjsDlidVU7JlnCN2A=="],
 
+    "ly-pi": ["ly-pi@workspace:ly-pi"],
+
     "magic-string": ["magic-string@0.30.21", "https://registry.npmmirror.com/magic-string/-/magic-string-0.30.21.tgz", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
 
     "magicast": ["magicast@0.5.3", "https://registry.npmmirror.com/magicast/-/magicast-0.5.3.tgz", { "dependencies": { "@babel/parser": "^7.29.3", "@babel/types": "^7.29.0", "source-map-js": "^1.2.1" } }, "sha512-pVKE4UdSQ7DvHzivsCIFx2BJn1mHG6KsyrFcaxFx6tONdneEuThrDx0Cj3AMg58KyN4pzYT+LHOotxDQDjNvkw=="],
@@ -592,20 +492,6 @@
     "minipass": ["minipass@7.1.3", "https://registry.npmmirror.com/minipass/-/minipass-7.1.3.tgz", {}, "sha512-tEBHqDnIoM/1rXME1zgka9g6Q2lcoCkxHLuc7ODJ5BxbP5d4c2Z5cGgtXAku59200Cx7diuHTOYfSBD8n6mm8A=="],
 
     "ms": ["ms@2.1.3", "https://registry.npmmirror.com/ms/-/ms-2.1.3.tgz", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
-
-    "my-back": ["my-back@workspace:pi-extensions/my-back"],
-
-    "my-bt": ["my-bt@workspace:pi-extensions/my-bt"],
-
-    "my-cd-guard": ["my-cd-guard@workspace:pi-extensions/my-cd-guard"],
-
-    "my-html": ["my-html@workspace:pi-extensions/my-html"],
-
-    "my-hud": ["my-hud@workspace:pi-extensions/my-hud"],
-
-    "my-permission": ["my-permission@workspace:pi-extensions/my-permission"],
-
-    "my-script-guard": ["my-script-guard@workspace:pi-extensions/my-script-guard"],
 
     "nanoid": ["nanoid@3.3.12", "https://registry.npmmirror.com/nanoid/-/nanoid-3.3.12.tgz", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ=="],
 
@@ -691,8 +577,6 @@
 
     "tslib": ["tslib@2.8.1", "https://registry.npmmirror.com/tslib/-/tslib-2.8.1.tgz", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
-    "turbo": ["turbo@2.9.16", "https://registry.npmmirror.com/turbo/-/turbo-2.9.16.tgz", { "optionalDependencies": { "@turbo/darwin-64": "2.9.16", "@turbo/darwin-arm64": "2.9.16", "@turbo/linux-64": "2.9.16", "@turbo/linux-arm64": "2.9.16", "@turbo/windows-64": "2.9.16", "@turbo/windows-arm64": "2.9.16" }, "bin": { "turbo": "bin/turbo" } }, "sha512-NqgRQy6j6dPYcdSdv0q1g9QsZg7SWg87RERM8otw/1AtKU2yTFVClOM7cbwKzOonZr/Ek1blTBucw64L9H0Bwg=="],
-
     "typebox": ["typebox@1.2.2", "https://registry.npmmirror.com/typebox/-/typebox-1.2.2.tgz", {}, "sha512-0nqIJFL+baWoAEtwa0l/vfbfXg0+3gEhiWGnHuoIiivXjlk/TpxDddG0WER34CojKNpHi4ZXku8XGEz9H55b5Q=="],
 
     "undici": ["undici@8.3.0", "https://registry.npmmirror.com/undici/-/undici-8.3.0.tgz", {}, "sha512-TkUDgb6tl7KOGZ+7e8E3d2FYgUQgF6z5YypqjWmixVQSQERFcVrVg0ySADm2LVLRh5ljAaHTCR5Fmz3Q34rB7Q=="],
@@ -702,8 +586,6 @@
     "vite": ["vite@8.0.16", "https://registry.npmmirror.com/vite/-/vite-8.0.16.tgz", { "dependencies": { "lightningcss": "^1.32.0", "picomatch": "^4.0.4", "postcss": "^8.5.15", "rolldown": "1.0.3", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.1.18", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-h9bXPmJichP5fLmVQo3PyaGSDE2n3aPuomeAlVRm0JLmt4rY6zmPKd59HYI4LNW8oTK7tlTsuC7l/m7awx9Jcw=="],
 
     "vitest": ["vitest@4.1.8", "https://registry.npmmirror.com/vitest/-/vitest-4.1.8.tgz", { "dependencies": { "@vitest/expect": "4.1.8", "@vitest/mocker": "4.1.8", "@vitest/pretty-format": "4.1.8", "@vitest/runner": "4.1.8", "@vitest/snapshot": "4.1.8", "@vitest/spy": "4.1.8", "@vitest/utils": "4.1.8", "es-module-lexer": "^2.0.0", "expect-type": "^1.3.0", "magic-string": "^0.30.21", "obug": "^2.1.1", "pathe": "^2.0.3", "picomatch": "^4.0.3", "std-env": "^4.0.0-rc.1", "tinybench": "^2.9.0", "tinyexec": "^1.0.2", "tinyglobby": "^0.2.15", "tinyrainbow": "^3.1.0", "vite": "^6.0.0 || ^7.0.0 || ^8.0.0", "why-is-node-running": "^2.3.0" }, "peerDependencies": { "@edge-runtime/vm": "*", "@opentelemetry/api": "^1.9.0", "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0", "@vitest/browser-playwright": "4.1.8", "@vitest/browser-preview": "4.1.8", "@vitest/browser-webdriverio": "4.1.8", "@vitest/coverage-istanbul": "4.1.8", "@vitest/coverage-v8": "4.1.8", "@vitest/ui": "4.1.8", "happy-dom": "*", "jsdom": "*" }, "optionalPeers": ["@edge-runtime/vm", "@opentelemetry/api", "@types/node", "@vitest/browser-playwright", "@vitest/browser-preview", "@vitest/browser-webdriverio", "@vitest/coverage-istanbul", "@vitest/coverage-v8", "@vitest/ui", "happy-dom", "jsdom"], "bin": { "vitest": "vitest.mjs" } }, "sha512-flY6ScbCIt9HThs+C5HS7jvGOB560DJtk/Z15IQROTA6zEy49Nh8T/dofWTQL+n3vswqn87sbJNiuqw1SDp5Ig=="],
-
-    "web-preview": ["web-preview@workspace:pi-extensions/web-preview"],
 
     "web-streams-polyfill": ["web-streams-polyfill@3.3.3", "https://registry.npmmirror.com/web-streams-polyfill/-/web-streams-polyfill-3.3.3.tgz", {}, "sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw=="],
 
@@ -740,8 +622,6 @@
     "bun-types/@types/node": ["@types/node@25.9.2", "https://registry.npmmirror.com/@types/node/-/node-25.9.2.tgz", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-G05zqtJhcDLb8uslf5EjCxXg9G1KQxiV8OS0R26IC//Eoyitzqe8z37I7cqvnZlrlSfgocQRfSn/AHBZJJFyGw=="],
 
     "check-docs/@types/node": ["@types/node@26.1.1", "https://registry.npmmirror.com/@types/node/-/node-26.1.1.tgz", { "dependencies": { "undici-types": "~8.3.0" } }, "sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw=="],
-
-    "my-hud/@types/node": ["@types/node@25.9.2", "https://registry.npmmirror.com/@types/node/-/node-25.9.2.tgz", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-G05zqtJhcDLb8uslf5EjCxXg9G1KQxiV8OS0R26IC//Eoyitzqe8z37I7cqvnZlrlSfgocQRfSn/AHBZJJFyGw=="],
 
     "p-retry/retry": ["retry@0.13.1", "https://registry.npmmirror.com/retry/-/retry-0.13.1.tgz", {}, "sha512-XQBQ3I8W1Cge0Seh+6gjj03LbmRFWuoszgK9ooCpwYIrhhoO80pfq4cUkU5DkknwfOfFteRwlZ56PYOGYyFWdg=="],
 
