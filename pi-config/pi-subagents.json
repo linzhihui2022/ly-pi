@@ -55,6 +55,10 @@
       },
       "delegate": {
         "model": "deepseek/deepseek-v4-flash"
+      },
+      "researcher": {
+        "model": "kimi-coding/k3",
+        "fallbackModels": ["deepseek-v4-pro"]
       }
     }
   }

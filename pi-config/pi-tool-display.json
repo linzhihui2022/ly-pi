@@ -10,9 +10,9 @@
     "write": true
   },
   "enableNativeUserMessageBox": true,
-  "readOutputMode": "summary",
-  "searchOutputMode": "count",
-  "mcpOutputMode": "summary",
+  "readOutputMode": "hidden",
+  "searchOutputMode": "hidden",
+  "mcpOutputMode": "hidden",
   "previewLines": 8,
   "expandedPreviewMaxLines": 4000,
   "bashOutputMode": "opencode",

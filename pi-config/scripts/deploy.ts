@@ -45,6 +45,26 @@ await Bun.write(
   Bun.file("pi-goal.json"),
 );
 
+// rpiv-todo → ~/.config/rpiv-todo/config.json
+const rpivTodoDest = join(homedir(), ".config/rpiv-todo");
+await mkdir(rpivTodoDest, { recursive: true });
+await Bun.write(
+  join(rpivTodoDest, "config.json"),
+  Bun.file("rpiv-todo.json"),
+);
+
+// mcp → ~/.pi/agent/mcp.json
+await Bun.write(
+  join(homedir(), ".pi/agent/mcp.json"),
+  Bun.file("mcp.json"),
+);
+
+// web-search → ~/.pi/web-search.json
+await Bun.write(
+  join(homedir(), ".pi/web-search.json"),
+  Bun.file("web-search.json"),
+);
+
 // rtk: install/refresh the Pi extension (skipped if rtk is not installed)
 if (Bun.which("rtk")) {
   Bun.spawnSync(["rtk", "init", "-g", "--agent", "pi"]);
