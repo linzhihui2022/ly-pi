@@ -69,12 +69,7 @@ export function createAdvocate(config: Config): AdvocateFn {
       };
     }
 
-    const prompt = buildAdvocatePrompt(
-      cases,
-      currentJudgeMd,
-      judgePrompt,
-      cwd,
-    );
+    const prompt = buildAdvocatePrompt(cases, currentJudgeMd, judgePrompt, cwd);
     const auth = await getAuth(model);
 
     try {

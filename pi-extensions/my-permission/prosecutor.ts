@@ -99,7 +99,7 @@ export function createProsecutor(config: Config): ProsecutorFn {
           "}",
           "",
           "add: 建议新增的安全规则（应 deny 或需要检察的模式），每条包含 rule（一行祈使句）和 reason（一句话原因）。如果没有假阴性，设为空数组 []。",
-          "summary: 统计摘要，格式如 \"审查 X 条放行记录，发现 Y 条假阴性：管道外泄 N 次、heredoc 注入 M 次\"。如果没有假阴性，写\"未发现假阴性\"。",
+          'summary: 统计摘要，格式如 "审查 X 条放行记录，发现 Y 条假阴性：管道外泄 N 次、heredoc 注入 M 次"。如果没有假阴性，写"未发现假阴性"。',
           "",
           "关键：",
           "- 不要建议当前 JUDGE.md 中已覆盖的规则",
@@ -216,7 +216,7 @@ export function buildProsecutorPrompt(
     "",
     "---",
     "",
-    "## 被放行的操作（共 ${allowedEntries.length} 条）",
+    `## 被放行的操作（共 ${allowedEntries.length} 条）`,
     entryList,
   ].join("\n");
 }

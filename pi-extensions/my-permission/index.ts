@@ -1,11 +1,11 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import type { Api, Model } from "@earendil-works/pi-ai";
 import { Type } from "@sinclair/typebox";
 import open from "open";
 import {
@@ -115,9 +115,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         ctx.cwd,
         resolveModel,
         typeof ctx.modelRegistry.getApiKeyAndHeaders === "function"
-          ? async (
-              model: Model<Api>,
-            ) => {
+          ? async (model: Model<Api>) => {
               const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
               return auth.ok ? auth : undefined;
             }
@@ -276,9 +274,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
 
       if (result.error) {
         return {
-          content: [
-            { type: "text", text: `检察官分析失败: ${result.error}` },
-          ],
+          content: [{ type: "text", text: `检察官分析失败: ${result.error}` }],
           details: {},
         };
       }
@@ -296,10 +292,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      ctx.ui.notify(
-        `⚖️ 检察官审计: ${suggestion.summary}`,
-        "info",
-      );
+      ctx.ui.notify(`⚖️ 检察官审计: ${suggestion.summary}`, "info");
 
       const selectedRules: string[] = [];
 
