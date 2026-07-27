@@ -16,5 +16,5 @@
   "enableInstallTelemetry": false,
   "hideThinkingBlock": true,
   "quietStartup": false,
-  "theme": "dark"
+  "theme": "catppuccin-mocha"
 }
