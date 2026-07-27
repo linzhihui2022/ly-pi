@@ -124,6 +124,56 @@ describe("createJudge", () => {
     );
   });
 
+  it("returns failure result when response has stopReason: error", async () => {
+    await mockComplete({
+      content: [],
+      stopReason: "error",
+      errorMessage: "No API key for provider: deepseek",
+    });
+    const judge = createJudge(config, judgeDeps);
+    const result = await judge(input, "/repo", undefined, resolveFnOk);
+    expect(result).toEqual(
+      failureReason(
+        input,
+        "法官模型调用失败: No API key for provider: deepseek",
+      ),
+    );
+  });
+
+  it("returns failure result when response has errorMessage but no stopReason", async () => {
+    await mockComplete({
+      content: [],
+      errorMessage: "rate limited",
+    });
+    const judge = createJudge(config, judgeDeps);
+    const result = await judge(input, "/repo", undefined, resolveFnOk);
+    expect(result).toEqual(
+      failureReason(input, "法官模型调用失败: rate limited"),
+    );
+  });
+
+  it("passes thinking: off to complete", async () => {
+    const { complete } = await import("@earendil-works/pi-ai");
+    (complete as ReturnType<typeof vi.fn>).mockImplementation(
+      (_model: unknown, _context: unknown, opts?: Record<string, unknown>) => {
+        return Promise.resolve({
+          content: [
+            {
+              type: "text" as const,
+              text: '{"safe":true,"score":8,"reason":"ok","toolFor":"read"}',
+            },
+          ],
+          _thinkingOpt: opts?.thinking,
+        });
+      },
+    );
+    const judge = createJudge(config, judgeDeps);
+    await judge(input, "/repo", undefined, resolveFnOk);
+    const calls = (complete as ReturnType<typeof vi.fn>).mock.calls;
+    const options = calls[calls.length - 1][2] as { thinking?: string };
+    expect(options.thinking).toBe("off");
+  });
+
   it("returns failure result when JSON is missing 'safe' field", async () => {
     await mockComplete({
       content: [
@@ -278,6 +328,40 @@ describe("createJudge", () => {
       apiKey: "deepseek-key",
       headers: { "X-Custom": "1" },
     });
+  });
+
+  it("falls back to session model auth when judge model auth returns undefined", async () => {
+    const { complete } = await import("@earendil-works/pi-ai");
+    (complete as ReturnType<typeof vi.fn>).mockImplementation(
+      (
+        _model: unknown,
+        _context: unknown,
+        opts?: { apiKey?: string; headers?: Record<string, string> },
+      ) => {
+        // Capture the auth that was passed
+        return Promise.resolve({
+          content: [
+            {
+              type: "text" as const,
+              text: `{"safe":true,"score":8,"reason":"ok","toolFor":"auth:${opts?.apiKey ?? "none"}"}`,
+            },
+          ],
+        });
+      },
+    );
+
+    // getAuth: fails for v4-flash model, succeeds for v4-pro (session model)
+    const getAuth = async (m: Model<Api>) => {
+      if (m.id === "deepseek-v4-flash") return undefined;
+      return { apiKey: "session-key", headers: { "X-Session": "1" } };
+    };
+
+    const judge = createJudge(config, { ...judgeDeps, getAuth });
+    const sessionModel = makeModel({ id: "deepseek-v4-pro" });
+    const result = await judge(input, "/repo", sessionModel, resolveFnOk);
+
+    // Should have used session model's auth
+    expect(result.toolFor).toContain("auth:session-key");
   });
 
   it("proceeds without explicit auth when getAuth resolves undefined", async () => {

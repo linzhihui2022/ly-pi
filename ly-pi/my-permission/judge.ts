@@ -29,7 +29,11 @@ export function createJudge(
       return failureResult("法官提示词未加载，请手动确认", input);
     }
 
-    const auth = deps?.getAuth ? await deps.getAuth(resolved) : undefined;
+    let auth = deps?.getAuth ? await deps.getAuth(resolved) : undefined;
+    // Fallback to session model auth if judge model auth fails
+    if (!auth?.apiKey && model && deps?.getAuth) {
+      auth = await deps.getAuth(model);
+    }
     const prompt = buildJudgePrompt(
       input,
       cwd,
@@ -47,18 +51,33 @@ export function createJudge(
     const timeout = setTimeout(() => controller.abort(), config.judgeTimeoutMs);
 
     try {
-      const response = await complete(resolved, context, {
+      const completeOpts: Record<string, unknown> = {
         signal: controller.signal,
-        apiKey: auth?.apiKey,
-        headers: auth?.headers,
-      });
+        thinking: "off",
+      };
+      if (auth?.apiKey) completeOpts.apiKey = auth.apiKey;
+      if (auth?.headers) completeOpts.headers = auth.headers;
+      const response = await complete(resolved, context, completeOpts);
       clearTimeout(timeout);
-      const cost = response.usage?.cost?.total;
+
+      if (response.stopReason === "error" || response.errorMessage) {
+        const detail = response.errorMessage ?? response.stopReason;
+        console.warn("[my-permission] judge API error:", detail);
+        return failureResult(
+          `法官模型调用失败: ${detail}`,
+          input,
+        );
+      }
+
       const parsed = parseJudgeResponse(response);
       if (parsed) {
-        parsed.cost = cost;
+        parsed.cost = response.usage?.cost?.total;
         return parsed;
       }
+      console.warn(
+        "[my-permission] judge parse failed, raw content:",
+        JSON.stringify(response.content),
+      );
       return failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
       clearTimeout(timeout);

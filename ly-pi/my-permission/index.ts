@@ -348,7 +348,15 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     const judge = createJudge(config, {
       judgePrompt,
       localJudge,
-      getAuth: createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
+      getAuth: async (model) => {
+        const standard = createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders);
+        const result = await standard(model);
+        if (result?.apiKey) return result;
+        // Fallback: get API key directly from provider credential store
+        const apiKey = await ctx.modelRegistry.getApiKeyForProvider(model.provider);
+        if (apiKey) return { apiKey };
+        return result;
+      },
     });
     const toolName = event.toolName;
     const value = stringifyToolInput(event);
