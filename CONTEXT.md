@@ -48,6 +48,10 @@ _Avoid_: 教授、professor、分析器
 事后审计假阴性的角色。读取法官日志中全部被判 safe 的放行记录，用更强模型二次审查，找出漏网的危险操作，输出 deny/检测规则建议和 JUDGE.md 优化建议。通过 `/permission-prosecutor` 手动触发。
 _Avoid_: 反向审查、auditor
 
+**Chief Judge / 审判长**:
+事后审计 JUDGE.md 规则本体质量的角色。不依赖会话日志，直接审视规则间的矛盾、过宽、冗余、遗漏，输出 add / remove / modify / merge 四种建议。通过 `permission_chief` 工具手动触发。
+_Avoid_: presiding judge、规则校验器
+
 **JUDGE.md**:
 项目根目录的法官规则扩展文件。包含 Advocate 和 Prosecutor 输出的规则建议（一行一条），在法官判定时注入 prompt 末尾作为项目级指导。写入前自动去重，随时间累积。
 _Avoid_: 项目规则、local rule
