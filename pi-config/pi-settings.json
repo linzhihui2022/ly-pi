@@ -1,21 +1,20 @@
 {
-  "hideThinkingBlock": true,
-  "theme": "dark",
-  "quietStartup": false,
-  "compaction": {
-    "enabled": true,
-    "reserveTokens": 16384,
-    "keepRecentTokens": 20000
-  },
-  "defaultThinkingLevel": "max",
-  "collapseChangelog": true,
-  "doubleEscapeAction": "none",
-  "editorPaddingX": 1,
   "autocompleteMaxVisible": 8,
-  "showHardwareCursor": true,
-  "defaultProjectTrust": "always",
-  "enableInstallTelemetry": false,
   "branchSummary": {
     "skipPrompt": true
-  }
+  },
+  "collapseChangelog": true,
+  "compaction": {
+    "enabled": true,
+    "keepRecentTokens": 20000,
+    "reserveTokens": 16384
+  },
+  "defaultProjectTrust": "always",
+  "defaultThinkingLevel": "max",
+  "doubleEscapeAction": "none",
+  "editorPaddingX": 1,
+  "enableInstallTelemetry": false,
+  "hideThinkingBlock": true,
+  "quietStartup": false,
+  "theme": "dark"
 }
