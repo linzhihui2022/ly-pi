@@ -15,6 +15,8 @@ export const COST_TYPES = [
   "advocate-merge",
   "prosecutor-analysis",
   "prosecutor-merge",
+  "chief-analysis",
+  "chief-merge",
 ] as const;
 
 export type CostType = (typeof COST_TYPES)[number];
@@ -40,6 +42,10 @@ export interface SessionSummary {
     analysis: { totalCost: number; calls: number };
     merge: { totalCost: number; calls: number };
   };
+  chief: {
+    analysis: { totalCost: number; calls: number };
+    merge: { totalCost: number; calls: number };
+  };
   totalCost: number;
   totalCalls: number;
   firstTs: string;
@@ -53,6 +59,10 @@ export interface DailySummary {
     merge: { totalCost: number; calls: number };
   };
   prosecutor: {
+    analysis: { totalCost: number; calls: number };
+    merge: { totalCost: number; calls: number };
+  };
+  chief: {
     analysis: { totalCost: number; calls: number };
     merge: { totalCost: number; calls: number };
   };
@@ -73,6 +83,10 @@ export interface CostAggregation {
     merge: CostBucket;
   };
   prosecutor: {
+    analysis: CostBucket;
+    merge: CostBucket;
+  };
+  chief: {
     analysis: CostBucket;
     merge: CostBucket;
   };
@@ -186,6 +200,10 @@ function emptySession(sessionId: string): SessionSummary {
       analysis: { totalCost: 0, calls: 0 },
       merge: { totalCost: 0, calls: 0 },
     },
+    chief: {
+      analysis: { totalCost: 0, calls: 0 },
+      merge: { totalCost: 0, calls: 0 },
+    },
     totalCost: 0,
     totalCalls: 0,
     firstTs: "",
@@ -201,6 +219,10 @@ function emptyDaily(): DailySummary {
       merge: { totalCost: 0, calls: 0 },
     },
     prosecutor: {
+      analysis: { totalCost: 0, calls: 0 },
+      merge: { totalCost: 0, calls: 0 },
+    },
+    chief: {
       analysis: { totalCost: 0, calls: 0 },
       merge: { totalCost: 0, calls: 0 },
     },
@@ -269,6 +291,10 @@ export function aggregateCosts(
       analysis: emptyBucket(),
       merge: emptyBucket(),
     },
+    chief: {
+      analysis: emptyBucket(),
+      merge: emptyBucket(),
+    },
     models: [],
     sessions: [],
     daily: {},
@@ -318,6 +344,22 @@ export function aggregateCosts(
             date,
           );
           break;
+        case "chief-analysis":
+          addToBucket(
+            result.chief.analysis,
+            entry.cost,
+            entry.model,
+            date,
+          );
+          break;
+        case "chief-merge":
+          addToBucket(
+            result.chief.merge,
+            entry.cost,
+            entry.model,
+            date,
+          );
+          break;
       }
 
       // Model aggregation
@@ -358,6 +400,12 @@ export function aggregateCosts(
         case "prosecutor-merge":
           addToSlot(session.prosecutor.merge, entry.cost);
           break;
+        case "chief-analysis":
+          addToSlot(session.chief.analysis, entry.cost);
+          break;
+        case "chief-merge":
+          addToSlot(session.chief.merge, entry.cost);
+          break;
       }
 
       // Daily aggregation (cross-role)
@@ -382,6 +430,12 @@ export function aggregateCosts(
           break;
         case "prosecutor-merge":
           addToSlot(day.prosecutor.merge, entry.cost);
+          break;
+        case "chief-analysis":
+          addToSlot(day.chief.analysis, entry.cost);
+          break;
+        case "chief-merge":
+          addToSlot(day.chief.merge, entry.cost);
           break;
       }
     }

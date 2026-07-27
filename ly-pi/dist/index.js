@@ -58488,7 +58488,9 @@ var COST_TYPES = [
   "advocate-analysis",
   "advocate-merge",
   "prosecutor-analysis",
-  "prosecutor-merge"
+  "prosecutor-merge",
+  "chief-analysis",
+  "chief-merge"
 ];
 function encodeProjectDir(cwd) {
   const trimmed = cwd.replace(/^\//, "").replace(/\/$/, "");
@@ -58554,6 +58556,10 @@ function emptySession(sessionId) {
       analysis: { totalCost: 0, calls: 0 },
       merge: { totalCost: 0, calls: 0 }
     },
+    chief: {
+      analysis: { totalCost: 0, calls: 0 },
+      merge: { totalCost: 0, calls: 0 }
+    },
     totalCost: 0,
     totalCalls: 0,
     firstTs: "",
@@ -58568,6 +58574,10 @@ function emptyDaily() {
       merge: { totalCost: 0, calls: 0 }
     },
     prosecutor: {
+      analysis: { totalCost: 0, calls: 0 },
+      merge: { totalCost: 0, calls: 0 }
+    },
+    chief: {
       analysis: { totalCost: 0, calls: 0 },
       merge: { totalCost: 0, calls: 0 }
     },
@@ -58608,6 +58618,10 @@ function aggregateCosts(cwd, opts) {
       analysis: emptyBucket(),
       merge: emptyBucket()
     },
+    chief: {
+      analysis: emptyBucket(),
+      merge: emptyBucket()
+    },
     models: [],
     sessions: [],
     daily: {}
@@ -58638,6 +58652,12 @@ function aggregateCosts(cwd, opts) {
           break;
         case "prosecutor-merge":
           addToBucket(result.prosecutor.merge, entry.cost, entry.model, date);
+          break;
+        case "chief-analysis":
+          addToBucket(result.chief.analysis, entry.cost, entry.model, date);
+          break;
+        case "chief-merge":
+          addToBucket(result.chief.merge, entry.cost, entry.model, date);
           break;
       }
       let modelEntry = modelMap.get(entry.model);
@@ -58674,6 +58694,12 @@ function aggregateCosts(cwd, opts) {
         case "prosecutor-merge":
           addToSlot(session.prosecutor.merge, entry.cost);
           break;
+        case "chief-analysis":
+          addToSlot(session.chief.analysis, entry.cost);
+          break;
+        case "chief-merge":
+          addToSlot(session.chief.merge, entry.cost);
+          break;
       }
       if (!result.daily[date]) {
         result.daily[date] = emptyDaily();
@@ -58696,6 +58722,12 @@ function aggregateCosts(cwd, opts) {
           break;
         case "prosecutor-merge":
           addToSlot(day.prosecutor.merge, entry.cost);
+          break;
+        case "chief-analysis":
+          addToSlot(day.chief.analysis, entry.cost);
+          break;
+        case "chief-merge":
+          addToSlot(day.chief.merge, entry.cost);
           break;
       }
     }
@@ -58904,6 +58936,8 @@ function renderDailyTable(agg) {
           <td class="cost">${toCny(d.advocate.analysis.totalCost + d.advocate.merge.totalCost)}</td>
           <td class="num">${d.prosecutor.analysis.calls + d.prosecutor.merge.calls}</td>
           <td class="cost">${toCny(d.prosecutor.analysis.totalCost + d.prosecutor.merge.totalCost)}</td>
+          <td class="num">${d.chief.analysis.calls + d.chief.merge.calls}</td>
+          <td class="cost">${toCny(d.chief.analysis.totalCost + d.chief.merge.totalCost)}</td>
           <td class="num">${d.totalCalls}</td>
           <td class="cost total">${toCny(d.totalCost)}</td>
         </tr>`;
@@ -58912,7 +58946,7 @@ function renderDailyTable(agg) {
   return `    <h2 class="section-title">每日明细</h2>
     <table>
       <thead>
-        <tr><th>日期</th><th>Judge 调用</th><th>Judge 成本</th><th>Advocate 调用</th><th>Advocate 成本</th><th>Prosecutor 调用</th><th>Prosecutor 成本</th><th>合计调用</th><th>合计成本</th></tr>
+        <tr><th>日期</th><th>Judge 调用</th><th>Judge 成本</th><th>Advocate 调用</th><th>Advocate 成本</th><th>Prosecutor 调用</th><th>Prosecutor 成本</th><th>Chief 调用</th><th>Chief 成本</th><th>合计调用</th><th>合计成本</th></tr>
       </thead>
       <tbody>
 ${rows}
@@ -58931,7 +58965,7 @@ function renderSessionTable(agg) {
   return `    <h2 class="section-title">会话明细</h2>
 ${truncated}    <table>
       <thead>
-        <tr><th>会话</th><th>时间</th><th>Judge</th><th>Advocate</th><th>Prosecutor</th><th>调用</th><th>成本</th></tr>
+        <tr><th>会话</th><th>时间</th><th>Judge</th><th>Advocate</th><th>Prosecutor</th><th>Chief</th><th>调用</th><th>成本</th></tr>
       </thead>
       <tbody>
 ${rows}
@@ -58945,12 +58979,15 @@ function renderSessionRow(s) {
   const advCost = s.advocate.analysis.totalCost + s.advocate.merge.totalCost;
   const prosCalls = s.prosecutor.analysis.calls + s.prosecutor.merge.calls;
   const prosCost = s.prosecutor.analysis.totalCost + s.prosecutor.merge.totalCost;
+  const chiefCalls = s.chief.analysis.calls + s.chief.merge.calls;
+  const chiefCost = s.chief.analysis.totalCost + s.chief.merge.totalCost;
   return `        <tr>
           <td>${escapeHtml3(shortId)}</td>
           <td>${escapeHtml3(timeRange)}</td>
           <td class="cost">${toCny(s.judge.totalCost)}</td>
           <td class="cost">${toCny(advCost)}</td>
           <td class="cost">${toCny(prosCost)}</td>
+          <td class="cost">${toCny(chiefCost)}</td>
           <td class="num">${s.totalCalls}</td>
           <td class="cost total">${toCny(s.totalCost)}</td>
         </tr>`;
@@ -58985,6 +59022,16 @@ function buildRoleRows(agg) {
       label: "Prosecutor (合并)",
       cost: agg.prosecutor.merge.totalCost,
       calls: agg.prosecutor.merge.calls
+    },
+    {
+      label: "Chief (分析)",
+      cost: agg.chief.analysis.totalCost,
+      calls: agg.chief.analysis.calls
+    },
+    {
+      label: "Chief (合并)",
+      cost: agg.chief.merge.totalCost,
+      calls: agg.chief.merge.calls
     }
   ];
   return rows.map((row) => `        <tr>
@@ -59007,6 +59054,10 @@ function grandTotal(agg) {
   calls += agg.prosecutor.analysis.calls;
   cost += agg.prosecutor.merge.totalCost;
   calls += agg.prosecutor.merge.calls;
+  cost += agg.chief.analysis.totalCost;
+  calls += agg.chief.analysis.calls;
+  cost += agg.chief.merge.totalCost;
+  calls += agg.chief.merge.calls;
   return { cost, calls };
 }
 function toCny(usd) {
@@ -59749,6 +59800,251 @@ function buildProsecutorPrompt(allowedEntries, currentJudgeMd, judgePrompt, cwd)
 `);
 }
 
+// my-permission/chief.ts
+import { complete as complete4 } from "@earendil-works/pi-ai";
+var log4 = createDevLogger("my-permission:chief");
+function createChief(config) {
+  return async function analyze(currentJudgeMd, judgePrompt, cwd, resolveModel, getAuth) {
+    if (!currentJudgeMd.trim()) {
+      return { error: "项目尚未创建 JUDGE.md，无需审计" };
+    }
+    const parts = config.professorModel.split("/");
+    if (parts.length !== 2) {
+      return {
+        error: `professorModel 格式无效: ${config.professorModel}`
+      };
+    }
+    const model = resolveModel(parts[0], parts[1]);
+    if (!model) {
+      log4.error("chief model not found", { configured: config.professorModel });
+      return { error: `未找到审判长模型: ${config.professorModel}` };
+    }
+    log4.debug("chief model resolved", {
+      provider: model.provider,
+      model: model.id
+    });
+    const prompt = buildChiefPrompt(currentJudgeMd, judgePrompt, cwd);
+    const auth = await getAuth(model);
+    try {
+      const context = {
+        systemPrompt: [
+          "你是 my-permission 权限系统的审判长（Chief Judge）。",
+          "你的任务不是看案例，而是直接审视 JUDGE.md 规则文件本身的质量。",
+          "",
+          "## 审查维度",
+          "",
+          "1. **矛盾规则**：两条规则覆盖同一场景但结论相反（一条 allow，一条 deny）",
+          "2. **过宽规则**：一条 allow 规则的范围远超实际需要，留下了安全隐患",
+          "3. **可合并规则**：多条规则表述不同但语义相同或可以归纳为更精炼的一条",
+          "4. **遗漏盲区**：应该覆盖但完全没有规则保护的重要安全场景",
+          "5. **冗余规则**：语义已被其他规则完全覆盖的多余规则",
+          "",
+          "## 输出格式",
+          "",
+          "只回复严格 JSON，不要包含其他文字：",
+          "{",
+          '  "suggestions": [',
+          '    {"type": "add", "rule": "新规则文本", "reason": "添加原因"},',
+          '    {"type": "remove", "rule": "要删除的规则原文", "reason": "删除原因"},',
+          '    {"type": "modify", "oldRule": "当前规则原文", "newRule": "改写后的规则", "reason": "改写原因"},',
+          '    {"type": "merge", "oldRules": ["规则1原文", "规则2原文"], "newRule": "合并后的规则", "reason": "合并原因"}',
+          "  ],",
+          '  "summary": "审计 N 条规则，发现 ..."',
+          "}",
+          "",
+          "关键规则：",
+          "- oldRule/oldRules 必须精确匹配 JUDGE.md 中的原文（一字不差）",
+          "- newRule 保持原风格的祈使句，一行一条",
+          "- 只报告确实存在的问题，不要为了凑数而误报",
+          "- 如果没有问题，suggestions 设为空数组 []",
+          "- 直接输出 JSON，不要 markdown 代码块"
+        ].join(`
+`),
+        messages: [
+          { role: "user", content: prompt, timestamp: Date.now() }
+        ]
+      };
+      const response = await complete4(model, context, {
+        thinking: config.professorThinking,
+        apiKey: auth?.apiKey,
+        headers: auth?.headers,
+        env: auth?.env
+      });
+      const cost = response.usage?.cost?.total;
+      const errResp = response;
+      if (errResp.stopReason === "error" || errResp.errorMessage) {
+        log4.error("chief API error", { detail: errResp.errorMessage || errResp.stopReason });
+        return { error: `审判长模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
+      }
+      const text = response.content.find((c) => c.type === "text")?.text || response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
+      if (!text) {
+        log4.error("chief empty response");
+        return { error: "审判长模型返回了空内容" };
+      }
+      const parsed = parseChiefJson(text);
+      if (!parsed) {
+        log4.error("chief parse failed");
+        return { error: "审判长模型返回了无法解析的 JSON" };
+      }
+      log4.info("chief completed", {
+        findings: parsed.suggestions.length,
+        cost
+      });
+      return { suggestion: parsed, cost };
+    } catch (err) {
+      log4.error("chief call failed", { error: err.message });
+      return { error: `审判长模型调用失败: ${err.message}` };
+    }
+  };
+}
+function createChiefMerger(config) {
+  return async function merge(currentJudgeMd, selectedSuggestions, resolveModel, getAuth) {
+    const parts = config.professorModel.split("/");
+    if (parts.length !== 2) {
+      return { error: "professorModel 格式无效" };
+    }
+    const model = resolveModel(parts[0], parts[1]);
+    if (!model) {
+      log4.error("chief merger model not found", { configured: config.professorModel });
+      return { error: "未找到审判长合并模型" };
+    }
+    const auth = await getAuth(model);
+    const opsText = selectedSuggestions.map((s, i) => {
+      switch (s.type) {
+        case "add":
+          return `${i + 1}. [新增] ${s.rule}
+   原因: ${s.reason}`;
+        case "remove":
+          return `${i + 1}. [删除] ${s.rule}
+   原因: ${s.reason}`;
+        case "modify":
+          return `${i + 1}. [改写] "${s.oldRule}" → "${s.newRule}"
+   原因: ${s.reason}`;
+        case "merge":
+          return `${i + 1}. [合并] ${(s.oldRules ?? []).map((r) => `"${r}"`).join(" + ")} → "${s.newRule}"
+   原因: ${s.reason}`;
+      }
+    }).join(`
+
+`);
+    try {
+      const context = {
+        systemPrompt: [
+          "你是 JUDGE.md 的编辑。将审判长的建议应用到现有的 JUDGE.md 中。",
+          "",
+          "操作类型：",
+          "- [新增]：追加新规则到末尾或合适的位置",
+          "- [删除]：移除完全匹配的规则行",
+          "- [改写]：将 oldRule 替换为 newRule",
+          "- [合并]：将多条 oldRules 替换为一条 newRule，删除原文，插入合并后的规则",
+          "",
+          "规则：",
+          "- 保留所有未被操作的规则原文",
+          "- 去除重复：如果操作结果与已有规则语义相同，跳过该操作",
+          "- 保持简短精炼，一行一条",
+          "- 直接输出完整的 JUDGE.md 文本，不要包含解释或 markdown 代码块"
+        ].join(`
+`),
+        messages: [
+          {
+            role: "user",
+            content: [
+              "现有 JUDGE.md：",
+              currentJudgeMd || "（空）",
+              "",
+              "审判长的操作建议：",
+              opsText,
+              "",
+              "请应用这些操作，直接输出完整的 JUDGE.md："
+            ].join(`
+`),
+            timestamp: Date.now()
+          }
+        ]
+      };
+      const response = await complete4(model, context, {
+        apiKey: auth?.apiKey,
+        headers: auth?.headers,
+        env: auth?.env
+      });
+      const cost = response.usage?.cost?.total;
+      const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
+      if (!text) {
+        log4.error("chief merger empty response");
+        return { error: "审判长合并模型返回了空内容" };
+      }
+      log4.info("chief merger completed", {
+        operations: selectedSuggestions.length,
+        cost
+      });
+      return { mergedText: text.trim(), cost };
+    } catch (err) {
+      log4.error("chief merger call failed", { error: err.message });
+      return { error: `审判长合并模型调用失败: ${err.message}` };
+    }
+  };
+}
+function buildChiefPrompt(currentJudgeMd, judgePrompt, cwd) {
+  return [
+    "以下是 my-permission 权限系统当前使用的 JUDGE.md 和法官提示词。",
+    "请从规则本身出发，审计 JUDGE.md 的质量。",
+    "",
+    `当前项目工作目录: ${cwd}`,
+    "",
+    "---",
+    "",
+    "## 法官提示词（理解规则使用场景）",
+    "",
+    "```",
+    judgePrompt || "（未加载）",
+    "```",
+    "",
+    "---",
+    "",
+    `## 当前 JUDGE.md（共 ${currentJudgeMd.split(`
+`).filter((l) => l.trim()).length} 条规则）`,
+    "",
+    currentJudgeMd
+  ].join(`
+`);
+}
+function parseChiefJson(text) {
+  const jsonMatch = /\{[\s\S]*\}/.exec(text);
+  if (!jsonMatch)
+    return;
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed || typeof parsed !== "object")
+      return;
+    const p = parsed;
+    if (!Array.isArray(p.suggestions) || typeof p.summary !== "string") {
+      return;
+    }
+    const suggestions = p.suggestions.filter((item) => {
+      if (typeof item !== "object" || item === null)
+        return false;
+      const s = item;
+      if (typeof s.type !== "string" || !["add", "remove", "modify", "merge"].includes(s.type))
+        return false;
+      if (typeof s.reason !== "string")
+        return false;
+      switch (s.type) {
+        case "add":
+          return typeof s.rule === "string";
+        case "remove":
+          return typeof s.rule === "string";
+        case "modify":
+          return typeof s.oldRule === "string" && typeof s.newRule === "string";
+        case "merge":
+          return Array.isArray(s.oldRules) && s.oldRules.every((r) => typeof r === "string") && typeof s.newRule === "string";
+      }
+    });
+    return { suggestions, summary: p.summary };
+  } catch {
+    return;
+  }
+}
+
 // my-permission/utils.ts
 import { realpathSync as realpathSync2 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
@@ -60033,7 +60329,7 @@ function recordJudgeStats(pi, input, result) {
   pi.appendEntry(JUDGE_STATS_CUSTOM_TYPE, entry);
 }
 function collectAllowed(entries) {
-  return collectJudgeLogs(entries).filter((log4) => log4.safe);
+  return collectJudgeLogs(entries).filter((log5) => log5.safe);
 }
 function collectJudgeLogs(entries) {
   const overrideKeys = new Set;
@@ -60050,7 +60346,7 @@ function collectJudgeLogs(entries) {
     if (entry.type === "custom" && entry.customType === JUDGE_STATS_CUSTOM_TYPE && entry.data && typeof entry.data === "object") {
       const data = entry.data;
       if (typeof data.toolName === "string" && typeof data.value === "string" && typeof data.safe === "boolean" && typeof data.reason === "string" && typeof data.toolFor === "string") {
-        const log4 = {
+        const log5 = {
           decision: data.safe ? "allowed" : "denied",
           toolName: data.toolName,
           value: data.value,
@@ -60060,9 +60356,9 @@ function collectJudgeLogs(entries) {
           toolFor: data.toolFor
         };
         if (!data.safe) {
-          log4.userApproved = overrideKeys.has(`${data.toolName}:${data.value}`);
+          log5.userApproved = overrideKeys.has(`${data.toolName}:${data.value}`);
         }
-        logs.push(log4);
+        logs.push(log5);
       }
     }
   }
@@ -60178,6 +60474,46 @@ function formatDiff(oldText, newText) {
   return lines.join(`
 `);
 }
+function suggestionTypeLabel(type) {
+  switch (type) {
+    case "add":
+      return "新增规则";
+    case "remove":
+      return "删除规则";
+    case "modify":
+      return "改写规则";
+    case "merge":
+      return "合并规则";
+    default:
+      return type;
+  }
+}
+function suggestionTypeDetail(item) {
+  const parts = [];
+  switch (item.type) {
+    case "add":
+      parts.push(`${ANSI.bold}新增: ${item.rule}${ANSI.reset}`);
+      break;
+    case "remove":
+      parts.push(`${ANSI.bold}删除: ${item.rule}${ANSI.reset}`);
+      break;
+    case "modify":
+      parts.push(`${ANSI.bold}改写${ANSI.reset}`);
+      parts.push(`${ANSI.red}− ${item.oldRule}${ANSI.reset}`);
+      parts.push(`${ANSI.green}+ ${item.newRule}${ANSI.reset}`);
+      break;
+    case "merge":
+      parts.push(`${ANSI.bold}合并${ANSI.reset}`);
+      for (const r of item.oldRules ?? []) {
+        parts.push(`${ANSI.red}− ${r}${ANSI.reset}`);
+      }
+      parts.push(`${ANSI.green}+ ${item.newRule}${ANSI.reset}`);
+      break;
+  }
+  parts.push(`${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
+  return parts.join(`
+`);
+}
 async function myPermission(pi) {
   const extensionDir = resolveExtDir(import.meta);
   const config = await loadConfig2(join10(extensionDir, "config.json"));
@@ -60229,6 +60565,44 @@ async function myPermission(pi) {
       details: {}
     };
   }
+  async function mergeAndWriteChiefMd(ctx, opts) {
+    const merger = createChiefMerger(config);
+    const mergeResult = await merger(opts.currentJudgeMd, opts.selectedSuggestions, opts.resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)));
+    if (mergeResult.error || !mergeResult.mergedText) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `融合失败: ${mergeResult.error || "空内容"}`
+          }
+        ],
+        details: {}
+      };
+    }
+    if (mergeResult.cost !== undefined) {
+      appendCost(ctx.sessionManager.getSessionId(), ctx.cwd, "chief-merge", mergeResult.cost, config.professorModel);
+    }
+    const totalCost = (opts.analysisCost ?? 0) + (mergeResult.cost ?? 0);
+    ctx.ui.notify(`\uD83D\uDC68‍⚖️ 审判长费用: $${totalCost.toFixed(6)} (分析 $${(opts.analysisCost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
+    const diffBody = formatDiff(opts.currentJudgeMd, mergeResult.mergedText);
+    const write = await ctx.ui.confirm(`\uD83D\uDC68‍⚖️ 审判长融合完成 — 确认写入？`, diffBody);
+    if (write) {
+      writeFileSync4(join10(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ JUDGE.md 已更新，共 ${opts.selectedSuggestions.length} 条操作`
+          }
+        ],
+        details: {}
+      };
+    }
+    return {
+      content: [{ type: "text", text: "已放弃，JUDGE.md 未修改" }],
+      details: {}
+    };
+  }
   pi.registerCommand("judge-log", {
     description: "查看当前会话的每一次法官判断",
     handler: async (_args, ctx) => {
@@ -60248,7 +60622,7 @@ async function myPermission(pi) {
     }
   });
   pi.registerCommand("judge-costs", {
-    description: "查看累计的法庭三角色 LLM 成本统计",
+    description: "查看累计的法庭四角色 LLM 成本统计",
     handler: async (_args, ctx) => {
       const agg = aggregateCosts(ctx.cwd);
       try {
@@ -60412,6 +60786,80 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
         label: "检察官",
         emoji: "⚖️",
         mergeCostType: "prosecutor-merge"
+      });
+    }
+  });
+  pi.registerTool({
+    name: "permission_chief",
+    label: "审判长",
+    description: "审计 JUDGE.md 规则本身的质量——发现矛盾、过宽、冗余、遗漏，输出 add/remove/modify/merge 建议。当用户提到审判长、规则审计、规则审查、规则矛盾、规则冲突、过宽规则时调用此工具。",
+    promptSnippet: "permission_chief — 审计 JUDGE.md 规则质量，发现矛盾与盲区",
+    parameters: exports_typebox.Object({}),
+    execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
+      const currentJudgeMd = loadFile(join10(process.cwd(), "JUDGE.md"));
+      if (!currentJudgeMd || !currentJudgeMd.trim()) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "项目尚未创建 JUDGE.md，无需审计。"
+            }
+          ],
+          details: {}
+        };
+      }
+      const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
+      const chief = createChief(config);
+      const result = await chief(currentJudgeMd, judgePrompt, ctx.cwd, resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)));
+      if (result.error) {
+        return {
+          content: [
+            { type: "text", text: `审判长分析失败: ${result.error}` }
+          ],
+          details: {}
+        };
+      }
+      if (result.cost !== undefined) {
+        appendCost(ctx.sessionManager.getSessionId(), ctx.cwd, "chief-analysis", result.cost, config.professorModel);
+      }
+      const suggestion = result.suggestion;
+      if (!suggestion || suggestion.suggestions.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `审判长审计完成：${suggestion?.summary ?? "未发现问题"}`
+            }
+          ],
+          details: {}
+        };
+      }
+      ctx.ui.notify(`\uD83D\uDC68‍⚖️ 审判长审计: ${suggestion.summary}`, "info");
+      const selectedSuggestions = [];
+      for (const item of suggestion.suggestions) {
+        const label2 = suggestionTypeLabel(item.type);
+        const detail = suggestionTypeDetail(item);
+        const keep = await ctx.ui.confirm(`${ANSI.cyan}\uD83D\uDC68‍⚖️ 审判长建议 — ${label2}？${ANSI.reset}`, detail);
+        if (keep) {
+          selectedSuggestions.push(item);
+        }
+      }
+      if (selectedSuggestions.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "未采纳任何建议，JUDGE.md 未修改"
+            }
+          ],
+          details: {}
+        };
+      }
+      return await mergeAndWriteChiefMd(ctx, {
+        currentJudgeMd,
+        selectedSuggestions,
+        resolveModel,
+        analysisCost: result.cost
       });
     }
   });

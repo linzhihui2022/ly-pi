@@ -13,6 +13,10 @@ function emptyAgg(): CostAggregation {
       analysis: { totalCost: 0, calls: 0, byModel: {}, daily: {} },
       merge: { totalCost: 0, calls: 0, byModel: {}, daily: {} },
     },
+    chief: {
+      analysis: { totalCost: 0, calls: 0, byModel: {}, daily: {} },
+      merge: { totalCost: 0, calls: 0, byModel: {}, daily: {} },
+    },
     models: [],
     sessions: [],
     daily: {},
@@ -32,13 +36,15 @@ describe("renderCostPage", () => {
     expect(html).toContain("¥0.00");
   });
 
-  it("renders all five role rows in summary table", () => {
+  it("renders all seven role rows in summary table", () => {
     const html = renderCostPage(emptyAgg());
     expect(html).toContain("Judge");
     expect(html).toContain("Advocate (分析)");
     expect(html).toContain("Advocate (合并)");
     expect(html).toContain("Prosecutor (分析)");
     expect(html).toContain("Prosecutor (合并)");
+    expect(html).toContain("Chief (分析)");
+    expect(html).toContain("Chief (合并)");
   });
 
   it("renders judge cost and calls", () => {
@@ -102,6 +108,10 @@ describe("renderCostPage", () => {
           analysis: { totalCost: 0, calls: 0 },
           merge: { totalCost: 0, calls: 0 },
         },
+        chief: {
+          analysis: { totalCost: 0, calls: 0 },
+          merge: { totalCost: 0, calls: 0 },
+        },
         totalCost: 0.003,
         totalCalls: 6,
       },
@@ -129,6 +139,10 @@ describe("renderCostPage", () => {
           merge: { totalCost: 0, calls: 0 },
         },
         prosecutor: {
+          analysis: { totalCost: 0, calls: 0 },
+          merge: { totalCost: 0, calls: 0 },
+        },
+        chief: {
           analysis: { totalCost: 0, calls: 0 },
           merge: { totalCost: 0, calls: 0 },
         },
@@ -185,6 +199,10 @@ function makeSession(id: string): SessionSummary {
       merge: { totalCost: 0, calls: 0 },
     },
     prosecutor: {
+      analysis: { totalCost: 0, calls: 0 },
+      merge: { totalCost: 0, calls: 0 },
+    },
+    chief: {
       analysis: { totalCost: 0, calls: 0 },
       merge: { totalCost: 0, calls: 0 },
     },

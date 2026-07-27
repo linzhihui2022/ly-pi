@@ -182,6 +182,8 @@ function renderDailyTable(agg: CostAggregation): string {
           <td class="cost">${toCny(d.advocate.analysis.totalCost + d.advocate.merge.totalCost)}</td>
           <td class="num">${d.prosecutor.analysis.calls + d.prosecutor.merge.calls}</td>
           <td class="cost">${toCny(d.prosecutor.analysis.totalCost + d.prosecutor.merge.totalCost)}</td>
+          <td class="num">${d.chief.analysis.calls + d.chief.merge.calls}</td>
+          <td class="cost">${toCny(d.chief.analysis.totalCost + d.chief.merge.totalCost)}</td>
           <td class="num">${d.totalCalls}</td>
           <td class="cost total">${toCny(d.totalCost)}</td>
         </tr>`;
@@ -191,7 +193,7 @@ function renderDailyTable(agg: CostAggregation): string {
   return `    <h2 class="section-title">每日明细</h2>
     <table>
       <thead>
-        <tr><th>日期</th><th>Judge 调用</th><th>Judge 成本</th><th>Advocate 调用</th><th>Advocate 成本</th><th>Prosecutor 调用</th><th>Prosecutor 成本</th><th>合计调用</th><th>合计成本</th></tr>
+        <tr><th>日期</th><th>Judge 调用</th><th>Judge 成本</th><th>Advocate 调用</th><th>Advocate 成本</th><th>Prosecutor 调用</th><th>Prosecutor 成本</th><th>Chief 调用</th><th>Chief 成本</th><th>合计调用</th><th>合计成本</th></tr>
       </thead>
       <tbody>
 ${rows}
@@ -213,7 +215,7 @@ function renderSessionTable(agg: CostAggregation): string {
 
   return `    <h2 class="section-title">会话明细</h2>\n${truncated}    <table>
       <thead>
-        <tr><th>会话</th><th>时间</th><th>Judge</th><th>Advocate</th><th>Prosecutor</th><th>调用</th><th>成本</th></tr>
+        <tr><th>会话</th><th>时间</th><th>Judge</th><th>Advocate</th><th>Prosecutor</th><th>Chief</th><th>调用</th><th>成本</th></tr>
       </thead>
       <tbody>
 ${rows}
@@ -234,6 +236,10 @@ function renderSessionRow(s: SessionSummary): string {
     s.prosecutor.analysis.calls + s.prosecutor.merge.calls;
   const prosCost =
     s.prosecutor.analysis.totalCost + s.prosecutor.merge.totalCost;
+  const chiefCalls =
+    s.chief.analysis.calls + s.chief.merge.calls;
+  const chiefCost =
+    s.chief.analysis.totalCost + s.chief.merge.totalCost;
 
   return `        <tr>
           <td>${escapeHtml(shortId)}</td>
@@ -241,6 +247,7 @@ function renderSessionRow(s: SessionSummary): string {
           <td class="cost">${toCny(s.judge.totalCost)}</td>
           <td class="cost">${toCny(advCost)}</td>
           <td class="cost">${toCny(prosCost)}</td>
+          <td class="cost">${toCny(chiefCost)}</td>
           <td class="num">${s.totalCalls}</td>
           <td class="cost total">${toCny(s.totalCost)}</td>
         </tr>`;
@@ -278,6 +285,16 @@ function buildRoleRows(agg: CostAggregation): string {
       cost: agg.prosecutor.merge.totalCost,
       calls: agg.prosecutor.merge.calls,
     },
+    {
+      label: "Chief (分析)",
+      cost: agg.chief.analysis.totalCost,
+      calls: agg.chief.analysis.calls,
+    },
+    {
+      label: "Chief (合并)",
+      cost: agg.chief.merge.totalCost,
+      calls: agg.chief.merge.calls,
+    },
   ];
 
   return rows
@@ -305,6 +322,10 @@ function grandTotal(agg: CostAggregation): { cost: number; calls: number } {
   calls += agg.prosecutor.analysis.calls;
   cost += agg.prosecutor.merge.totalCost;
   calls += agg.prosecutor.merge.calls;
+  cost += agg.chief.analysis.totalCost;
+  calls += agg.chief.analysis.calls;
+  cost += agg.chief.merge.totalCost;
+  calls += agg.chief.merge.calls;
   return { cost, calls };
 }
 

@@ -21,6 +21,8 @@ import { createJudge } from "./judge";
 import { renderJudgeLogPage } from "./log-page";
 import { createAdvocate, createMerger } from "./professor";
 import { createProsecutor } from "./prosecutor";
+import { createChief, createChiefMerger } from "./chief";
+import type { ChiefSuggestionItem } from "./chief";
 import { decide } from "./rules";
 import {
   collectAllowed,
@@ -107,6 +109,56 @@ function formatDiff(oldText: string, newText: string): string {
   }
 
   return lines.join("\n");
+}
+
+/** Format chief suggestion type for confirm dialog label. */
+function suggestionTypeLabel(type: string): string {
+  switch (type) {
+    case "add":
+      return "新增规则";
+    case "remove":
+      return "删除规则";
+    case "modify":
+      return "改写规则";
+    case "merge":
+      return "合并规则";
+    default:
+      return type;
+  }
+}
+
+/** Format chief suggestion detail for confirm dialog body. */
+function suggestionTypeDetail(item: {
+  type: string;
+  rule?: string;
+  oldRule?: string;
+  newRule?: string;
+  oldRules?: string[];
+  reason: string;
+}): string {
+  const parts: string[] = [];
+  switch (item.type) {
+    case "add":
+      parts.push(`${C.bold}新增: ${item.rule}${C.reset}`);
+      break;
+    case "remove":
+      parts.push(`${C.bold}删除: ${item.rule}${C.reset}`);
+      break;
+    case "modify":
+      parts.push(`${C.bold}改写${C.reset}`);
+      parts.push(`${C.red}− ${item.oldRule}${C.reset}`);
+      parts.push(`${C.green}+ ${item.newRule}${C.reset}`);
+      break;
+    case "merge":
+      parts.push(`${C.bold}合并${C.reset}`);
+      for (const r of item.oldRules ?? []) {
+        parts.push(`${C.red}− ${r}${C.reset}`);
+      }
+      parts.push(`${C.green}+ ${item.newRule}${C.reset}`);
+      break;
+  }
+  parts.push(`${C.yellow}原因: ${item.reason}${C.reset}`);
+  return parts.join("\n");
 }
 
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
@@ -207,6 +259,84 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     };
   }
 
+  /** Chief Phase 2: merge selected suggestions → confirm → write JUDGE.md */
+  async function mergeAndWriteChiefMd(
+    ctx: ExtensionContext,
+    opts: {
+      currentJudgeMd: string;
+      selectedSuggestions: ChiefSuggestionItem[];
+      resolveModel: (provider: string, id: string) => Model<Api> | undefined;
+      analysisCost?: number;
+    },
+  ) {
+    const merger = createChiefMerger(config);
+    const mergeResult = await merger(
+      opts.currentJudgeMd,
+      opts.selectedSuggestions,
+      opts.resolveModel,
+      createAuthResolverWithFallback(
+        ctx.modelRegistry.getApiKeyAndHeaders,
+        (p) => ctx.modelRegistry.getApiKeyForProvider(p),
+      ),
+    );
+
+    if (mergeResult.error || !mergeResult.mergedText) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `融合失败: ${mergeResult.error || "空内容"}`,
+          },
+        ],
+        details: {},
+      };
+    }
+
+    if (mergeResult.cost !== undefined) {
+      appendCost(
+        ctx.sessionManager.getSessionId(),
+        ctx.cwd,
+        "chief-merge",
+        mergeResult.cost,
+        config.professorModel,
+      );
+    }
+
+    const totalCost = (opts.analysisCost ?? 0) + (mergeResult.cost ?? 0);
+    ctx.ui.notify(
+      `👨‍⚖️ 审判长费用: $${totalCost.toFixed(6)} (分析 $${(opts.analysisCost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`,
+      "info",
+    );
+
+    const diffBody = formatDiff(opts.currentJudgeMd, mergeResult.mergedText);
+    const write = await ctx.ui.confirm(
+      `👨‍⚖️ 审判长融合完成 — 确认写入？`,
+      diffBody,
+    );
+
+    if (write) {
+      writeFileSync(
+        join(process.cwd(), "JUDGE.md"),
+        mergeResult.mergedText,
+        "utf-8",
+      );
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `✅ JUDGE.md 已更新，共 ${opts.selectedSuggestions.length} 条操作`,
+          },
+        ],
+        details: {},
+      };
+    }
+
+    return {
+      content: [{ type: "text" as const, text: "已放弃，JUDGE.md 未修改" }],
+      details: {},
+    };
+  }
+
   pi.registerCommand("judge-log", {
     description: "查看当前会话的每一次法官判断",
     handler: async (_args, ctx: ExtensionContext) => {
@@ -235,7 +365,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   });
 
   pi.registerCommand("judge-costs", {
-    description: "查看累计的法庭三角色 LLM 成本统计",
+    description: "查看累计的法庭四角色 LLM 成本统计",
     handler: async (_args, ctx: ExtensionContext) => {
       const agg = aggregateCosts(ctx.cwd);
 
@@ -479,6 +609,113 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         label: "检察官",
         emoji: "⚖️",
         mergeCostType: "prosecutor-merge",
+      });
+    },
+  });
+
+  pi.registerTool({
+    name: "permission_chief",
+    label: "审判长",
+    description:
+      "审计 JUDGE.md 规则本身的质量——发现矛盾、过宽、冗余、遗漏，输出 add/remove/modify/merge 建议。当用户提到审判长、规则审计、规则审查、规则矛盾、规则冲突、过宽规则时调用此工具。",
+    promptSnippet:
+      "permission_chief — 审计 JUDGE.md 规则质量，发现矛盾与盲区",
+    parameters: Type.Object({}),
+    execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
+      const currentJudgeMd = loadFile(join(process.cwd(), "JUDGE.md"));
+
+      if (!currentJudgeMd || !currentJudgeMd.trim()) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "项目尚未创建 JUDGE.md，无需审计。",
+            },
+          ],
+          details: {},
+        };
+      }
+
+      const resolveModel = (provider: string, id: string) =>
+        ctx.modelRegistry.find(provider, id);
+      const chief = createChief(config);
+
+      const result = await chief(
+        currentJudgeMd,
+        judgePrompt,
+        ctx.cwd,
+        resolveModel,
+        createAuthResolverWithFallback(
+          ctx.modelRegistry.getApiKeyAndHeaders,
+          (p) => ctx.modelRegistry.getApiKeyForProvider(p),
+        ),
+      );
+
+      if (result.error) {
+        return {
+          content: [
+            { type: "text" as const, text: `审判长分析失败: ${result.error}` },
+          ],
+          details: {},
+        };
+      }
+
+      if (result.cost !== undefined) {
+        appendCost(
+          ctx.sessionManager.getSessionId(),
+          ctx.cwd,
+          "chief-analysis",
+          result.cost,
+          config.professorModel,
+        );
+      }
+
+      const suggestion = result.suggestion;
+      if (!suggestion || suggestion.suggestions.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `审判长审计完成：${suggestion?.summary ?? "未发现问题"}`,
+            },
+          ],
+          details: {},
+        };
+      }
+
+      ctx.ui.notify(`👨‍⚖️ 审判长审计: ${suggestion.summary}`, "info");
+
+      const selectedSuggestions: ChiefSuggestionItem[] = [];
+
+      for (const item of suggestion.suggestions) {
+        const label = suggestionTypeLabel(item.type);
+        const detail = suggestionTypeDetail(item);
+        const keep = await ctx.ui.confirm(
+          `${C.cyan}👨‍⚖️ 审判长建议 — ${label}？${C.reset}`,
+          detail,
+        );
+        if (keep) {
+          selectedSuggestions.push(item);
+        }
+      }
+
+      if (selectedSuggestions.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "未采纳任何建议，JUDGE.md 未修改",
+            },
+          ],
+          details: {},
+        };
+      }
+
+      return await mergeAndWriteChiefMd(ctx, {
+        currentJudgeMd,
+        selectedSuggestions,
+        resolveModel,
+        analysisCost: result.cost,
       });
     },
   });
