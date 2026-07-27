@@ -49548,7 +49548,7 @@ function myCdGuard(pi) {
     return {
       systemPrompt: event.systemPrompt + `
 
-The shell starts in ${projectRoot}. Do not prepend \`cd ${projectRoot} &&\` before commands — it is redundant.`
+CRITICAL: All bash commands execute in ${projectRoot}. NEVER prefix commands with \`cd ${projectRoot} &&\` — it is redundant and will be automatically stripped. Run the command directly instead.`
     };
   });
   pi.on("tool_call", (event, ctx) => {
@@ -53234,6 +53234,9 @@ function buildStatusLine(theme, width, data) {
     }
     parts.push(stat);
   }
+  if (show("log") && data.logEnabled) {
+    parts.push(theme.fg("accent", `${icon("log")}LOG`));
+  }
   return truncateToWidth(parts.join(" "), width);
 }
 function formatGitStatus(theme, status) {
@@ -53366,8 +53369,12 @@ class Bar {
   };
   runningJudgeStats = { allowed: 0, denied: 0 };
   runningJudgeCost = 0;
+  logEnabled = false;
   setBranch(branch) {
     this.branch = branch;
+  }
+  setLogEnabled(enabled) {
+    this.logEnabled = enabled;
   }
   invalidatePullRequest() {
     this.pullRequestCacheTime = 0;
@@ -53500,7 +53507,8 @@ class Bar {
       gitStatus: this.gitStatus,
       pullRequest: this.pullRequest,
       judgeStats: this.runningJudgeStats,
-      judgeCost: this.runningJudgeCost
+      judgeCost: this.runningJudgeCost,
+      logEnabled: this.logEnabled
     });
     return [line];
   }
@@ -53528,6 +53536,7 @@ class Bar {
     };
     this.runningJudgeStats = { allowed: 0, denied: 0 };
     this.runningJudgeCost = 0;
+    this.logEnabled = false;
   }
 }
 
@@ -53651,6 +53660,11 @@ function myHud(pi) {
   pi.on("tool_call", () => {
     bar?.requestRender();
   });
+  pi.events?.on?.("ly-log:toggle", (data) => {
+    const event = data;
+    bar?.setLogEnabled(event.enabled);
+    requestRender();
+  });
   pi.on("agent_start", (_event, ctx) => {
     updateMemoryWarning(ctx);
     const theme = ctx.ui.getTheme("catppuccin-mocha");
@@ -53722,6 +53736,24 @@ function myHud(pi) {
       };
     });
   });
+}
+
+// src/shared/logger.ts
+function createLogger(source, write) {
+  return {
+    debug(msg, data) {
+      write({ level: "debug", source, msg, data });
+    },
+    info(msg, data) {
+      write({ level: "info", source, msg, data });
+    },
+    warn(msg, data) {
+      write({ level: "warn", source, msg, data });
+    },
+    error(msg, data) {
+      write({ level: "error", source, msg, data });
+    }
+  };
 }
 
 // src/shared/log-page.ts
@@ -53878,6 +53910,30 @@ td.actions {
   border-color: #a6e3a1;
   color: #1e1e2e;
 }
+.action-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.action-btn {
+  background: #45475a;
+  border: 1px solid #585b70;
+  color: #cdd6f4;
+  padding: 5px 16px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.action-btn:hover {
+  background: #585b70;
+}
+.action-btn.copied {
+  background: #a6e3a1;
+  border-color: #a6e3a1;
+  color: #1e1e2e;
+}
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
@@ -53940,6 +53996,60 @@ function copyLog(btn) {
     btn.classList.add('copied');
     setTimeout(function() {
       btn.textContent = '复制';
+      btn.classList.remove('copied');
+    }, 1500);
+  });
+}
+
+function collectJson(rows) {
+  var entries = [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var entry = {
+      timestamp: row.dataset.timestamp,
+      level: row.dataset.level,
+      source: row.dataset.source,
+      msg: row.dataset.msg
+    };
+    if (row.dataset.rawdata) {
+      try {
+        entry.data = JSON.parse(row.dataset.rawdata);
+      } catch (e) {
+        entry.data = row.dataset.rawdata;
+      }
+    }
+    entries.push(entry);
+  }
+  return entries;
+}
+
+function copyAllLogs(btn) {
+  var rows = document.querySelectorAll('tbody tr');
+  var json = JSON.stringify(collectJson(rows), null, 2);
+  navigator.clipboard.writeText(json).then(function() {
+    btn.textContent = '已复制 (' + rows.length + ' 条)';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = '复制全部';
+      btn.classList.remove('copied');
+    }, 1500);
+  });
+}
+
+function copyFilteredLogs(btn) {
+  var rows = document.querySelectorAll('tbody tr');
+  var visible = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].style.display !== 'none') {
+      visible.push(rows[i]);
+    }
+  }
+  var json = JSON.stringify(collectJson(visible), null, 2);
+  navigator.clipboard.writeText(json).then(function() {
+    btn.textContent = '已复制 (' + visible.length + ' 条)';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = '复制筛选结果';
       btn.classList.remove('copied');
     }, 1500);
   });
@@ -54022,6 +54132,10 @@ ${sourceFilters}
     </div>
   </header>
   <main>
+    <div class="action-bar">
+      <button class="action-btn" onclick="copyAllLogs(this)">复制全部</button>
+      <button class="action-btn" onclick="copyFilteredLogs(this)">复制筛选结果</button>
+    </div>
     <table>
       <thead>
         <tr><th>#</th><th>时间</th><th>级别</th><th>来源</th><th>消息</th><th>数据</th><th></th></tr>
@@ -54044,6 +54158,14 @@ var LOG_CUSTOM_TYPE = "ly-log";
 var LOG_CONFIG_CUSTOM_TYPE = "ly-log-config";
 var _pi = null;
 var _enabled = false;
+function createDevLogger(source) {
+  const write = (entry) => {
+    if (_pi) {
+      _pi.appendEntry(LOG_CUSTOM_TYPE, entry);
+    }
+  };
+  return createLogger(source, write);
+}
 function restoreEnabled(ctx) {
   const entries = ctx.sessionManager.getEntries();
   for (let i = entries.length - 1;i >= 0; i--) {
@@ -58352,12 +58474,22 @@ async function loadConfig2(configPath) {
 
 // my-permission/judge.ts
 import { complete } from "@earendil-works/pi-ai";
+var log = createDevLogger("my-permission:judge");
 function createJudge(config, deps) {
   return async function judge(input, cwd, model, resolveModel) {
     const resolved = resolveJudgeModel(config, resolveModel, model);
     if (!resolved) {
+      log.warn("judge model not found", {
+        configured: config.judgeModel,
+        fallback: model ? `${model.provider}/${model.id}` : "none"
+      });
       return failureResult("未找到可用的法官模型，请手动确认", input);
     }
+    log.debug("judge model resolved", {
+      provider: resolved.provider,
+      model: resolved.id,
+      configured: config.judgeModel
+    });
     if (!deps?.judgePrompt) {
       return failureResult("法官提示词未加载，请手动确认", input);
     }
@@ -58387,19 +58519,25 @@ function createJudge(config, deps) {
       clearTimeout(timeout);
       if (response.stopReason === "error" || response.errorMessage) {
         const detail = response.errorMessage ?? response.stopReason;
-        console.warn("[my-permission] judge API error:", detail);
+        log.error("judge API error", { detail, model: resolved.id });
         return failureResult(`法官模型调用失败: ${detail}`, input);
       }
       const parsed = parseJudgeResponse(response);
       if (parsed) {
         parsed.cost = response.usage?.cost?.total;
+        log.info("judge verdict", {
+          safe: parsed.safe,
+          score: parsed.score,
+          cost: parsed.cost,
+          tool: input.toolName
+        });
         return parsed;
       }
-      console.warn("[my-permission] judge parse failed, raw content:", JSON.stringify(response.content));
+      log.warn("judge parse failed", { content: JSON.stringify(response.content) });
       return failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
       clearTimeout(timeout);
-      console.warn("[my-permission] judge call failed:", error);
+      log.error("judge call failed", { error: error.message });
       if (controller.signal.aborted) {
         return failureResult(`法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`, input);
       }
@@ -58602,7 +58740,7 @@ var FILTER_JS2 = `function filterLogs(filter) {
   }
 }`;
 function renderJudgeLogPage(logs) {
-  const rows = logs.map((log, index) => renderRow2(log, index + 1)).reverse().join(`
+  const rows = logs.map((log2, index) => renderRow2(log2, index + 1)).reverse().join(`
 `);
   return buildHtmlDocument({
     title: "法官判断日志",
@@ -58630,19 +58768,19 @@ ${rows}
     js: FILTER_JS2
   });
 }
-function renderRow2(log, num) {
-  const verdictClass = log.safe ? "safe" : "unsafe";
-  const verdictLabel = log.safe ? "✓ 安全" : "✗ 不安全";
-  const scoreText = log.score !== undefined ? `（${log.score}/10）` : "";
-  const userCell = log.safe !== false ? '<td class="na">—</td>' : log.userApproved ? '<td class="approved">✓ 批准</td>' : '<td class="denied">✗ 拒绝</td>';
-  return `        <tr data-safe="${log.safe}">
+function renderRow2(log2, num) {
+  const verdictClass = log2.safe ? "safe" : "unsafe";
+  const verdictLabel = log2.safe ? "✓ 安全" : "✗ 不安全";
+  const scoreText = log2.score !== undefined ? `（${log2.score}/10）` : "";
+  const userCell = log2.safe !== false ? '<td class="na">—</td>' : log2.userApproved ? '<td class="approved">✓ 批准</td>' : '<td class="denied">✗ 拒绝</td>';
+  return `        <tr data-safe="${log2.safe}">
           <td class="num">${num}</td>
-          <td>${escapeHtml3(log.toolName)}</td>
-          <td class="command"><code>${escapeHtml3(log.value)}</code></td>
+          <td>${escapeHtml3(log2.toolName)}</td>
+          <td class="command"><code>${escapeHtml3(log2.value)}</code></td>
           <td class="${verdictClass}">${verdictLabel}${scoreText}</td>
           ${userCell}
-          <td>${escapeHtml3(log.toolFor)}</td>
-          <td>${escapeHtml3(log.reason)}</td>
+          <td>${escapeHtml3(log2.toolFor)}</td>
+          <td>${escapeHtml3(log2.reason)}</td>
         </tr>`;
 }
 function escapeHtml3(text) {
@@ -58651,6 +58789,7 @@ function escapeHtml3(text) {
 
 // my-permission/professor.ts
 import { complete as complete2 } from "@earendil-works/pi-ai";
+var log2 = createDevLogger("my-permission:professor");
 function createAdvocate(config) {
   return async function analyze(cases, cwd, resolveModel, getAuth, currentJudgeMd, judgePrompt) {
     if (cases.length === 0) {
@@ -58664,10 +58803,16 @@ function createAdvocate(config) {
     }
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
+      log2.error("advocate model not found", { configured: config.professorModel });
       return {
         error: `未找到教授模型: ${config.professorModel}`
       };
     }
+    log2.debug("advocate model resolved", {
+      provider: model.provider,
+      model: model.id,
+      configured: config.professorModel
+    });
     const prompt = buildAdvocatePrompt(cases, currentJudgeMd, judgePrompt, cwd);
     const auth = await getAuth(model);
     try {
@@ -58729,16 +58874,25 @@ function createAdvocate(config) {
       const cost = response.usage?.cost?.total;
       const errResp = response;
       if (errResp.stopReason === "error" || errResp.errorMessage) {
+        log2.error("advocate API error", { detail: errResp.errorMessage || errResp.stopReason });
         return { error: `教授模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
       }
       const text = response.content.find((c) => c.type === "text")?.text || response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
+        log2.error("advocate empty response");
         return { error: "教授模型返回了空内容" };
       }
       const parsed = parseAdvocateJson(text);
       if (!parsed) {
+        log2.error("advocate parse failed");
         return { error: "教授模型返回了无法解析的 JSON" };
       }
+      log2.info("advocate completed", {
+        cases: cases.length,
+        add: parsed.add.length,
+        remove: parsed.remove.length,
+        cost
+      });
       return { suggestion: parsed, cost };
     } catch (err) {
       return {
@@ -58820,6 +58974,7 @@ function createMerger(config) {
     }
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
+      log2.error("merger model not found", { configured: config.professorModel });
       return { error: `未找到教授模型` };
     }
     const auth = await getAuth(model);
@@ -58865,10 +59020,13 @@ function createMerger(config) {
       const cost = response.usage?.cost?.total;
       const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
+        log2.error("merger empty response");
         return { error: "融合模型返回了空内容" };
       }
+      log2.info("merger completed", { rules: selectedRules.length, cost });
       return { mergedText: text.trim(), cost };
     } catch (err) {
+      log2.error("merger call failed", { error: err.message });
       return { error: `融合模型调用失败: ${err.message}` };
     }
   };
@@ -58876,6 +59034,7 @@ function createMerger(config) {
 
 // my-permission/prosecutor.ts
 import { complete as complete3 } from "@earendil-works/pi-ai";
+var log3 = createDevLogger("my-permission:prosecutor");
 function createProsecutor(config) {
   return async function analyze(allowedEntries, cwd, resolveModel, getAuth, currentJudgeMd, judgePrompt) {
     if (allowedEntries.length === 0) {
@@ -58889,10 +59048,16 @@ function createProsecutor(config) {
     }
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
+      log3.error("prosecutor model not found", { configured: config.professorModel });
       return {
         error: `未找到审查模型: ${config.professorModel}`
       };
     }
+    log3.debug("prosecutor model resolved", {
+      provider: model.provider,
+      model: model.id,
+      configured: config.professorModel
+    });
     const prompt = buildProsecutorPrompt(allowedEntries, currentJudgeMd, judgePrompt, cwd);
     const auth = await getAuth(model);
     try {
@@ -58951,18 +59116,27 @@ function createProsecutor(config) {
       const cost = response.usage?.cost?.total;
       const errResp = response;
       if (errResp.stopReason === "error" || errResp.errorMessage) {
+        log3.error("prosecutor API error", { detail: errResp.errorMessage || errResp.stopReason });
         return { error: `审查模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
       }
       const text = response.content.find((c) => c.type === "text")?.text || response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
+        log3.error("prosecutor empty response");
         return { error: "审查模型返回了空内容" };
       }
       const parsed = parseProsecutorJson(text);
       if (!parsed) {
+        log3.error("prosecutor parse failed");
         return { error: "审查模型返回了无法解析的 JSON" };
       }
+      log3.info("prosecutor completed", {
+        reviewed: allowedEntries.length,
+        findings: parsed.add.length,
+        cost
+      });
       return { suggestion: parsed, cost };
     } catch (err) {
+      log3.error("prosecutor call failed", { error: err.message });
       return {
         error: `审查模型调用失败: ${err.message}`
       };
@@ -59314,7 +59488,7 @@ function recordJudgeStats(pi, input, result) {
   pi.appendEntry(JUDGE_STATS_CUSTOM_TYPE, entry);
 }
 function collectAllowed(entries) {
-  return collectJudgeLogs(entries).filter((log) => log.safe);
+  return collectJudgeLogs(entries).filter((log4) => log4.safe);
 }
 function collectJudgeLogs(entries) {
   const overrideKeys = new Set;
@@ -59331,7 +59505,7 @@ function collectJudgeLogs(entries) {
     if (entry.type === "custom" && entry.customType === JUDGE_STATS_CUSTOM_TYPE && entry.data && typeof entry.data === "object") {
       const data = entry.data;
       if (typeof data.toolName === "string" && typeof data.value === "string" && typeof data.safe === "boolean" && typeof data.reason === "string" && typeof data.toolFor === "string") {
-        const log = {
+        const log4 = {
           decision: data.safe ? "allowed" : "denied",
           toolName: data.toolName,
           value: data.value,
@@ -59341,9 +59515,9 @@ function collectJudgeLogs(entries) {
           toolFor: data.toolFor
         };
         if (!data.safe) {
-          log.userApproved = overrideKeys.has(`${data.toolName}:${data.value}`);
+          log4.userApproved = overrideKeys.has(`${data.toolName}:${data.value}`);
         }
-        logs.push(log);
+        logs.push(log4);
       }
     }
   }

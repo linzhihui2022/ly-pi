@@ -158,6 +158,30 @@ td.actions {
   border-color: #a6e3a1;
   color: #1e1e2e;
 }
+.action-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.action-btn {
+  background: #45475a;
+  border: 1px solid #585b70;
+  color: #cdd6f4;
+  padding: 5px 16px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.action-btn:hover {
+  background: #585b70;
+}
+.action-btn.copied {
+  background: #a6e3a1;
+  border-color: #a6e3a1;
+  color: #1e1e2e;
+}
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
@@ -221,6 +245,60 @@ function copyLog(btn) {
     btn.classList.add('copied');
     setTimeout(function() {
       btn.textContent = '复制';
+      btn.classList.remove('copied');
+    }, 1500);
+  });
+}
+
+function collectJson(rows) {
+  var entries = [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var entry = {
+      timestamp: row.dataset.timestamp,
+      level: row.dataset.level,
+      source: row.dataset.source,
+      msg: row.dataset.msg
+    };
+    if (row.dataset.rawdata) {
+      try {
+        entry.data = JSON.parse(row.dataset.rawdata);
+      } catch (e) {
+        entry.data = row.dataset.rawdata;
+      }
+    }
+    entries.push(entry);
+  }
+  return entries;
+}
+
+function copyAllLogs(btn) {
+  var rows = document.querySelectorAll('tbody tr');
+  var json = JSON.stringify(collectJson(rows), null, 2);
+  navigator.clipboard.writeText(json).then(function() {
+    btn.textContent = '已复制 (' + rows.length + ' 条)';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = '复制全部';
+      btn.classList.remove('copied');
+    }, 1500);
+  });
+}
+
+function copyFilteredLogs(btn) {
+  var rows = document.querySelectorAll('tbody tr');
+  var visible = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].style.display !== 'none') {
+      visible.push(rows[i]);
+    }
+  }
+  var json = JSON.stringify(collectJson(visible), null, 2);
+  navigator.clipboard.writeText(json).then(function() {
+    btn.textContent = '已复制 (' + visible.length + ' 条)';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = '复制筛选结果';
       btn.classList.remove('copied');
     }, 1500);
   });
@@ -334,6 +412,10 @@ ${sourceFilters}
     </div>
   </header>
   <main>
+    <div class="action-bar">
+      <button class="action-btn" onclick="copyAllLogs(this)">复制全部</button>
+      <button class="action-btn" onclick="copyFilteredLogs(this)">复制筛选结果</button>
+    </div>
     <table>
       <thead>
         <tr><th>#</th><th>时间</th><th>级别</th><th>来源</th><th>消息</th><th>数据</th><th></th></tr>
