@@ -1,19 +1,16 @@
-import { join } from "node:path";
 import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
-  ExtensionCommandContext,
+  ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { ANSI as C } from "../src/shared/ansi";
 import { createAuthResolver } from "../src/shared/auth";
 import { resolveExtDir } from "../src/shared/ext-dir";
 import { loadFile } from "../src/shared/file";
-import {
-  servePreviewFile,
-  stopPreviewServer,
-} from "../src/shared/preview";
+import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
 import { loadConfig } from "./config";
 import { createJudge } from "./judge";
 import { renderJudgeLogPage } from "./log-page";
@@ -30,7 +27,6 @@ import {
 import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
 import {
   collectPaths,
-  extractPathTokens,
   resolveSymlinkedPaths,
   stringifyToolInput,
 } from "./utils";
@@ -53,14 +49,17 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const child = isChildSession();
 
   /** Shared Phase 2: merge selected rules → confirm → write JUDGE.md */
-  async function mergeAndWriteJudgeMd(ctx: ExtensionCommandContext, opts: {
-    currentJudgeMd: string;
-    selectedRules: string[];
-    resolveModel: (provider: string, id: string) => Model<Api> | undefined;
-    analysisCost?: number;
-    label: string;
-    emoji: string;
-  }) {
+  async function mergeAndWriteJudgeMd(
+    ctx: ExtensionContext,
+    opts: {
+      currentJudgeMd: string;
+      selectedRules: string[];
+      resolveModel: (provider: string, id: string) => Model<Api> | undefined;
+      analysisCost?: number;
+      label: string;
+      emoji: string;
+    },
+  ) {
     const merger = createMerger(config);
     const mergeResult = await merger(
       opts.currentJudgeMd,
@@ -73,7 +72,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: `融合失败: ${mergeResult.error || "空内容"}`,
           },
         ],
@@ -101,7 +100,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: `✅ JUDGE.md 已更新，共 ${opts.selectedRules.length} 条规则`,
           },
         ],
@@ -110,14 +109,14 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     }
 
     return {
-      content: [{ type: "text", text: "已放弃，JUDGE.md 未修改" }],
+      content: [{ type: "text" as const, text: "已放弃，JUDGE.md 未修改" }],
       details: {},
     };
   }
 
   pi.registerCommand("judge-log", {
     description: "查看当前会话的每一次法官判断",
-    handler: async (_args, ctx: ExtensionCommandContext) => {
+    handler: async (_args, ctx: ExtensionContext) => {
       const entries = ctx.sessionManager.getEntries();
       const logs = collectJudgeLogs(entries);
       if (logs.length === 0) {
@@ -156,7 +155,10 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       if (cases.length === 0) {
         return {
           content: [
-            { type: "text", text: "当前会话没有法官误判案例，法官表现完美！" },
+            {
+              type: "text" as const,
+              text: "当前会话没有法官误判案例，法官表现完美！",
+            },
           ],
           details: {},
         };
@@ -178,7 +180,9 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
 
       if (result.error) {
         return {
-          content: [{ type: "text", text: `辩护人分析失败: ${result.error}` }],
+          content: [
+            { type: "text" as const, text: `辩护人分析失败: ${result.error}` },
+          ],
           details: {},
         };
       }
@@ -191,7 +195,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: "辩护人认为当前 JUDGE.md 已覆盖所有误判模式，无需修改",
             },
           ],
@@ -220,7 +224,9 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
 
       if (selectedRules.length === 0) {
         return {
-          content: [{ type: "text", text: "未采纳任何规则，JUDGE.md 未修改" }],
+          content: [
+            { type: "text" as const, text: "未采纳任何规则，JUDGE.md 未修改" },
+          ],
           details: {},
         };
       }
@@ -253,7 +259,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: "当前会话没有法官放行的记录，无需审计。",
             },
           ],
@@ -277,7 +283,9 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
 
       if (result.error) {
         return {
-          content: [{ type: "text", text: `检察官分析失败: ${result.error}` }],
+          content: [
+            { type: "text" as const, text: `检察官分析失败: ${result.error}` },
+          ],
           details: {},
         };
       }
@@ -287,7 +295,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: `检察官审计完成：${suggestion?.summary ?? "未发现假阴性"}`,
             },
           ],
@@ -313,7 +321,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: "未采纳任何规则，JUDGE.md 未修改",
             },
           ],

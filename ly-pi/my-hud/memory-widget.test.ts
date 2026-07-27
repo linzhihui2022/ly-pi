@@ -23,11 +23,7 @@ describe("buildMemoryWarningLines", () => {
     const { buildMemoryWarningLines } = await import("./memory-widget");
     const theme = createTheme();
 
-    const result = buildMemoryWarningLines(
-      theme,
-      { percent: 42, ok: true },
-      [],
-    );
+    const result = buildMemoryWarningLines(theme, { percent: 42, ok: true });
 
     expect(result).toBeNull();
   });
@@ -36,10 +32,7 @@ describe("buildMemoryWarningLines", () => {
     const { buildMemoryWarningLines } = await import("./memory-widget");
     const theme = createTheme();
 
-    const result = buildMemoryWarningLines(
-      theme,
-      { percent: 87, ok: false },
-    );
+    const result = buildMemoryWarningLines(theme, { percent: 87, ok: false });
 
     expect(result).toEqual(["⚠️ 内存 87%"]);
     expect(theme.fg).toHaveBeenCalledWith("error", "⚠️ 内存 87%");

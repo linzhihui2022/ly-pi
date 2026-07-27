@@ -8,11 +8,7 @@ import {
   hyperlink,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
-import {
-  formatCacheRate,
-  formatTokens,
-  shortModelName,
-} from "./format";
+import { formatCacheRate, formatTokens, shortModelName } from "./format";
 import { icon } from "./icons";
 import type { GitStatus, StatusLineData } from "./types";
 

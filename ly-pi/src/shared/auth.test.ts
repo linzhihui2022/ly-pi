@@ -17,7 +17,10 @@ describe("createAuthResolver", () => {
     const resolve = createAuthResolver(mock);
     const model = { provider: "x", id: "y" } as never;
     const result = await resolve(model);
-    expect(result).toEqual({ apiKey: "key-123", headers: { "X-Custom": "val" } });
+    expect(result).toEqual({
+      apiKey: "key-123",
+      headers: { "X-Custom": "val" },
+    });
     expect(mock).toHaveBeenCalledWith(model);
   });
 

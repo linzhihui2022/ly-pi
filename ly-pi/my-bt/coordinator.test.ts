@@ -206,5 +206,3 @@ describe("spawnSoundProcess", () => {
     expect(() => onExecDone()).not.toThrow();
   });
 });
-
-

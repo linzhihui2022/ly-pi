@@ -22,7 +22,7 @@ export function extractEntryUsage(entry: SessionEntry): TokenUsage | null {
 }
 
 export function aggregateSessionUsage(entries: SessionEntry[]): TokenUsage {
-  let acc: TokenUsage = {
+  const acc: TokenUsage = {
     input: 0,
     output: 0,
     cacheRead: 0,

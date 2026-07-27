@@ -84,7 +84,10 @@ import { confirmToolCall, isChildSession } from "./ui";
 function createMockApi() {
   const handlers: Record<string, (...args: unknown[]) => unknown> = {};
   const commands: Record<string, (...args: unknown[]) => unknown> = {};
-  const tools: Record<string, { name: string; execute: (...args: unknown[]) => unknown }> = {};
+  const tools: Record<
+    string,
+    { name: string; execute: (...args: unknown[]) => unknown }
+  > = {};
   return {
     on: vi.fn((event: string, handler: (...args: unknown[]) => unknown) => {
       handlers[event] = handler;
@@ -94,9 +97,11 @@ function createMockApi() {
         commands[name] = options.handler;
       },
     ),
-    registerTool: vi.fn((tool: { name: string; execute: (...args: unknown[]) => unknown }) => {
-      tools[tool.name] = tool;
-    }),
+    registerTool: vi.fn(
+      (tool: { name: string; execute: (...args: unknown[]) => unknown }) => {
+        tools[tool.name] = tool;
+      },
+    ),
     getHandler: (event: string) => handlers[event],
     getCommand: (name: string) => commands[name],
     appendEntry: vi.fn(),

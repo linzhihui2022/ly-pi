@@ -23,7 +23,7 @@ import { checkMemoryPressure } from "./memory";
 import { buildMemoryWarningLines } from "./memory-widget";
 import { getPullRequestForCurrentBranch, openUrl } from "./pr";
 import { setHiddenFields } from "./render";
-import { extractEntryUsage, getLastUserMessage } from "./session";
+import { getLastUserMessage } from "./session";
 import { pickRandomMessage } from "./working";
 
 const EXT_DIR = resolveExtDir(import.meta);
@@ -70,9 +70,7 @@ export default function myHud(pi: ExtensionAPI): void {
   function updateMemoryWarning(ctx: ExtensionContext): void {
     const memoryStatus = checkMemoryPressure();
     const theme = ctx.ui.getTheme("catppuccin-mocha");
-    const lines = theme
-      ? buildMemoryWarningLines(theme, memoryStatus)
-      : null;
+    const lines = theme ? buildMemoryWarningLines(theme, memoryStatus) : null;
 
     if (lines) {
       ctx.ui.setWidget(

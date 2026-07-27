@@ -92,7 +92,6 @@ describe("buildStatusLine with PR", () => {
     expect(line).toContain("#42");
     expect(line).not.toContain("\u001b]8;;");
   });
-
 });
 
 describe("hiddenFields", () => {

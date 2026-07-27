@@ -15,17 +15,19 @@ export type AuthResolver = (
  *
  * This is the factory behind the repeated 7-line closure in my-permission.
  */
-export function createAuthResolver(
-  getApiKeyAndHeaders: unknown,
-): AuthResolver {
+export function createAuthResolver(getApiKeyAndHeaders: unknown): AuthResolver {
   if (typeof getApiKeyAndHeaders === "function") {
     return async (model: Model<Api>) => {
       const auth = await (
-        getApiKeyAndHeaders as (
-          model: Model<Api>,
-        ) => Promise<{ ok: boolean; apiKey?: string; headers?: Record<string, string> }>
+        getApiKeyAndHeaders as (model: Model<Api>) => Promise<{
+          ok: boolean;
+          apiKey?: string;
+          headers?: Record<string, string>;
+        }>
       )(model);
-      return auth.ok ? { apiKey: auth.apiKey, headers: auth.headers } : undefined;
+      return auth.ok
+        ? { apiKey: auth.apiKey, headers: auth.headers }
+        : undefined;
     };
   }
   return async () => undefined;

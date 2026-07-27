@@ -130,5 +130,3 @@ describe("resolveSoundPath", () => {
     expect(result).toBe("/fake/sounds/startup.mp3");
   });
 });
-
-

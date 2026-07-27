@@ -36,7 +36,11 @@ describe("servePreviewFile", () => {
   });
 
   it("writes content to the preview directory and returns URL", async () => {
-    const url = await servePreviewFile("test-session", "test.html", "<h1>Hi</h1>");
+    const url = await servePreviewFile(
+      "test-session",
+      "test.html",
+      "<h1>Hi</h1>",
+    );
 
     const filePath = join(sessionDir, "test.html");
     expect(existsSync(filePath)).toBe(true);
