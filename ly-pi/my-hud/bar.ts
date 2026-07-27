@@ -47,9 +47,14 @@ export class Bar {
   };
   private runningJudgeStats = { allowed: 0, denied: 0 };
   private runningJudgeCost = 0;
+  private logEnabled = false;
 
   setBranch(branch: string | null): void {
     this.branch = branch;
+  }
+
+  setLogEnabled(enabled: boolean): void {
+    this.logEnabled = enabled;
   }
 
   invalidatePullRequest(): void {
@@ -214,6 +219,7 @@ export class Bar {
       pullRequest: this.pullRequest,
       judgeStats: this.runningJudgeStats,
       judgeCost: this.runningJudgeCost,
+      logEnabled: this.logEnabled,
     });
     return [line];
   }
@@ -242,5 +248,6 @@ export class Bar {
     };
     this.runningJudgeStats = { allowed: 0, denied: 0 };
     this.runningJudgeCost = 0;
+    this.logEnabled = false;
   }
 }

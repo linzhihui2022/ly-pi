@@ -133,6 +133,10 @@ export function buildStatusLine(
     parts.push(stat);
   }
 
+  if (show("log") && data.logEnabled) {
+    parts.push(theme.fg("accent", `${icon("log")}LOG`));
+  }
+
   return truncateToWidth(parts.join(" "), width);
 }
 

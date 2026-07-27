@@ -52907,7 +52907,8 @@ var icons = {
   cost: "",
   cacheRate: " ",
   terminal: "  ",
-  shield: " "
+  shield: " ",
+  log: " "
 };
 function icon(name) {
   return icons[name];
@@ -53720,6 +53721,399 @@ function myHud(pi) {
         }
       };
     });
+  });
+}
+
+// src/shared/log-page.ts
+var PAGE_CSS2 = `body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #cdd6f4;
+  background: #1e1e2e;
+  margin: 0;
+  padding: 0;
+}
+.page-header {
+  padding: 1.5rem 1rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid #313244;
+}
+.page-header h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #cba6f7;
+  margin: 0 0 0.35rem;
+}
+.page-header p {
+  color: #7f849c;
+  font-size: 0.85rem;
+  margin: 0 0 0.9rem;
+}
+.filters {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  background: #313244;
+  border: 1px solid #45475a;
+  color: #a6adc8;
+  padding: 4px 16px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.filter-btn:hover {
+  background: #45475a;
+}
+.filter-btn.active {
+  background: #cba6f7;
+  border-color: #cba6f7;
+  color: #1e1e2e;
+  font-weight: 600;
+}
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.filter-label {
+  color: #7f849c;
+  font-size: 0.8rem;
+}
+main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2rem;
+}
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  overflow: hidden;
+}
+th, td {
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #313244;
+}
+th {
+  background: #313244;
+  color: #cba6f7;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+tbody tr:last-child td {
+  border-bottom: none;
+}
+tbody tr:nth-child(even) td {
+  background: #232436;
+}
+tbody tr:hover td {
+  background: #313244;
+}
+td.num {
+  color: #7f849c;
+  white-space: nowrap;
+}
+td.time {
+  color: #a6adc8;
+  white-space: nowrap;
+  font-size: 0.85em;
+}
+td.level-debug { color: #7f849c; font-weight: 600; white-space: nowrap; }
+td.level-info  { color: #89b4fa; font-weight: 600; white-space: nowrap; }
+td.level-warn  { color: #f9e2af; font-weight: 600; white-space: nowrap; }
+td.level-error { color: #f38ba8; font-weight: 600; white-space: nowrap; }
+td.source {
+  color: #cba6f7;
+  white-space: nowrap;
+  font-size: 0.85em;
+}
+td.message {
+  color: #cdd6f4;
+  word-break: break-all;
+}
+td.data-cell {
+  max-width: 300px;
+  overflow: hidden;
+}
+td.data-cell code {
+  background: #11111b;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: #94e2d5;
+  font-size: 0.8em;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+td.actions {
+  white-space: nowrap;
+}
+.copy-btn {
+  background: #45475a;
+  border: 1px solid #585b70;
+  color: #cdd6f4;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.copy-btn:hover {
+  background: #585b70;
+}
+.copy-btn.copied {
+  background: #a6e3a1;
+  border-color: #a6e3a1;
+  color: #1e1e2e;
+}
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #7f849c;
+}
+.page-footer {
+  text-align: center;
+  padding: 1rem 1rem 2rem;
+  font-size: 0.8rem;
+  color: #7f849c;
+  border-top: 1px solid #313244;
+}`;
+var FILTER_JS = `var activeLevel = 'all';
+var activeSource = 'all';
+
+function applyFilters() {
+  var rows = document.querySelectorAll('tbody tr');
+  for (var i = 0; i < rows.length; i++) {
+    var level = rows[i].dataset.level;
+    var source = rows[i].dataset.source;
+    var levelMatch = activeLevel === 'all' || level === activeLevel;
+    var sourceMatch = activeSource === 'all' || source === activeSource;
+    rows[i].style.display = (levelMatch && sourceMatch) ? '' : 'none';
+  }
+}
+
+function setLevel(filter) {
+  activeLevel = filter;
+  var buttons = document.querySelectorAll('#level-filters .filter-btn');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle('active', buttons[i].dataset.filter === filter);
+  }
+  applyFilters();
+}
+
+function setSource(filter) {
+  activeSource = filter;
+  var buttons = document.querySelectorAll('#source-filters .filter-btn');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle('active', buttons[i].dataset.filter === filter);
+  }
+  applyFilters();
+}
+
+function copyLog(btn) {
+  var row = btn.closest('tr');
+  var timestamp = row.dataset.timestamp;
+  var level = row.dataset.level;
+  var source = row.dataset.source;
+  var msg = row.dataset.msg;
+  var dataText = row.dataset.rawdata || '';
+
+  var text = '[' + timestamp + '] [' + level.toUpperCase() + '] ' + source + ': ' + msg;
+  if (dataText) {
+    text += '\\n' + dataText;
+  }
+
+  navigator.clipboard.writeText(text).then(function() {
+    btn.textContent = '已复制';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = '复制';
+      btn.classList.remove('copied');
+    }, 1500);
+  });
+}`;
+function renderLevelCell(level) {
+  const labels = {
+    debug: "DEBUG",
+    info: "INFO",
+    warn: "WARN",
+    error: "ERROR"
+  };
+  return `<td class="level-${level}">${labels[level] ?? level.toUpperCase()}</td>`;
+}
+function renderDataCell(data) {
+  if (data === undefined || data === null) {
+    return '<td class="data-cell"><code>—</code></td>';
+  }
+  const text = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  return `<td class="data-cell"><code>${escapeHtml2(text)}</code></td>`;
+}
+function renderRow(log, num) {
+  const rawData = log.data !== undefined ? typeof log.data === "string" ? log.data : JSON.stringify(log.data, null, 2) : "";
+  return `        <tr
+          data-level="${escapeAttr(log.level)}"
+          data-source="${escapeAttr(log.source)}"
+          data-timestamp="${escapeAttr(log.timestamp)}"
+          data-msg="${escapeAttr(log.msg)}"
+          data-rawdata="${escapeAttr(rawData)}">
+          <td class="num">${num}</td>
+          <td class="time">${escapeHtml2(log.timestamp)}</td>
+          ${renderLevelCell(log.level)}
+          <td class="source">${escapeHtml2(log.source)}</td>
+          <td class="message">${escapeHtml2(log.msg)}</td>
+          ${renderDataCell(log.data)}
+          <td class="actions"><button class="copy-btn" onclick="copyLog(this)">复制</button></td>
+        </tr>`;
+}
+function collectSources(logs) {
+  const seen = new Set;
+  for (const log of logs) {
+    seen.add(log.source);
+  }
+  return [...seen].sort();
+}
+function escapeHtml2(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function escapeAttr(text) {
+  return text.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function renderLogPage(logs) {
+  const rows = logs.map((log, index) => renderRow(log, index + 1)).join(`
+`);
+  const sources = collectSources(logs);
+  const sourceFilters = sources.map((s) => `        <button class="filter-btn" data-filter="${escapeAttr(s)}" onclick="setSource('${escapeAttr(s)}')">${escapeHtml2(s)}</button>`).join(`
+`);
+  const bodyContent = logs.length === 0 ? `  <main>
+    <div class="empty-state">暂无日志记录。使用 /ly-log on 开启日志。</div>
+  </main>` : `  <header class="page-header">
+    <h1>开发日志</h1>
+    <p>当前会话日志（共 ${logs.length} 条）</p>
+    <div class="filters">
+      <div class="filter-group">
+        <span class="filter-label">级别:</span>
+        <div id="level-filters">
+          <button class="filter-btn active" data-filter="all" onclick="setLevel('all')">全部</button>
+          <button class="filter-btn" data-filter="debug" onclick="setLevel('debug')">DEBUG</button>
+          <button class="filter-btn" data-filter="info" onclick="setLevel('info')">INFO</button>
+          <button class="filter-btn" data-filter="warn" onclick="setLevel('warn')">WARN</button>
+          <button class="filter-btn" data-filter="error" onclick="setLevel('error')">ERROR</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">来源:</span>
+        <div id="source-filters">
+          <button class="filter-btn active" data-filter="all" onclick="setSource('all')">全部</button>
+${sourceFilters}
+        </div>
+      </div>
+    </div>
+  </header>
+  <main>
+    <table>
+      <thead>
+        <tr><th>#</th><th>时间</th><th>级别</th><th>来源</th><th>消息</th><th>数据</th><th></th></tr>
+      </thead>
+      <tbody>
+${rows}
+      </tbody>
+    </table>
+  </main>`;
+  return buildHtmlDocument({
+    title: "开发日志",
+    bodyHtml: bodyContent,
+    css: PAGE_CSS2,
+    js: FILTER_JS
+  });
+}
+
+// my-log/index.ts
+var LOG_CUSTOM_TYPE = "ly-log";
+var LOG_CONFIG_CUSTOM_TYPE = "ly-log-config";
+var _pi = null;
+var _enabled = false;
+function restoreEnabled(ctx) {
+  const entries = ctx.sessionManager.getEntries();
+  for (let i = entries.length - 1;i >= 0; i--) {
+    const entry = entries[i];
+    if (entry.type === "custom" && entry.customType === LOG_CONFIG_CUSTOM_TYPE) {
+      _enabled = entry.data?.enabled === true;
+      return;
+    }
+  }
+  _enabled = false;
+}
+function collectLogEntries(ctx) {
+  const entries = ctx.sessionManager.getEntries();
+  const result = [];
+  for (const entry of entries) {
+    if (entry.type === "custom" && entry.customType === LOG_CUSTOM_TYPE) {
+      const data = entry.data;
+      if (data && typeof data.level === "string" && typeof data.source === "string" && typeof data.msg === "string") {
+        result.push({
+          level: data.level,
+          source: data.source,
+          msg: data.msg,
+          data: data.data,
+          timestamp: entry.timestamp
+        });
+      }
+    }
+  }
+  return result;
+}
+function myLog(pi) {
+  _pi = pi;
+  pi.on("session_start", (_event, ctx) => {
+    restoreEnabled(ctx);
+    pi.events.emit("ly-log:toggle", { enabled: _enabled });
+  });
+  pi.registerCommand("ly-log", {
+    description: "管理开发日志 /ly-log [on|off]",
+    handler: async (args, ctx) => {
+      const sub = args?.trim();
+      if (sub === "on") {
+        _enabled = true;
+        pi.appendEntry(LOG_CONFIG_CUSTOM_TYPE, { enabled: true });
+        pi.events.emit("ly-log:toggle", { enabled: true });
+        ctx.ui.notify("日志已开启", "info");
+        return;
+      }
+      if (sub === "off") {
+        _enabled = false;
+        pi.appendEntry(LOG_CONFIG_CUSTOM_TYPE, { enabled: false });
+        pi.events.emit("ly-log:toggle", { enabled: false });
+        ctx.ui.notify("日志已关闭", "info");
+        return;
+      }
+      const logs = collectLogEntries(ctx);
+      if (logs.length === 0) {
+        ctx.ui.notify("当前会话暂无日志记录。使用 /ly-log on 开启。", "info");
+        return;
+      }
+      try {
+        const sessionId = ctx.sessionManager.getSessionId();
+        const fileUrl = await servePreviewFile(sessionId, "ly-log.html", renderLogPage(logs));
+        ctx.ui.notify(`Preview: ${fileUrl}`, "info");
+      } catch (err) {
+        ctx.ui.notify(`Failed to start preview server: ${err.message}`, "error");
+      }
+    }
+  });
+  pi.on("session_shutdown", async () => {
+    await stopPreviewServer();
   });
 }
 
@@ -57878,11 +58272,23 @@ function createAuthResolver(getApiKeyAndHeaders) {
   if (typeof getApiKeyAndHeaders === "function") {
     return async (model) => {
       const auth = await getApiKeyAndHeaders(model);
-      return auth.ok ? { apiKey: auth.apiKey, headers: auth.headers } : undefined;
+      return auth.ok ? { apiKey: auth.apiKey, headers: auth.headers, env: auth.env } : undefined;
     };
   }
   return async () => {
     return;
+  };
+}
+function createAuthResolverWithFallback(getApiKeyAndHeaders, getApiKeyForProvider) {
+  const standard = createAuthResolver(getApiKeyAndHeaders);
+  return async (model) => {
+    const result = await standard(model);
+    if (result?.apiKey)
+      return result;
+    const apiKey = await getApiKeyForProvider(model.provider);
+    if (apiKey)
+      return { apiKey };
+    return result;
   };
 }
 
@@ -58050,7 +58456,7 @@ function parseJudgeResponse(response) {
 }
 
 // my-permission/log-page.ts
-var PAGE_CSS2 = `body {
+var PAGE_CSS3 = `body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   font-size: 14px;
   line-height: 1.6;
@@ -58181,7 +58587,7 @@ td.na {
   color: #7f849c;
   border-top: 1px solid #313244;
 }`;
-var FILTER_JS = `function filterLogs(filter) {
+var FILTER_JS2 = `function filterLogs(filter) {
   var buttons = document.querySelectorAll('.filter-btn');
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].classList.toggle('active', buttons[i].dataset.filter === filter);
@@ -58196,7 +58602,7 @@ var FILTER_JS = `function filterLogs(filter) {
   }
 }`;
 function renderJudgeLogPage(logs) {
-  const rows = logs.map((log, index) => renderRow(log, index + 1)).reverse().join(`
+  const rows = logs.map((log, index) => renderRow2(log, index + 1)).reverse().join(`
 `);
   return buildHtmlDocument({
     title: "法官判断日志",
@@ -58220,26 +58626,26 @@ ${rows}
     </table>
   </main>
   <footer class="page-footer">Generated by pi · my-permission</footer>`,
-    css: PAGE_CSS2,
-    js: FILTER_JS
+    css: PAGE_CSS3,
+    js: FILTER_JS2
   });
 }
-function renderRow(log, num) {
+function renderRow2(log, num) {
   const verdictClass = log.safe ? "safe" : "unsafe";
   const verdictLabel = log.safe ? "✓ 安全" : "✗ 不安全";
   const scoreText = log.score !== undefined ? `（${log.score}/10）` : "";
   const userCell = log.safe !== false ? '<td class="na">—</td>' : log.userApproved ? '<td class="approved">✓ 批准</td>' : '<td class="denied">✗ 拒绝</td>';
   return `        <tr data-safe="${log.safe}">
           <td class="num">${num}</td>
-          <td>${escapeHtml2(log.toolName)}</td>
-          <td class="command"><code>${escapeHtml2(log.value)}</code></td>
+          <td>${escapeHtml3(log.toolName)}</td>
+          <td class="command"><code>${escapeHtml3(log.value)}</code></td>
           <td class="${verdictClass}">${verdictLabel}${scoreText}</td>
           ${userCell}
-          <td>${escapeHtml2(log.toolFor)}</td>
-          <td>${escapeHtml2(log.reason)}</td>
+          <td>${escapeHtml3(log.toolFor)}</td>
+          <td>${escapeHtml3(log.reason)}</td>
         </tr>`;
 }
-function escapeHtml2(text) {
+function escapeHtml3(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
@@ -58317,10 +58723,15 @@ function createAdvocate(config) {
       const response = await complete2(model, context, {
         thinking: config.professorThinking,
         apiKey: auth?.apiKey,
-        headers: auth?.headers
+        headers: auth?.headers,
+        env: auth?.env
       });
       const cost = response.usage?.cost?.total;
-      const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
+      const errResp = response;
+      if (errResp.stopReason === "error" || errResp.errorMessage) {
+        return { error: `教授模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
+      }
+      const text = response.content.find((c) => c.type === "text")?.text || response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
         return { error: "教授模型返回了空内容" };
       }
@@ -58448,7 +58859,8 @@ function createMerger(config) {
       };
       const response = await complete2(model, context, {
         apiKey: auth?.apiKey,
-        headers: auth?.headers
+        headers: auth?.headers,
+        env: auth?.env
       });
       const cost = response.usage?.cost?.total;
       const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
@@ -58533,10 +58945,15 @@ function createProsecutor(config) {
       const response = await complete3(model, context, {
         thinking: config.professorThinking,
         apiKey: auth?.apiKey,
-        headers: auth?.headers
+        headers: auth?.headers,
+        env: auth?.env
       });
       const cost = response.usage?.cost?.total;
-      const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
+      const errResp = response;
+      if (errResp.stopReason === "error" || errResp.errorMessage) {
+        return { error: `审查模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
+      }
+      const text = response.content.find((c) => c.type === "text")?.text || response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
         return { error: "审查模型返回了空内容" };
       }
@@ -59002,7 +59419,7 @@ async function myPermission(pi) {
   const child = isChildSession();
   async function mergeAndWriteJudgeMd(ctx, opts) {
     const merger = createMerger(config);
-    const mergeResult = await merger(opts.currentJudgeMd, opts.selectedRules, opts.resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders));
+    const mergeResult = await merger(opts.currentJudgeMd, opts.selectedRules, opts.resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)));
     if (mergeResult.error || !mergeResult.mergedText) {
       return {
         content: [
@@ -59075,7 +59492,7 @@ async function myPermission(pi) {
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const advocate = createAdvocate(config);
       const currentJudgeMd = loadFile(join9(process.cwd(), "JUDGE.md"));
-      const result = await advocate(cases, ctx.cwd, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders), currentJudgeMd, judgePrompt);
+      const result = await advocate(cases, ctx.cwd, resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
           content: [
@@ -59148,7 +59565,7 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const prosecutor = createProsecutor(config);
       const currentJudgeMd = loadFile(join9(process.cwd(), "JUDGE.md"));
-      const result = await prosecutor(allowed, ctx.cwd, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders), currentJudgeMd, judgePrompt);
+      const result = await prosecutor(allowed, ctx.cwd, resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
           content: [
@@ -59407,6 +59824,7 @@ function myScriptGuard(pi) {
 async function ly_pi_default(pi) {
   myCdGuard(pi);
   myScriptGuard(pi);
+  myLog(pi);
   await myPermission(pi);
   myBack(pi);
   myHtml(pi);

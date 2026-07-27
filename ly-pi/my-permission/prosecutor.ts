@@ -118,12 +118,21 @@ export function createProsecutor(config: Config): ProsecutorFn {
         thinking: config.professorThinking,
         apiKey: auth?.apiKey,
         headers: auth?.headers,
+        env: auth?.env,
       });
 
       const cost = response.usage?.cost?.total;
 
+      // Surface API-level errors before content extraction.
+      // The event-stream swallows exceptions and returns an error output
+      // with content=[], stopReason="error", and a diagnostic errorMessage.
+      const errResp = response as Record<string, unknown>;
+      if (errResp.stopReason === "error" || errResp.errorMessage) {
+        return { error: `审查模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
+      }
+
       const text =
-        response.content.find((c) => c.type === "text")?.text ??
+        response.content.find((c) => c.type === "text")?.text ||
         response.content
           .flatMap((c) =>
             Object.entries(c as unknown as Record<string, unknown>)

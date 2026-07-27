@@ -128,12 +128,19 @@ export function createAdvocate(config: Config): AdvocateFn {
         thinking: config.professorThinking,
         apiKey: auth?.apiKey,
         headers: auth?.headers,
+        env: auth?.env,
       });
 
       const cost = response.usage?.cost?.total;
 
+      // Surface API-level errors before content extraction.
+      const errResp = response as Record<string, unknown>;
+      if (errResp.stopReason === "error" || errResp.errorMessage) {
+        return { error: `教授模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
+      }
+
       const text =
-        response.content.find((c) => c.type === "text")?.text ??
+        response.content.find((c) => c.type === "text")?.text ||
         response.content
           .flatMap((c) =>
             Object.entries(c as unknown as Record<string, unknown>)
@@ -304,6 +311,7 @@ export function createMerger(config: Config): MergerFn {
       const response = await complete(model, context, {
         apiKey: auth?.apiKey,
         headers: auth?.headers,
+        env: auth?.env,
       });
 
       const cost = response.usage?.cost?.total;

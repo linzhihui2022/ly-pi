@@ -18,6 +18,7 @@ const icons = {
   cacheRate: "\uf080 ",
   terminal: "\uf120  ",
   shield: "\uf132 ",
+  log: "\uf02d ",
 } as const;
 
 export type IconName = keyof typeof icons;

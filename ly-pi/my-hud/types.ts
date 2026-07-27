@@ -37,4 +37,6 @@ export interface StatusLineData {
   judgeStats?: { allowed: number; denied: number };
   /** Judge cost in CNY. */
   judgeCost?: number;
+  /** Whether developer logging is enabled. */
+  logEnabled?: boolean;
 }

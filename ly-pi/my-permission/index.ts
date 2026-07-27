@@ -7,7 +7,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { ANSI as C } from "../src/shared/ansi";
-import { createAuthResolver } from "../src/shared/auth";
+import { createAuthResolver, createAuthResolverWithFallback } from "../src/shared/auth";
 import { resolveExtDir } from "../src/shared/ext-dir";
 import { loadFile } from "../src/shared/file";
 import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
@@ -65,7 +65,10 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       opts.currentJudgeMd,
       opts.selectedRules,
       opts.resolveModel,
-      createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
+      createAuthResolverWithFallback(
+        ctx.modelRegistry.getApiKeyAndHeaders,
+        (p) => ctx.modelRegistry.getApiKeyForProvider(p),
+      ),
     );
 
     if (mergeResult.error || !mergeResult.mergedText) {
@@ -173,7 +176,10 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         cases,
         ctx.cwd,
         resolveModel,
-        createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
+        createAuthResolverWithFallback(
+          ctx.modelRegistry.getApiKeyAndHeaders,
+          (p) => ctx.modelRegistry.getApiKeyForProvider(p),
+        ),
         currentJudgeMd,
         judgePrompt,
       );
@@ -276,7 +282,10 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         allowed,
         ctx.cwd,
         resolveModel,
-        createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders),
+        createAuthResolverWithFallback(
+          ctx.modelRegistry.getApiKeyAndHeaders,
+          (p) => ctx.modelRegistry.getApiKeyForProvider(p),
+        ),
         currentJudgeMd,
         judgePrompt,
       );

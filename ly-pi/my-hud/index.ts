@@ -104,6 +104,12 @@ export default function myHud(pi: ExtensionAPI): void {
     bar?.requestRender();
   });
 
+  // Listen for log toggle events from my-log extension.
+  pi.events.on("ly-log:toggle", (data: { enabled: boolean }) => {
+    bar?.setLogEnabled(data.enabled);
+    requestRender();
+  });
+
   pi.on("agent_start", (_event, ctx) => {
     updateMemoryWarning(ctx);
     // Pick the working message once per agent run: pi fires turn_start on
