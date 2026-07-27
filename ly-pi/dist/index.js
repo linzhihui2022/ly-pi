@@ -54239,10 +54239,6 @@ function myLog(pi) {
   });
 }
 
-// my-permission/index.ts
-import { writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join10 } from "node:path";
-
 // ../node_modules/.bun/typebox@1.2.2/node_modules/typebox/build/system/memory/memory.mjs
 var exports_memory = {};
 __export(exports_memory, {
@@ -58376,6 +58372,67 @@ __export(exports_typebox, {
   Array: () => _Array_,
   Any: () => Any
 });
+// my-reload/index.ts
+var MARKER_TYPE = "reload_marker";
+var CONTINUE_MESSAGE = "继续之前的工作";
+function myReload(pi) {
+  pi.registerTool({
+    name: "request_reload",
+    label: "Request Reload",
+    description: "Mark that the current session needs an extension reload before continuing. " + "Call this after deploying extension changes, then tell the user to run /reload. " + "After reload, the agent will automatically continue working.",
+    parameters: exports_typebox.Object({
+      reason: exports_typebox.String({
+        description: "Why a reload is needed (e.g. 'modified my-hud render logic')"
+      })
+    }),
+    async execute(_toolCallId, params) {
+      pi.appendEntry(MARKER_TYPE, {
+        reason: params.reason,
+        pending: true
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `已标记需要 reload。原因：${params.reason}
+
+` + `请执行 \`/reload\` 以重新加载扩展，之后 agent 将自动继续。`
+          }
+        ],
+        details: {}
+      };
+    }
+  });
+  pi.on("session_start", (event, ctx) => {
+    if (event.reason !== "reload")
+      return;
+    const entries = ctx.sessionManager.getEntries();
+    if (entries.length === 0)
+      return;
+    let markerIndex = -1;
+    for (let i = entries.length - 1;i >= 0; i--) {
+      const entry = entries[i];
+      if (entry.type === "message" && entry.message?.role === "user") {
+        return;
+      }
+      if (entry.type === "custom" && entry.customType === MARKER_TYPE) {
+        const data = entry.data;
+        if (data?.pending) {
+          markerIndex = i;
+          break;
+        }
+      }
+    }
+    if (markerIndex === -1)
+      return;
+    pi.sendUserMessage(CONTINUE_MESSAGE);
+  });
+}
+
+// my-permission/index.ts
+import { writeFileSync as writeFileSync4 } from "node:fs";
+import { join as join10 } from "node:path";
+
 // src/shared/ansi.ts
 var ANSI = {
   reset: "\x1B[0m",
@@ -61068,6 +61125,7 @@ async function ly_pi_default(pi) {
   myScriptGuard(pi);
   myLog(pi);
   await myPermission(pi);
+  myReload(pi);
   myBack(pi);
   myHtml(pi);
   myBt(pi);
