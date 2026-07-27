@@ -6,13 +6,13 @@ function tree(entries: Record<string, string>): ReadonlyMap<string, string> {
 }
 
 const HEALTHY = {
-  "README.md": "| 扩展 | 功能 |\n| --- | --- |\n| **my-hud** | 状态栏 |",
+  "README.md": "| 子模块 | 功能 |\n| --- | --- |\n| **my-hud** | 状态栏 |",
   "AGENTS.md": "no links",
   "docs/agents/issue-tracker.md": "x",
   "docs/agents/domain.md": "x",
   "docs/agents/triage-labels.md":
     "| a | b | c |\n| --- | --- | --- |\n| `needs-triage` | `needs-triage` | x |",
-  "pi-extensions/my-hud/package.json": "{}",
+  "ly-pi/my-hud/index.ts": "",
   ".scratch/feat/issues/01-first.md": "**Status:** needs-triage",
 };
 

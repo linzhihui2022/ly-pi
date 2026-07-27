@@ -9,7 +9,7 @@ describe("checkNoLegacyDocs", () => {
   it("passes when no REQUIREMENTS.md or SPEC.md exists", () => {
     const t = tree({
       "README.md": "x",
-      "pi-extensions/my-hud/index.ts": "x",
+      "ly-pi/my-hud/index.ts": "x",
     });
 
     expect(checkNoLegacyDocs(t)).toEqual([]);
@@ -19,15 +19,15 @@ describe("checkNoLegacyDocs", () => {
     const t = tree({
       "REQUIREMENTS.md": "x",
       "SPEC.md": "x",
-      "pi-extensions/my-hud/REQUIREMENTS.md": "x",
-      "pi-extensions/my-hud/SPEC.md": "x",
+      "ly-pi/my-hud/REQUIREMENTS.md": "x",
+      "ly-pi/my-hud/SPEC.md": "x",
     });
 
     expect(checkNoLegacyDocs(t)).toEqual([
       "legacy doc REQUIREMENTS.md must be removed",
       "legacy doc SPEC.md must be removed",
-      "legacy doc pi-extensions/my-hud/REQUIREMENTS.md must be removed",
-      "legacy doc pi-extensions/my-hud/SPEC.md must be removed",
+      "legacy doc ly-pi/my-hud/REQUIREMENTS.md must be removed",
+      "legacy doc ly-pi/my-hud/SPEC.md must be removed",
     ]);
   });
 });

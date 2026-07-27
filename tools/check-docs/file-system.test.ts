@@ -38,18 +38,18 @@ describe("buildFileTree", () => {
   });
 
   it("stores empty content for non-markdown files", () => {
-    put("pi-extensions/my-hud/package.json", "{}");
+    put("ly-pi/my-hud/package.json", "{}");
 
     const t = buildFileTree(root);
 
-    expect(t.get("pi-extensions/my-hud/package.json")).toBe("");
+    expect(t.get("ly-pi/my-hud/package.json")).toBe("");
   });
 
   it("skips generated and vendored directories", () => {
     put("node_modules/pkg/REQUIREMENTS.md");
     put(".git/HEAD");
-    put("pi-extensions/my-hud/dist/index.js");
-    put("pi-extensions/my-hud/coverage/lcov.info");
+    put("ly-pi/my-hud/dist/index.js");
+    put("ly-pi/my-hud/coverage/lcov.info");
     put(".turbo/cache/x");
     put(".worktrees/copy/README.md");
     put(".pi-subagents/run/log.txt");

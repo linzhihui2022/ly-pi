@@ -1,6 +1,7 @@
 import type { FileTree } from "../types";
 
-const EXTENSION_DIR = /^pi-extensions\/([^/]+)\/package\.json$/;
+/** Match ly-pi submodule directories by their entry point (e.g. ly-pi/my-back/index.ts). */
+const SUBMODULE_ENTRY = /^ly-pi\/(my-[^/]+)\/index\.ts$/;
 const BOLD_NAME = /^\*\*([^*]+)\*\*$/;
 
 function listedExtensions(readme: string): string[] {
@@ -19,24 +20,24 @@ export function checkExtensionTable(tree: FileTree): string[] {
   if (readme === undefined) return ["README.md not found"];
 
   const listed = listedExtensions(readme);
-  const actual: string[] = [];
+  const actual = new Set<string>();
   for (const key of tree.keys()) {
-    const match = EXTENSION_DIR.exec(key);
-    if (match) actual.push(match[1]);
+    const match = SUBMODULE_ENTRY.exec(key);
+    if (match) actual.add(match[1]);
   }
 
   const failures: string[] = [];
   for (const name of actual) {
     if (!listed.includes(name)) {
       failures.push(
-        `pi-extensions/${name} exists but is not listed in the README extension table`,
+        `ly-pi/${name} exists but is not listed in the README extension table`,
       );
     }
   }
   for (const name of listed) {
-    if (!actual.includes(name)) {
+    if (!actual.has(name)) {
       failures.push(
-        `README extension table lists ${name} but pi-extensions/${name} does not exist`,
+        `README extension table lists ${name} but ly-pi/${name} does not exist`,
       );
     }
   }
