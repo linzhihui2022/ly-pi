@@ -1,4 +1,5 @@
-允许读取 /Users/lychee/.pi/agent/ 目录下的配置文件（.md, .json），但禁止读取 /Users/lychee/.pi/agent/auth.json 文件
+允许读取 /Users/lychee/.pi/agent/ 目录下的所有 .md 文件，包括子目录
+允许读取 /Users/lychee/.pi/agent/ 目录下的配置文件 (.json)，但禁止读取 /Users/lychee/.pi/agent/auth.json 文件
 允许读取 /Users/lychee/.pi/agent/extensions/ 目录下的 .js 文件以确认部署内容
 允许在项目内执行 bun build / bun test / bun run deploy 及其组合命令
 允许在项目内及子目录（ly-pi/ 等）执行 bun run build 构建命令
@@ -16,5 +17,7 @@
 允许 biome check --write 自动修复项目内文件
 允许 git push 在 git add/commit 之后执行，仅限已完成提交确认的推送
 允许读取项目依赖的 node_modules 源码（.ts, .js）以进行调试分析，路径需在项目 node_modules 或全局 npm 安装目录下
+执行 git push 前必须确认当前分支不是 main/master，或要求用户显式确认远程推送
+审计 deploy 命令的实际脚本内容（package.json 中 scripts.deploy），若涉及 curl/wget/scp/rsync 等外传操作需人工确认
 禁止编辑 /Users/lychee/.pi/agent/extensions/ 目录下的 .js 文件
 禁止在项目外执行代码检查后触发 build/deploy 组合命令
