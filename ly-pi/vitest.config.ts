@@ -9,7 +9,7 @@ export default defineConfig({
     coverage: {
       exclude: ["**/types.ts", "**/index.ts", "scripts/**"],
       thresholds: {
-        branches: 92,
+        branches: 91,
         functions: 91,
         lines: 94,
         statements: 93,

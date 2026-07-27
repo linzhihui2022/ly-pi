@@ -3,9 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockEnsurePreviewServer = vi.fn();
-const mockStopPreviewServer = vi.fn();
-const mockOpen = vi.fn();
+const { mockEnsurePreviewServer, mockStopPreviewServer, mockOpen } =
+  vi.hoisted(() => ({
+    mockEnsurePreviewServer: vi.fn(),
+    mockStopPreviewServer: vi.fn(),
+    mockOpen: vi.fn(),
+  }));
 
 vi.mock("open", () => ({ default: mockOpen }));
 vi.mock("../../web-preview/index", () => ({

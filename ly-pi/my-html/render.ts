@@ -3,9 +3,10 @@ import { join } from "node:path";
 import hljs from "highlight.js";
 import { Marked } from "marked";
 import { markedHighlight } from "marked-highlight";
+import { resolveExtDir } from "../src/shared/ext-dir";
 import { buildHtmlDocument as buildPreviewDocument } from "../web-preview/index";
 
-const EXT_DIR = __dirname;
+const EXT_DIR = resolveExtDir(import.meta);
 
 const CATPPUCCIN_MOCHA_HLJS = `/* Catppuccin Mocha for Highlight.js */
 .markdown-body .hljs,
