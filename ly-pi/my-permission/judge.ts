@@ -84,6 +84,7 @@ export function createJudge(
       const parsed = parseJudgeResponse(response);
       if (parsed) {
         parsed.cost = response.usage?.cost?.total;
+        parsed.modelUsed = `${resolved.provider}/${resolved.id}`;
         log.info("judge verdict", {
           safe: parsed.safe,
           score: parsed.score,

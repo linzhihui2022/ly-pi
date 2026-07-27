@@ -39,6 +39,8 @@ export interface JudgeResult {
   toolFor: string;
   /** Cost in USD from the judge LLM call. */
   cost?: number;
+  /** The actual model used for the judge call (provider/id). */
+  modelUsed?: string;
 }
 
 export interface ToolInput {

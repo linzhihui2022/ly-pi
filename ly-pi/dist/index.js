@@ -58480,6 +58480,7 @@ import {
   readdirSync,
   readFileSync as readFileSync7
 } from "node:fs";
+import { basename as basename2 } from "node:path";
 import { homedir as homedir2 } from "node:os";
 import { join as join8 } from "node:path";
 var COST_TYPES = [
@@ -58496,12 +58497,13 @@ function encodeProjectDir(cwd) {
 function getCostsDir() {
   return join8(homedir2(), ".pi", "costs");
 }
-function getCostsFilePath(sessionId, cwd) {
-  return join8(getCostsDir(), encodeProjectDir(cwd), `${sessionId}.jsonl`);
+function getCostsFilePath(sessionId, cwd, costsDir) {
+  return join8(costsDir ?? getCostsDir(), encodeProjectDir(cwd), `${sessionId}.jsonl`);
 }
-function appendCost(sessionId, cwd, type, cost, model) {
-  const filePath = getCostsFilePath(sessionId, cwd);
-  const dir = join8(getCostsDir(), encodeProjectDir(cwd));
+function appendCost(sessionId, cwd, type, cost, model, opts) {
+  const baseDir = opts?.costsDir ?? getCostsDir();
+  const filePath = getCostsFilePath(sessionId, cwd, baseDir);
+  const dir = join8(baseDir, encodeProjectDir(cwd));
   if (!existsSync3(dir)) {
     mkdirSync3(dir, { recursive: true });
   }
@@ -58536,6 +58538,43 @@ function addToBucket(bucket, cost, model, date) {
   }
   addToStats(bucket.daily[date], cost, model);
 }
+function addToSlot(slot, cost) {
+  slot.totalCost += cost;
+  slot.calls += 1;
+}
+function emptySession(sessionId) {
+  return {
+    sessionId,
+    judge: { totalCost: 0, calls: 0 },
+    advocate: {
+      analysis: { totalCost: 0, calls: 0 },
+      merge: { totalCost: 0, calls: 0 }
+    },
+    prosecutor: {
+      analysis: { totalCost: 0, calls: 0 },
+      merge: { totalCost: 0, calls: 0 }
+    },
+    totalCost: 0,
+    totalCalls: 0,
+    firstTs: "",
+    lastTs: ""
+  };
+}
+function emptyDaily() {
+  return {
+    judge: { totalCost: 0, calls: 0 },
+    advocate: {
+      analysis: { totalCost: 0, calls: 0 },
+      merge: { totalCost: 0, calls: 0 }
+    },
+    prosecutor: {
+      analysis: { totalCost: 0, calls: 0 },
+      merge: { totalCost: 0, calls: 0 }
+    },
+    totalCost: 0,
+    totalCalls: 0
+  };
+}
 function isCostType(value) {
   return typeof value === "string" && COST_TYPES.includes(value);
 }
@@ -58558,7 +58597,7 @@ function parseLine(line) {
     return null;
   }
 }
-function aggregateCosts(cwd) {
+function aggregateCosts(cwd, opts) {
   const result = {
     judge: emptyBucket(),
     advocate: {
@@ -58568,32 +58607,16 @@ function aggregateCosts(cwd) {
     prosecutor: {
       analysis: emptyBucket(),
       merge: emptyBucket()
-    }
+    },
+    models: [],
+    sessions: [],
+    daily: {}
   };
-  const costsDir = getCostsDir();
-  if (cwd) {
-    const projectDir = join8(costsDir, encodeProjectDir(cwd));
-    aggregateProject(result, projectDir);
-  } else {
-    if (!existsSync3(costsDir))
-      return result;
-    const entries = readdirSync(costsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        aggregateProject(result, join8(costsDir, entry.name));
-      }
-    }
-  }
-  return result;
-}
-function aggregateProject(result, projectDir) {
-  if (!existsSync3(projectDir))
-    return;
-  const files = readdirSync(projectDir, { withFileTypes: true });
-  for (const file of files) {
-    if (!file.isFile() || !file.name.endsWith(".jsonl"))
-      continue;
-    const content = readFileSync7(join8(projectDir, file.name), "utf-8");
+  const costsDir = opts?.costsDir ?? getCostsDir();
+  const modelMap = new Map;
+  const sessionMap = new Map;
+  function processFile(filePath, sessionId) {
+    const content = readFileSync7(filePath, "utf-8");
     for (const line of content.split(`
 `)) {
       const entry = parseLine(line);
@@ -58617,8 +58640,380 @@ function aggregateProject(result, projectDir) {
           addToBucket(result.prosecutor.merge, entry.cost, entry.model, date);
           break;
       }
+      let modelEntry = modelMap.get(entry.model);
+      if (!modelEntry) {
+        modelEntry = { totalCost: 0, calls: 0 };
+        modelMap.set(entry.model, modelEntry);
+      }
+      modelEntry.totalCost += entry.cost;
+      modelEntry.calls += 1;
+      let session = sessionMap.get(sessionId);
+      if (!session) {
+        session = emptySession(sessionId);
+        sessionMap.set(sessionId, session);
+      }
+      session.totalCost += entry.cost;
+      session.totalCalls += 1;
+      if (!session.firstTs || entry.ts < session.firstTs)
+        session.firstTs = entry.ts;
+      if (!session.lastTs || entry.ts > session.lastTs)
+        session.lastTs = entry.ts;
+      switch (entry.type) {
+        case "judge":
+          addToSlot(session.judge, entry.cost);
+          break;
+        case "advocate-analysis":
+          addToSlot(session.advocate.analysis, entry.cost);
+          break;
+        case "advocate-merge":
+          addToSlot(session.advocate.merge, entry.cost);
+          break;
+        case "prosecutor-analysis":
+          addToSlot(session.prosecutor.analysis, entry.cost);
+          break;
+        case "prosecutor-merge":
+          addToSlot(session.prosecutor.merge, entry.cost);
+          break;
+      }
+      if (!result.daily[date]) {
+        result.daily[date] = emptyDaily();
+      }
+      const day = result.daily[date];
+      day.totalCost += entry.cost;
+      day.totalCalls += 1;
+      switch (entry.type) {
+        case "judge":
+          addToSlot(day.judge, entry.cost);
+          break;
+        case "advocate-analysis":
+          addToSlot(day.advocate.analysis, entry.cost);
+          break;
+        case "advocate-merge":
+          addToSlot(day.advocate.merge, entry.cost);
+          break;
+        case "prosecutor-analysis":
+          addToSlot(day.prosecutor.analysis, entry.cost);
+          break;
+        case "prosecutor-merge":
+          addToSlot(day.prosecutor.merge, entry.cost);
+          break;
+      }
     }
   }
+  if (cwd) {
+    const projectDir = join8(costsDir, encodeProjectDir(cwd));
+    if (existsSync3(projectDir)) {
+      const files = readdirSync(projectDir, { withFileTypes: true });
+      for (const file of files) {
+        if (!file.isFile() || !file.name.endsWith(".jsonl"))
+          continue;
+        const sessionId = basename2(file.name, ".jsonl");
+        processFile(join8(projectDir, file.name), sessionId);
+      }
+    }
+  } else {
+    if (!existsSync3(costsDir))
+      return result;
+    const entries = readdirSync(costsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory())
+        continue;
+      const projectDir = join8(costsDir, entry.name);
+      const files = readdirSync(projectDir, { withFileTypes: true });
+      for (const file of files) {
+        if (!file.isFile() || !file.name.endsWith(".jsonl"))
+          continue;
+        const sessionId = basename2(file.name, ".jsonl");
+        processFile(join8(projectDir, file.name), sessionId);
+      }
+    }
+  }
+  result.models = Array.from(modelMap.entries()).map(([model, stats]) => ({ model, ...stats })).sort((a, b) => b.totalCost - a.totalCost);
+  result.sessions = Array.from(sessionMap.values()).sort((a, b) => a.firstTs.localeCompare(b.firstTs));
+  return result;
+}
+
+// my-permission/cost-page.ts
+var CNY = 7;
+var PAGE_CSS3 = `body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #cdd6f4;
+  background: #1e1e2e;
+  margin: 0;
+  padding: 0;
+}
+.page-header {
+  padding: 1.5rem 1rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid #313244;
+}
+.page-header h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #cba6f7;
+  margin: 0 0 0.35rem;
+}
+.page-header p {
+  color: #7f849c;
+  font-size: 0.85rem;
+  margin: 0;
+}
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2rem;
+}
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #cba6f7;
+  margin: 2rem 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #45475a;
+}
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  overflow: hidden;
+}
+th, td {
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #313244;
+  font-size: 0.85rem;
+}
+th {
+  background: #313244;
+  color: #cba6f7;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+td.num {
+  color: #7f849c;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+td.cost {
+  color: #f38ba8;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+td.total {
+  font-weight: 700;
+  color: #cba6f7;
+}
+tbody tr:last-child td {
+  border-bottom: none;
+}
+tbody tr:nth-child(even) td {
+  background: #232436;
+}
+tbody tr:hover td {
+  background: #313244;
+}
+.page-footer {
+  text-align: center;
+  padding: 1rem 1rem 2rem;
+  font-size: 0.8rem;
+  color: #7f849c;
+  border-top: 1px solid #313244;
+  margin-top: 2rem;
+}`;
+function renderCostPage(agg) {
+  return buildHtmlDocument({
+    title: "法庭成本统计",
+    bodyHtml: [
+      renderHeader(agg),
+      "  <main>",
+      renderSummaryTable(agg),
+      renderModelTable(agg),
+      renderDailyTable(agg),
+      renderSessionTable(agg),
+      renderFooter()
+    ].join(`
+`),
+    css: PAGE_CSS3
+  });
+}
+function renderHeader(agg) {
+  const total = grandTotal(agg);
+  return `  <header class="page-header">
+    <h1>法庭成本统计</h1>
+    <p>CNY (USD × 7) · ${agg.sessions.length} 个会话 · ${toCny(total.cost)} · ${total.calls} 次调用</p>
+  </header>`;
+}
+function renderSummaryTable(agg) {
+  const total = grandTotal(agg);
+  const rows = buildRoleRows(agg);
+  return `    <h2 class="section-title">角色汇总</h2>
+    <table>
+      <thead>
+        <tr><th>角色</th><th>调用次数</th><th>成本</th></tr>
+      </thead>
+      <tbody>
+${rows}
+        <tr>
+          <td class="num total">总计</td>
+          <td class="num total">${total.calls}</td>
+          <td class="cost total">${toCny(total.cost)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+function renderModelTable(agg) {
+  if (agg.models.length === 0)
+    return "";
+  const rows = agg.models.map((m) => `        <tr>
+          <td>${escapeHtml3(m.model)}</td>
+          <td class="num">${m.calls}</td>
+          <td class="cost">${toCny(m.totalCost)}</td>
+        </tr>`).join(`
+`);
+  return `    <h2 class="section-title">模型分布</h2>
+    <table>
+      <thead>
+        <tr><th>模型</th><th>调用次数</th><th>成本</th></tr>
+      </thead>
+      <tbody>
+${rows}
+      </tbody>
+    </table>`;
+}
+function renderDailyTable(agg) {
+  const dates = Object.keys(agg.daily).sort();
+  if (dates.length === 0)
+    return "";
+  const rows = dates.map((date) => {
+    const d = agg.daily[date];
+    return `        <tr>
+          <td>${date}</td>
+          <td class="num">${d.judge.calls}</td>
+          <td class="cost">${toCny(d.judge.totalCost)}</td>
+          <td class="num">${d.advocate.analysis.calls + d.advocate.merge.calls}</td>
+          <td class="cost">${toCny(d.advocate.analysis.totalCost + d.advocate.merge.totalCost)}</td>
+          <td class="num">${d.prosecutor.analysis.calls + d.prosecutor.merge.calls}</td>
+          <td class="cost">${toCny(d.prosecutor.analysis.totalCost + d.prosecutor.merge.totalCost)}</td>
+          <td class="num">${d.totalCalls}</td>
+          <td class="cost total">${toCny(d.totalCost)}</td>
+        </tr>`;
+  }).join(`
+`);
+  return `    <h2 class="section-title">每日明细</h2>
+    <table>
+      <thead>
+        <tr><th>日期</th><th>Judge 调用</th><th>Judge 成本</th><th>Advocate 调用</th><th>Advocate 成本</th><th>Prosecutor 调用</th><th>Prosecutor 成本</th><th>合计调用</th><th>合计成本</th></tr>
+      </thead>
+      <tbody>
+${rows}
+      </tbody>
+    </table>`;
+}
+function renderSessionTable(agg) {
+  if (agg.sessions.length === 0)
+    return "";
+  const limit = 20;
+  const shown = agg.sessions.slice(-limit);
+  const truncated = agg.sessions.length > limit ? `    <p style="color:#7f849c;font-size:0.8rem;margin:0.5rem 0 0">显示最近 ${limit} 条，共 ${agg.sessions.length} 条会话</p>
+` : "";
+  const rows = shown.map((s) => renderSessionRow(s)).join(`
+`);
+  return `    <h2 class="section-title">会话明细</h2>
+${truncated}    <table>
+      <thead>
+        <tr><th>会话</th><th>时间</th><th>Judge</th><th>Advocate</th><th>Prosecutor</th><th>调用</th><th>成本</th></tr>
+      </thead>
+      <tbody>
+${rows}
+      </tbody>
+    </table>`;
+}
+function renderSessionRow(s) {
+  const shortId = s.sessionId.slice(0, 8);
+  const timeRange = s.firstTs ? `${s.firstTs.slice(0, 16)} ~ ${s.lastTs.slice(0, 16)}` : "—";
+  const advCalls = s.advocate.analysis.calls + s.advocate.merge.calls;
+  const advCost = s.advocate.analysis.totalCost + s.advocate.merge.totalCost;
+  const prosCalls = s.prosecutor.analysis.calls + s.prosecutor.merge.calls;
+  const prosCost = s.prosecutor.analysis.totalCost + s.prosecutor.merge.totalCost;
+  return `        <tr>
+          <td>${escapeHtml3(shortId)}</td>
+          <td>${escapeHtml3(timeRange)}</td>
+          <td class="cost">${toCny(s.judge.totalCost)}</td>
+          <td class="cost">${toCny(advCost)}</td>
+          <td class="cost">${toCny(prosCost)}</td>
+          <td class="num">${s.totalCalls}</td>
+          <td class="cost total">${toCny(s.totalCost)}</td>
+        </tr>`;
+}
+function renderFooter() {
+  return `  </main>
+  <footer class="page-footer">Generated by pi · my-permission</footer>`;
+}
+function buildRoleRows(agg) {
+  const rows = [
+    {
+      label: "Judge",
+      cost: agg.judge.totalCost,
+      calls: agg.judge.calls
+    },
+    {
+      label: "Advocate (分析)",
+      cost: agg.advocate.analysis.totalCost,
+      calls: agg.advocate.analysis.calls
+    },
+    {
+      label: "Advocate (合并)",
+      cost: agg.advocate.merge.totalCost,
+      calls: agg.advocate.merge.calls
+    },
+    {
+      label: "Prosecutor (分析)",
+      cost: agg.prosecutor.analysis.totalCost,
+      calls: agg.prosecutor.analysis.calls
+    },
+    {
+      label: "Prosecutor (合并)",
+      cost: agg.prosecutor.merge.totalCost,
+      calls: agg.prosecutor.merge.calls
+    }
+  ];
+  return rows.map((row) => `        <tr>
+          <td>${escapeHtml3(row.label)}</td>
+          <td class="num">${row.calls}</td>
+          <td class="cost">${toCny(row.cost)}</td>
+        </tr>`).join(`
+`);
+}
+function grandTotal(agg) {
+  let cost = 0;
+  let calls = 0;
+  cost += agg.judge.totalCost;
+  calls += agg.judge.calls;
+  cost += agg.advocate.analysis.totalCost;
+  calls += agg.advocate.analysis.calls;
+  cost += agg.advocate.merge.totalCost;
+  calls += agg.advocate.merge.calls;
+  cost += agg.prosecutor.analysis.totalCost;
+  calls += agg.prosecutor.analysis.calls;
+  cost += agg.prosecutor.merge.totalCost;
+  calls += agg.prosecutor.merge.calls;
+  return { cost, calls };
+}
+function toCny(usd) {
+  return `¥${(usd * CNY).toFixed(2)}`;
+}
+function escapeHtml3(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 // my-permission/judge.ts
@@ -58744,7 +59139,7 @@ function parseJudgeResponse(response) {
 }
 
 // my-permission/log-page.ts
-var PAGE_CSS3 = `body {
+var PAGE_CSS4 = `body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   font-size: 14px;
   line-height: 1.6;
@@ -58914,7 +59309,7 @@ ${rows}
     </table>
   </main>
   <footer class="page-footer">Generated by pi · my-permission</footer>`,
-    css: PAGE_CSS3,
+    css: PAGE_CSS4,
     js: FILTER_JS2
   });
 }
@@ -58925,15 +59320,15 @@ function renderRow2(log2, num) {
   const userCell = log2.safe !== false ? '<td class="na">—</td>' : log2.userApproved ? '<td class="approved">✓ 批准</td>' : '<td class="denied">✗ 拒绝</td>';
   return `        <tr data-safe="${log2.safe}">
           <td class="num">${num}</td>
-          <td>${escapeHtml3(log2.toolName)}</td>
-          <td class="command"><code>${escapeHtml3(log2.value)}</code></td>
+          <td>${escapeHtml4(log2.toolName)}</td>
+          <td class="command"><code>${escapeHtml4(log2.value)}</code></td>
           <td class="${verdictClass}">${verdictLabel}${scoreText}</td>
           ${userCell}
-          <td>${escapeHtml3(log2.toolFor)}</td>
-          <td>${escapeHtml3(log2.reason)}</td>
+          <td>${escapeHtml4(log2.toolFor)}</td>
+          <td>${escapeHtml4(log2.reason)}</td>
         </tr>`;
 }
-function escapeHtml3(text) {
+function escapeHtml4(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
@@ -59853,35 +60248,16 @@ async function myPermission(pi) {
     }
   });
   pi.registerCommand("judge-costs", {
-    description: "查看累计的法廷三角色 LLM 成本统计",
+    description: "查看累计的法庭三角色 LLM 成本统计",
     handler: async (_args, ctx) => {
       const agg = aggregateCosts(ctx.cwd);
-      const CNY = 7;
-      const lines = [];
-      const sep = "─".repeat(56);
-      lines.push(`${ANSI.bold}法廷成本统计 (CNY, USD × 7)${ANSI.reset}`);
-      lines.push(sep);
-      lines.push(`  ${"角色".padEnd(20)} ${"调用".padStart(6)} ${"成本".padStart(10)}`);
-      lines.push(sep);
-      let grandTotal = 0;
-      let grandCalls = 0;
-      function addRow(label2, cost, calls) {
-        const cny = `¥${(cost * CNY).toFixed(2)}`;
-        lines.push(`  ${label2.padEnd(20)} ${String(calls).padStart(6)} ${style(cny.padStart(10), ANSI.red)}`);
-        grandTotal += cost;
-        grandCalls += calls;
+      try {
+        const sessionId = ctx.sessionManager.getSessionId();
+        const fileUrl = await servePreviewFile(sessionId, "judge-costs.html", renderCostPage(agg));
+        ctx.ui.notify(`Preview: ${fileUrl}`, "info");
+      } catch (err) {
+        ctx.ui.notify(`Failed to start preview server: ${err.message}`, "error");
       }
-      addRow("Judge", agg.judge.totalCost, agg.judge.calls);
-      addRow("Advocate (分析)", agg.advocate.analysis.totalCost, agg.advocate.analysis.calls);
-      addRow("Advocate (合并)", agg.advocate.merge.totalCost, agg.advocate.merge.calls);
-      addRow("Prosecutor (分析)", agg.prosecutor.analysis.totalCost, agg.prosecutor.analysis.calls);
-      addRow("Prosecutor (合并)", agg.prosecutor.merge.totalCost, agg.prosecutor.merge.calls);
-      lines.push(sep);
-      const totalCny = `¥${(grandTotal * CNY).toFixed(2)}`;
-      lines.push(`  ${"总计".padEnd(20)} ${String(grandCalls).padStart(6)} ${style(totalCny.padStart(10), ANSI.red)}`);
-      lines.push(sep);
-      ctx.ui.notify(lines.join(`
-`), "info");
     }
   });
   pi.registerTool({

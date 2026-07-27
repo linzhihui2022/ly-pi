@@ -6,7 +6,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { ANSI as C, style } from "../src/shared/ansi";
+import { ANSI as C } from "../src/shared/ansi";
 import {
   createAuthResolver,
   createAuthResolverWithFallback,
@@ -16,6 +16,7 @@ import { loadFile } from "../src/shared/file";
 import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
 import { loadConfig } from "./config";
 import { aggregateCosts, appendCost } from "./cost-tracker";
+import { renderCostPage } from "./cost-page";
 import { createJudge } from "./judge";
 import { renderJudgeLogPage } from "./log-page";
 import { createAdvocate, createMerger } from "./professor";
@@ -234,63 +235,24 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   });
 
   pi.registerCommand("judge-costs", {
-    description: "查看累计的法廷三角色 LLM 成本统计",
+    description: "查看累计的法庭三角色 LLM 成本统计",
     handler: async (_args, ctx: ExtensionContext) => {
       const agg = aggregateCosts(ctx.cwd);
-      const CNY = 7;
 
-      const lines: string[] = [];
-      const sep = "─".repeat(56);
-
-      lines.push(`${C.bold}法廷成本统计 (CNY, USD × 7)${C.reset}`);
-      lines.push(sep);
-      lines.push(
-        `  ${"角色".padEnd(20)} ${"调用".padStart(6)} ${"成本".padStart(10)}`,
-      );
-      lines.push(sep);
-
-      let grandTotal = 0;
-      let grandCalls = 0;
-
-      function addRow(label: string, cost: number, calls: number) {
-        const cny = `¥${(cost * CNY).toFixed(2)}`;
-        lines.push(
-          `  ${label.padEnd(20)} ${String(calls).padStart(6)} ${style(cny.padStart(10), C.red)}`,
+      try {
+        const sessionId = ctx.sessionManager.getSessionId();
+        const fileUrl = await servePreviewFile(
+          sessionId,
+          "judge-costs.html",
+          renderCostPage(agg),
         );
-        grandTotal += cost;
-        grandCalls += calls;
+        ctx.ui.notify(`Preview: ${fileUrl}`, "info");
+      } catch (err) {
+        ctx.ui.notify(
+          `Failed to start preview server: ${(err as Error).message}`,
+          "error",
+        );
       }
-
-      addRow("Judge", agg.judge.totalCost, agg.judge.calls);
-      addRow(
-        "Advocate (分析)",
-        agg.advocate.analysis.totalCost,
-        agg.advocate.analysis.calls,
-      );
-      addRow(
-        "Advocate (合并)",
-        agg.advocate.merge.totalCost,
-        agg.advocate.merge.calls,
-      );
-      addRow(
-        "Prosecutor (分析)",
-        agg.prosecutor.analysis.totalCost,
-        agg.prosecutor.analysis.calls,
-      );
-      addRow(
-        "Prosecutor (合并)",
-        agg.prosecutor.merge.totalCost,
-        agg.prosecutor.merge.calls,
-      );
-
-      lines.push(sep);
-      const totalCny = `¥${(grandTotal * CNY).toFixed(2)}`;
-      lines.push(
-        `  ${"总计".padEnd(20)} ${String(grandCalls).padStart(6)} ${style(totalCny.padStart(10), C.red)}`,
-      );
-      lines.push(sep);
-
-      ctx.ui.notify(lines.join("\n"), "info");
     },
   });
 

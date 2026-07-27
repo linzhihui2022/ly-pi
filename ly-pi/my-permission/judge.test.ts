@@ -79,6 +79,7 @@ describe("createJudge", () => {
       score: 8,
       reason: "read only",
       toolFor: "read file",
+      modelUsed: "deepseek/deepseek-v4-flash",
     });
   });
 
@@ -103,6 +104,7 @@ describe("createJudge", () => {
       score: 3,
       reason: "destructive",
       toolFor: "delete files",
+      modelUsed: "deepseek/deepseek-v4-flash",
     });
   });
 
@@ -275,6 +277,7 @@ describe("createJudge", () => {
       score: 9,
       reason: "fallback ok",
       toolFor: "read",
+      modelUsed: "openai/fallback-model",
     });
   });
 
@@ -294,6 +297,7 @@ describe("createJudge", () => {
       score: 7,
       reason: "ok",
       toolFor: "do stuff",
+      modelUsed: "deepseek/deepseek-v4-flash",
     });
   });
 
