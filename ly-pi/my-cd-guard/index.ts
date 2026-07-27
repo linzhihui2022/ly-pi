@@ -15,7 +15,7 @@ export default function myCdGuard(pi: ExtensionAPI): void {
     return {
       systemPrompt:
         event.systemPrompt +
-        `\n\nThe shell starts in ${projectRoot}. Do not prepend \`cd ${projectRoot} &&\` before commands — it is redundant.`,
+        `\n\nCRITICAL: All bash commands execute in ${projectRoot}. NEVER prefix commands with \`cd ${projectRoot} &&\` — it is redundant and will be automatically stripped. Run the command directly instead.`,
     };
   });
 
