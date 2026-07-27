@@ -10,9 +10,9 @@
 
 import type {
   ExtensionAPI,
-  ExtensionCommandContext,
+  ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { createLogger, type Logger } from "../src/shared/logger";
+import { createLogger, type Logger, type WriteFn } from "../src/shared/logger";
 import { renderLogPage, type LogEntryWithTimestamp } from "../src/shared/log-page";
 import {
   servePreviewFile,
@@ -31,14 +31,15 @@ let _enabled = false;
  * Writes are dropped when logging is disabled.
  */
 export function createDevLogger(source: string): Logger {
-  return createLogger(source, (entry) => {
+  const write: WriteFn = (entry) => {
     if (_enabled && _pi) {
       _pi.appendEntry(LOG_CUSTOM_TYPE, entry);
     }
-  });
+  };
+  return createLogger(source, write);
 }
 
-function restoreEnabled(ctx: ExtensionCommandContext): void {
+function restoreEnabled(ctx: ExtensionContext): void {
   const entries = ctx.sessionManager.getEntries();
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
@@ -55,7 +56,7 @@ function restoreEnabled(ctx: ExtensionCommandContext): void {
 }
 
 function collectLogEntries(
-  ctx: ExtensionCommandContext,
+  ctx: ExtensionContext,
 ): LogEntryWithTimestamp[] {
   const entries = ctx.sessionManager.getEntries();
   const result: LogEntryWithTimestamp[] = [];

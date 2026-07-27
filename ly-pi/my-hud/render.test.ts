@@ -213,3 +213,45 @@ describe("hiddenFields", () => {
     expect(line).toContain("1.50");
   });
 });
+
+describe("buildStatusLine log indicator", () => {
+  afterEach(() => {
+    setHiddenFields([]);
+  });
+
+  it("shows LOG when logEnabled is true", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+      logEnabled: true,
+    });
+    expect(line).toContain("LOG");
+  });
+
+  it("hides LOG when logEnabled is false", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+      logEnabled: false,
+    });
+    expect(line).not.toContain("LOG");
+  });
+
+  it("hides LOG when logEnabled is undefined", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+    });
+    expect(line).not.toContain("LOG");
+  });
+
+  it("hides LOG when hiddenFields includes log", () => {
+    setHiddenFields(["log"]);
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+      logEnabled: true,
+    });
+    expect(line).not.toContain("LOG");
+  });
+});

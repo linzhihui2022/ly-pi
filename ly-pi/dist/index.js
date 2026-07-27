@@ -54160,7 +54160,7 @@ var _pi = null;
 var _enabled = false;
 function createDevLogger(source) {
   const write = (entry) => {
-    if (_pi) {
+    if (_enabled && _pi) {
       _pi.appendEntry(LOG_CUSTOM_TYPE, entry);
     }
   };

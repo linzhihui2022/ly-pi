@@ -1,7 +1,10 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai";
+import { createDevLogger } from "../my-log/index";
 import type { DeniedThenApproved } from "./stats";
 import type { Config } from "./types";
+
+const log = createDevLogger("my-permission:professor");
 
 export interface AdvocateSuggestion {
   add: Array<{ rule: string; reason: string }>;
@@ -66,10 +69,16 @@ export function createAdvocate(config: Config): AdvocateFn {
 
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
+      log.error("advocate model not found", { configured: config.professorModel });
       return {
         error: `未找到教授模型: ${config.professorModel}`,
       };
     }
+    log.debug("advocate model resolved", {
+      provider: model.provider,
+      model: model.id,
+      configured: config.professorModel,
+    });
 
     const prompt = buildAdvocatePrompt(cases, currentJudgeMd, judgePrompt, cwd);
     const auth = await getAuth(model);
@@ -136,6 +145,7 @@ export function createAdvocate(config: Config): AdvocateFn {
       // Surface API-level errors before content extraction.
       const errResp = response as Record<string, unknown>;
       if (errResp.stopReason === "error" || errResp.errorMessage) {
+        log.error("advocate API error", { detail: errResp.errorMessage || errResp.stopReason });
         return { error: `教授模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
       }
 
@@ -153,13 +163,21 @@ export function createAdvocate(config: Config): AdvocateFn {
           .join("");
 
       if (!text) {
+        log.error("advocate empty response");
         return { error: "教授模型返回了空内容" };
       }
 
       const parsed = parseAdvocateJson(text);
       if (!parsed) {
+        log.error("advocate parse failed");
         return { error: "教授模型返回了无法解析的 JSON" };
       }
+      log.info("advocate completed", {
+        cases: cases.length,
+        add: parsed.add.length,
+        remove: parsed.remove.length,
+        cost,
+      });
       return { suggestion: parsed, cost };
     } catch (err) {
       return {
@@ -271,6 +289,7 @@ export function createMerger(config: Config): MergerFn {
 
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
+      log.error("merger model not found", { configured: config.professorModel });
       return { error: `未找到教授模型` };
     }
 
@@ -330,11 +349,14 @@ export function createMerger(config: Config): MergerFn {
           .join("");
 
       if (!text) {
+        log.error("merger empty response");
         return { error: "融合模型返回了空内容" };
       }
 
+      log.info("merger completed", { rules: selectedRules.length, cost });
       return { mergedText: text.trim(), cost };
     } catch (err) {
+      log.error("merger call failed", { error: (err as Error).message });
       return { error: `融合模型调用失败: ${(err as Error).message}` };
     }
   };

@@ -1,6 +1,9 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai";
+import { createDevLogger } from "../my-log/index";
 import type { Config, JudgeResult, ToolInput } from "./types";
+
+const log = createDevLogger("my-permission:judge");
 
 export function createJudge(
   config: Config,
@@ -22,8 +25,17 @@ export function createJudge(
   ): Promise<JudgeResult> {
     const resolved = resolveJudgeModel(config, resolveModel, model);
     if (!resolved) {
+      log.warn("judge model not found", {
+        configured: config.judgeModel,
+        fallback: model ? `${model.provider}/${model.id}` : "none",
+      });
       return failureResult("未找到可用的法官模型，请手动确认", input);
     }
+    log.debug("judge model resolved", {
+      provider: resolved.provider,
+      model: resolved.id,
+      configured: config.judgeModel,
+    });
 
     if (!deps?.judgePrompt) {
       return failureResult("法官提示词未加载，请手动确认", input);
@@ -62,7 +74,7 @@ export function createJudge(
 
       if (response.stopReason === "error" || response.errorMessage) {
         const detail = response.errorMessage ?? response.stopReason;
-        console.warn("[my-permission] judge API error:", detail);
+        log.error("judge API error", { detail, model: resolved.id });
         return failureResult(
           `法官模型调用失败: ${detail}`,
           input,
@@ -72,16 +84,19 @@ export function createJudge(
       const parsed = parseJudgeResponse(response);
       if (parsed) {
         parsed.cost = response.usage?.cost?.total;
+        log.info("judge verdict", {
+          safe: parsed.safe,
+          score: parsed.score,
+          cost: parsed.cost,
+          tool: input.toolName,
+        });
         return parsed;
       }
-      console.warn(
-        "[my-permission] judge parse failed, raw content:",
-        JSON.stringify(response.content),
-      );
+      log.warn("judge parse failed", { content: JSON.stringify(response.content) });
       return failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
       clearTimeout(timeout);
-      console.warn("[my-permission] judge call failed:", error);
+      log.error("judge call failed", { error: (error as Error).message });
       if (controller.signal.aborted) {
         return failureResult(
           `法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`,

@@ -105,8 +105,9 @@ export default function myHud(pi: ExtensionAPI): void {
   });
 
   // Listen for log toggle events from my-log extension.
-  pi.events.on("ly-log:toggle", (data: { enabled: boolean }) => {
-    bar?.setLogEnabled(data.enabled);
+  pi.events?.on?.("ly-log:toggle", (data: unknown) => {
+    const event = data as { enabled: boolean };
+    bar?.setLogEnabled(event.enabled);
     requestRender();
   });
 

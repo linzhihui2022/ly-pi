@@ -1,7 +1,10 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai";
+import { createDevLogger } from "../my-log/index";
 import type { JudgeLogEntry } from "./stats";
 import type { Config } from "./types";
+
+const log = createDevLogger("my-permission:prosecutor");
 
 export interface ProsecutorSuggestion {
   add: Array<{ rule: string; reason: string }>;
@@ -54,10 +57,16 @@ export function createProsecutor(config: Config): ProsecutorFn {
 
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
+      log.error("prosecutor model not found", { configured: config.professorModel });
       return {
         error: `未找到审查模型: ${config.professorModel}`,
       };
     }
+    log.debug("prosecutor model resolved", {
+      provider: model.provider,
+      model: model.id,
+      configured: config.professorModel,
+    });
 
     const prompt = buildProsecutorPrompt(
       allowedEntries,
@@ -124,10 +133,9 @@ export function createProsecutor(config: Config): ProsecutorFn {
       const cost = response.usage?.cost?.total;
 
       // Surface API-level errors before content extraction.
-      // The event-stream swallows exceptions and returns an error output
-      // with content=[], stopReason="error", and a diagnostic errorMessage.
       const errResp = response as Record<string, unknown>;
       if (errResp.stopReason === "error" || errResp.errorMessage) {
+        log.error("prosecutor API error", { detail: errResp.errorMessage || errResp.stopReason });
         return { error: `审查模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
       }
 
@@ -145,15 +153,23 @@ export function createProsecutor(config: Config): ProsecutorFn {
           .join("");
 
       if (!text) {
+        log.error("prosecutor empty response");
         return { error: "审查模型返回了空内容" };
       }
 
       const parsed = parseProsecutorJson(text);
       if (!parsed) {
+        log.error("prosecutor parse failed");
         return { error: "审查模型返回了无法解析的 JSON" };
       }
+      log.info("prosecutor completed", {
+        reviewed: allowedEntries.length,
+        findings: parsed.add.length,
+        cost,
+      });
       return { suggestion: parsed, cost };
     } catch (err) {
+      log.error("prosecutor call failed", { error: (err as Error).message });
       return {
         error: `审查模型调用失败: ${(err as Error).message}`,
       };
