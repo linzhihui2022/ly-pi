@@ -59804,7 +59804,7 @@ function buildProsecutorPrompt(allowedEntries, currentJudgeMd, judgePrompt, cwd)
 import { complete as complete4 } from "@earendil-works/pi-ai";
 var log4 = createDevLogger("my-permission:chief");
 function createChief(config) {
-  return async function analyze(currentJudgeMd, judgePrompt, cwd, resolveModel, getAuth) {
+  return async function analyze(currentJudgeMd, judgePrompt, cwd, instruction, resolveModel, getAuth) {
     if (!currentJudgeMd.trim()) {
       return { error: "项目尚未创建 JUDGE.md，无需审计" };
     }
@@ -59823,7 +59823,7 @@ function createChief(config) {
       provider: model.provider,
       model: model.id
     });
-    const prompt = buildChiefPrompt(currentJudgeMd, judgePrompt, cwd);
+    const prompt = buildChiefPrompt(currentJudgeMd, judgePrompt, cwd, instruction);
     const auth = await getAuth(model);
     try {
       const context = {
@@ -59984,28 +59984,17 @@ function createChiefMerger(config) {
     }
   };
 }
-function buildChiefPrompt(currentJudgeMd, judgePrompt, cwd) {
-  return [
+function buildChiefPrompt(currentJudgeMd, judgePrompt, cwd, instruction) {
+  const parts = [
     "以下是 my-permission 权限系统当前使用的 JUDGE.md 和法官提示词。",
-    "请从规则本身出发，审计 JUDGE.md 的质量。",
-    "",
-    `当前项目工作目录: ${cwd}`,
-    "",
-    "---",
-    "",
-    "## 法官提示词（理解规则使用场景）",
-    "",
-    "```",
-    judgePrompt || "（未加载）",
-    "```",
-    "",
-    "---",
-    "",
-    `## 当前 JUDGE.md（共 ${currentJudgeMd.split(`
-`).filter((l) => l.trim()).length} 条规则）`,
-    "",
-    currentJudgeMd
-  ].join(`
+    "请从规则本身出发，审计 JUDGE.md 的质量。"
+  ];
+  if (instruction) {
+    parts.push("", "## 用户额外要求", "", instruction);
+  }
+  parts.push("", `当前项目工作目录: ${cwd}`, "", "---", "", "## 法官提示词（理解规则使用场景）", "", "```", judgePrompt || "（未加载）", "```", "", "---", "", `## 当前 JUDGE.md（共 ${currentJudgeMd.split(`
+`).filter((l) => l.trim()).length} 条规则）`, "", currentJudgeMd);
+  return parts.join(`
 `);
 }
 function parseChiefJson(text) {
@@ -60794,8 +60783,11 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
     label: "审判长",
     description: "审计 JUDGE.md 规则本身的质量——发现矛盾、过宽、冗余、遗漏，输出 add/remove/modify/merge 建议。当用户提到审判长、规则审计、规则审查、规则矛盾、规则冲突、过宽规则时调用此工具。",
     promptSnippet: "permission_chief — 审计 JUDGE.md 规则质量，发现矛盾与盲区",
-    parameters: exports_typebox.Object({}),
+    parameters: exports_typebox.Object({
+      instruction: exports_typebox.Optional(exports_typebox.String())
+    }),
     execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
+      const instruction = _params.instruction;
       const currentJudgeMd = loadFile(join10(process.cwd(), "JUDGE.md"));
       if (!currentJudgeMd || !currentJudgeMd.trim()) {
         return {
@@ -60810,7 +60802,7 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
       }
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const chief = createChief(config);
-      const result = await chief(currentJudgeMd, judgePrompt, ctx.cwd, resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)));
+      const result = await chief(currentJudgeMd, judgePrompt, ctx.cwd, instruction, resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)));
       if (result.error) {
         return {
           content: [

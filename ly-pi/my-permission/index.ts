@@ -620,8 +620,11 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       "审计 JUDGE.md 规则本身的质量——发现矛盾、过宽、冗余、遗漏，输出 add/remove/modify/merge 建议。当用户提到审判长、规则审计、规则审查、规则矛盾、规则冲突、过宽规则时调用此工具。",
     promptSnippet:
       "permission_chief — 审计 JUDGE.md 规则质量，发现矛盾与盲区",
-    parameters: Type.Object({}),
+    parameters: Type.Object({
+      instruction: Type.Optional(Type.String()),
+    }),
     execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
+      const instruction = (_params as { instruction?: string }).instruction;
       const currentJudgeMd = loadFile(join(process.cwd(), "JUDGE.md"));
 
       if (!currentJudgeMd || !currentJudgeMd.trim()) {
@@ -644,6 +647,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         currentJudgeMd,
         judgePrompt,
         ctx.cwd,
+        instruction,
         resolveModel,
         createAuthResolverWithFallback(
           ctx.modelRegistry.getApiKeyAndHeaders,

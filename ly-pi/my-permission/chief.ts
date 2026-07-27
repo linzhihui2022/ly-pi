@@ -41,6 +41,7 @@ export type ChiefFn = (
   currentJudgeMd: string,
   judgePrompt: string,
   cwd: string,
+  instruction?: string,
   resolveModel: (provider: string, id: string) => Model<Api> | undefined,
   getAuth: (
     model: Model<Api>,
@@ -67,6 +68,7 @@ export function createChief(config: Config): ChiefFn {
     currentJudgeMd: string,
     judgePrompt: string,
     cwd: string,
+    instruction: string | undefined,
     resolveModel: (provider: string, id: string) => Model<Api> | undefined,
     getAuth: (
       model: Model<Api>,
@@ -99,6 +101,7 @@ export function createChief(config: Config): ChiefFn {
       currentJudgeMd,
       judgePrompt,
       cwd,
+      instruction,
     );
     const auth = await getAuth(model);
 
@@ -310,10 +313,18 @@ function buildChiefPrompt(
   currentJudgeMd: string,
   judgePrompt: string,
   cwd: string,
+  instruction?: string,
 ): string {
-  return [
+  const parts = [
     "以下是 my-permission 权限系统当前使用的 JUDGE.md 和法官提示词。",
     "请从规则本身出发，审计 JUDGE.md 的质量。",
+  ];
+
+  if (instruction) {
+    parts.push("", "## 用户额外要求", "", instruction);
+  }
+
+  parts.push(
     "",
     `当前项目工作目录: ${cwd}`,
     "",
@@ -330,7 +341,9 @@ function buildChiefPrompt(
     `## 当前 JUDGE.md（共 ${currentJudgeMd.split("\n").filter((l) => l.trim()).length} 条规则）`,
     "",
     currentJudgeMd,
-  ].join("\n");
+  );
+
+  return parts.join("\n");
 }
 
 // ---- JSON parser ----
