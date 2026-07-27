@@ -1,0 +1,21 @@
+{
+  "name": "web-preview",
+  "module": "index.ts",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "typecheck": "bun x tsgo --noEmit",
+    "test": "npx vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^25.9.1",
+    "vitest": "^4"
+  },
+  "peerDependencies": {
+    "@typescript/native-preview": "^7.0.0-beta"
+  }
+}
