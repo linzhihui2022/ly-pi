@@ -6,12 +6,16 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { ANSI as C } from "../src/shared/ansi";
-import { createAuthResolver, createAuthResolverWithFallback } from "../src/shared/auth";
+import { ANSI as C, style } from "../src/shared/ansi";
+import {
+  createAuthResolver,
+  createAuthResolverWithFallback,
+} from "../src/shared/auth";
 import { resolveExtDir } from "../src/shared/ext-dir";
 import { loadFile } from "../src/shared/file";
 import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
 import { loadConfig } from "./config";
+import { aggregateCosts, appendCost } from "./cost-tracker";
 import { createJudge } from "./judge";
 import { renderJudgeLogPage } from "./log-page";
 import { createAdvocate, createMerger } from "./professor";
@@ -30,6 +34,79 @@ import {
   resolveSymlinkedPaths,
   stringifyToolInput,
 } from "./utils";
+
+// ---- diff helpers ----
+
+const GREY = "\x1b[90m";
+
+interface DiffLine {
+  type: "keep" | "add" | "remove";
+  text: string;
+}
+
+/** Compute line-level diff between old and new text using LCS. */
+function computeDiff(oldText: string, newText: string): DiffLine[] {
+  const oldLines = oldText.split("\n");
+  const newLines = newText.split("\n");
+  const m = oldLines.length;
+  const n = newLines.length;
+
+  const dp: number[][] = Array.from({ length: m + 1 }, () =>
+    new Array(n + 1).fill(0),
+  );
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (oldLines[i - 1] === newLines[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  const result: DiffLine[] = [];
+  let i = m;
+  let j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      result.unshift({ type: "keep", text: oldLines[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.unshift({ type: "add", text: newLines[j - 1] });
+      j--;
+    } else {
+      result.unshift({ type: "remove", text: oldLines[i - 1] });
+      i--;
+    }
+  }
+  return result;
+}
+
+/** Format diff as color-coded text for confirm dialog body. */
+function formatDiff(oldText: string, newText: string): string {
+  const diff = computeDiff(oldText, newText);
+  const adds = diff.filter((d) => d.type === "add").length;
+  const removes = diff.filter((d) => d.type === "remove").length;
+
+  const lines: string[] = [];
+  lines.push(
+    `${C.bold}变更预览 (${adds + removes} 处: ${C.green}+${adds}${C.reset}${C.bold} ${C.red}−${removes}${C.reset}${C.bold})${C.reset}`,
+  );
+  lines.push("");
+
+  for (const d of diff) {
+    if (d.type === "keep") {
+      lines.push(`${GREY}  ${d.text}${C.reset}`);
+    } else if (d.type === "add") {
+      lines.push(`${C.green}+ ${d.text}${C.reset}`);
+    } else {
+      lines.push(`${C.red}− ${d.text}${C.reset}`);
+    }
+  }
+
+  return lines.join("\n");
+}
 
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const extensionDir = resolveExtDir(import.meta);
@@ -58,6 +135,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       analysisCost?: number;
       label: string;
       emoji: string;
+      mergeCostType: "advocate-merge" | "prosecutor-merge";
     },
   ) {
     const merger = createMerger(config);
@@ -83,15 +161,26 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       };
     }
 
+    if (mergeResult.cost !== undefined) {
+      appendCost(
+        ctx.sessionManager.getSessionId(),
+        ctx.cwd,
+        opts.mergeCostType,
+        mergeResult.cost,
+        config.professorModel,
+      );
+    }
+
     const totalCost = (opts.analysisCost ?? 0) + (mergeResult.cost ?? 0);
     ctx.ui.notify(
       `${opts.emoji} ${opts.label}费用: $${totalCost.toFixed(6)} (分析 $${(opts.analysisCost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`,
       "info",
     );
 
+    const diffBody = formatDiff(opts.currentJudgeMd, mergeResult.mergedText);
     const write = await ctx.ui.confirm(
       `${opts.emoji} ${opts.label}融合完成 — 确认写入？`,
-      `${C.green}${mergeResult.mergedText}${C.reset}`,
+      diffBody,
     );
 
     if (write) {
@@ -144,6 +233,67 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     },
   });
 
+  pi.registerCommand("judge-costs", {
+    description: "查看累计的法廷三角色 LLM 成本统计",
+    handler: async (_args, ctx: ExtensionContext) => {
+      const agg = aggregateCosts(ctx.cwd);
+      const CNY = 7;
+
+      const lines: string[] = [];
+      const sep = "─".repeat(56);
+
+      lines.push(`${C.bold}法廷成本统计 (CNY, USD × 7)${C.reset}`);
+      lines.push(sep);
+      lines.push(
+        `  ${"角色".padEnd(20)} ${"调用".padStart(6)} ${"成本".padStart(10)}`,
+      );
+      lines.push(sep);
+
+      let grandTotal = 0;
+      let grandCalls = 0;
+
+      function addRow(label: string, cost: number, calls: number) {
+        const cny = `¥${(cost * CNY).toFixed(2)}`;
+        lines.push(
+          `  ${label.padEnd(20)} ${String(calls).padStart(6)} ${style(cny.padStart(10), C.red)}`,
+        );
+        grandTotal += cost;
+        grandCalls += calls;
+      }
+
+      addRow("Judge", agg.judge.totalCost, agg.judge.calls);
+      addRow(
+        "Advocate (分析)",
+        agg.advocate.analysis.totalCost,
+        agg.advocate.analysis.calls,
+      );
+      addRow(
+        "Advocate (合并)",
+        agg.advocate.merge.totalCost,
+        agg.advocate.merge.calls,
+      );
+      addRow(
+        "Prosecutor (分析)",
+        agg.prosecutor.analysis.totalCost,
+        agg.prosecutor.analysis.calls,
+      );
+      addRow(
+        "Prosecutor (合并)",
+        agg.prosecutor.merge.totalCost,
+        agg.prosecutor.merge.calls,
+      );
+
+      lines.push(sep);
+      const totalCny = `¥${(grandTotal * CNY).toFixed(2)}`;
+      lines.push(
+        `  ${"总计".padEnd(20)} ${String(grandCalls).padStart(6)} ${style(totalCny.padStart(10), C.red)}`,
+      );
+      lines.push(sep);
+
+      ctx.ui.notify(lines.join("\n"), "info");
+    },
+  });
+
   pi.registerTool({
     name: "permission_advocate",
     label: "辩护人",
@@ -191,6 +341,16 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
           ],
           details: {},
         };
+      }
+
+      if (result.cost !== undefined) {
+        appendCost(
+          ctx.sessionManager.getSessionId(),
+          ctx.cwd,
+          "advocate-analysis",
+          result.cost,
+          config.professorModel,
+        );
       }
 
       const suggestion = result.suggestion;
@@ -245,6 +405,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         analysisCost: result.cost,
         label: "辩护人",
         emoji: "🎓",
+        mergeCostType: "advocate-merge",
       });
     },
   });
@@ -299,6 +460,16 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
+      if (result.cost !== undefined) {
+        appendCost(
+          ctx.sessionManager.getSessionId(),
+          ctx.cwd,
+          "prosecutor-analysis",
+          result.cost,
+          config.professorModel,
+        );
+      }
+
       const suggestion = result.suggestion;
       if (!suggestion || suggestion.add.length === 0) {
         return {
@@ -345,6 +516,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         analysisCost: result.cost,
         label: "检察官",
         emoji: "⚖️",
+        mergeCostType: "prosecutor-merge",
       });
     },
   });
@@ -358,11 +530,15 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       judgePrompt,
       localJudge,
       getAuth: async (model) => {
-        const standard = createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders);
+        const standard = createAuthResolver(
+          ctx.modelRegistry.getApiKeyAndHeaders,
+        );
         const result = await standard(model);
         if (result?.apiKey) return result;
         // Fallback: get API key directly from provider credential store
-        const apiKey = await ctx.modelRegistry.getApiKeyForProvider(model.provider);
+        const apiKey = await ctx.modelRegistry.getApiKeyForProvider(
+          model.provider,
+        );
         if (apiKey) return { apiKey };
         return result;
       },
@@ -393,6 +569,15 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       resolveModel,
     );
     recordJudgeStats(pi, { toolName, value }, judgeResult);
+    if (judgeResult.cost !== undefined && judgeResult.modelUsed) {
+      appendCost(
+        ctx.sessionManager.getSessionId(),
+        ctx.cwd,
+        "judge",
+        judgeResult.cost,
+        judgeResult.modelUsed,
+      );
+    }
     if (judgeResult.safe === true) return undefined;
 
     if (child || !ctx.hasUI) {

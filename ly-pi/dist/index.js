@@ -54241,7 +54241,7 @@ function myLog(pi) {
 
 // my-permission/index.ts
 import { writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join9 } from "node:path";
+import { join as join10 } from "node:path";
 
 // ../node_modules/.bun/typebox@1.2.2/node_modules/typebox/build/system/memory/memory.mjs
 var exports_memory = {};
@@ -58472,6 +58472,155 @@ async function loadConfig2(configPath) {
   }
 }
 
+// my-permission/cost-tracker.ts
+import {
+  appendFileSync,
+  existsSync as existsSync3,
+  mkdirSync as mkdirSync3,
+  readdirSync,
+  readFileSync as readFileSync7
+} from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { join as join8 } from "node:path";
+var COST_TYPES = [
+  "judge",
+  "advocate-analysis",
+  "advocate-merge",
+  "prosecutor-analysis",
+  "prosecutor-merge"
+];
+function encodeProjectDir(cwd) {
+  const trimmed = cwd.replace(/^\//, "").replace(/\/$/, "");
+  return `--${trimmed.replace(/\//g, "-")}--`;
+}
+function getCostsDir() {
+  return join8(homedir2(), ".pi", "costs");
+}
+function getCostsFilePath(sessionId, cwd) {
+  return join8(getCostsDir(), encodeProjectDir(cwd), `${sessionId}.jsonl`);
+}
+function appendCost(sessionId, cwd, type, cost, model) {
+  const filePath = getCostsFilePath(sessionId, cwd);
+  const dir = join8(getCostsDir(), encodeProjectDir(cwd));
+  if (!existsSync3(dir)) {
+    mkdirSync3(dir, { recursive: true });
+  }
+  const entry = JSON.stringify({
+    type,
+    cost,
+    model,
+    ts: new Date().toISOString()
+  });
+  appendFileSync(filePath, `${entry}
+`, "utf-8");
+}
+function emptyBucket() {
+  return { totalCost: 0, calls: 0, byModel: {}, daily: {} };
+}
+function emptyStats() {
+  return { totalCost: 0, calls: 0, byModel: {} };
+}
+function addToStats(stats, cost, model) {
+  stats.totalCost += cost;
+  stats.calls += 1;
+  if (!stats.byModel[model]) {
+    stats.byModel[model] = { totalCost: 0, calls: 0 };
+  }
+  stats.byModel[model].totalCost += cost;
+  stats.byModel[model].calls += 1;
+}
+function addToBucket(bucket, cost, model, date) {
+  addToStats(bucket, cost, model);
+  if (!bucket.daily[date]) {
+    bucket.daily[date] = emptyStats();
+  }
+  addToStats(bucket.daily[date], cost, model);
+}
+function isCostType(value) {
+  return typeof value === "string" && COST_TYPES.includes(value);
+}
+function isValidEntry(entry) {
+  if (!entry || typeof entry !== "object")
+    return false;
+  const e = entry;
+  return isCostType(e.type) && typeof e.cost === "number" && !Number.isNaN(e.cost) && typeof e.model === "string" && typeof e.ts === "string";
+}
+function parseLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed)
+    return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!isValidEntry(parsed))
+      return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+function aggregateCosts(cwd) {
+  const result = {
+    judge: emptyBucket(),
+    advocate: {
+      analysis: emptyBucket(),
+      merge: emptyBucket()
+    },
+    prosecutor: {
+      analysis: emptyBucket(),
+      merge: emptyBucket()
+    }
+  };
+  const costsDir = getCostsDir();
+  if (cwd) {
+    const projectDir = join8(costsDir, encodeProjectDir(cwd));
+    aggregateProject(result, projectDir);
+  } else {
+    if (!existsSync3(costsDir))
+      return result;
+    const entries = readdirSync(costsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        aggregateProject(result, join8(costsDir, entry.name));
+      }
+    }
+  }
+  return result;
+}
+function aggregateProject(result, projectDir) {
+  if (!existsSync3(projectDir))
+    return;
+  const files = readdirSync(projectDir, { withFileTypes: true });
+  for (const file of files) {
+    if (!file.isFile() || !file.name.endsWith(".jsonl"))
+      continue;
+    const content = readFileSync7(join8(projectDir, file.name), "utf-8");
+    for (const line of content.split(`
+`)) {
+      const entry = parseLine(line);
+      if (!entry)
+        continue;
+      const date = entry.ts.slice(0, 10);
+      switch (entry.type) {
+        case "judge":
+          addToBucket(result.judge, entry.cost, entry.model, date);
+          break;
+        case "advocate-analysis":
+          addToBucket(result.advocate.analysis, entry.cost, entry.model, date);
+          break;
+        case "advocate-merge":
+          addToBucket(result.advocate.merge, entry.cost, entry.model, date);
+          break;
+        case "prosecutor-analysis":
+          addToBucket(result.prosecutor.analysis, entry.cost, entry.model, date);
+          break;
+        case "prosecutor-merge":
+          addToBucket(result.prosecutor.merge, entry.cost, entry.model, date);
+          break;
+      }
+    }
+  }
+}
+
 // my-permission/judge.ts
 import { complete } from "@earendil-works/pi-ai";
 var log = createDevLogger("my-permission:judge");
@@ -58525,6 +58674,7 @@ function createJudge(config, deps) {
       const parsed = parseJudgeResponse(response);
       if (parsed) {
         parsed.cost = response.usage?.cost?.total;
+        parsed.modelUsed = `${resolved.provider}/${resolved.id}`;
         log.info("judge verdict", {
           safe: parsed.safe,
           score: parsed.score,
@@ -59206,11 +59356,11 @@ function buildProsecutorPrompt(allowedEntries, currentJudgeMd, judgePrompt, cwd)
 
 // my-permission/utils.ts
 import { realpathSync as realpathSync2 } from "node:fs";
-import { homedir as homedir2 } from "node:os";
-import { join as join8, resolve as resolve2 } from "node:path";
+import { homedir as homedir3 } from "node:os";
+import { join as join9, resolve as resolve2 } from "node:path";
 function expandHome(path2) {
   if (path2 === "~" || path2.startsWith("~/")) {
-    return path2.replace("~", homedir2());
+    return path2.replace("~", homedir3());
   }
   return path2;
 }
@@ -59293,7 +59443,7 @@ function resolveSymlinkedPaths(paths, cwd) {
   const resolved = [...paths];
   for (const p of paths) {
     try {
-      const full = p.startsWith("/") || p.startsWith("~") ? join8(p.startsWith("~") ? process.env.HOME ?? "/home" : "/", p.replace(/^~/, "")) : join8(cwd, p);
+      const full = p.startsWith("/") || p.startsWith("~") ? join9(p.startsWith("~") ? process.env.HOME ?? "/home" : "/", p.replace(/^~/, "")) : join9(cwd, p);
       const real = realpathSync2(full);
       if (real !== full) {
         resolved.push(real);
@@ -59578,17 +59728,72 @@ function formatConfirmMessage(options2) {
 }
 
 // my-permission/index.ts
+var GREY = "\x1B[90m";
+function computeDiff(oldText, newText) {
+  const oldLines = oldText.split(`
+`);
+  const newLines = newText.split(`
+`);
+  const m = oldLines.length;
+  const n = newLines.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i2 = 1;i2 <= m; i2++) {
+    for (let j2 = 1;j2 <= n; j2++) {
+      if (oldLines[i2 - 1] === newLines[j2 - 1]) {
+        dp[i2][j2] = dp[i2 - 1][j2 - 1] + 1;
+      } else {
+        dp[i2][j2] = Math.max(dp[i2 - 1][j2], dp[i2][j2 - 1]);
+      }
+    }
+  }
+  const result = [];
+  let i = m;
+  let j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      result.unshift({ type: "keep", text: oldLines[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.unshift({ type: "add", text: newLines[j - 1] });
+      j--;
+    } else {
+      result.unshift({ type: "remove", text: oldLines[i - 1] });
+      i--;
+    }
+  }
+  return result;
+}
+function formatDiff(oldText, newText) {
+  const diff = computeDiff(oldText, newText);
+  const adds = diff.filter((d) => d.type === "add").length;
+  const removes = diff.filter((d) => d.type === "remove").length;
+  const lines = [];
+  lines.push(`${ANSI.bold}变更预览 (${adds + removes} 处: ${ANSI.green}+${adds}${ANSI.reset}${ANSI.bold} ${ANSI.red}−${removes}${ANSI.reset}${ANSI.bold})${ANSI.reset}`);
+  lines.push("");
+  for (const d of diff) {
+    if (d.type === "keep") {
+      lines.push(`${GREY}  ${d.text}${ANSI.reset}`);
+    } else if (d.type === "add") {
+      lines.push(`${ANSI.green}+ ${d.text}${ANSI.reset}`);
+    } else {
+      lines.push(`${ANSI.red}− ${d.text}${ANSI.reset}`);
+    }
+  }
+  return lines.join(`
+`);
+}
 async function myPermission(pi) {
   const extensionDir = resolveExtDir(import.meta);
-  const config = await loadConfig2(join9(extensionDir, "config.json"));
+  const config = await loadConfig2(join10(extensionDir, "config.json"));
   const judgePrompt = (() => {
-    const prompt = loadFile(join9(extensionDir, "judge-prompt.md"));
+    const prompt = loadFile(join10(extensionDir, "judge-prompt.md"));
     if (!prompt) {
       console.warn("[my-permission] judge-prompt.md not found, judge will be disabled");
     }
     return prompt;
   })();
-  const localJudge = loadFile(join9(process.cwd(), "JUDGE.md"));
+  const localJudge = loadFile(join10(process.cwd(), "JUDGE.md"));
   const cache = createSessionCache();
   const child = isChildSession();
   async function mergeAndWriteJudgeMd(ctx, opts) {
@@ -59605,11 +59810,15 @@ async function myPermission(pi) {
         details: {}
       };
     }
+    if (mergeResult.cost !== undefined) {
+      appendCost(ctx.sessionManager.getSessionId(), ctx.cwd, opts.mergeCostType, mergeResult.cost, config.professorModel);
+    }
     const totalCost = (opts.analysisCost ?? 0) + (mergeResult.cost ?? 0);
     ctx.ui.notify(`${opts.emoji} ${opts.label}费用: $${totalCost.toFixed(6)} (分析 $${(opts.analysisCost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`, "info");
-    const write = await ctx.ui.confirm(`${opts.emoji} ${opts.label}融合完成 — 确认写入？`, `${ANSI.green}${mergeResult.mergedText}${ANSI.reset}`);
+    const diffBody = formatDiff(opts.currentJudgeMd, mergeResult.mergedText);
+    const write = await ctx.ui.confirm(`${opts.emoji} ${opts.label}融合完成 — 确认写入？`, diffBody);
     if (write) {
-      writeFileSync4(join9(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
+      writeFileSync4(join10(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
       return {
         content: [
           {
@@ -59643,6 +59852,38 @@ async function myPermission(pi) {
       }
     }
   });
+  pi.registerCommand("judge-costs", {
+    description: "查看累计的法廷三角色 LLM 成本统计",
+    handler: async (_args, ctx) => {
+      const agg = aggregateCosts(ctx.cwd);
+      const CNY = 7;
+      const lines = [];
+      const sep = "─".repeat(56);
+      lines.push(`${ANSI.bold}法廷成本统计 (CNY, USD × 7)${ANSI.reset}`);
+      lines.push(sep);
+      lines.push(`  ${"角色".padEnd(20)} ${"调用".padStart(6)} ${"成本".padStart(10)}`);
+      lines.push(sep);
+      let grandTotal = 0;
+      let grandCalls = 0;
+      function addRow(label2, cost, calls) {
+        const cny = `¥${(cost * CNY).toFixed(2)}`;
+        lines.push(`  ${label2.padEnd(20)} ${String(calls).padStart(6)} ${style(cny.padStart(10), ANSI.red)}`);
+        grandTotal += cost;
+        grandCalls += calls;
+      }
+      addRow("Judge", agg.judge.totalCost, agg.judge.calls);
+      addRow("Advocate (分析)", agg.advocate.analysis.totalCost, agg.advocate.analysis.calls);
+      addRow("Advocate (合并)", agg.advocate.merge.totalCost, agg.advocate.merge.calls);
+      addRow("Prosecutor (分析)", agg.prosecutor.analysis.totalCost, agg.prosecutor.analysis.calls);
+      addRow("Prosecutor (合并)", agg.prosecutor.merge.totalCost, agg.prosecutor.merge.calls);
+      lines.push(sep);
+      const totalCny = `¥${(grandTotal * CNY).toFixed(2)}`;
+      lines.push(`  ${"总计".padEnd(20)} ${String(grandCalls).padStart(6)} ${style(totalCny.padStart(10), ANSI.red)}`);
+      lines.push(sep);
+      ctx.ui.notify(lines.join(`
+`), "info");
+    }
+  });
   pi.registerTool({
     name: "permission_advocate",
     label: "辩护人",
@@ -59665,7 +59906,7 @@ async function myPermission(pi) {
       }
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const advocate = createAdvocate(config);
-      const currentJudgeMd = loadFile(join9(process.cwd(), "JUDGE.md"));
+      const currentJudgeMd = loadFile(join10(process.cwd(), "JUDGE.md"));
       const result = await advocate(cases, ctx.cwd, resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
@@ -59674,6 +59915,9 @@ async function myPermission(pi) {
           ],
           details: {}
         };
+      }
+      if (result.cost !== undefined) {
+        appendCost(ctx.sessionManager.getSessionId(), ctx.cwd, "advocate-analysis", result.cost, config.professorModel);
       }
       const suggestion = result.suggestion;
       if (!suggestion || suggestion.add.length === 0 && suggestion.remove.length === 0) {
@@ -59712,7 +59956,8 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
         resolveModel,
         analysisCost: result.cost,
         label: "辩护人",
-        emoji: "\uD83C\uDF93"
+        emoji: "\uD83C\uDF93",
+        mergeCostType: "advocate-merge"
       });
     }
   });
@@ -59738,7 +59983,7 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
       }
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const prosecutor = createProsecutor(config);
-      const currentJudgeMd = loadFile(join9(process.cwd(), "JUDGE.md"));
+      const currentJudgeMd = loadFile(join10(process.cwd(), "JUDGE.md"));
       const result = await prosecutor(allowed, ctx.cwd, resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
@@ -59747,6 +59992,9 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
           ],
           details: {}
         };
+      }
+      if (result.cost !== undefined) {
+        appendCost(ctx.sessionManager.getSessionId(), ctx.cwd, "prosecutor-analysis", result.cost, config.professorModel);
       }
       const suggestion = result.suggestion;
       if (!suggestion || suggestion.add.length === 0) {
@@ -59786,7 +60034,8 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
         resolveModel,
         analysisCost: result.cost,
         label: "检察官",
-        emoji: "⚖️"
+        emoji: "⚖️",
+        mergeCostType: "prosecutor-merge"
       });
     }
   });
@@ -59827,6 +60076,9 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
     const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
     const judgeResult = await judge({ toolName, value: value2, paths }, ctx.cwd, ctx.model, resolveModel);
     recordJudgeStats(pi, { toolName, value: value2 }, judgeResult);
+    if (judgeResult.cost !== undefined && judgeResult.modelUsed) {
+      appendCost(ctx.sessionManager.getSessionId(), ctx.cwd, "judge", judgeResult.cost, judgeResult.modelUsed);
+    }
     if (judgeResult.safe === true)
       return;
     if (child || !ctx.hasUI) {
