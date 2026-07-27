@@ -250,4 +250,35 @@ describe("Bar PR caching", () => {
 
     expect(getPullRequestNumber).toHaveBeenCalledTimes(1);
   });
+
+  it("renders judge records and their CNY cost", () => {
+    const entries = [
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: { decision: "allowed", cost: 0.05 },
+      },
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: { decision: "denied", cost: 0.02 },
+      },
+    ];
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const theme = createMockTheme();
+    const ctx = {
+      ...createCtx(),
+      sessionManager: { getEntries: () => entries },
+    };
+
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(ctx as unknown as ExtensionContext);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory(mockTui, theme);
+
+    expect(component.render(200)[0]).toContain("1/1/0.49");
+  });
 });

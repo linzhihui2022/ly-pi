@@ -8,7 +8,12 @@ import {
   hyperlink,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
-import { formatCacheRate, formatTokens, shortModelName } from "./format";
+import {
+  formatCacheRate,
+  formatPermissionStats,
+  formatTokens,
+  shortModelName,
+} from "./format";
 import { icon } from "./icons";
 import type { GitStatus, StatusLineData } from "./types";
 
@@ -32,6 +37,7 @@ export function buildStatusLine(
     usage,
     gitStatus,
     pullRequest,
+    judgeStats,
   } = data;
   const show = (field: string): boolean => !hiddenFields.has(field);
   const project =
@@ -107,6 +113,24 @@ export function buildStatusLine(
         `${icon("cacheRate")}${formatCacheRate(usage.input, usage.cacheRead)}`,
       ),
     );
+  }
+
+  const permissionStats = formatPermissionStats(judgeStats);
+  if (show("permission") && permissionStats) {
+    let stat =
+      theme.fg("accent", `${icon("shield")}${judgeStats?.allowed}`) +
+      theme.fg("dim", "/") +
+      theme.fg("error", `${judgeStats?.denied}`);
+    if (
+      typeof data.judgeCost === "number" &&
+      data.judgeCost > 0 &&
+      show("cost")
+    ) {
+      stat +=
+        theme.fg("dim", "/") +
+        theme.fg("thinkingMedium", data.judgeCost.toFixed(2));
+    }
+    parts.push(stat);
   }
 
   return truncateToWidth(parts.join(" "), width);

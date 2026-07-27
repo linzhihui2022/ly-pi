@@ -49227,13 +49227,15 @@ import { join as join3, resolve } from "node:path";
 // src/shared/ext-dir.ts
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-var __dirname = "/Users/lychee/Documents/configure/ly-pi/src/shared";
 function resolveExtDir(importMeta) {
-  if (typeof __dirname !== "undefined")
-    return __dirname;
   if (importMeta) {
     try {
       return dirname(fileURLToPath(importMeta.url));
+    } catch {}
+  }
+  if (!globalThis.__PI_TEST_SKIP_DIRNAME) {
+    try {
+      return eval("__dirname");
     } catch {}
   }
   return process.cwd();
@@ -52408,8 +52410,7 @@ function escape3(html2, encode) {
 }
 
 // my-html/render.ts
-var __dirname = "/Users/lychee/Documents/configure/ly-pi/my-html";
-var EXT_DIR2 = __dirname;
+var EXT_DIR2 = resolveExtDir(import.meta);
 var CATPPUCCIN_MOCHA_HLJS = `/* Catppuccin Mocha for Highlight.js */
 .markdown-body .hljs,
 .markdown-body .hljs-subst {
@@ -52956,6 +52957,13 @@ function setModelShortNames(map) {
 function shortModelName(modelName) {
   return userShortNames[modelName] ?? SHORT_NAMES[modelName] ?? modelName;
 }
+function formatPermissionStats(stats) {
+  if (!stats)
+    return "";
+  if (stats.allowed === 0 && stats.denied === 0)
+    return "";
+  return `${stats.allowed}/${stats.denied}`;
+}
 function formatCacheRate(input, cacheRead) {
   const total = cacheRead + input;
   if (total === 0)
@@ -53170,7 +53178,8 @@ function buildStatusLine(theme, width, data) {
     ctxColored,
     usage,
     gitStatus,
-    pullRequest
+    pullRequest,
+    judgeStats
   } = data;
   const show = (field) => !hiddenFields.has(field);
   const project = rawProject.length > 10 ? `${rawProject.slice(0, 8)}..` : rawProject;
@@ -53216,6 +53225,14 @@ function buildStatusLine(theme, width, data) {
   if (show("cacheRate")) {
     parts.push(theme.fg("accent", `${icon("cacheRate")}${formatCacheRate(usage.input, usage.cacheRead)}`));
   }
+  const permissionStats = formatPermissionStats(judgeStats);
+  if (show("permission") && permissionStats) {
+    let stat = theme.fg("accent", `${icon("shield")}${judgeStats?.allowed}`) + theme.fg("dim", "/") + theme.fg("error", `${judgeStats?.denied}`);
+    if (typeof data.judgeCost === "number" && data.judgeCost > 0 && show("cost")) {
+      stat += theme.fg("dim", "/") + theme.fg("thinkingMedium", data.judgeCost.toFixed(2));
+    }
+    parts.push(stat);
+  }
   return truncateToWidth(parts.join(" "), width);
 }
 function formatGitStatus(theme, status) {
@@ -53260,6 +53277,32 @@ function extractEntryUsage(entry) {
     };
   }
   return null;
+}
+function aggregateJudgeStats(entries) {
+  let allowed = 0;
+  let denied = 0;
+  for (const entry of entries) {
+    if (entry.type === "custom" && entry.customType === "my-permission-judge") {
+      const decision = entry.data?.decision;
+      if (decision === "allowed")
+        allowed++;
+      else if (decision === "denied")
+        denied++;
+    }
+  }
+  return { allowed, denied };
+}
+function aggregateJudgeCost(entries) {
+  let total = 0;
+  for (const entry of entries) {
+    if (entry.type === "custom" && entry.customType === "my-permission-judge") {
+      const cost = entry.data?.cost;
+      if (typeof cost === "number") {
+        total += cost;
+      }
+    }
+  }
+  return total * USD_TO_CNY;
 }
 function stripSkillTags(text) {
   return text.replace(/<skill[^>]*>[\s\S]*?<\/skill>/g, "").trim();
@@ -53320,6 +53363,8 @@ class Bar {
     cacheWrite: 0,
     cost: 0
   };
+  runningJudgeStats = { allowed: 0, denied: 0 };
+  runningJudgeCost = 0;
   setBranch(branch) {
     this.branch = branch;
   }
@@ -53420,8 +53465,11 @@ class Bar {
         cacheWrite: 0,
         cost: 0
       };
+      this.runningJudgeStats = { allowed: 0, denied: 0 };
+      this.runningJudgeCost = 0;
       this.lastSeenIndex = 0;
     }
+    const newEntries = entries.slice(this.lastSeenIndex);
     for (let i = this.lastSeenIndex;i < entries.length; i++) {
       const usage2 = extractEntryUsage(entries[i]);
       if (usage2) {
@@ -53432,6 +53480,10 @@ class Bar {
         this.runningUsage.cost += usage2.cost;
       }
     }
+    const newJudgeStats = aggregateJudgeStats(newEntries);
+    this.runningJudgeStats.allowed += newJudgeStats.allowed;
+    this.runningJudgeStats.denied += newJudgeStats.denied;
+    this.runningJudgeCost += aggregateJudgeCost(newEntries);
     this.lastSeenIndex = entries.length;
     const usage = this.runningUsage;
     const cu = this.ctx.getContextUsage();
@@ -53445,7 +53497,9 @@ class Bar {
       ctxColored,
       usage,
       gitStatus: this.gitStatus,
-      pullRequest: this.pullRequest
+      pullRequest: this.pullRequest,
+      judgeStats: this.runningJudgeStats,
+      judgeCost: this.runningJudgeCost
     });
     return [line];
   }
@@ -53471,6 +53525,8 @@ class Bar {
       cacheWrite: 0,
       cost: 0
     };
+    this.runningJudgeStats = { allowed: 0, denied: 0 };
+    this.runningJudgeCost = 0;
   }
 }
 
@@ -53668,8 +53724,8 @@ function myHud(pi) {
 }
 
 // my-permission/index.ts
-import { join as join9 } from "node:path";
 import { writeFileSync as writeFileSync4 } from "node:fs";
+import { join as join9 } from "node:path";
 
 // ../node_modules/.bun/typebox@1.2.2/node_modules/typebox/build/system/memory/memory.mjs
 var exports_memory = {};
@@ -57899,7 +57955,10 @@ function createJudge(config, deps) {
     if (!deps?.judgePrompt) {
       return failureResult("法官提示词未加载，请手动确认", input);
     }
-    const auth = deps?.getAuth ? await deps.getAuth(resolved) : undefined;
+    let auth = deps?.getAuth ? await deps.getAuth(resolved) : undefined;
+    if (!auth?.apiKey && model && deps?.getAuth) {
+      auth = await deps.getAuth(model);
+    }
     const prompt = buildJudgePrompt(input, cwd, deps.judgePrompt, deps.localJudge);
     const context = {
       systemPrompt: "You are a security gate. Reply with strict JSON only.",
@@ -57910,18 +57969,27 @@ function createJudge(config, deps) {
     const controller = new AbortController;
     const timeout = setTimeout(() => controller.abort(), config.judgeTimeoutMs);
     try {
-      const response = await complete(resolved, context, {
+      const completeOpts = {
         signal: controller.signal,
-        apiKey: auth?.apiKey,
-        headers: auth?.headers
-      });
+        thinking: "off"
+      };
+      if (auth?.apiKey)
+        completeOpts.apiKey = auth.apiKey;
+      if (auth?.headers)
+        completeOpts.headers = auth.headers;
+      const response = await complete(resolved, context, completeOpts);
       clearTimeout(timeout);
-      const cost = response.usage?.cost?.total;
+      if (response.stopReason === "error" || response.errorMessage) {
+        const detail = response.errorMessage ?? response.stopReason;
+        console.warn("[my-permission] judge API error:", detail);
+        return failureResult(`法官模型调用失败: ${detail}`, input);
+      }
       const parsed = parseJudgeResponse(response);
       if (parsed) {
-        parsed.cost = cost;
+        parsed.cost = response.usage?.cost?.total;
         return parsed;
       }
+      console.warn("[my-permission] judge parse failed, raw content:", JSON.stringify(response.content));
       return failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
       clearTimeout(timeout);
@@ -58996,7 +59064,10 @@ async function myPermission(pi) {
       if (cases.length === 0) {
         return {
           content: [
-            { type: "text", text: "当前会话没有法官误判案例，法官表现完美！" }
+            {
+              type: "text",
+              text: "当前会话没有法官误判案例，法官表现完美！"
+            }
           ],
           details: {}
         };
@@ -59007,7 +59078,9 @@ async function myPermission(pi) {
       const result = await advocate(cases, ctx.cwd, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
-          content: [{ type: "text", text: `辩护人分析失败: ${result.error}` }],
+          content: [
+            { type: "text", text: `辩护人分析失败: ${result.error}` }
+          ],
           details: {}
         };
       }
@@ -59036,7 +59109,9 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
       }
       if (selectedRules.length === 0) {
         return {
-          content: [{ type: "text", text: "未采纳任何规则，JUDGE.md 未修改" }],
+          content: [
+            { type: "text", text: "未采纳任何规则，JUDGE.md 未修改" }
+          ],
           details: {}
         };
       }
@@ -59076,7 +59151,9 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
       const result = await prosecutor(allowed, ctx.cwd, resolveModel, createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
-          content: [{ type: "text", text: `检察官分析失败: ${result.error}` }],
+          content: [
+            { type: "text", text: `检察官分析失败: ${result.error}` }
+          ],
           details: {}
         };
       }
@@ -59129,7 +59206,16 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
     const judge = createJudge(config, {
       judgePrompt,
       localJudge,
-      getAuth: createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders)
+      getAuth: async (model) => {
+        const standard = createAuthResolver(ctx.modelRegistry.getApiKeyAndHeaders);
+        const result = await standard(model);
+        if (result?.apiKey)
+          return result;
+        const apiKey = await ctx.modelRegistry.getApiKeyForProvider(model.provider);
+        if (apiKey)
+          return { apiKey };
+        return result;
+      }
     });
     const toolName = event.toolName;
     const value2 = stringifyToolInput(event);

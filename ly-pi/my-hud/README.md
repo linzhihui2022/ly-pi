@@ -14,6 +14,7 @@ Replaces the built-in footer with a compact, always-on status bar showing:
 | Output |  | Cumulative output tokens this session |
 | Cache Read |  | Cumulative cache-read tokens this session |
 | Cost |  | Estimated cost in CNY (USD × 7) |
+| Permission |  | Judge allowed/denied counts and judge cost in CNY |
 
 ## Context Thresholds
 
@@ -41,7 +42,7 @@ Optional `my-hud.json` inside the extension directory (reloaded via `/reload`):
 ```
 
 - `modelShortNames` — map full model IDs to short display names (overrides builtins)
-- `hiddenFields` — hide status line fields; valid keys: `project`, `model`, `branch`, `gitStatus`, `context`, `input`, `output`, `cacheRead`, `cost`, `cacheRate`
+- `hiddenFields` — hide status line fields; valid keys: `project`, `model`, `branch`, `gitStatus`, `context`, `input`, `output`, `cacheRead`, `cost`, `cacheRate`, `permission`
 
 Missing or invalid config falls back to defaults silently.
 

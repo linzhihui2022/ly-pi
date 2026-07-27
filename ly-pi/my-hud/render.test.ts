@@ -92,6 +92,16 @@ describe("buildStatusLine with PR", () => {
     expect(line).toContain("#42");
     expect(line).not.toContain("\u001b]8;;");
   });
+
+  it("shows judge counts and CNY cost together", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+      judgeStats: { allowed: 12, denied: 3 },
+      judgeCost: 0.49,
+    });
+    expect(line).toContain("12/3/0.49");
+  });
 });
 
 describe("hiddenFields", () => {
@@ -171,6 +181,18 @@ describe("hiddenFields", () => {
     const line = buildStatusLine(theme, 200, richData);
     expect(line).toContain("main");
     expect(line).not.toContain("++2");
+  });
+
+  it("hides judge cost while preserving judge counts when cost is hidden", () => {
+    setHiddenFields(["cost"]);
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...richData,
+      judgeStats: { allowed: 12, denied: 3 },
+      judgeCost: 0.49,
+    });
+    expect(line).toContain("12/3");
+    expect(line).not.toContain("12/3/0.49");
   });
 
   it("hides branch but keeps git status", () => {

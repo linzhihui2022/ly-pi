@@ -13,7 +13,11 @@ import { contextColored } from "./format";
 import { getGitStatus } from "./git";
 import { getPullRequestNumber, getRemoteUrl, parseRemoteUrl } from "./pr";
 import { buildStatusLine } from "./render";
-import { extractEntryUsage } from "./session";
+import {
+  aggregateJudgeCost,
+  aggregateJudgeStats,
+  extractEntryUsage,
+} from "./session";
 import type { GitStatus, PullRequestInfo, TokenUsage } from "./types";
 
 const WIDGET_KEY = "my-hud-bar";
@@ -41,6 +45,8 @@ export class Bar {
     cacheWrite: 0,
     cost: 0,
   };
+  private runningJudgeStats = { allowed: 0, denied: 0 };
+  private runningJudgeCost = 0;
 
   setBranch(branch: string | null): void {
     this.branch = branch;
@@ -165,9 +171,12 @@ export class Bar {
         cacheWrite: 0,
         cost: 0,
       };
+      this.runningJudgeStats = { allowed: 0, denied: 0 };
+      this.runningJudgeCost = 0;
       this.lastSeenIndex = 0;
     }
     // Only process entries we haven't seen yet.
+    const newEntries = entries.slice(this.lastSeenIndex);
     for (let i = this.lastSeenIndex; i < entries.length; i++) {
       const usage = extractEntryUsage(entries[i]);
       if (usage) {
@@ -178,6 +187,10 @@ export class Bar {
         this.runningUsage.cost += usage.cost;
       }
     }
+    const newJudgeStats = aggregateJudgeStats(newEntries);
+    this.runningJudgeStats.allowed += newJudgeStats.allowed;
+    this.runningJudgeStats.denied += newJudgeStats.denied;
+    this.runningJudgeCost += aggregateJudgeCost(newEntries);
     this.lastSeenIndex = entries.length;
     const usage = this.runningUsage;
 
@@ -199,6 +212,8 @@ export class Bar {
       usage,
       gitStatus: this.gitStatus,
       pullRequest: this.pullRequest,
+      judgeStats: this.runningJudgeStats,
+      judgeCost: this.runningJudgeCost,
     });
     return [line];
   }
@@ -225,5 +240,7 @@ export class Bar {
       cacheWrite: 0,
       cost: 0,
     };
+    this.runningJudgeStats = { allowed: 0, denied: 0 };
+    this.runningJudgeCost = 0;
   }
 }
