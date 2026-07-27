@@ -1,23 +1,10 @@
-允许读取 /Users/lychee/.pi/agent/ 目录下的所有 .md 文件，包括子目录
-允许读取 /Users/lychee/.pi/agent/ 目录下的配置文件 (.json)，但禁止读取 /Users/lychee/.pi/agent/auth.json 文件
-允许读取 /Users/lychee/.pi/agent/extensions/ 目录下的 .js 文件以确认部署内容
-允许在项目内执行 bun build / bun test / bun run deploy 及其组合命令
-允许在项目内及子目录（ly-pi/ 等）执行 bun run build 构建命令
-允许在子目录执行 bun run test 及其管道组合命令
-允许使用 sed -i 修改项目内的测试文件（*.test.ts）
-允许在项目内执行 git stash / git stash pop 管理临时变更
-允许删除项目内的临时文件及临时标记文件
-允许在项目内执行 echo 等无害命令进行文本输出
-允许查找 /Users/lychee/.pi 下的 session 记录文件
-允许在项目内及子目录执行 biome check 及其管道组合命令（grep、head、tail、sort、uniq、-c 等），可带 --max-diagnostics，仅限无 --write 的只读检查
-允许在项目内执行 bun x tsgo --noEmit 进行类型检查，ly-pi/ 子目录下可先 cd 进入再执行
-允许在项目内使用 grep 搜索项目源代码文件内容
-允许恢复单个子目录到指定 git 提交（git checkout <commit> -- <path>），后可跟 biome check 管道组合命令
-允许 git add 和 git commit 在项目内提交变更
-允许 biome check --write 自动修复项目内文件
-允许 git push 在 git add/commit 之后执行，仅限已完成提交确认的推送
-允许读取项目依赖的 node_modules 源码（.ts, .js）以进行调试分析，路径需在项目 node_modules 或全局 npm 安装目录下
-执行 git push 前必须确认当前分支不是 main/master，或要求用户显式确认远程推送
-审计 deploy 命令的实际脚本内容（package.json 中 scripts.deploy），若涉及 curl/wget/scp/rsync 等外传操作需人工确认
-禁止编辑 /Users/lychee/.pi/agent/extensions/ 目录下的 .js 文件
-禁止在项目外执行代码检查后触发 build/deploy 组合命令
+允许读取 ~/.pi 目录下的 agent 配置（.md/.json）、session 记录、costs 记录，排除含 auth/token/secret 关键字的文件
+允许在项目内执行构建、测试、类型检查、代码检查（无 --write）及源代码搜索命令，支持管道组合（grep/head/tail/sort/uniq/-c），deploy 命令需额外审计脚本内容
+允许在项目内执行 git stash/stash pop、git add、git commit、git checkout 恢复子目录、biome check --write 自动修复等安全版本管理操作
+禁止在项目外目录执行写操作，禁止编辑 ~/.pi/agent/extensions/ 下的 .js 文件
+禁止读取任何敏感凭据文件，包括 ~/.ssh/ 目录、.env 系列、credentials.*、*.pem、*.key
+禁止通过 find -exec/-ok、xargs、heredoc、echo 管道等方式间接执行任意解释器代码（python/node/perl/ruby/php 等）
+禁止网络传输工具（nc/telnet/ssh/scp/rsync/ftp）建立连接，curl 仅限读取且禁止落盘、禁止管道给解释器执行
+禁止 sudo、rm -rf、kill 及 chmod/chown/chgrp 等破坏性或权限变更命令
+允许项目内的常规操作：删除临时文件、echo 输出、sed -i 修改测试文件、读取 node_modules 源码
+执行 git push 或 deploy 前需额外确认：push 时分支非 main/master 或用户确认，deploy 含外传操作需人工审计
