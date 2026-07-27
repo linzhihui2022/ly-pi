@@ -2,7 +2,7 @@
 name: pr-type-design-analyzer
 description: Specialized agent for analyzing type design, encapsulation, and invariant expression in pull request diffs.
 tools: read, bash, grep, find, ls
-model: kimi-coding/k3
+model: kimi-coding/k3-256k
 systemPromptMode: replace
 thinking: max
 acceptanceRole: read-only

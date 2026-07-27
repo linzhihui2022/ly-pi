@@ -2,7 +2,7 @@
 name: pr-code-reviewer
 description: Specialized agent for general code review against project guidelines, bug detection, and code quality. Use as part of a PR review when checking overall correctness and project conventions.
 tools: read, bash, grep, find, ls
-model: kimi-coding/k3
+model: kimi-coding/k3-256k
 systemPromptMode: replace
 thinking: max
 acceptanceRole: read-only

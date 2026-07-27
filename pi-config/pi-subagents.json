@@ -31,33 +31,33 @@
     "disableThinking": false,
     "agentOverrides": {
       "worker": {
-        "model": "kimi-coding/k3",
+        "model": "kimi-coding/k3-256k",
         "fallbackModels": ["deepseek-v4-pro"]
       },
       "reviewer": {
-        "model": "kimi-coding/k3",
+        "model": "kimi-coding/k3-256k",
         "fallbackModels": ["deepseek-v4-pro"]
       },
       "scout": {
         "model": "deepseek/deepseek-v4-flash"
       },
       "planner": {
-        "model": "kimi-coding/k3",
+        "model": "kimi-coding/k3-256k",
         "fallbackModels": ["deepseek-v4-pro"]
       },
       "oracle": {
-        "model": "kimi-coding/k3",
+        "model": "kimi-coding/k3-256k",
         "fallbackModels": ["deepseek-v4-pro"]
       },
       "context-builder": {
-        "model": "kimi-coding/k3",
+        "model": "kimi-coding/k3-256k",
         "fallbackModels": ["deepseek-v4-pro"]
       },
       "delegate": {
         "model": "deepseek/deepseek-v4-flash"
       },
       "researcher": {
-        "model": "kimi-coding/k3",
+        "model": "kimi-coding/k3-256k",
         "fallbackModels": ["deepseek-v4-pro"]
       }
     }
