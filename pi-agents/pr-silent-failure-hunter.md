@@ -2,7 +2,6 @@
 name: pr-silent-failure-hunter
 description: Specialized agent for finding silent failures, inadequate error handling, and inappropriate fallback behavior in pull request diffs.
 tools: read, bash, grep, find, ls
-model: kimi-coding/k3-256k
 systemPromptMode: replace
 thinking: max
 acceptanceRole: read-only

@@ -1,77 +1,110 @@
-import { readFile } from "node:fs/promises";
-import type { Action, Config } from "./types";
+import type { Config } from "./types";
 
-const ACTIONS: Action[] = ["allow", "ask", "deny"];
-
-function createDefaultConfig(): Config {
-  return {
-    defaultPolicy: "ask",
-    judgeModel: "deepseek/deepseek-v4-flash",
-    professorModel: "deepseek/deepseek-v4-pro",
-    professorThinking: "max",
-    judgeTimeoutMs: 8000,
-    childPolicy: "deny-on-unsafe",
-    permission: {},
-  };
-}
-
-function isAction(value: unknown): value is Action {
-  return typeof value === "string" && ACTIONS.includes(value as Action);
-}
-
-function isValidChildPolicy(
-  value: unknown,
-): value is "deny-on-unsafe" | "allow-on-safe" {
-  return value === "deny-on-unsafe" || value === "allow-on-safe";
-}
-
-function isValidPositiveNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
-export async function loadConfig(configPath: string): Promise<Config> {
-  try {
-    const raw = await readFile(configPath, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      console.warn(
-        `[my-permission] invalid config at ${configPath}, using defaults`,
-      );
-      return createDefaultConfig();
-    }
-    const p = parsed as Record<string, unknown>;
-    const def = createDefaultConfig();
-    return {
-      defaultPolicy: isAction(p.defaultPolicy)
-        ? p.defaultPolicy
-        : def.defaultPolicy,
-      judgeModel:
-        typeof p.judgeModel === "string" ? p.judgeModel : def.judgeModel,
-      professorModel:
-        typeof p.professorModel === "string"
-          ? p.professorModel
-          : def.professorModel,
-      professorThinking:
-        typeof p.professorThinking === "string"
-          ? p.professorThinking
-          : def.professorThinking,
-      judgeTimeoutMs: isValidPositiveNumber(p.judgeTimeoutMs)
-        ? p.judgeTimeoutMs
-        : def.judgeTimeoutMs,
-      childPolicy: isValidChildPolicy(p.childPolicy)
-        ? p.childPolicy
-        : def.childPolicy,
-      permission:
-        p.permission &&
-        typeof p.permission === "object" &&
-        !Array.isArray(p.permission)
-          ? (p.permission as Config["permission"])
-          : def.permission,
-    };
-  } catch (error) {
-    console.warn(
-      `[my-permission] failed to load config at ${configPath}, using defaults: ${error}`,
-    );
-    return createDefaultConfig();
-  }
-}
+export const config = {
+  defaultPolicy: "allow",
+  judgeModel: "deepseek/deepseek-v4-flash",
+  professorModel: "deepseek/deepseek-v4-pro",
+  professorThinking: "max",
+  judgeTimeoutMs: 8000,
+  childPolicy: "deny-on-unsafe",
+  permission: {
+    ask_user_question: "allow",
+    bash: {
+      "*": "ask",
+      "awk *": "ask",
+      "biome *": "allow",
+      "bun add *": "allow",
+      "bun build *": "allow",
+      "bun install *": "allow",
+      "bun remove *": "allow",
+      "bun run *": "allow",
+      "bun test *": "allow",
+      "bun x *": "allow",
+      env: "deny",
+      "env |*": "deny",
+      "env|*": "deny",
+      "export -p": "deny",
+      "export -p |*": "deny",
+      "export -p|*": "deny",
+      "gh pr comment *": "ask",
+      "gh pr view *": "allow",
+      "gh run view *": "allow",
+      "git add *": "allow",
+      "git branch --contains *": "allow",
+      "git branch --show-current": "allow",
+      "git diff": "allow",
+      "git diff *": "allow",
+      "git log *": "allow",
+      "git merge-base *": "allow",
+      "git merge-base HEAD main": "allow",
+      "git merge-base HEAD master": "allow",
+      "git rev-parse *": "allow",
+      "git status": "allow",
+      "git status *": "allow",
+      "node *": "allow",
+      "npm install *": "allow",
+      "npm run *": "allow",
+      "npm test *": "allow",
+      "pi update": "allow",
+      "pi update --extensions": "allow",
+      "pnpm install *": "allow",
+      "pnpm run *": "allow",
+      "pnpm sst *": "deny",
+      "pnpm test *": "allow",
+      printenv: "deny",
+      "printenv *": "deny",
+      "rm -rf *": "deny",
+      "rtk find *": "allow",
+      "rtk git add *": "allow",
+      "rtk git branch --contains *": "allow",
+      "rtk git branch --show-current": "allow",
+      "rtk git diff": "allow",
+      "rtk git diff *": "allow",
+      "rtk git log *": "allow",
+      "rtk git merge-base *": "allow",
+      "rtk git merge-base HEAD main": "allow",
+      "rtk git merge-base HEAD master": "allow",
+      "rtk git rev-parse *": "allow",
+      "rtk git status": "allow",
+      "rtk git status *": "allow",
+      "sed *": "allow",
+      set: "deny",
+      "set |*": "deny",
+      "set|*": "deny",
+      "sst *": "deny",
+      "sudo *": "ask",
+      "tsc *": "allow",
+      "vitest *": "allow",
+    },
+    ctx_execute: "allow",
+    external_directory: {
+      "*": "ask",
+      "/Users/lychee/.pi/agent": "allow",
+      "~/.cargo/registry/*": "allow",
+      "~/.npm/_cacache/*": "allow",
+      "~/Library/Caches/*": "allow",
+    },
+    path: {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow",
+      "*.key": "deny",
+      "*.pem": "deny",
+      "*.token": "deny",
+      "*password*": "deny",
+      "*secret*": "deny",
+      ".netrc": "deny",
+      "credentials.*": "deny",
+      "id_ecdsa*": "deny",
+      "id_ed25519*": "deny",
+      "id_rsa*": "deny",
+      "kubeconfig*": "deny",
+      "~/.aws/*": "deny",
+      "~/.kube/*": "deny",
+      "~/.npmrc": "deny",
+      "~/.ssh/*": "deny",
+    },
+    todo: "allow",
+  },
+} as const satisfies Config;

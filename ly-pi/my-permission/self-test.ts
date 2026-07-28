@@ -7,11 +7,10 @@
  * 用法：bun run self-test.ts
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai";
 import { createJudge } from "./judge";
+import { JUDGE_PROMPT } from "./judge-prompt";
 import type { Config, JudgeResult, ToolInput } from "./types";
 
 // ---- Config ----------------------------------------------------------------
@@ -26,10 +25,7 @@ const config: Config = {
   permission: {},
 };
 
-const JUDGE_PROMPT = readFileSync(
-  join(import.meta.dirname, "judge-prompt.md"),
-  "utf-8",
-);
+
 
 const VARIANT_COUNT = 5; // variants per attack category
 

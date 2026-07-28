@@ -1,200 +1,79 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
-import { loadConfig } from "./config";
+import { describe, expect, it } from "vitest";
+import { config } from "./config";
 
-const tmp = join(import.meta.dirname, "tmp-config-test");
-
-afterAll(async () => {
-  await rm(tmp, { recursive: true, force: true });
-});
-
-describe("loadConfig", () => {
-  it("returns defaults when file is missing", async () => {
-    const cfg = await loadConfig(join(tmp, "missing.json"));
-    expect(cfg.defaultPolicy).toBe("ask");
-    expect(cfg.judgeModel).toBe("deepseek/deepseek-v4-flash");
-    expect(cfg.judgeTimeoutMs).toBe(8000);
-    expect(cfg.childPolicy).toBe("deny-on-unsafe");
+describe("config", () => {
+  it("has sensible defaults", () => {
+    expect(config.defaultPolicy).toBe("allow");
+    expect(config.judgeModel).toBe("deepseek/deepseek-v4-flash");
+    expect(config.professorModel).toBe("deepseek/deepseek-v4-pro");
+    expect(config.professorThinking).toBe("max");
+    expect(config.judgeTimeoutMs).toBe(8000);
+    expect(config.childPolicy).toBe("deny-on-unsafe");
   });
 
-  it("merges provided values", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "cfg.json");
-    await writeFile(
-      path,
-      JSON.stringify({ defaultPolicy: "deny", judgeTimeoutMs: 3000 }),
-    );
-    const cfg = await loadConfig(path);
-    expect(cfg.defaultPolicy).toBe("deny");
-    expect(cfg.judgeTimeoutMs).toBe(3000);
-    expect(cfg.judgeModel).toBe("deepseek/deepseek-v4-flash");
+  it("has non-empty permission map", () => {
+    expect(config.permission).toBeTruthy();
+    expect(typeof config.permission).toBe("object");
+    expect(Object.keys(config.permission).length).toBeGreaterThan(0);
   });
 
-  it("falls back on invalid JSON", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "bad.json");
-    await writeFile(path, "not json");
-    const cfg = await loadConfig(path);
-    expect(cfg.defaultPolicy).toBe("ask");
+  it("has permission.ask_user_question set to allow", () => {
+    expect(config.permission.ask_user_question).toBe("allow");
   });
 
-  it("uses defaults when parsed JSON is not an object (string)", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "not-object.json");
-    await writeFile(path, '"just a string"');
-    const cfg = await loadConfig(path);
-    expect(cfg.defaultPolicy).toBe("ask");
+  it("has permission.todo set to allow", () => {
+    expect(config.permission.todo).toBe("allow");
   });
 
-  it("uses defaults when parsed JSON is null", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "null.json");
-    await writeFile(path, "null");
-    const cfg = await loadConfig(path);
-    expect(cfg.defaultPolicy).toBe("ask");
+  it("has bash permission entries", () => {
+    const bash = config.permission.bash;
+    expect(bash).toBeTruthy();
+    expect(typeof bash).toBe("object");
+    // biome-ignore lint/style/noNonNullAssertion: checked above
+    expect(Object.keys(bash!).length).toBeGreaterThan(0);
   });
 
-  it("accepts childPolicy allow-on-safe", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "child.json");
-    await writeFile(path, JSON.stringify({ childPolicy: "allow-on-safe" }));
-    const cfg = await loadConfig(path);
-    expect(cfg.childPolicy).toBe("allow-on-safe");
+  it("has path permission entries", () => {
+    const path = config.permission.path;
+    expect(path).toBeTruthy();
+    expect(typeof path).toBe("object");
   });
 
-  it("uses default childPolicy for unknown value", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "unknown-child.json");
-    await writeFile(path, JSON.stringify({ childPolicy: "auto" }));
-    const cfg = await loadConfig(path);
-    expect(cfg.childPolicy).toBe("deny-on-unsafe");
+  it("has external_directory permission entries", () => {
+    const ed = config.permission.external_directory;
+    expect(ed).toBeTruthy();
+    expect(typeof ed).toBe("object");
   });
 
-  it("accepts custom judgeModel", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "model.json");
-    await writeFile(
-      path,
-      JSON.stringify({ judgeModel: "anthropic/claude-haiku" }),
-    );
-    const cfg = await loadConfig(path);
-    expect(cfg.judgeModel).toBe("anthropic/claude-haiku");
+  it("denies env-related bash commands", () => {
+    const bash = config.permission.bash;
+    expect(bash).toBeTruthy();
+    // biome-ignore lint/style/noNonNullAssertion: checked above
+    const b = bash! as Record<string, string>;
+    expect(b["env"]).toBe("deny");
+    expect(b["set"]).toBe("deny");
+    expect(b["printenv"]).toBe("deny");
   });
 
-  it("accepts custom professorModel", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "prof-model.json");
-    await writeFile(path, JSON.stringify({ professorModel: "openai/gpt-4o" }));
-    const cfg = await loadConfig(path);
-    expect(cfg.professorModel).toBe("openai/gpt-4o");
+  it("denies sensitive path patterns", () => {
+    const path = config.permission.path;
+    expect(path).toBeTruthy();
+    // biome-ignore lint/style/noNonNullAssertion: checked above
+    const p = path! as Record<string, string>;
+    expect(p["*.env"]).toBe("deny");
+    expect(p["*.key"]).toBe("deny");
+    expect(p["*.pem"]).toBe("deny");
+    expect(p["~/.ssh/*"]).toBe("deny");
   });
 
-  it("uses default professorModel when not provided", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "no-prof.json");
-    await writeFile(path, JSON.stringify({}));
-    const cfg = await loadConfig(path);
-    expect(cfg.professorModel).toBe("deepseek/deepseek-v4-pro");
-  });
-
-  it("uses default professorThinking when not provided", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "no-think.json");
-    await writeFile(path, JSON.stringify({}));
-    const cfg = await loadConfig(path);
-    expect(cfg.professorThinking).toBe("max");
-  });
-
-  it("accepts custom professorThinking", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "think.json");
-    await writeFile(path, JSON.stringify({ professorThinking: "high" }));
-    const cfg = await loadConfig(path);
-    expect(cfg.professorThinking).toBe("high");
-  });
-
-  it("falls back defaultPolicy for invalid value", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "bad-default.json");
-    await writeFile(path, JSON.stringify({ defaultPolicy: "maybe" }));
-    const cfg = await loadConfig(path);
-    expect(cfg.defaultPolicy).toBe("ask");
-  });
-
-  it("accepts custom permission object", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "perm.json");
-    await writeFile(path, JSON.stringify({ permission: { read: "allow" } }));
-    const cfg = await loadConfig(path);
-    expect(cfg.permission).toEqual({ read: "allow" });
-  });
-
-  it("rejects permission array, falls back to empty object", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "perm-array.json");
-    await writeFile(path, JSON.stringify({ permission: ["read", "write"] }));
-    const cfg = await loadConfig(path);
-    expect(cfg.permission).toEqual({});
-  });
-
-  it("rejects negative judgeTimeoutMs", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "neg-timeout.json");
-    await writeFile(path, JSON.stringify({ judgeTimeoutMs: -100 }));
-    const cfg = await loadConfig(path);
-    expect(cfg.judgeTimeoutMs).toBe(8000);
-  });
-
-  it("rejects NaN judgeTimeoutMs", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "nan-timeout.json");
-    await writeFile(path, JSON.stringify({ judgeTimeoutMs: NaN }));
-    const cfg = await loadConfig(path);
-    expect(cfg.judgeTimeoutMs).toBe(8000);
-  });
-
-  it("rejects Infinity judgeTimeoutMs", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "inf-timeout.json");
-    await writeFile(path, JSON.stringify({ judgeTimeoutMs: Infinity }));
-    const cfg = await loadConfig(path);
-    expect(cfg.judgeTimeoutMs).toBe(8000);
-  });
-
-  it("explicitly accepts childPolicy deny-on-unsafe", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "child-deny.json");
-    await writeFile(path, JSON.stringify({ childPolicy: "deny-on-unsafe" }));
-    const cfg = await loadConfig(path);
-    expect(cfg.childPolicy).toBe("deny-on-unsafe");
-  });
-
-  it("returns a fresh object each call (not default ref)", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "fresh.json");
-    await writeFile(path, JSON.stringify({ defaultPolicy: "deny" }));
-    const wanted = await loadConfig(join(tmp, "missing.json"));
-    const got = await loadConfig(path);
-    // Mutating got should never affect "wanted"
-    got.defaultPolicy = "ask" as const;
-    expect(wanted.defaultPolicy).toBe("ask");
-  });
-
-  it("returns fresh config per fallback call", async () => {
-    await mkdir(tmp, { recursive: true });
-    const first = await loadConfig(join(tmp, "missing.json"));
-    const second = await loadConfig(join(tmp, "missing2.json"));
-    first.judgeModel = "custom/local";
-    expect(second.judgeModel).toBe("deepseek/deepseek-v4-flash");
-  });
-
-  it("rejects parsed JSON array, uses defaults", async () => {
-    await mkdir(tmp, { recursive: true });
-    const path = join(tmp, "array-root.json");
-    await writeFile(path, JSON.stringify(["a", "b"]));
-    const cfg = await loadConfig(path);
-    expect(cfg.defaultPolicy).toBe("ask");
-    expect(cfg.judgeTimeoutMs).toBe(8000);
+  it("allows common dev commands in bash", () => {
+    const bash = config.permission.bash;
+    expect(bash).toBeTruthy();
+    // biome-ignore lint/style/noNonNullAssertion: checked above
+    const b = bash! as Record<string, string>;
+    expect(b["git status"]).toBe("allow");
+    expect(b["bun run *"]).toBe("allow");
+    expect(b["bun test *"]).toBe("allow");
+    expect(b["node *"]).toBe("allow");
   });
 });

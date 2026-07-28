@@ -2,7 +2,6 @@
 name: pr-test-analyzer
 description: Specialized agent for reviewing test coverage quality and completeness in pull request diffs.
 tools: read, bash, grep, find, ls
-model: kimi-coding/k3-256k
 systemPromptMode: replace
 thinking: max
 acceptanceRole: read-only

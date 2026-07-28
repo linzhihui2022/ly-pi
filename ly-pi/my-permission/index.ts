@@ -11,12 +11,12 @@ import {
   createAuthResolver,
   createAuthResolverWithFallback,
 } from "../src/shared/auth";
-import { resolveExtDir } from "../src/shared/ext-dir";
 import { loadFile } from "../src/shared/file";
 import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
 import type { ChiefSuggestionItem } from "./chief";
 import { createChief, createChiefMerger } from "./chief";
-import { loadConfig } from "./config";
+import { config } from "./config";
+import { JUDGE_PROMPT } from "./judge-prompt";
 import { renderCostPage } from "./cost-page";
 import { aggregateCosts, appendCost } from "./cost-tracker";
 import { createJudge } from "./judge";
@@ -162,18 +162,7 @@ function suggestionTypeDetail(item: {
 }
 
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
-  const extensionDir = resolveExtDir(import.meta);
-  const config = await loadConfig(join(extensionDir, "config.json"));
-
-  const judgePrompt = (() => {
-    const prompt = loadFile(join(extensionDir, "judge-prompt.md"));
-    if (!prompt) {
-      console.warn(
-        "[my-permission] judge-prompt.md not found, judge will be disabled",
-      );
-    }
-    return prompt;
-  })();
+  const judgePrompt = JUDGE_PROMPT;
   const localJudge = loadFile(join(process.cwd(), "JUDGE.md"));
   const cache = createSessionCache();
   const child = isChildSession();

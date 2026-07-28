@@ -58670,52 +58670,151 @@ function parseChiefJson(text) {
 }
 
 // my-permission/config.ts
-import { readFile } from "node:fs/promises";
-var ACTIONS = ["allow", "ask", "deny"];
-function createDefaultConfig() {
-  return {
-    defaultPolicy: "ask",
-    judgeModel: "deepseek/deepseek-v4-flash",
-    professorModel: "deepseek/deepseek-v4-pro",
-    professorThinking: "max",
-    judgeTimeoutMs: 8000,
-    childPolicy: "deny-on-unsafe",
-    permission: {}
-  };
-}
-function isAction(value) {
-  return typeof value === "string" && ACTIONS.includes(value);
-}
-function isValidChildPolicy(value) {
-  return value === "deny-on-unsafe" || value === "allow-on-safe";
-}
-function isValidPositiveNumber(value) {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-async function loadConfig2(configPath) {
-  try {
-    const raw = await readFile(configPath, "utf8");
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      console.warn(`[my-permission] invalid config at ${configPath}, using defaults`);
-      return createDefaultConfig();
-    }
-    const p = parsed;
-    const def2 = createDefaultConfig();
-    return {
-      defaultPolicy: isAction(p.defaultPolicy) ? p.defaultPolicy : def2.defaultPolicy,
-      judgeModel: typeof p.judgeModel === "string" ? p.judgeModel : def2.judgeModel,
-      professorModel: typeof p.professorModel === "string" ? p.professorModel : def2.professorModel,
-      professorThinking: typeof p.professorThinking === "string" ? p.professorThinking : def2.professorThinking,
-      judgeTimeoutMs: isValidPositiveNumber(p.judgeTimeoutMs) ? p.judgeTimeoutMs : def2.judgeTimeoutMs,
-      childPolicy: isValidChildPolicy(p.childPolicy) ? p.childPolicy : def2.childPolicy,
-      permission: p.permission && typeof p.permission === "object" && !Array.isArray(p.permission) ? p.permission : def2.permission
-    };
-  } catch (error) {
-    console.warn(`[my-permission] failed to load config at ${configPath}, using defaults: ${error}`);
-    return createDefaultConfig();
+var config = {
+  defaultPolicy: "allow",
+  judgeModel: "deepseek/deepseek-v4-flash",
+  professorModel: "deepseek/deepseek-v4-pro",
+  professorThinking: "max",
+  judgeTimeoutMs: 8000,
+  childPolicy: "deny-on-unsafe",
+  permission: {
+    ask_user_question: "allow",
+    bash: {
+      "*": "ask",
+      "awk *": "ask",
+      "biome *": "allow",
+      "bun add *": "allow",
+      "bun build *": "allow",
+      "bun install *": "allow",
+      "bun remove *": "allow",
+      "bun run *": "allow",
+      "bun test *": "allow",
+      "bun x *": "allow",
+      env: "deny",
+      "env |*": "deny",
+      "env|*": "deny",
+      "export -p": "deny",
+      "export -p |*": "deny",
+      "export -p|*": "deny",
+      "gh pr comment *": "ask",
+      "gh pr view *": "allow",
+      "gh run view *": "allow",
+      "git add *": "allow",
+      "git branch --contains *": "allow",
+      "git branch --show-current": "allow",
+      "git diff": "allow",
+      "git diff *": "allow",
+      "git log *": "allow",
+      "git merge-base *": "allow",
+      "git merge-base HEAD main": "allow",
+      "git merge-base HEAD master": "allow",
+      "git rev-parse *": "allow",
+      "git status": "allow",
+      "git status *": "allow",
+      "node *": "allow",
+      "npm install *": "allow",
+      "npm run *": "allow",
+      "npm test *": "allow",
+      "pi update": "allow",
+      "pi update --extensions": "allow",
+      "pnpm install *": "allow",
+      "pnpm run *": "allow",
+      "pnpm sst *": "deny",
+      "pnpm test *": "allow",
+      printenv: "deny",
+      "printenv *": "deny",
+      "rm -rf *": "deny",
+      "rtk find *": "allow",
+      "rtk git add *": "allow",
+      "rtk git branch --contains *": "allow",
+      "rtk git branch --show-current": "allow",
+      "rtk git diff": "allow",
+      "rtk git diff *": "allow",
+      "rtk git log *": "allow",
+      "rtk git merge-base *": "allow",
+      "rtk git merge-base HEAD main": "allow",
+      "rtk git merge-base HEAD master": "allow",
+      "rtk git rev-parse *": "allow",
+      "rtk git status": "allow",
+      "rtk git status *": "allow",
+      "sed *": "allow",
+      set: "deny",
+      "set |*": "deny",
+      "set|*": "deny",
+      "sst *": "deny",
+      "sudo *": "ask",
+      "tsc *": "allow",
+      "vitest *": "allow"
+    },
+    ctx_execute: "allow",
+    external_directory: {
+      "*": "ask",
+      "/Users/lychee/.pi/agent": "allow",
+      "~/.cargo/registry/*": "allow",
+      "~/.npm/_cacache/*": "allow",
+      "~/Library/Caches/*": "allow"
+    },
+    path: {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow",
+      "*.key": "deny",
+      "*.pem": "deny",
+      "*.token": "deny",
+      "*password*": "deny",
+      "*secret*": "deny",
+      ".netrc": "deny",
+      "credentials.*": "deny",
+      "id_ecdsa*": "deny",
+      "id_ed25519*": "deny",
+      "id_rsa*": "deny",
+      "kubeconfig*": "deny",
+      "~/.aws/*": "deny",
+      "~/.kube/*": "deny",
+      "~/.npmrc": "deny",
+      "~/.ssh/*": "deny"
+    },
+    todo: "allow"
   }
+};
+
+// my-permission/judge-prompt.ts
+var JUDGE_PROMPT = `你是一名编码助手的安全门禁。评估以下工具调用是否可以自动执行。
+
+当前工作目录：{{cwd}}
+工具名：{{toolName}}
+工具输入（已脱敏）：{{toolInput}}
+
+只回复严格 JSON：
+{
+  "safe": boolean,
+  "score": number, // 1-10，分数越高越安全
+  "reason": "一句话说明为什么安全或不安全",
+  "toolFor": "一句话说明该工具调用会做什么"
 }
+
+## 判定方法论：意图链分析（Intent Chain Analysis）
+
+不要只看工具名，要追踪工具调用的完整语义链——数据从哪来、往哪去、最终效果落在哪里。
+
+安全：工具调用的最终效果不超出当前项目边界，不产生不可逆副作用。
+
+不安全（满足任一即判 unsafe）：
+- 数据流向项目外部（管道末端是网络请求如 curl/wget、文件上传、外部 API 调用）
+- 通过间接方式执行代码（-e/-c 参数、heredoc 管道给解释器如 python/node/perl）
+- 写入内容未经过用户显式确认（heredoc 写入文件、git apply/hash-object 注入）
+- 依赖来源非可信仓库（从外部 URL 安装包、未签名的 tgz/git 源、非官方 registry）
+- 破坏性操作无明确项目内目标（rm -rf 无具体路径、sudo、chmod 777 等系统级修改）
+
+安全示例：
+- 只读操作：git status/diff/log、读取项目内文件、列出目录
+- 构建与测试：bun test、tsc、vitest、项目构建命令
+- 安装项目声明的依赖：bun install、npm ci
+- 修改项目内文件：write/edit 项目源码
+
+保持简洁。不要包含 markdown 格式。
+`;
 
 // my-permission/cost-page.ts
 var CNY = 7;
@@ -59311,12 +59410,12 @@ function aggregateCosts(cwd, opts) {
 // my-permission/judge.ts
 import { complete as complete2 } from "@earendil-works/pi-ai";
 var log2 = createDevLogger("my-permission:judge");
-function createJudge(config, deps) {
+function createJudge(config2, deps) {
   return async function judge(input, cwd, model, resolveModel) {
-    const resolved = resolveJudgeModel(config, resolveModel, model);
+    const resolved = resolveJudgeModel(config2, resolveModel, model);
     if (!resolved) {
       log2.warn("judge model not found", {
-        configured: config.judgeModel,
+        configured: config2.judgeModel,
         fallback: model ? `${model.provider}/${model.id}` : "none"
       });
       return failureResult("未找到可用的法官模型，请手动确认", input);
@@ -59324,7 +59423,7 @@ function createJudge(config, deps) {
     log2.debug("judge model resolved", {
       provider: resolved.provider,
       model: resolved.id,
-      configured: config.judgeModel
+      configured: config2.judgeModel
     });
     if (!deps?.judgePrompt) {
       return failureResult("法官提示词未加载，请手动确认", input);
@@ -59341,7 +59440,7 @@ function createJudge(config, deps) {
       ]
     };
     const controller = new AbortController;
-    const timeout = setTimeout(() => controller.abort(), config.judgeTimeoutMs);
+    const timeout = setTimeout(() => controller.abort(), config2.judgeTimeoutMs);
     try {
       const completeOpts = {
         signal: controller.signal,
@@ -59378,7 +59477,7 @@ function createJudge(config, deps) {
       clearTimeout(timeout);
       log2.error("judge call failed", { error: error.message });
       if (controller.signal.aborted) {
-        return failureResult(`法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`, input);
+        return failureResult(`法官模型调用超时（${config2.judgeTimeoutMs}ms），请手动确认`, input);
       }
       return failureResult("法官模型调用失败，请手动确认", input);
     }
@@ -59391,8 +59490,8 @@ function failureResult(reason, input) {
     toolFor: `${input.toolName} ${input.value}`
   };
 }
-function resolveJudgeModel(config, resolveModel, fallback) {
-  const parts = config.judgeModel.split("/");
+function resolveJudgeModel(config2, resolveModel, fallback) {
+  const parts = config2.judgeModel.split("/");
   if (parts.length !== 2)
     return fallback;
   const found = resolveModel(parts[0], parts[1]);
@@ -59629,30 +59728,30 @@ function escapeHtml4(text) {
 // my-permission/professor.ts
 import { complete as complete3 } from "@earendil-works/pi-ai";
 var log3 = createDevLogger("my-permission:professor");
-function createAdvocate(config) {
+function createAdvocate(config2) {
   return async function analyze(cases, cwd, resolveModel, getAuth, currentJudgeMd, judgePrompt) {
     if (cases.length === 0) {
       return { error: "当前会话没有法官误判案例" };
     }
-    const parts = config.professorModel.split("/");
+    const parts = config2.professorModel.split("/");
     if (parts.length !== 2) {
       return {
-        error: `professorModel 格式无效: ${config.professorModel}，需要 provider/model 格式`
+        error: `professorModel 格式无效: ${config2.professorModel}，需要 provider/model 格式`
       };
     }
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
       log3.error("advocate model not found", {
-        configured: config.professorModel
+        configured: config2.professorModel
       });
       return {
-        error: `未找到教授模型: ${config.professorModel}`
+        error: `未找到教授模型: ${config2.professorModel}`
       };
     }
     log3.debug("advocate model resolved", {
       provider: model.provider,
       model: model.id,
-      configured: config.professorModel
+      configured: config2.professorModel
     });
     const prompt = buildAdvocatePrompt(cases, currentJudgeMd, judgePrompt, cwd);
     const auth = await getAuth(model);
@@ -59707,7 +59806,7 @@ function createAdvocate(config) {
         ]
       };
       const response = await complete3(model, context, {
-        thinking: config.professorThinking,
+        thinking: config2.professorThinking,
         apiKey: auth?.apiKey,
         headers: auth?.headers,
         env: auth?.env
@@ -59811,16 +59910,16 @@ function buildAdvocatePrompt(cases, currentJudgeMd, judgePrompt, cwd) {
   ].join(`
 `);
 }
-function createMerger(config) {
+function createMerger(config2) {
   return async function merge(currentJudgeMd, selectedRules, resolveModel, getAuth) {
-    const parts = config.professorModel.split("/");
+    const parts = config2.professorModel.split("/");
     if (parts.length !== 2) {
       return { error: `professorModel 格式无效` };
     }
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
       log3.error("merger model not found", {
-        configured: config.professorModel
+        configured: config2.professorModel
       });
       return { error: `未找到教授模型` };
     }
@@ -59882,30 +59981,30 @@ function createMerger(config) {
 // my-permission/prosecutor.ts
 import { complete as complete4 } from "@earendil-works/pi-ai";
 var log4 = createDevLogger("my-permission:prosecutor");
-function createProsecutor(config) {
+function createProsecutor(config2) {
   return async function analyze(allowedEntries, cwd, resolveModel, getAuth, currentJudgeMd, judgePrompt) {
     if (allowedEntries.length === 0) {
       return { error: "当前会话没有法官放行的记录" };
     }
-    const parts = config.professorModel.split("/");
+    const parts = config2.professorModel.split("/");
     if (parts.length !== 2) {
       return {
-        error: `professorModel 格式无效: ${config.professorModel}，需要 provider/model 格式`
+        error: `professorModel 格式无效: ${config2.professorModel}，需要 provider/model 格式`
       };
     }
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
       log4.error("prosecutor model not found", {
-        configured: config.professorModel
+        configured: config2.professorModel
       });
       return {
-        error: `未找到审查模型: ${config.professorModel}`
+        error: `未找到审查模型: ${config2.professorModel}`
       };
     }
     log4.debug("prosecutor model resolved", {
       provider: model.provider,
       model: model.id,
-      configured: config.professorModel
+      configured: config2.professorModel
     });
     const prompt = buildProsecutorPrompt(allowedEntries, currentJudgeMd, judgePrompt, cwd);
     const auth = await getAuth(model);
@@ -59957,7 +60056,7 @@ function createProsecutor(config) {
         ]
       };
       const response = await complete4(model, context, {
-        thinking: config.professorThinking,
+        thinking: config2.professorThinking,
         apiKey: auth?.apiKey,
         headers: auth?.headers,
         env: auth?.env
@@ -60157,26 +60256,26 @@ function resolveSymlinkedPaths(paths, cwd) {
 }
 
 // my-permission/rules.ts
-function decide(input, cwd, config) {
+function decide(input, cwd, config2) {
   const layers = [];
   if (input.paths.length > 0) {
-    const pathRules = normalizeCrossCuttingRule(config.permission.path);
+    const pathRules = normalizeCrossCuttingRule(config2.permission.path);
     if (pathRules) {
       layers.push(evaluatePathLayer(input.paths, pathRules, cwd));
     }
-    const extRules = normalizeCrossCuttingRule(config.permission.external_directory);
+    const extRules = normalizeCrossCuttingRule(config2.permission.external_directory);
     if (extRules) {
       layers.push(evaluateExternalDirectoryLayer(input.paths, extRules, cwd));
     }
   }
-  const surfaceRules = config.permission[input.toolName];
+  const surfaceRules = config2.permission[input.toolName];
   if (surfaceRules) {
     layers.push(evaluateSurfaceLayer(input, surfaceRules, cwd));
   }
   const merged = mergeVerdicts(...layers);
   if (merged)
     return merged;
-  return { action: config.defaultPolicy, source: "defaultPolicy" };
+  return { action: config2.defaultPolicy, source: "defaultPolicy" };
 }
 function normalizeCrossCuttingRule(rule) {
   if (rule === undefined)
@@ -60527,15 +60626,7 @@ function suggestionTypeDetail(item) {
 `);
 }
 async function myPermission(pi) {
-  const extensionDir = resolveExtDir(import.meta);
-  const config = await loadConfig2(join10(extensionDir, "config.json"));
-  const judgePrompt = (() => {
-    const prompt = loadFile(join10(extensionDir, "judge-prompt.md"));
-    if (!prompt) {
-      console.warn("[my-permission] judge-prompt.md not found, judge will be disabled");
-    }
-    return prompt;
-  })();
+  const judgePrompt = JUDGE_PROMPT;
   const localJudge = loadFile(join10(process.cwd(), "JUDGE.md"));
   const cache = createSessionCache();
   const child = isChildSession();

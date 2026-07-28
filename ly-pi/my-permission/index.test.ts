@@ -17,9 +17,11 @@ vi.mock("@earendil-works/pi-ai", async (importOriginal) => {
 
 // Mock all internal modules
 vi.mock("./config", () => ({
-  loadConfig: vi.fn().mockResolvedValue({
+  config: {
     defaultPolicy: "ask",
     judgeModel: "deepseek/deepseek-v4-flash",
+    professorModel: "deepseek/deepseek-v4-pro",
+    professorThinking: "max",
     judgeTimeoutMs: 5000,
     childPolicy: "deny-on-unsafe",
     permission: {
@@ -27,7 +29,7 @@ vi.mock("./config", () => ({
       read: "allow",
       bash: { "*": "ask", "rm -rf *": "deny" },
     },
-  }),
+  },
 }));
 
 vi.mock("./rules", () => ({
