@@ -1,0 +1,363 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pi Agent Unified Settings",
+  "description": "Unified settings for the Pi coding agent — user preferences, subagent configuration, and subagent extension runtime. Deployed by the ly-pi deploy script to their respective targets.",
+  "type": "object",
+  "required": ["settings", "subagents", "subagentRuntime"],
+  "properties": {
+    "settings":   { "$ref": "#/$defs/piSettings" },
+    "subagents":  { "$ref": "#/$defs/subagentSettings" },
+    "subagentRuntime": { "$ref": "#/$defs/subagentRuntime" }
+  },
+  "additionalProperties": false,
+
+  "$defs": {
+
+    "piSettings": {
+      "type": "object",
+      "description": "Pi user-facing settings, applied to ~/.pi/agent/settings.json top-level keys.",
+      "properties": {
+        "autocompleteMaxVisible": {
+          "type": "integer", "minimum": 3, "maximum": 20,
+          "description": "Max visible items in autocomplete dropdown (3-20)"
+        },
+        "branchSummary": {
+          "type": "object",
+          "properties": {
+            "skipPrompt":       { "type": "boolean", "description": "Skip 'Summarize branch?' prompt on /tree navigation" },
+            "reserveTokens":    { "type": "integer", "minimum": 0, "description": "Tokens reserved for branch summarization" }
+          },
+          "additionalProperties": false
+        },
+        "collapseChangelog": {
+          "type": "boolean",
+          "description": "Show condensed changelog after updates"
+        },
+        "compaction": {
+          "type": "object",
+          "required": ["enabled", "keepRecentTokens", "reserveTokens"],
+          "properties": {
+            "enabled":          { "type": "boolean", "description": "Enable auto-compaction" },
+            "keepRecentTokens": { "type": "integer", "minimum": 0, "description": "Recent tokens to keep (not summarized)" },
+            "reserveTokens":    { "type": "integer", "minimum": 0, "description": "Tokens reserved for LLM response" }
+          },
+          "additionalProperties": false
+        },
+        "defaultModel": {
+          "type": "string",
+          "description": "Default model ID"
+        },
+        "defaultProjectTrust": {
+          "type": "string",
+          "enum": ["ask", "always", "never"],
+          "description": "Fallback project trust: 'ask' (default), 'always', or 'never'. Global setting only."
+        },
+        "defaultProvider": {
+          "type": "string",
+          "description": "Default provider (e.g. 'anthropic', 'openai')"
+        },
+        "defaultThinkingLevel": {
+          "type": "string",
+          "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
+          "description": "Default thinking/reasoning level"
+        },
+        "doubleEscapeAction": {
+          "type": "string",
+          "enum": ["tree", "fork", "none"],
+          "description": "Action for double-escape: 'tree', 'fork', or 'none'"
+        },
+        "editorPaddingX": {
+          "type": "integer", "minimum": 0, "maximum": 3,
+          "description": "Horizontal padding for input editor (0-3)"
+        },
+        "enableAnalytics": {
+          "type": "boolean",
+          "description": "Opt-in analytics data sharing"
+        },
+        "enableInstallTelemetry": {
+          "type": "boolean",
+          "description": "Anonymous install/update version ping"
+        },
+        "enableSkillCommands": {
+          "type": "boolean",
+          "description": "Register skills as /skill:name commands"
+        },
+        "enabledModels": {
+          "type": "array", "items": { "type": "string" },
+          "description": "Model patterns for Ctrl+P cycling"
+        },
+        "externalEditor": {
+          "type": "string",
+          "description": "Command for Ctrl+G external editor"
+        },
+        "followUpMode": {
+          "type": "string", "enum": ["all", "one-at-a-time"],
+          "description": "How follow-up messages are sent"
+        },
+        "hideThinkingBlock": {
+          "type": "boolean",
+          "description": "Hide thinking blocks in output"
+        },
+        "httpIdleTimeoutMs": {
+          "type": "integer", "minimum": 0,
+          "description": "HTTP header/body idle timeout in ms. 0 to disable."
+        },
+        "httpProxy": {
+          "type": "string",
+          "description": "HTTP proxy URL. Global setting only."
+        },
+        "images": {
+          "type": "object",
+          "properties": {
+            "autoResize":  { "type": "boolean", "description": "Resize images to 2000x2000 max" },
+            "blockImages": { "type": "boolean", "description": "Block all images from being sent to LLM" }
+          },
+          "additionalProperties": false
+        },
+        "markdown": {
+          "type": "object",
+          "properties": {
+            "codeBlockIndent": { "type": "string", "description": "Indentation for code blocks" }
+          },
+          "additionalProperties": false
+        },
+        "npmCommand": {
+          "type": "array", "items": { "type": "string" },
+          "description": "Command argv for npm package operations"
+        },
+        "outputPad": {
+          "type": "integer", "minimum": 0, "maximum": 1,
+          "description": "Horizontal padding for messages and thinking (0 or 1)"
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "properties": {
+                  "source":     { "type": "string" },
+                  "extensions": { "type": "array", "items": { "type": "string" } },
+                  "skills":     { "type": "array", "items": { "type": "string" } },
+                  "prompts":    { "type": "array", "items": { "type": "string" } },
+                  "themes":     { "type": "array", "items": { "type": "string" } },
+                  "autoload":   { "type": "boolean" }
+                },
+                "required": ["source"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "npm/git packages to load resources from"
+        },
+        "quietStartup": {
+          "type": "boolean",
+          "description": "Hide startup header"
+        },
+        "retry": {
+          "type": "object",
+          "properties": {
+            "enabled":       { "type": "boolean", "description": "Enable automatic agent-level retry" },
+            "maxRetries":    { "type": "integer", "minimum": 1, "description": "Maximum agent-level retry attempts" },
+            "baseDelayMs":   { "type": "integer", "minimum": 0, "description": "Base delay for exponential backoff (ms)" },
+            "provider": {
+              "type": "object",
+              "properties": {
+                "timeoutMs":        { "type": "integer", "minimum": 0 },
+                "maxRetries":       { "type": "integer", "minimum": 0 },
+                "maxRetryDelayMs":  { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "sessionDir": {
+          "type": "string",
+          "description": "Directory for session files. Supports ~ and relative paths."
+        },
+        "shellCommandPrefix": {
+          "type": "string",
+          "description": "Prefix for every bash command"
+        },
+        "shellPath": {
+          "type": "string",
+          "description": "Custom shell path"
+        },
+        "showCacheMissNotices": {
+          "type": "boolean",
+          "description": "Show transcript notices for significant prompt-cache misses"
+        },
+        "showHardwareCursor": {
+          "type": "boolean",
+          "description": "Show terminal cursor for IME support"
+        },
+        "steeringMode": {
+          "type": "string", "enum": ["all", "one-at-a-time"],
+          "description": "How steering messages are sent"
+        },
+        "terminal": {
+          "type": "object",
+          "properties": {
+            "showImages":       { "type": "boolean", "description": "Show images in terminal (if supported)" },
+            "imageWidthCells":  { "type": "integer", "minimum": 1, "description": "Preferred inline image width in cells" },
+            "clearOnShrink":    { "type": "boolean", "description": "Clear empty rows when content shrinks" }
+          },
+          "additionalProperties": false
+        },
+        "theme": {
+          "type": "string",
+          "description": "Theme name"
+        },
+        "thinkingBudgets": {
+          "type": "object",
+          "description": "Custom token budgets per thinking level",
+          "properties": {
+            "minimal": { "type": "integer", "minimum": 1 },
+            "low":     { "type": "integer", "minimum": 1 },
+            "medium":  { "type": "integer", "minimum": 1 },
+            "high":    { "type": "integer", "minimum": 1 },
+            "xhigh":   { "type": "integer", "minimum": 1 },
+            "max":     { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "trackingId": {
+          "type": "string",
+          "description": "Analytics tracking identifier"
+        },
+        "transport": {
+          "type": "string", "enum": ["sse", "websocket", "websocket-cached", "auto"],
+          "description": "Preferred transport for multi-transport providers"
+        },
+        "treeFilterMode": {
+          "type": "string", "enum": ["default", "no-tools", "user-only", "labeled-only", "all"],
+          "description": "Default filter for /tree"
+        },
+        "warnings": {
+          "type": "object",
+          "properties": {
+            "anthropicExtraUsage": { "type": "boolean", "description": "Warn about paid extra usage with Anthropic subscription" }
+          },
+          "additionalProperties": false
+        },
+        "websocketConnectTimeoutMs": {
+          "type": "integer", "minimum": 0,
+          "description": "WebSocket connect handshake timeout in ms. 0 to disable."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "subagentSettings": {
+      "type": "object",
+      "description": "Subagent configuration, merged into ~/.pi/agent/settings.json#/subagents.",
+      "properties": {
+        "disableThinking": {
+          "type": "boolean",
+          "description": "Disable thinking for all subagents"
+        },
+        "agentOverrides": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/agentOverride" },
+          "description": "Per-agent overrides keyed by agent name"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "agentOverride": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string", "description": "Model identifier (e.g. 'deepseek/deepseek-v4-flash')" }
+      },
+      "additionalProperties": false
+    },
+
+    "subagentRuntime": {
+      "type": "object",
+      "description": "Subagent extension runtime settings, deployed to ~/.pi/agent/extensions/subagent/config.json.",
+      "required": [
+        "toolDescriptionMode",
+        "asyncWidget",
+        "asyncByDefault",
+        "globalConcurrencyLimit",
+        "maxSubagentSpawnsPerSession",
+        "maxSubagentDepth",
+        "parallel",
+        "intercomBridge",
+        "completionBatch"
+      ],
+      "properties": {
+        "toolDescriptionMode": {
+          "type": "string", "enum": ["compact", "full"],
+          "description": "How tool descriptions are rendered"
+        },
+        "asyncWidget": {
+          "type": "boolean",
+          "description": "Show async run widgets in the UI"
+        },
+        "asyncByDefault": {
+          "type": "boolean",
+          "description": "Run subagents asynchronously by default"
+        },
+        "waitTool": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean", "description": "Enable the subagent_wait tool" }
+          },
+          "additionalProperties": false
+        },
+        "forceTopLevelAsync": {
+          "type": "boolean",
+          "description": "Force top-level runs to be async"
+        },
+        "globalConcurrencyLimit": {
+          "type": "integer", "minimum": 1,
+          "description": "Maximum concurrent subagent runs globally"
+        },
+        "maxSubagentSpawnsPerSession": {
+          "type": "integer", "minimum": 1,
+          "description": "Maximum subagent spawns per session"
+        },
+        "maxSubagentDepth": {
+          "type": "integer", "minimum": 0,
+          "description": "Maximum nesting depth of subagents"
+        },
+        "parallel": {
+          "type": "object",
+          "required": ["maxTasks", "concurrency"],
+          "properties": {
+            "maxTasks":    { "type": "integer", "minimum": 1, "description": "Maximum parallel tasks" },
+            "concurrency": { "type": "integer", "minimum": 1, "description": "Default concurrency level" }
+          },
+          "additionalProperties": false
+        },
+        "intercomBridge": {
+          "type": "object",
+          "required": ["mode"],
+          "properties": {
+            "mode": { "type": "string", "enum": ["always", "auto", "never"], "description": "Intercom bridge mode" }
+          },
+          "additionalProperties": false
+        },
+        "completionBatch": {
+          "type": "object",
+          "required": ["enabled", "debounceMs", "maxWaitMs", "stragglerDebounceMs", "stragglerMaxWaitMs", "stragglerWindowMs"],
+          "properties": {
+            "enabled":               { "type": "boolean", "description": "Enable completion batching" },
+            "debounceMs":            { "type": "integer", "minimum": 0, "description": "Debounce delay in ms" },
+            "maxWaitMs":             { "type": "integer", "minimum": 0, "description": "Max wait time for batch completion" },
+            "stragglerDebounceMs":   { "type": "integer", "minimum": 0, "description": "Straggler debounce delay" },
+            "stragglerMaxWaitMs":    { "type": "integer", "minimum": 0, "description": "Straggler max wait time" },
+            "stragglerWindowMs":     { "type": "integer", "minimum": 0, "description": "Straggler window duration" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
