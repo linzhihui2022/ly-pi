@@ -1,7 +1,0 @@
-{
-  "name": "pi-skills",
-  "private": true,
-  "scripts": {
-    "deploy": "bun run scripts/deploy.ts"
-  }
-}

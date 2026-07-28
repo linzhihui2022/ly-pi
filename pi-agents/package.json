@@ -1,9 +1,0 @@
-{
-  "name": "pi-agents",
-  "private": true,
-  "scripts": {
-    "typecheck": "bun x tsgo --noEmit",
-    "lint": "biome check .",
-    "deploy": "bun run scripts/deploy.ts"
-  }
-}
