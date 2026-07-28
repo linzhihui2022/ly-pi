@@ -60792,13 +60792,13 @@ async function myPermission(pi) {
       }
     }
   });
-  pi.registerCommand("judge-costs", {
+  pi.registerCommand("court-costs", {
     description: "查看累计的法庭四角色 LLM 成本统计",
     handler: async (_args, ctx) => {
       const agg = aggregateCosts(ctx.cwd);
       try {
         const sessionId = ctx.sessionManager.getSessionId();
-        const fileUrl = await servePreviewFile(sessionId, "judge-costs.html", renderCostPage(agg));
+        const fileUrl = await servePreviewFile(sessionId, "court-costs.html", renderCostPage(agg));
         ctx.ui.notify(`Preview: ${fileUrl}`, "info");
       } catch (err) {
         ctx.ui.notify(`Failed to start preview server: ${err.message}`, "error");

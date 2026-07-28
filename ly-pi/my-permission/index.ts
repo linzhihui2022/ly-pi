@@ -277,7 +277,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     },
   });
 
-  pi.registerCommand("judge-costs", {
+  pi.registerCommand("court-costs", {
     description: "查看累计的法庭四角色 LLM 成本统计",
     handler: async (_args, ctx: ExtensionContext) => {
       const agg = aggregateCosts(ctx.cwd);
@@ -286,7 +286,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         const sessionId = ctx.sessionManager.getSessionId();
         const fileUrl = await servePreviewFile(
           sessionId,
-          "judge-costs.html",
+          "court-costs.html",
           renderCostPage(agg),
         );
         ctx.ui.notify(`Preview: ${fileUrl}`, "info");

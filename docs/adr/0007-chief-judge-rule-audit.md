@@ -29,6 +29,6 @@
 
 ## Consequences
 
-- 法庭隐喻从三角色变为四角色，`JUDGE.md`、`/judge-costs`、`cost-tracker` 均需新增 chief 相关支持。
+- 法庭隐喻从三角色变为四角色，`JUDGE.md`、`/court-costs`、`cost-tracker` 均需新增 chief 相关支持。
 - 审判长的 modify/merge 操作比 add/remove 更复杂，合并 prompt 质量是成败关键——需要针对规则去重、语义覆盖、合并措辞做专门调优。
 - 静态审计 + 三案例审计的覆盖形成闭环：误判（advocate）、漏判（prosecutor）、规则腐化（chief），没有明显盲区。

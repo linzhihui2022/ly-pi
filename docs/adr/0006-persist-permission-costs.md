@@ -13,5 +13,5 @@
 ## Consequences
 
 - 每次 LLM 调用后立即 `appendFileSync`，在调用路径上有同步 I/O（单条记录 < 200 字节，实际延迟可忽略）。
-- 新增 `/judge-costs` 命令用于聚合查看累计成本。
+- 新增 `/court-costs` 命令用于聚合查看累计成本。
 - 法官的 session entry 成本字段保留（双写），不影响现有 `judge-log` 功能。
