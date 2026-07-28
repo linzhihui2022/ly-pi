@@ -136,36 +136,30 @@ async function write(path: string, data: string | Uint8Array) {
 // ── Other configs ───────────────────────────────────────────────────────────
 {
   const configDir = "assets/config";
-
-  await write(join(agentDir, "mcp.json"), Bun.file(join(configDir, "mcp.json")));
-  console.log("mcp.json: deployed");
-
-  await write(join(agentDir, "APPEND_SYSTEM.md"), Bun.file(join(configDir, "append-system.md")));
-  console.log("append-system.md: deployed");
-
-  await write(
-    join(agentDir, "extensions", "pi-tool-display", "config.json"),
-    Bun.file(join(configDir, "pi-tool-display.json")),
-  );
-  console.log("pi-tool-display: deployed");
-
-  await write(
-    join(STAGING, "web-search.json"),
-    Bun.file(join(configDir, "web-search.json")),
-  );
-  console.log("web-search.json: deployed");
-
-  await write(
-    join(STAGING, "config", "rpiv-todo", "config.json"),
-    Bun.file(join(configDir, "rpiv-todo.json")),
-  );
-  console.log("rpiv-todo: deployed");
-
-  // Extension-local configs (my-sound, my-back) → flattened at extension root
   const extDir = join(agentDir, "extensions", "ly-pi");
-  await write(join(extDir, "my-sound.json"), Bun.file(join(configDir, "my-sound.json")));
-  await write(join(extDir, "my-back.json"), Bun.file(join(configDir, "my-back.json")));
-  console.log("Extension configs: deployed");
+
+  const configManifest: Array<{
+    src: string;
+    dest: string;
+    base?: string;
+    label: string;
+  }> = [
+    { src: "mcp.json", dest: "mcp.json", label: "mcp.json" },
+    { src: "append-system.md", dest: "APPEND_SYSTEM.md", label: "append-system.md" },
+    { src: "pi-tool-display.json", dest: "extensions/pi-tool-display/config.json", label: "pi-tool-display" },
+    { src: "web-search.json", dest: "web-search.json", base: STAGING, label: "web-search.json" },
+    { src: "rpiv-todo.json", dest: "config/rpiv-todo/config.json", base: STAGING, label: "rpiv-todo" },
+    { src: "my-sound.json", dest: "my-sound.json", base: extDir, label: "my-sound.json" },
+    { src: "my-back.json", dest: "my-back.json", base: extDir, label: "my-back.json" },
+  ];
+
+  for (const { src, dest, base, label } of configManifest) {
+    await write(
+      join(base ?? agentDir, dest),
+      Bun.file(join(configDir, src)),
+    );
+    console.log(`${label}: deployed`);
+  }
 }
 
 // ── Static assets ───────────────────────────────────────────────────────────
