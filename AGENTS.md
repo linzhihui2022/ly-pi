@@ -7,7 +7,7 @@
 | 文件/目录 | 说明 |
 |-----------|------|
 | `MY-AGENTS.md` | 全局偏好（软链接到 `~/.pi/agent/AGENTS.md` 和 `~/.claude/CLAUDE.md`） |
-| `ly-pi/` | 统一扩展入口（单包，含全部 7 个子模块） |
+| `ly-pi/` | 统一扩展入口（单包，含全部 9 个子模块） |
 | `pi-skills/` | 自定义技能 |
 | `pi-themes/` | 自定义主题 |
 | `scripts/deploy-all.ts` | 统一部署流水线（build → test → deploy all） |
@@ -76,6 +76,15 @@ bun run --cwd ly-pi test -- my-hud
 - `.scratch/` 纳入 git，即本仓库的本地 issue tracker
 - 文档修正类变更（README、AGENTS.md 等耐久文档的内容更新）直接修改，不需要走 spec
 - 一致性防线：`bun run check-docs` 校验文档与仓库现实对齐（README 扩展表、相对链接、`.scratch/` 票据约定、旧体系文件复活）
+
+## 一致性约束
+
+**硬性规则：完成任何工作后，必须运行 `bun run check-docs` 验证文档与代码的一致性。** 检查未通过不得视为工作完成。
+
+- 修改了 README、AGENTS.md、或任何 `docs/` 下的耐久文档 → 跑 check-docs
+- 新增/删除/重命名文件或目录 → 跑 check-docs
+- 修改了 `.scratch/` 下的票据或规格 → 跑 check-docs
+- 即使以上都不适用，在工作结束前也应跑一次作为兜底验证
 
 ## Agent skills
 

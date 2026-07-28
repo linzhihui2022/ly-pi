@@ -2,7 +2,7 @@
 
 我的终端、Shell、AI 编码 Agent 全家桶 —— Git 版本管理，一键部署。
 
-> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，所有 7 个 Pi 扩展合并为统一入口 `ly-pi`，包含 6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
+> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，所有 9 个 Pi 扩展合并为统一入口 `ly-pi`，包含 6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
 
 > 需求与规格的管理方式见下文「文档系统」一节。
 
@@ -12,11 +12,13 @@
 
 ```
 configure/
-├── ly-pi/                  # 统一扩展入口（单包，含全部 7 个子模块）
+├── ly-pi/                  # 统一扩展入口（单包，含全部 9 个子模块）
 │   ├── index.ts            # 入口：按序注册所有子模块
 │   ├── my-cd-guard/        # 冗余 cd 前缀自动纠正
 │   ├── my-script-guard/    # 内联脚本硬拦截 + 急迫升级
+│   ├── my-log/             # 开发日志：/ly-log 命令 + 浏览器查看
 │   ├── my-permission/      # 工具调用权限拦截器 + 模型法官
+│   ├── my-reload/          # 扩展热重载自动恢复
 │   ├── my-back/            # /back 命令
 │   ├── my-html/            # /html 渲染
 │   ├── my-bt/              # BT-7274 语音包
@@ -62,7 +64,9 @@ configure/
 |--------|------|
 | **my-cd-guard** | 冗余 cd 前缀自动纠正：原地剥掉指向会话工作目录的 `cd <cwd> &&` 前缀并通知用户 |
 | **my-script-guard** | 内联脚本 + 写文件旁路硬拦截：拦截 bash 中的 `-c`/`-e`/heredoc 长脚本，被拦 3 次后升级为用户确认 |
+| **my-log** | 开发日志：`/ly-log on|off` 开关 + `/ly-log` 浏览器查看会话日志，供其他模块通过 `createDevLogger` 接入 |
 | **my-permission** | 工具调用权限拦截器：确定性规则 + `deepseek-v4-flash` 模型法官 + 子代理差异化处理 |
+| **my-reload** | 扩展热重载自动恢复：`request_reload` 工具标记后，reload 完成自动发送继续指令 |
 | **my-back** | `/back` 命令：撤销最近一条用户消息并将文本放回编辑器 |
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
 | **my-bt** | BT-7274 语音包：会话生命周期事件触发音频，`/bt` 命令控制 |
