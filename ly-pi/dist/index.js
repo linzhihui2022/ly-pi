@@ -49164,6 +49164,242 @@ var require_lib = __commonJS((exports, module) => {
   module.exports = hljs;
 });
 
+// shared/guard-harness.ts
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
+function createGuardHarness(pi, guards) {
+  let cwd = "";
+  const escalationCounts = {};
+  pi.on("session_start", (_event, ctx) => {
+    cwd = ctx.cwd;
+    for (const guard of guards) {
+      try {
+        guard.onSessionStart?.(cwd);
+      } catch (err) {
+        console.warn(`[guard-harness] Guard "${guard.name}" onSessionStart error:`, err);
+      }
+    }
+  });
+  pi.on("before_agent_start", async (event) => {
+    let prompt = event.systemPrompt;
+    for (const guard of guards) {
+      try {
+        const result = guard.onBeforeAgentStart?.(prompt, cwd);
+        if (result !== undefined)
+          prompt = result;
+      } catch (err) {
+        console.warn(`[guard-harness] Guard "${guard.name}" onBeforeAgentStart error:`, err);
+      }
+    }
+    return { systemPrompt: prompt };
+  });
+  pi.on("tool_call", async (event, ctx) => {
+    if (!isToolCallEventType("bash", event))
+      return;
+    for (const guard of guards) {
+      try {
+        const detection = guard.detect(event.input.command, ctx.cwd);
+        if (!detection)
+          continue;
+        if (guard.escalation) {
+          escalationCounts[guard.name] = (escalationCounts[guard.name] ?? 0) + 1;
+          if (escalationCounts[guard.name] > guard.escalation.threshold && ctx.hasUI) {
+            const { title, body } = guard.escalation.buildConfirm(detection, escalationCounts[guard.name]);
+            const allowed = await ctx.ui.confirm(title, body);
+            if (allowed)
+              continue;
+          }
+        }
+        const result = await guard.react(detection, event, ctx);
+        if (result?.block)
+          return result;
+      } catch (err) {
+        console.warn(`[guard-harness] Guard "${guard.name}" error:`, err);
+      }
+    }
+    return;
+  });
+}
+
+// my-cd-guard/index.ts
+import { realpathSync } from "node:fs";
+
+// my-cd-guard/detector.ts
+var identity = (p) => p;
+var LEADING_CD_RE = /^\s*cd\s+(?:"([^"]*)"|'([^']*)'|([^;&\s]+))\s*(&&|;)?\s*/;
+function normalizeTarget(raw, cwd) {
+  let target = raw;
+  if (target === "." || target === "./")
+    target = cwd;
+  if (target.length > 1)
+    target = target.replace(/\/+$/, "");
+  return target;
+}
+function safeRealpath(path, realpath) {
+  try {
+    return realpath(path);
+  } catch {
+    return path;
+  }
+}
+function stripRedundantCd(command, cwd, realpath = identity) {
+  const match = LEADING_CD_RE.exec(command);
+  if (!match)
+    return;
+  const target = normalizeTarget(match[1] ?? match[2] ?? match[3], cwd);
+  if (safeRealpath(target, realpath) !== safeRealpath(cwd, realpath)) {
+    return;
+  }
+  const hasMore = match[4] !== undefined;
+  const rest = hasMore ? command.slice(match[0].length) : "";
+  return {
+    command: rest.trim().length > 0 ? rest : "true",
+    stripped: match[0]
+  };
+}
+
+// my-cd-guard/index.ts
+var cdGuard = {
+  name: "cd-guard",
+  detect: (command, cwd) => stripRedundantCd(command, cwd, realpathSync),
+  react: (detection, event, ctx) => {
+    event.input.command = detection.command;
+    if (ctx.hasUI) {
+      ctx.ui.notify(`已自动剥掉冗余 cd 前缀：${detection.stripped.trim()}`, "info");
+    }
+  },
+  onBeforeAgentStart: (systemPrompt, cwd) => systemPrompt + `
+
+CRITICAL: All bash commands execute in ${cwd}. NEVER prefix commands with \`cd ${cwd} &&\` — it is redundant and will be automatically stripped. Run the command directly instead.`
+};
+
+// my-script-guard/detector.ts
+var MAX_EVAL_LENGTH = 80;
+var INTERPRETER = String.raw`(python(?:\d(?:\.\d+)?)?|node|ruby|perl|php)`;
+var PREFIXES = String.raw`(?:(?:time|sudo|nice|command|uv\s+run|env(?:\s+[A-Za-z_]\w*=\S*)*)\s+)*`;
+var EVAL_RE = new RegExp(String.raw`(?:^|[|;&\n])\s*${PREFIXES}${INTERPRETER}\b(?:\s+-\w+)*?\s+-(?:c|e|r)\s+("((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)')`, "s");
+var HEREDOC_RE = new RegExp(String.raw`(?:^|[|;&\n])\s*${PREFIXES}${INTERPRETER}\b(?:\s+-\w+|\s+-(?=\s))*\s*(\u003c\u003c\u003c|\u003c\u003c)-?\s*['"]?(\w*)`);
+function extractHeredocBody(command, matchEnd, operator, delimiter) {
+  if (operator === "<<<") {
+    return command.slice(matchEnd).trim().replace(/^['"]|['"]$/g, "");
+  }
+  const bodyStart = command.indexOf(`
+`, matchEnd);
+  if (bodyStart === -1)
+    return "";
+  const lines = command.slice(bodyStart + 1).split(`
+`);
+  const end = lines.findIndex((line) => line.trim() === delimiter);
+  return (end === -1 ? lines : lines.slice(0, end)).join(`
+`);
+}
+function detectInlineScript(command) {
+  const evalMatch = EVAL_RE.exec(command);
+  if (evalMatch) {
+    const code = evalMatch[3] ?? evalMatch[4];
+    if (code.length > MAX_EVAL_LENGTH || code.includes(`
+`)) {
+      return { interpreter: evalMatch[1], kind: "eval", code };
+    }
+  }
+  const heredocMatch = HEREDOC_RE.exec(command);
+  if (heredocMatch) {
+    const code = extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, heredocMatch[2], heredocMatch[3]);
+    return { interpreter: heredocMatch[1], kind: "heredoc", code };
+  }
+  return;
+}
+var MAX_INLINE_CONTENT_LENGTH = 80;
+var ANY_HEREDOC_RE = /<<-?\s*['"]?(\w+)['"]?/g;
+var TEE_WITH_TARGET_RE = /\btee\s+(?:-\w+\s+)*("[^"]*"|'[^']*'|\S+)/;
+var REDIRECT_TARGET_RE = />>?\s*("[^"]*"|'[^']*'|\S+)/;
+var ECHO_REDIRECT_RE = /(?:^|[|;&\n])\s*(echo|printf)\b([^>]*?)>>?\s*("[^"]*"|'[^']*'|\S+)/gs;
+function unquote(value) {
+  return value.replace(/^['"]|['"]$/g, "");
+}
+function lineOf(haystack, index) {
+  const start = haystack.lastIndexOf(`
+`, index) + 1;
+  const nl = haystack.indexOf(`
+`, index);
+  return haystack.slice(start, nl === -1 ? haystack.length : nl);
+}
+function detectFileWriteBypass(command) {
+  for (const echoMatch of command.matchAll(ECHO_REDIRECT_RE)) {
+    const content = echoMatch[2].trim();
+    if (content.length > MAX_INLINE_CONTENT_LENGTH || content.includes(`
+`)) {
+      return {
+        kind: "file-write",
+        tool: echoMatch[1],
+        target: unquote(echoMatch[3]),
+        code: content
+      };
+    }
+  }
+  for (const heredocMatch of command.matchAll(ANY_HEREDOC_RE)) {
+    const line = lineOf(command, heredocMatch.index);
+    const teeMatch = TEE_WITH_TARGET_RE.exec(line);
+    if (teeMatch) {
+      return {
+        kind: "file-write",
+        tool: "tee",
+        target: unquote(teeMatch[1]),
+        code: extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, "<<", heredocMatch[1])
+      };
+    }
+    if (/\bcat\b/.test(line)) {
+      const redirectMatch = REDIRECT_TARGET_RE.exec(line);
+      if (redirectMatch) {
+        return {
+          kind: "file-write",
+          tool: "cat",
+          target: unquote(redirectMatch[1]),
+          code: extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, "<<", heredocMatch[1])
+        };
+      }
+    }
+  }
+  return;
+}
+var PREVIEW_LIMIT = 500;
+function buildReason(detection) {
+  if (detection.kind === "file-write") {
+    return `Blocked file write via bash (${detection.tool} → ${detection.target}). ` + "Use the write/edit tools to create or modify files instead of heredocs or output redirects. " + "Short one-liners (80 chars or less, single line) are fine.";
+  }
+  return `Blocked inline ${detection.interpreter} script (${detection.kind}). ` + "Do not run long inline scripts via bash. " + "Prefer dedicated tools (read/write/edit/grep) for file and text operations. " + `If a script is genuinely required, write it to a file with the write tool, then run \`${detection.interpreter} <file>\`.`;
+}
+function buildConfirmMessage(detection, blockedCount) {
+  const preview = detection.code.length > PREVIEW_LIMIT ? `${detection.code.slice(0, PREVIEW_LIMIT)}…` : detection.code;
+  if (detection.kind === "file-write") {
+    return {
+      title: `文件写入旁路已被拦截 ${blockedCount} 次，是否放行？`,
+      body: [`方式：${detection.tool} → ${detection.target}`, "", preview].join(`
+`)
+    };
+  }
+  return {
+    title: `内联脚本已被拦截 ${blockedCount} 次，是否放行？`,
+    body: [
+      `解释器：${detection.interpreter}`,
+      `形式：${detection.kind}`,
+      "",
+      preview
+    ].join(`
+`)
+  };
+}
+
+// my-script-guard/index.ts
+var scriptGuard = {
+  name: "script-guard",
+  detect: (command) => detectInlineScript(command) ?? detectFileWriteBypass(command),
+  react: (detection) => ({ block: true, reason: buildReason(detection) }),
+  escalation: {
+    threshold: 3,
+    buildConfirm: buildConfirmMessage
+  }
+};
+
 // my-back/back.ts
 function findLastUserMessageEntry(branch) {
   for (let i = branch.length - 1;i >= 0; i--) {
@@ -49525,73 +49761,6 @@ function mySound(pi) {
         ctx.ui.notify(`Sound: 未知分类 "${args}"。用 /sound 查看可用分类。`, "warning");
       }
     }
-  });
-}
-
-// my-cd-guard/index.ts
-import { realpathSync } from "node:fs";
-import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
-
-// my-cd-guard/detector.ts
-var identity = (p) => p;
-var LEADING_CD_RE = /^\s*cd\s+(?:"([^"]*)"|'([^']*)'|([^;&\s]+))\s*(&&|;)?\s*/;
-function normalizeTarget(raw, cwd) {
-  let target = raw;
-  if (target === "." || target === "./")
-    target = cwd;
-  if (target.length > 1)
-    target = target.replace(/\/+$/, "");
-  return target;
-}
-function safeRealpath(path, realpath) {
-  try {
-    return realpath(path);
-  } catch {
-    return path;
-  }
-}
-function stripRedundantCd(command, cwd, realpath = identity) {
-  const match = LEADING_CD_RE.exec(command);
-  if (!match)
-    return;
-  const target = normalizeTarget(match[1] ?? match[2] ?? match[3], cwd);
-  if (safeRealpath(target, realpath) !== safeRealpath(cwd, realpath)) {
-    return;
-  }
-  const hasMore = match[4] !== undefined;
-  const rest = hasMore ? command.slice(match[0].length) : "";
-  return {
-    command: rest.trim().length > 0 ? rest : "true",
-    stripped: match[0]
-  };
-}
-
-// my-cd-guard/index.ts
-function myCdGuard(pi) {
-  let projectRoot = "";
-  pi.on("session_start", (_event, ctx) => {
-    projectRoot = ctx.cwd;
-  });
-  pi.on("before_agent_start", async (event) => {
-    if (!projectRoot)
-      return;
-    return {
-      systemPrompt: event.systemPrompt + `
-
-CRITICAL: All bash commands execute in ${projectRoot}. NEVER prefix commands with \`cd ${projectRoot} &&\` — it is redundant and will be automatically stripped. Run the command directly instead.`
-    };
-  });
-  pi.on("tool_call", (event, ctx) => {
-    if (!isToolCallEventType("bash", event))
-      return;
-    const result = stripRedundantCd(event.input.command, ctx.cwd, realpathSync);
-    if (!result)
-      return;
-    event.input.command = result.command;
-    if (ctx.hasUI) {
-      ctx.ui.notify(`已自动剥掉冗余 cd 前缀：${result.stripped.trim()}`, "info");
-    }
-    return;
   });
 }
 
@@ -61000,151 +61169,9 @@ function myReload(pi) {
   });
 }
 
-// my-script-guard/index.ts
-import { isToolCallEventType as isToolCallEventType2 } from "@earendil-works/pi-coding-agent";
-
-// my-script-guard/detector.ts
-var MAX_EVAL_LENGTH = 80;
-var INTERPRETER = String.raw`(python(?:\d(?:\.\d+)?)?|node|ruby|perl|php)`;
-var PREFIXES = String.raw`(?:(?:time|sudo|nice|command|uv\s+run|env(?:\s+[A-Za-z_]\w*=\S*)*)\s+)*`;
-var EVAL_RE = new RegExp(String.raw`(?:^|[|;&\n])\s*${PREFIXES}${INTERPRETER}\b(?:\s+-\w+)*?\s+-(?:c|e|r)\s+("((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)')`, "s");
-var HEREDOC_RE = new RegExp(String.raw`(?:^|[|;&\n])\s*${PREFIXES}${INTERPRETER}\b(?:\s+-\w+|\s+-(?=\s))*\s*(\u003c\u003c\u003c|\u003c\u003c)-?\s*['"]?(\w*)`);
-function extractHeredocBody(command, matchEnd, operator, delimiter) {
-  if (operator === "<<<") {
-    return command.slice(matchEnd).trim().replace(/^['"]|['"]$/g, "");
-  }
-  const bodyStart = command.indexOf(`
-`, matchEnd);
-  if (bodyStart === -1)
-    return "";
-  const lines = command.slice(bodyStart + 1).split(`
-`);
-  const end = lines.findIndex((line) => line.trim() === delimiter);
-  return (end === -1 ? lines : lines.slice(0, end)).join(`
-`);
-}
-function detectInlineScript(command) {
-  const evalMatch = EVAL_RE.exec(command);
-  if (evalMatch) {
-    const code = evalMatch[3] ?? evalMatch[4];
-    if (code.length > MAX_EVAL_LENGTH || code.includes(`
-`)) {
-      return { interpreter: evalMatch[1], kind: "eval", code };
-    }
-  }
-  const heredocMatch = HEREDOC_RE.exec(command);
-  if (heredocMatch) {
-    const code = extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, heredocMatch[2], heredocMatch[3]);
-    return { interpreter: heredocMatch[1], kind: "heredoc", code };
-  }
-  return;
-}
-var MAX_INLINE_CONTENT_LENGTH = 80;
-var ANY_HEREDOC_RE = /<<-?\s*['"]?(\w+)['"]?/g;
-var TEE_WITH_TARGET_RE = /\btee\s+(?:-\w+\s+)*("[^"]*"|'[^']*'|\S+)/;
-var REDIRECT_TARGET_RE = />>?\s*("[^"]*"|'[^']*'|\S+)/;
-var ECHO_REDIRECT_RE = /(?:^|[|;&\n])\s*(echo|printf)\b([^>]*?)>>?\s*("[^"]*"|'[^']*'|\S+)/gs;
-function unquote(value2) {
-  return value2.replace(/^['"]|['"]$/g, "");
-}
-function lineOf(haystack, index) {
-  const start = haystack.lastIndexOf(`
-`, index) + 1;
-  const nl = haystack.indexOf(`
-`, index);
-  return haystack.slice(start, nl === -1 ? haystack.length : nl);
-}
-function detectFileWriteBypass(command) {
-  for (const echoMatch of command.matchAll(ECHO_REDIRECT_RE)) {
-    const content = echoMatch[2].trim();
-    if (content.length > MAX_INLINE_CONTENT_LENGTH || content.includes(`
-`)) {
-      return {
-        kind: "file-write",
-        tool: echoMatch[1],
-        target: unquote(echoMatch[3]),
-        code: content
-      };
-    }
-  }
-  for (const heredocMatch of command.matchAll(ANY_HEREDOC_RE)) {
-    const line = lineOf(command, heredocMatch.index);
-    const teeMatch = TEE_WITH_TARGET_RE.exec(line);
-    if (teeMatch) {
-      return {
-        kind: "file-write",
-        tool: "tee",
-        target: unquote(teeMatch[1]),
-        code: extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, "<<", heredocMatch[1])
-      };
-    }
-    if (/\bcat\b/.test(line)) {
-      const redirectMatch = REDIRECT_TARGET_RE.exec(line);
-      if (redirectMatch) {
-        return {
-          kind: "file-write",
-          tool: "cat",
-          target: unquote(redirectMatch[1]),
-          code: extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, "<<", heredocMatch[1])
-        };
-      }
-    }
-  }
-  return;
-}
-
-// my-script-guard/index.ts
-var ESCALATION_THRESHOLD = 3;
-var PREVIEW_LIMIT = 500;
-function buildReason(detection) {
-  if (detection.kind === "file-write") {
-    return `Blocked file write via bash (${detection.tool} → ${detection.target}). ` + "Use the write/edit tools to create or modify files instead of heredocs or output redirects. " + "Short one-liners (80 chars or less, single line) are fine.";
-  }
-  return `Blocked inline ${detection.interpreter} script (${detection.kind}). ` + "Do not run long inline scripts via bash. " + "Prefer dedicated tools (read/write/edit/grep) for file and text operations. " + `If a script is genuinely required, write it to a file with the write tool, then run \`${detection.interpreter} <file>\`.`;
-}
-function buildConfirmMessage(detection, blockedCount) {
-  const preview = detection.code.length > PREVIEW_LIMIT ? `${detection.code.slice(0, PREVIEW_LIMIT)}…` : detection.code;
-  if (detection.kind === "file-write") {
-    return {
-      title: `文件写入旁路已被拦截 ${blockedCount} 次，是否放行？`,
-      body: [`方式：${detection.tool} → ${detection.target}`, "", preview].join(`
-`)
-    };
-  }
-  return {
-    title: `内联脚本已被拦截 ${blockedCount} 次，是否放行？`,
-    body: [
-      `解释器：${detection.interpreter}`,
-      `形式：${detection.kind}`,
-      "",
-      preview
-    ].join(`
-`)
-  };
-}
-function myScriptGuard(pi) {
-  let blockedCount = 0;
-  pi.on("tool_call", async (event, ctx) => {
-    if (!isToolCallEventType2("bash", event))
-      return;
-    const detection = detectInlineScript(event.input.command) ?? detectFileWriteBypass(event.input.command);
-    if (!detection)
-      return;
-    blockedCount += 1;
-    if (blockedCount > ESCALATION_THRESHOLD && ctx.hasUI) {
-      const { title, body } = buildConfirmMessage(detection, blockedCount);
-      const allowed = await ctx.ui.confirm(title, body);
-      if (allowed)
-        return;
-    }
-    return { block: true, reason: buildReason(detection) };
-  });
-}
-
 // index.ts
 async function ly_pi_default(pi) {
-  myCdGuard(pi);
-  myScriptGuard(pi);
+  createGuardHarness(pi, [cdGuard, scriptGuard]);
   myLog(pi);
   await myPermission(pi);
   myReload(pi);

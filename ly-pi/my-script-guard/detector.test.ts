@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectFileWriteBypass, detectInlineScript } from "./detector";
+import { buildConfirmMessage, buildReason, detectFileWriteBypass, detectInlineScript } from "./detector";
 
 describe("detectInlineScript", () => {
   it("detects python -c with code longer than 80 chars", () => {
@@ -246,5 +246,57 @@ describe("detectFileWriteBypass", () => {
     expect(
       detectFileWriteBypass("python3 scripts/import.py <<EOF\ndata\nEOF"),
     ).toBeUndefined();
+  });
+});
+
+const LONG_CODE = "x".repeat(81);
+
+describe("buildReason", () => {
+  it("names the interpreter, the kind, and the file-based alternative", () => {
+    const detection = detectInlineScript(`python3 -c "${LONG_CODE}"`);
+    if (!detection) throw new Error("expected detection");
+    const reason = buildReason(detection);
+    expect(reason).toContain("python3");
+    expect(reason).toContain("eval");
+    expect(reason).toContain("python3 <file>");
+  });
+
+  it("names the tool and target for a file write bypass", () => {
+    const detection = detectFileWriteBypass("cat <<EOF > out.txt\nbody\nEOF");
+    if (!detection) throw new Error("expected detection");
+    const reason = buildReason(detection);
+    expect(reason).toContain("cat");
+    expect(reason).toContain("out.txt");
+    expect(reason).toContain("write/edit");
+  });
+});
+
+describe("buildConfirmMessage", () => {
+  it("builds confirm message for file write bypass", () => {
+    const detection = detectFileWriteBypass("cat <<EOF > out.txt\nbody\nEOF");
+    if (!detection) throw new Error("expected detection");
+    const msg = buildConfirmMessage(detection, 4);
+    expect(msg.title).toContain("文件写入旁路已被拦截");
+    expect(msg.title).toContain("4");
+    expect(msg.body).toContain("cat");
+    expect(msg.body).toContain("out.txt");
+  });
+
+  it("builds confirm message for inline script", () => {
+    const detection = detectInlineScript(`python3 -c "${LONG_CODE}"`);
+    if (!detection) throw new Error("expected detection");
+    const msg = buildConfirmMessage(detection, 4);
+    expect(msg.title).toContain("内联脚本已被拦截");
+    expect(msg.body).toContain("python3");
+    expect(msg.body).toContain("eval");
+  });
+
+  it("truncates long code in preview", () => {
+    const superLong = "y".repeat(600);
+    const detection = detectInlineScript(`python3 -c "${superLong}"`);
+    if (!detection) throw new Error("expected detection");
+    const msg = buildConfirmMessage(detection, 1);
+    expect(msg.body).toContain("…");
+    expect(msg.body.length).toBeLessThan(550);
   });
 });

@@ -1,35 +1,20 @@
 import { realpathSync } from "node:fs";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
-import { stripRedundantCd } from "./detector";
+import type { GuardConfig } from "../shared/guard-harness";
+import { stripRedundantCd, type CdStripResult } from "./detector";
 
-export default function myCdGuard(pi: ExtensionAPI): void {
-  let projectRoot = "";
-
-  pi.on("session_start", (_event, ctx) => {
-    projectRoot = ctx.cwd;
-  });
-
-  pi.on("before_agent_start", async (event) => {
-    if (!projectRoot) return;
-    return {
-      systemPrompt:
-        event.systemPrompt +
-        `\n\nCRITICAL: All bash commands execute in ${projectRoot}. NEVER prefix commands with \`cd ${projectRoot} &&\` — it is redundant and will be automatically stripped. Run the command directly instead.`,
-    };
-  });
-
-  pi.on("tool_call", (event, ctx) => {
-    if (!isToolCallEventType("bash", event)) return undefined;
-    const result = stripRedundantCd(event.input.command, ctx.cwd, realpathSync);
-    if (!result) return undefined;
-    event.input.command = result.command;
+export const cdGuard: GuardConfig<CdStripResult> = {
+  name: "cd-guard",
+  detect: (command, cwd) => stripRedundantCd(command, cwd, realpathSync),
+  react: (detection, event, ctx) => {
+    event.input.command = detection.command;
     if (ctx.hasUI) {
       ctx.ui.notify(
-        `已自动剥掉冗余 cd 前缀：${result.stripped.trim()}`,
+        `已自动剥掉冗余 cd 前缀：${detection.stripped.trim()}`,
         "info",
       );
     }
-    return undefined;
-  });
-}
+  },
+  onBeforeAgentStart: (systemPrompt, cwd) =>
+    systemPrompt +
+    `\n\nCRITICAL: All bash commands execute in ${cwd}. NEVER prefix commands with \`cd ${cwd} &&\` — it is redundant and will be automatically stripped. Run the command directly instead.`,
+};
