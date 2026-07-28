@@ -16,7 +16,7 @@
     "editorPaddingX": 1,
     "enableInstallTelemetry": false,
     "hideThinkingBlock": true,
-    "quietStartup": false,
+    "quietStartup": true,
     "theme": "catppuccin-mocha"
   },
   "subagents": {
