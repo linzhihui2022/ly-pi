@@ -176,14 +176,6 @@ function renderDailyTable(agg: CostAggregation): string {
       const d = agg.daily[date];
       return `        <tr>
           <td>${date}</td>
-          <td class="num">${d.judge.calls}</td>
-          <td class="cost">${toCny(d.judge.totalCost)}</td>
-          <td class="num">${d.advocate.analysis.calls + d.advocate.merge.calls}</td>
-          <td class="cost">${toCny(d.advocate.analysis.totalCost + d.advocate.merge.totalCost)}</td>
-          <td class="num">${d.prosecutor.analysis.calls + d.prosecutor.merge.calls}</td>
-          <td class="cost">${toCny(d.prosecutor.analysis.totalCost + d.prosecutor.merge.totalCost)}</td>
-          <td class="num">${d.chief.analysis.calls + d.chief.merge.calls}</td>
-          <td class="cost">${toCny(d.chief.analysis.totalCost + d.chief.merge.totalCost)}</td>
           <td class="num">${d.totalCalls}</td>
           <td class="cost total">${toCny(d.totalCost)}</td>
         </tr>`;
@@ -193,7 +185,7 @@ function renderDailyTable(agg: CostAggregation): string {
   return `    <h2 class="section-title">每日明细</h2>
     <table>
       <thead>
-        <tr><th>日期</th><th>Judge 调用</th><th>Judge 成本</th><th>Advocate 调用</th><th>Advocate 成本</th><th>Prosecutor 调用</th><th>Prosecutor 成本</th><th>Chief 调用</th><th>Chief 成本</th><th>合计调用</th><th>合计成本</th></tr>
+        <tr><th>日期</th><th>调用次数</th><th>成本</th></tr>
       </thead>
       <tbody>
 ${rows}
