@@ -1,10 +1,8 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { complete } from "@earendil-works/pi-ai";
-import { createDevLogger } from "../my-log/index";
+import type { AnalyzerConfig } from "./pipeline";
+import { createMerger as createSharedMerger, createRoleAnalyzer } from "./pipeline";
 import type { DeniedThenApproved } from "./stats";
 import type { Config } from "./types";
-
-const log = createDevLogger("my-permission:professor");
 
 export interface AdvocateSuggestion {
   add: Array<{ rule: string; reason: string }>;
@@ -15,7 +13,6 @@ export interface AdvocateResult {
   suggestion?: AdvocateSuggestion;
   mergedText?: string;
   error?: string;
-  /** Total cost in USD (analysis + merge calls). */
   cost?: number;
 }
 
@@ -43,7 +40,67 @@ export type MergerFn = (
   >,
 ) => Promise<AdvocateResult>;
 
+// ---- Role config (used by pipeline.ts) ----
+
+export const advocateAnalyzerConfig: AnalyzerConfig<
+  DeniedThenApproved[],
+  AdvocateSuggestion
+> = {
+  systemPrompt: [
+    "你是 my-permission 权限系统的安全策略分析师。",
+    "",
+    "## 系统架构",
+    "",
+    "权限系统分两层：",
+    "1. 规则层：模式匹配，直接 allow/deny",
+    "2. 法官：LLM 判定者，对规则层未命中的操作做出判定",
+    "",
+    "## 你的任务",
+    "",
+    "分析法官的假阳性案例，输出结构化的 JUDGE.md 优化建议。",
+    "",
+    "## 输出格式",
+    "",
+    "只回复严格 JSON，不要包含其他文字：",
+    "{",
+    '  "add": [',
+    '    { "rule": "新规则文本", "reason": "添加原因" }',
+    "  ],",
+    '  "remove": ["应删除的规则原文"]',
+    "}",
+    "",
+    "add: 建议新增的规则，每条包含 rule（一行祈使句）和 reason（一句话原因）。如果没有新增，设为空数组 []。",
+    "remove: 当前 JUDGE.md 中过时或错误的规则（必须匹配原文）。如果没有需删除的，设为空数组 []。",
+    "",
+    "注意：当前 JUDGE.md 中未出现在 remove 里的规则将自动保留，不需要在 JSON 中列出。",
+    "关键：不要建议当前 JUDGE.md 中已存在的规则。如果案例已被现有规则覆盖，则不需要添加。",
+    "",
+    "判断「重复」的标准是语义覆盖，不是字面匹配。例如：",
+    "- 已有「允许执行 bun run deploy」→ 不要再建议「允许执行 bun run scripts/deploy.ts」",
+    "- 已有「允许读取 .pi/agent/ 下配置文件」→ 不要再建议「允许读取 models-store.json」",
+    "",
+    "add 里的每一条都必须是当前 JUDGE.md 完全无法覆盖的新模式。",
+    "",
+    "## 规则",
+    "",
+    "- 只从可归纳的简单案例中提取模式，忽略多行长脚本等复杂案例",
+    "- 每条 rule 一句话，用祈使句，不超过一行",
+    '- reason 一句话说明原因（如"被误判 5 次"）',
+    "- 如果当前 JUDGE.md 已完美，所有数组为空",
+    "- 直接输出 JSON，不要 markdown 代码块",
+  ].join("\n"),
+  buildUserPrompt: (cases, cwd, currentJudgeMd, judgePrompt) =>
+    buildAdvocatePrompt(cases, currentJudgeMd, judgePrompt, cwd),
+  parseResult: parseAdvocateJson,
+  emptyInputError: "当前会话没有法官误判案例",
+  modelLabel: "advocate",
+};
+
+// ---- createAdvocate (thin wrapper) ----
+
 export function createAdvocate(config: Config): AdvocateFn {
+  const analyzer = createRoleAnalyzer(config, advocateAnalyzerConfig);
+
   return async function analyze(
     cases: DeniedThenApproved[],
     cwd: string,
@@ -60,166 +117,52 @@ export function createAdvocate(config: Config): AdvocateFn {
       return { error: "当前会话没有法官误判案例" };
     }
 
-    const parts = config.professorModel.split("/");
-    if (parts.length !== 2) {
-      return {
-        error: `professorModel 格式无效: ${config.professorModel}，需要 provider/model 格式`,
-      };
-    }
+    const result = await analyzer(
+      cases,
+      cwd,
+      currentJudgeMd,
+      judgePrompt,
+      resolveModel,
+      getAuth,
+    );
 
-    const model = resolveModel(parts[0], parts[1]);
-    if (!model) {
-      log.error("advocate model not found", {
-        configured: config.professorModel,
-      });
-      return {
-        error: `未找到教授模型: ${config.professorModel}`,
-      };
-    }
-    log.debug("advocate model resolved", {
-      provider: model.provider,
-      model: model.id,
-      configured: config.professorModel,
-    });
-
-    const prompt = buildAdvocatePrompt(cases, currentJudgeMd, judgePrompt, cwd);
-    const auth = await getAuth(model);
-
-    try {
-      const context = {
-        systemPrompt: [
-          "你是 my-permission 权限系统的安全策略分析师。",
-          "",
-          "## 系统架构",
-          "",
-          "权限系统分两层：",
-          "1. 规则层：模式匹配，直接 allow/deny",
-          "2. 法官：LLM 判定者，对规则层未命中的操作做出判定",
-          "",
-          "## 你的任务",
-          "",
-          "分析法官的假阳性案例，输出结构化的 JUDGE.md 优化建议。",
-          "",
-          "## 输出格式",
-          "",
-          "只回复严格 JSON，不要包含其他文字：",
-          "{",
-          '  "add": [',
-          '    { "rule": "新规则文本", "reason": "添加原因" }',
-          "  ],",
-          '  "remove": ["应删除的规则原文"]',
-          "}",
-          "",
-          "add: 建议新增的规则，每条包含 rule（一行祈使句）和 reason（一句话原因）。如果没有新增，设为空数组 []。",
-          "remove: 当前 JUDGE.md 中过时或错误的规则（必须匹配原文）。如果没有需删除的，设为空数组 []。",
-          "",
-          "注意：当前 JUDGE.md 中未出现在 remove 里的规则将自动保留，不需要在 JSON 中列出。",
-          "关键：不要建议当前 JUDGE.md 中已存在的规则。如果案例已被现有规则覆盖，则不需要添加。",
-          "",
-          "判断「重复」的标准是语义覆盖，不是字面匹配。例如：",
-          "- 已有「允许执行 bun run deploy」→ 不要再建议「允许执行 bun run scripts/deploy.ts」",
-          "- 已有「允许读取 .pi/agent/ 下配置文件」→ 不要再建议「允许读取 models-store.json」",
-          "",
-          "add 里的每一条都必须是当前 JUDGE.md 完全无法覆盖的新模式。",
-          "",
-          "## 规则",
-          "",
-          "- 只从可归纳的简单案例中提取模式，忽略多行长脚本等复杂案例",
-          "- 每条 rule 一句话，用祈使句，不超过一行",
-          '- reason 一句话说明原因（如"被误判 5 次"）',
-          "- 如果当前 JUDGE.md 已完美，所有数组为空",
-          "- 直接输出 JSON，不要 markdown 代码块",
-        ].join("\n"),
-        messages: [
-          { role: "user" as const, content: prompt, timestamp: Date.now() },
-        ],
-      };
-
-      const response = await complete(model, context, {
-        thinking: config.professorThinking,
-        apiKey: auth?.apiKey,
-        headers: auth?.headers,
-        env: auth?.env,
-      });
-
-      const cost = response.usage?.cost?.total;
-
-      // Surface API-level errors before content extraction.
-      const errResp = response as Record<string, unknown>;
-      if (errResp.stopReason === "error" || errResp.errorMessage) {
-        log.error("advocate API error", {
-          detail: errResp.errorMessage || errResp.stopReason,
-        });
-        return {
-          error: `教授模型调用失败: ${errResp.errorMessage || errResp.stopReason}`,
-        };
-      }
-
-      const text =
-        response.content.find((c) => c.type === "text")?.text ||
-        response.content
-          .flatMap((c) =>
-            Object.entries(c as unknown as Record<string, unknown>)
-              .filter(
-                ([k, v]) =>
-                  k !== "type" && typeof v === "string" && v.length > 0,
-              )
-              .map(([, v]) => v as string),
-          )
-          .join("");
-
-      if (!text) {
-        log.error("advocate empty response");
-        return { error: "教授模型返回了空内容" };
-      }
-
-      const parsed = parseAdvocateJson(text);
-      if (!parsed) {
-        log.error("advocate parse failed");
-        return { error: "教授模型返回了无法解析的 JSON" };
-      }
-      log.info("advocate completed", {
-        cases: cases.length,
-        add: parsed.add.length,
-        remove: parsed.remove.length,
-        cost,
-      });
-      return { suggestion: parsed, cost };
-    } catch (err) {
-      return {
-        error: `教授模型调用失败: ${(err as Error).message}`,
-      };
-    }
+    return {
+      suggestion: result.result,
+      error: result.error,
+      cost: result.cost,
+    };
   };
 }
 
-function parseAdvocateJson(text: string): AdvocateSuggestion | undefined {
-  const jsonMatch = /\{[\s\S]*\}/.exec(text);
-  if (!jsonMatch) return undefined;
-  try {
-    const parsed = JSON.parse(jsonMatch[0]) as unknown;
-    if (!parsed || typeof parsed !== "object") return undefined;
-    const p = parsed as Record<string, unknown>;
-    if (!Array.isArray(p.add) || !Array.isArray(p.remove)) {
-      return undefined;
-    }
-    const add = (p.add as unknown[]).filter(
-      (item): item is { rule: string; reason: string } =>
-        typeof item === "object" &&
-        item !== null &&
-        typeof (item as Record<string, unknown>).rule === "string" &&
-        typeof (item as Record<string, unknown>).reason === "string",
+// ---- createMerger (thin wrapper) ----
+
+export function createMerger(config: Config): MergerFn {
+  const sharedMerger = createSharedMerger(config);
+
+  return async function merge(
+    currentJudgeMd: string,
+    selectedRules: string[],
+    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
+    getAuth: (
+      model: Model<Api>,
+    ) => Promise<
+      { apiKey?: string; headers?: Record<string, string> } | undefined
+    >,
+  ): Promise<AdvocateResult> {
+    const result = await sharedMerger(
+      { current: currentJudgeMd, operations: selectedRules },
+      resolveModel,
+      getAuth,
     );
     return {
-      add,
-      remove: (p.remove as unknown[]).filter(
-        (v): v is string => typeof v === "string",
-      ),
+      mergedText: result.mergedText,
+      error: result.error,
+      cost: result.cost,
     };
-  } catch {
-    return undefined;
-  }
+  };
 }
+
+// ---- Prompt builder & JSON parser (role-specific, unchanged) ----
 
 export function buildAdvocatePrompt(
   cases: DeniedThenApproved[],
@@ -277,95 +220,30 @@ export function buildAdvocatePrompt(
   ].join("\n");
 }
 
-export function createMerger(config: Config): MergerFn {
-  return async function merge(
-    currentJudgeMd: string,
-    selectedRules: string[],
-    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (
-      model: Model<Api>,
-    ) => Promise<
-      { apiKey?: string; headers?: Record<string, string> } | undefined
-    >,
-  ): Promise<AdvocateResult> {
-    const parts = config.professorModel.split("/");
-    if (parts.length !== 2) {
-      return { error: `professorModel 格式无效` };
+function parseAdvocateJson(text: string): AdvocateSuggestion | undefined {
+  const jsonMatch = /\{[\s\S]*\}/.exec(text);
+  if (!jsonMatch) return undefined;
+  try {
+    const parsed = JSON.parse(jsonMatch[0]) as unknown;
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const p = parsed as Record<string, unknown>;
+    if (!Array.isArray(p.add) || !Array.isArray(p.remove)) {
+      return undefined;
     }
-
-    const model = resolveModel(parts[0], parts[1]);
-    if (!model) {
-      log.error("merger model not found", {
-        configured: config.professorModel,
-      });
-      return { error: `未找到教授模型` };
-    }
-
-    const auth = await getAuth(model);
-    const rulesList = selectedRules.map((r, i) => `${i + 1}. ${r}`).join("\n");
-
-    try {
-      const context = {
-        systemPrompt: [
-          "你是 JUDGE.md 的编辑。将用户选中的新规则融合到现有的 JUDGE.md 中。",
-          "",
-          "规则：",
-          "- 保留现有 JUDGE.md 的所有有效内容，不要丢失任何条目",
-          "- 将新规则追加到末尾，或插入到合适的位置",
-          "- 去除重复：如果新规则和现有规则意思相同或被已有规则语义覆盖，只保留表述更清晰的那条，不要两者都保留",
-          "- 如果新规则只是已有规则的特例（如已有「允许执行部署命令」，不要再保留「允许执行 bun run scripts/deploy.ts」），直接丢弃新规则",
-          undefined,
-          "- 保持简短精炼",
-          "- 直接输出完整的 JUDGE.md 文本，不要包含解释或 markdown 代码块",
-        ].join("\n"),
-        messages: [
-          {
-            role: "user" as const,
-            content: [
-              "现有 JUDGE.md：",
-              currentJudgeMd || "（空）",
-              "",
-              "用户选中的新规则：",
-              rulesList,
-              "",
-              "请将它们融合，直接输出完整的 JUDGE.md：",
-            ].join("\n"),
-            timestamp: Date.now(),
-          },
-        ],
-      };
-
-      const response = await complete(model, context, {
-        apiKey: auth?.apiKey,
-        headers: auth?.headers,
-        env: auth?.env,
-      });
-
-      const cost = response.usage?.cost?.total;
-
-      const text =
-        response.content.find((c) => c.type === "text")?.text ??
-        response.content
-          .flatMap((c) =>
-            Object.entries(c as unknown as Record<string, unknown>)
-              .filter(
-                ([k, v]) =>
-                  k !== "type" && typeof v === "string" && v.length > 0,
-              )
-              .map(([, v]) => v as string),
-          )
-          .join("");
-
-      if (!text) {
-        log.error("merger empty response");
-        return { error: "融合模型返回了空内容" };
-      }
-
-      log.info("merger completed", { rules: selectedRules.length, cost });
-      return { mergedText: text.trim(), cost };
-    } catch (err) {
-      log.error("merger call failed", { error: (err as Error).message });
-      return { error: `融合模型调用失败: ${(err as Error).message}` };
-    }
-  };
+    const add = (p.add as unknown[]).filter(
+      (item): item is { rule: string; reason: string } =>
+        typeof item === "object" &&
+        item !== null &&
+        typeof (item as Record<string, unknown>).rule === "string" &&
+        typeof (item as Record<string, unknown>).reason === "string",
+    );
+    return {
+      add,
+      remove: (p.remove as unknown[]).filter(
+        (v): v is string => typeof v === "string",
+      ),
+    };
+  } catch {
+    return undefined;
+  }
 }

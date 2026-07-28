@@ -98,7 +98,7 @@ describe("createProsecutor", () => {
       "",
       JUDGE_PROMPT,
     );
-    expect(result.error).toContain("未找到审查模型");
+    expect(result.error).toContain("未找到 prosecutor 模型");
   });
 
   it("returns suggestion with no rules when all allowed entries are safe", async () => {

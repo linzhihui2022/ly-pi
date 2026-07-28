@@ -14,14 +14,15 @@ import {
 import { loadFile } from "../src/shared/file";
 import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
 import type { ChiefSuggestionItem } from "./chief";
-import { createChief, createChiefMerger } from "./chief";
+import { createChief } from "./chief";
 import { config } from "./config";
+import { createMerger as createPipelineMerger } from "./pipeline";
 import { JUDGE_PROMPT } from "./judge-prompt";
 import { renderCostPage } from "./cost-page";
 import { aggregateCosts, appendCost } from "./cost-tracker";
 import { createJudge } from "./judge";
 import { renderJudgeLogPage } from "./log-page";
-import { createAdvocate, createMerger } from "./professor";
+import { createAdvocate } from "./professor";
 import { createProsecutor } from "./prosecutor";
 import { decide } from "./rules";
 import {
@@ -167,23 +168,24 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const cache = createSessionCache();
   const child = isChildSession();
 
-  /** Shared Phase 2: merge selected rules → confirm → write JUDGE.md */
-  async function mergeAndWriteJudgeMd(
+  /** Shared Phase 2: merge selected operations → confirm → write JUDGE.md */
+  async function mergeAndWrite(
     ctx: ExtensionContext,
     opts: {
       currentJudgeMd: string;
-      selectedRules: string[];
+      operations: Array<string | ChiefSuggestionItem>;
       resolveModel: (provider: string, id: string) => Model<Api> | undefined;
       analysisCost?: number;
       label: string;
       emoji: string;
-      mergeCostType: "advocate-merge" | "prosecutor-merge";
+      costType: "advocate-merge" | "prosecutor-merge" | "chief-merge";
+      count: number;
+      countLabel: string;
     },
   ) {
-    const merger = createMerger(config);
+    const merger = createPipelineMerger(config);
     const mergeResult = await merger(
-      opts.currentJudgeMd,
-      opts.selectedRules,
+      { current: opts.currentJudgeMd, operations: opts.operations },
       opts.resolveModel,
       createAuthResolverWithFallback(
         ctx.modelRegistry.getApiKeyAndHeaders,
@@ -207,7 +209,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       appendCost(
         ctx.sessionManager.getSessionId(),
         ctx.cwd,
-        opts.mergeCostType,
+        opts.costType,
         mergeResult.cost,
         config.professorModel,
       );
@@ -235,85 +237,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         content: [
           {
             type: "text" as const,
-            text: `✅ JUDGE.md 已更新，共 ${opts.selectedRules.length} 条规则`,
-          },
-        ],
-        details: {},
-      };
-    }
-
-    return {
-      content: [{ type: "text" as const, text: "已放弃，JUDGE.md 未修改" }],
-      details: {},
-    };
-  }
-
-  /** Chief Phase 2: merge selected suggestions → confirm → write JUDGE.md */
-  async function mergeAndWriteChiefMd(
-    ctx: ExtensionContext,
-    opts: {
-      currentJudgeMd: string;
-      selectedSuggestions: ChiefSuggestionItem[];
-      resolveModel: (provider: string, id: string) => Model<Api> | undefined;
-      analysisCost?: number;
-    },
-  ) {
-    const merger = createChiefMerger(config);
-    const mergeResult = await merger(
-      opts.currentJudgeMd,
-      opts.selectedSuggestions,
-      opts.resolveModel,
-      createAuthResolverWithFallback(
-        ctx.modelRegistry.getApiKeyAndHeaders,
-        (p) => ctx.modelRegistry.getApiKeyForProvider(p),
-      ),
-    );
-
-    if (mergeResult.error || !mergeResult.mergedText) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `融合失败: ${mergeResult.error || "空内容"}`,
-          },
-        ],
-        details: {},
-      };
-    }
-
-    if (mergeResult.cost !== undefined) {
-      appendCost(
-        ctx.sessionManager.getSessionId(),
-        ctx.cwd,
-        "chief-merge",
-        mergeResult.cost,
-        config.professorModel,
-      );
-    }
-
-    const totalCost = (opts.analysisCost ?? 0) + (mergeResult.cost ?? 0);
-    ctx.ui.notify(
-      `👨‍⚖️ 审判长费用: $${totalCost.toFixed(6)} (分析 $${(opts.analysisCost ?? 0).toFixed(6)} + 合并 $${(mergeResult.cost ?? 0).toFixed(6)})`,
-      "info",
-    );
-
-    const diffBody = formatDiff(opts.currentJudgeMd, mergeResult.mergedText);
-    const write = await ctx.ui.confirm(
-      `👨‍⚖️ 审判长融合完成 — 确认写入？`,
-      diffBody,
-    );
-
-    if (write) {
-      writeFileSync(
-        join(process.cwd(), "JUDGE.md"),
-        mergeResult.mergedText,
-        "utf-8",
-      );
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `✅ JUDGE.md 已更新，共 ${opts.selectedSuggestions.length} 条操作`,
+            text: `✅ JUDGE.md 已更新，共 ${opts.count} ${opts.countLabel}`,
           },
         ],
         details: {},
@@ -479,14 +403,16 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       }
 
       // Phase 2: merge → write
-      return await mergeAndWriteJudgeMd(ctx, {
+      return await mergeAndWrite(ctx, {
         currentJudgeMd,
-        selectedRules,
+        operations: selectedRules,
         resolveModel,
         analysisCost: result.cost,
         label: "辩护人",
         emoji: "🎓",
-        mergeCostType: "advocate-merge",
+        costType: "advocate-merge",
+        count: selectedRules.length,
+        countLabel: "条规则",
       });
     },
   });
@@ -590,14 +516,16 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      return await mergeAndWriteJudgeMd(ctx, {
+      return await mergeAndWrite(ctx, {
         currentJudgeMd,
-        selectedRules,
+        operations: selectedRules,
         resolveModel,
         analysisCost: result.cost,
         label: "检察官",
         emoji: "⚖️",
-        mergeCostType: "prosecutor-merge",
+        costType: "prosecutor-merge",
+        count: selectedRules.length,
+        countLabel: "条规则",
       });
     },
   });
@@ -703,11 +631,16 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      return await mergeAndWriteChiefMd(ctx, {
+      return await mergeAndWrite(ctx, {
         currentJudgeMd,
-        selectedSuggestions,
+        operations: selectedSuggestions,
         resolveModel,
         analysisCost: result.cost,
+        label: "审判长",
+        emoji: "👨‍⚖️",
+        costType: "chief-merge",
+        count: selectedSuggestions.length,
+        countLabel: "条操作",
       });
     },
   });

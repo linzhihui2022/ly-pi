@@ -101,7 +101,7 @@ describe("createChief", () => {
       resolveModelNotFound,
       getAuthOk,
     );
-    expect(result.error).toContain("未找到审判长模型");
+    expect(result.error).toContain("未找到 chief 模型");
   });
 
   it("returns empty suggestions when JUDGE.md has no issues", async () => {
@@ -468,7 +468,7 @@ describe("createChiefMerger", () => {
       resolveModelNotFound,
       getAuthOk,
     );
-    expect(result.error).toContain("未找到审判长合并模型");
+    expect(result.error).toContain("未找到合并模型");
   });
 
   it("merges add suggestions into JUDGE.md", async () => {

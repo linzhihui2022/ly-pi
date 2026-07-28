@@ -238,7 +238,7 @@ describe("createAdvocate", () => {
       JUDGE_PROMPT,
     );
     expect(result.suggestion).toBeUndefined();
-    expect(result.error).toContain("未找到教授模型");
+    expect(result.error).toContain("未找到 advocate 模型");
   });
 
   it("returns error when LLM call fails", async () => {
@@ -257,7 +257,7 @@ describe("createAdvocate", () => {
       JUDGE_PROMPT,
     );
     expect(result.suggestion).toBeUndefined();
-    expect(result.error).toContain("教授模型调用失败");
+    expect(result.error).toContain("advocate 模型调用失败");
   });
 
   it("returns error when LLM response has no text content", async () => {
