@@ -20,13 +20,21 @@ const agentDir = join(STAGING, "agent");
   ): string[] {
     const errors: string[] = [];
     if (typeof schema !== "object" || schema === null) return errors;
-    if (schema.type === "object" && typeof instance === "object" && instance !== null) {
+    if (
+      schema.type === "object" &&
+      typeof instance === "object" &&
+      instance !== null
+    ) {
       // required
       for (const r of (schema.required as string[] | undefined) ?? []) {
-        if (!(r in instance)) errors.push(`${path}: missing required property '${r}'`);
+        if (!(r in instance))
+          errors.push(`${path}: missing required property '${r}'`);
       }
       // properties
-      const props = (schema.properties as Record<string, Record<string, unknown>> | undefined) ?? {};
+      const props =
+        (schema.properties as
+          | Record<string, Record<string, unknown>>
+          | undefined) ?? {};
       const additional = schema.additionalProperties as boolean | undefined;
       for (const key of Object.keys(instance as Record<string, unknown>)) {
         const childPath = `${path}.${key}`;
@@ -37,13 +45,17 @@ const agentDir = join(STAGING, "agent");
               if (!Array.isArray((instance as Record<string, unknown>)[key]))
                 errors.push(`${childPath}: expected array`);
             } else if (actual !== props[key].type) {
-              errors.push(`${childPath}: expected ${props[key].type}, got ${actual}`);
+              errors.push(
+                `${childPath}: expected ${props[key].type}, got ${actual}`,
+              );
             }
           }
           if (props[key].enum) {
             const val = (instance as Record<string, unknown>)[key];
             if (!(props[key].enum as unknown[]).includes(val))
-              errors.push(`${childPath}: must be one of ${JSON.stringify(props[key].enum)}`);
+              errors.push(
+                `${childPath}: must be one of ${JSON.stringify(props[key].enum)}`,
+              );
           }
           if (typeof props[key].minimum === "number") {
             const val = (instance as Record<string, unknown>)[key] as number;
@@ -56,8 +68,13 @@ const agentDir = join(STAGING, "agent");
               errors.push(`${childPath}: must be <= ${props[key].maximum}`);
           }
           // Recurse into nested objects/arrays
-          validate((instance as Record<string, unknown>)[key], props[key], childPath)
-            .forEach((e) => errors.push(e));
+          validate(
+            (instance as Record<string, unknown>)[key],
+            props[key],
+            childPath,
+          ).forEach((e) => {
+            errors.push(e);
+          });
         } else if (additional === false) {
           errors.push(`${childPath}: unknown property`);
         }
@@ -69,7 +86,7 @@ const agentDir = join(STAGING, "agent");
   const errors = validate(settings, schema);
   if (errors.length > 0) {
     console.error("Schema validation FAILED:");
-    for (const e of errors) console.error("  " + e);
+    for (const e of errors) console.error(`  ${e}`);
     process.exit(1);
   }
   console.log("Schema validation: OK");
@@ -116,19 +133,21 @@ async function write(path: string, data: string | Uint8Array) {
   let target: Record<string, unknown> = {};
   try {
     target = await Bun.file(settingsPath).json();
-  } catch { /* first deploy */ }
+  } catch {
+    /* first deploy */
+  }
   target = deepMerge(target, merged.settings);
   target.subagents = deepMerge(
     (target.subagents as Record<string, unknown>) ?? {},
     merged.subagents,
   );
-  await write(settingsPath, JSON.stringify(target, null, 2) + "\n");
+  await write(settingsPath, `${JSON.stringify(target, null, 2)}\n`);
   console.log("Settings: deployed");
 
   // subagentRuntime → subagent extension config.json
   await write(
     join(agentDir, "extensions", "subagent", "config.json"),
-    JSON.stringify(merged.subagentRuntime, null, 2) + "\n",
+    `${JSON.stringify(merged.subagentRuntime, null, 2)}\n`,
   );
   console.log("subagentRuntime: deployed");
 }
@@ -145,61 +164,88 @@ async function write(path: string, data: string | Uint8Array) {
     label: string;
   }> = [
     { src: "mcp.json", dest: "mcp.json", label: "mcp.json" },
-    { src: "append-system.md", dest: "APPEND_SYSTEM.md", label: "append-system.md" },
-    { src: "pi-tool-display.json", dest: "extensions/pi-tool-display/config.json", label: "pi-tool-display" },
-    { src: "web-search.json", dest: "web-search.json", base: STAGING, label: "web-search.json" },
-    { src: "rpiv-todo.json", dest: "config/rpiv-todo/config.json", base: STAGING, label: "rpiv-todo" },
-    { src: "my-sound.json", dest: "my-sound.json", base: extDir, label: "my-sound.json" },
-    { src: "my-back.json", dest: "my-back.json", base: extDir, label: "my-back.json" },
+    {
+      src: "append-system.md",
+      dest: "APPEND_SYSTEM.md",
+      label: "append-system.md",
+    },
+    {
+      src: "pi-tool-display.json",
+      dest: "extensions/pi-tool-display/config.json",
+      label: "pi-tool-display",
+    },
+    {
+      src: "web-search.json",
+      dest: "web-search.json",
+      base: STAGING,
+      label: "web-search.json",
+    },
+    {
+      src: "rpiv-todo.json",
+      dest: "config/rpiv-todo/config.json",
+      base: STAGING,
+      label: "rpiv-todo",
+    },
+    {
+      src: "my-sound.json",
+      dest: "my-sound.json",
+      base: extDir,
+      label: "my-sound.json",
+    },
+    {
+      src: "my-back.json",
+      dest: "my-back.json",
+      base: extDir,
+      label: "my-back.json",
+    },
   ];
 
   for (const { src, dest, base, label } of configManifest) {
-    await write(
-      join(base ?? agentDir, dest),
-      Bun.file(join(configDir, src)),
-    );
+    await write(join(base ?? agentDir, dest), Bun.file(join(configDir, src)));
     console.log(`${label}: deployed`);
   }
 }
 
 // ── Static assets ───────────────────────────────────────────────────────────
-{
-  // Sounds
-  if (existsSync("assets/sounds")) {
-    cpSync("assets/sounds", join(agentDir, "extensions", "ly-pi", "sounds"), { recursive: true });
-    console.log("Sounds: deployed");
-  }
 
-  // Skills
-  if (existsSync("assets/skills")) {
-    cpSync("assets/skills", join(agentDir, "skills"), { recursive: true });
-    console.log("Skills: deployed");
-  }
+// Sounds
+if (existsSync("assets/sounds")) {
+  cpSync("assets/sounds", join(agentDir, "extensions", "ly-pi", "sounds"), {
+    recursive: true,
+  });
+  console.log("Sounds: deployed");
+}
 
-  // Themes
-  if (existsSync("assets/themes")) {
-    for (const f of new Bun.Glob("*.json").scanSync("assets/themes")) {
-      await write(join(agentDir, "themes", f), Bun.file(join("assets/themes", f)));
-    }
-    console.log("Themes: deployed");
-  }
+// Skills
+if (existsSync("assets/skills")) {
+  cpSync("assets/skills", join(agentDir, "skills"), { recursive: true });
+  console.log("Skills: deployed");
+}
 
-  // Agents
-  if (existsSync("assets/agents")) {
-    cpSync("assets/agents", join(agentDir, "agents"), { recursive: true });
-    console.log("Agents: deployed");
+// Themes
+if (existsSync("assets/themes")) {
+  for (const f of new Bun.Glob("*.json").scanSync("assets/themes")) {
+    await write(
+      join(agentDir, "themes", f),
+      Bun.file(join("assets/themes", f)),
+    );
   }
+  console.log("Themes: deployed");
+}
+
+// Agents
+if (existsSync("assets/agents")) {
+  cpSync("assets/agents", join(agentDir, "agents"), { recursive: true });
+  console.log("Agents: deployed");
 }
 
 // ── rtk init ────────────────────────────────────────────────────────────────
-{
-  if (Bun.which("rtk")) {
-    const proc = Bun.spawnSync(["rtk", "init", "-g", "--agent", "pi"]);
-    if (proc.exitCode === 0) console.log("rtk init: OK");
-    else console.log("rtk init: exited", proc.exitCode);
-  } else {
-    console.log("rtk not found, skipping");
-  }
+if (Bun.which("rtk")) {
+  const proc = Bun.spawnSync(["rtk", "init", "-g", "--agent", "pi"]);
+  if (proc.exitCode === 0) console.log("rtk init: OK");
+  else console.log("rtk init: exited", proc.exitCode);
+} else {
+  console.log("rtk not found, skipping");
 }
 
 console.log(`\nAll deployed to ${STAGING}/`);

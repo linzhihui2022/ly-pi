@@ -69,9 +69,7 @@ describe("scriptGuard", () => {
     });
 
     it("returns block with reason for file write bypass", () => {
-      const detection = detectFileWriteBypass(
-        "cat <<EOF > out.txt\nbody\nEOF",
-      );
+      const detection = detectFileWriteBypass("cat <<EOF > out.txt\nbody\nEOF");
       if (!detection) throw new Error("expected detection");
       const result = scriptGuard.react(detection, {} as never, {} as never);
       expect(result).toBeDefined();

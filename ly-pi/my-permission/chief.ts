@@ -1,6 +1,9 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AnalyzerConfig } from "./pipeline";
-import { createMerger as createSharedMerger, createRoleAnalyzer } from "./pipeline";
+import {
+  createRoleAnalyzer,
+  createMerger as createSharedMerger,
+} from "./pipeline";
 import type { Config } from "./types";
 
 // ---- types ----

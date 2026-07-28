@@ -108,7 +108,7 @@ export default function mySound(pi: ExtensionAPI): void {
       if (!args) {
         // List categories and packs
         const cats = listCategories(config);
-        const packNames = Object.keys(config.packs);
+        const _packNames = Object.keys(config.packs);
         const lines = [`🎙️  Sound — ${config.activePack}`];
         for (const cat of cats) {
           lines.push(`  /sound ${cat.name}  —  ${cat.description}`);

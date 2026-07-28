@@ -484,22 +484,22 @@ describe("aggregateCosts", () => {
   it("populates sessions sorted by firstTs", () => {
     writeFileSync(
       join(TEST_COSTS_DIR, "session-a.jsonl"),
-      JSON.stringify({
+      `${JSON.stringify({
         type: "judge",
         cost: 0.001,
         model: "x",
         ts: "2026-07-01T10:00:00.000Z",
-      }) + "\n",
+      })}\n`,
       "utf-8",
     );
     writeFileSync(
       join(TEST_COSTS_DIR, "session-b.jsonl"),
-      JSON.stringify({
+      `${JSON.stringify({
         type: "judge",
         cost: 0.002,
         model: "x",
         ts: "2026-06-01T10:00:00.000Z",
-      }) + "\n",
+      })}\n`,
       "utf-8",
     );
 

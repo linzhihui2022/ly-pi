@@ -99,7 +99,7 @@ describe("request_reload tool", () => {
 describe("session_start auto-resume", () => {
   it("registers a session_start handler", () => {
     const { handlers } = setup();
-    expect(handlers["session_start"]).toBeDefined();
+    expect(handlers.session_start).toBeDefined();
   });
 
   it("does nothing when reason is not 'reload'", () => {
@@ -109,10 +109,10 @@ describe("session_start auto-resume", () => {
       sessionManager: { getEntries: () => [] },
     };
 
-    handlers["session_start"]({ reason: "startup" }, ctx);
-    handlers["session_start"]({ reason: "new" }, ctx);
-    handlers["session_start"]({ reason: "resume" }, ctx);
-    handlers["session_start"]({ reason: "fork" }, ctx);
+    handlers.session_start({ reason: "startup" }, ctx);
+    handlers.session_start({ reason: "new" }, ctx);
+    handlers.session_start({ reason: "resume" }, ctx);
+    handlers.session_start({ reason: "fork" }, ctx);
 
     expect(sendUserMessageCalls).toHaveLength(0);
   });
@@ -124,7 +124,7 @@ describe("session_start auto-resume", () => {
       sessionManager: { getEntries: () => [] },
     };
 
-    handlers["session_start"]({ reason: "reload" }, ctx);
+    handlers.session_start({ reason: "reload" }, ctx);
     expect(sendUserMessageCalls).toHaveLength(0);
   });
 
@@ -137,7 +137,7 @@ describe("session_start auto-resume", () => {
       },
     };
 
-    handlers["session_start"]({ reason: "reload" }, ctx);
+    handlers.session_start({ reason: "reload" }, ctx);
     expect(sendUserMessageCalls).toHaveLength(0);
   });
 
@@ -159,7 +159,7 @@ describe("session_start auto-resume", () => {
       },
     };
 
-    handlers["session_start"]({ reason: "reload" }, ctx);
+    handlers.session_start({ reason: "reload" }, ctx);
 
     expect(sendUserMessageCalls).toHaveLength(1);
     expect(sendUserMessageCalls[0]).toBe(CONTINUE_MESSAGE);
@@ -180,7 +180,7 @@ describe("session_start auto-resume", () => {
       },
     };
 
-    handlers["session_start"]({ reason: "reload" }, ctx);
+    handlers.session_start({ reason: "reload" }, ctx);
     expect(sendUserMessageCalls).toHaveLength(0);
   });
 
@@ -201,7 +201,7 @@ describe("session_start auto-resume", () => {
       },
     };
 
-    handlers["session_start"]({ reason: "reload" }, ctx);
+    handlers.session_start({ reason: "reload" }, ctx);
     expect(sendUserMessageCalls).toHaveLength(0);
   });
 
@@ -220,7 +220,7 @@ describe("session_start auto-resume", () => {
       },
     };
 
-    handlers["session_start"]({ reason: "reload" }, ctx);
+    handlers.session_start({ reason: "reload" }, ctx);
     expect(sendUserMessageCalls).toHaveLength(0);
   });
 });

@@ -29,7 +29,6 @@ describe("config", () => {
     const bash = config.permission.bash;
     expect(bash).toBeTruthy();
     expect(typeof bash).toBe("object");
-    // biome-ignore lint/style/noNonNullAssertion: checked above
     expect(Object.keys(bash!).length).toBeGreaterThan(0);
   });
 
@@ -48,17 +47,15 @@ describe("config", () => {
   it("denies env-related bash commands", () => {
     const bash = config.permission.bash;
     expect(bash).toBeTruthy();
-    // biome-ignore lint/style/noNonNullAssertion: checked above
     const b = bash! as Record<string, string>;
-    expect(b["env"]).toBe("deny");
-    expect(b["set"]).toBe("deny");
-    expect(b["printenv"]).toBe("deny");
+    expect(b.env).toBe("deny");
+    expect(b.set).toBe("deny");
+    expect(b.printenv).toBe("deny");
   });
 
   it("denies sensitive path patterns", () => {
     const path = config.permission.path;
     expect(path).toBeTruthy();
-    // biome-ignore lint/style/noNonNullAssertion: checked above
     const p = path! as Record<string, string>;
     expect(p["*.env"]).toBe("deny");
     expect(p["*.key"]).toBe("deny");
@@ -69,7 +66,6 @@ describe("config", () => {
   it("allows common dev commands in bash", () => {
     const bash = config.permission.bash;
     expect(bash).toBeTruthy();
-    // biome-ignore lint/style/noNonNullAssertion: checked above
     const b = bash! as Record<string, string>;
     expect(b["git status"]).toBe("allow");
     expect(b["bun run *"]).toBe("allow");

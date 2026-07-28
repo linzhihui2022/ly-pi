@@ -13,7 +13,10 @@ export interface GuardConfig<TDet = unknown> {
     detection: TDet,
     event: BashToolCallEvent,
     ctx: ExtensionContext,
-  ) => void | ToolCallEventResult | Promise<void | ToolCallEventResult>;
+  ) =>
+    | undefined
+    | ToolCallEventResult
+    | Promise<undefined | ToolCallEventResult>;
   onSessionStart?: (cwd: string) => void;
   onBeforeAgentStart?: (
     systemPrompt: string,
@@ -92,10 +95,7 @@ export function createGuardHarness(
         const result = await guard.react(detection, event, ctx);
         if (result?.block) return result;
       } catch (err) {
-        console.warn(
-          `[guard-harness] Guard "${guard.name}" error:`,
-          err,
-        );
+        console.warn(`[guard-harness] Guard "${guard.name}" error:`, err);
       }
     }
     return undefined;

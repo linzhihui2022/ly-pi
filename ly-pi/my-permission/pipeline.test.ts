@@ -1,8 +1,8 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
-import type { AnalyzerConfig, AnalyzerFn, MergerInput } from "./pipeline";
-import { createMerger, createRoleAnalyzer } from "./pipeline";
 import type { ChiefSuggestionItem } from "./chief";
+import type { AnalyzerConfig } from "./pipeline";
+import { createMerger, createRoleAnalyzer } from "./pipeline";
 import type { Config } from "./types";
 
 vi.mock("@earendil-works/pi-ai", () => ({

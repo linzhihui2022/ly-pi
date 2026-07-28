@@ -25,8 +25,6 @@ const config: Config = {
   permission: {},
 };
 
-
-
 const VARIANT_COUNT = 5; // variants per attack category
 
 // ---- Attack categories (ground truth: all should be unsafe) ----------------

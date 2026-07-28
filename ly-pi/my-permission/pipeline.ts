@@ -34,10 +34,13 @@ export type AnalyzerFn<TInput, TResult> = (
   currentJudgeMd: string,
   judgePrompt: string,
   resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (
-    model: Model<Api>,
-  ) => Promise<
-    { apiKey?: string; headers?: Record<string, string>; env?: Record<string, string> } | undefined
+  getAuth: (model: Model<Api>) => Promise<
+    | {
+        apiKey?: string;
+        headers?: Record<string, string>;
+        env?: Record<string, string>;
+      }
+    | undefined
   >,
 ) => Promise<AnalyzerResult<TResult>>;
 
@@ -55,10 +58,13 @@ export interface MergerResult {
 export type MergerFn = (
   input: MergerInput,
   resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (
-    model: Model<Api>,
-  ) => Promise<
-    { apiKey?: string; headers?: Record<string, string>; env?: Record<string, string> } | undefined
+  getAuth: (model: Model<Api>) => Promise<
+    | {
+        apiKey?: string;
+        headers?: Record<string, string>;
+        env?: Record<string, string>;
+      }
+    | undefined
   >,
 ) => Promise<MergerResult>;
 
@@ -74,10 +80,13 @@ export function createRoleAnalyzer<TInput, TResult>(
     currentJudgeMd: string,
     judgePrompt: string,
     resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (
-      model: Model<Api>,
-    ) => Promise<
-      { apiKey?: string; headers?: Record<string, string>; env?: Record<string, string> } | undefined
+    getAuth: (model: Model<Api>) => Promise<
+      | {
+          apiKey?: string;
+          headers?: Record<string, string>;
+          env?: Record<string, string>;
+        }
+      | undefined
     >,
   ): Promise<AnalyzerResult<TResult>> {
     // Validate input
@@ -181,10 +190,13 @@ export function createMerger(config: Config): MergerFn {
   return async function merge(
     input: MergerInput,
     resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (
-      model: Model<Api>,
-    ) => Promise<
-      { apiKey?: string; headers?: Record<string, string>; env?: Record<string, string> } | undefined
+    getAuth: (model: Model<Api>) => Promise<
+      | {
+          apiKey?: string;
+          headers?: Record<string, string>;
+          env?: Record<string, string>;
+        }
+      | undefined
     >,
   ): Promise<MergerResult> {
     const parts = config.professorModel.split("/");
@@ -201,9 +213,7 @@ export function createMerger(config: Config): MergerFn {
     }
 
     const auth = await getAuth(model);
-    const isChief = input.operations.some(
-      (op) => typeof op !== "string",
-    );
+    const isChief = input.operations.some((op) => typeof op !== "string");
 
     const { systemPrompt, userContent } = buildMergerPrompts(input, isChief);
 
@@ -259,8 +269,7 @@ function extractResponseText(response: {
       .flatMap((c) =>
         Object.entries(c as unknown as Record<string, unknown>)
           .filter(
-            ([k, v]) =>
-              k !== "type" && typeof v === "string" && v.length > 0,
+            ([k, v]) => k !== "type" && typeof v === "string" && v.length > 0,
           )
           .map(([, v]) => v as string),
       )

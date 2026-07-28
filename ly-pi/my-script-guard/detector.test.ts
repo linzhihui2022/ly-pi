@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildConfirmMessage, buildReason, detectFileWriteBypass, detectInlineScript } from "./detector";
+import {
+  buildConfirmMessage,
+  buildReason,
+  detectFileWriteBypass,
+  detectInlineScript,
+} from "./detector";
 
 describe("detectInlineScript", () => {
   it("detects python -c with code longer than 80 chars", () => {

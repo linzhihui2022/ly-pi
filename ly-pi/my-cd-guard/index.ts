@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import type { GuardConfig } from "../shared/guard-harness";
-import { stripRedundantCd, type CdStripResult } from "./detector";
+import { type CdStripResult, stripRedundantCd } from "./detector";
 
 export const cdGuard: GuardConfig<CdStripResult> = {
   name: "cd-guard",
