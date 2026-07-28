@@ -1,12 +1,17 @@
-export interface BtCategory {
+export interface SoundPack {
+  soundDir: string;
+}
+
+export interface SoundCategory {
   description: string;
   files: string[];
 }
 
-export interface BtConfig {
+export interface SoundConfig {
   enabled: boolean;
-  soundDir: string;
-  categories: Record<string, BtCategory>;
+  activePack: string;
+  packs: Record<string, SoundPack>;
+  categories: Record<string, SoundCategory>;
   eventMap: Record<string, string>;
   /** Maps tool names (e.g. "ask_user_question") to sound categories */
   toolEventMap?: Record<string, string>;

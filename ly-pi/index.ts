@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import myBack from "./my-back/index";
-import myBt from "./my-bt/index";
+import mySound from "./my-sound/index";
 import myCdGuard from "./my-cd-guard/index";
 import myHtml from "./my-html/index";
 import myHud from "./my-hud/index";
@@ -17,6 +17,6 @@ export default async function (pi: ExtensionAPI): Promise<void> {
   myReload(pi);
   myBack(pi);
   myHtml(pi);
-  myBt(pi);
+  mySound(pi);
   myHud(pi);
 }

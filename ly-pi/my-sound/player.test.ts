@@ -7,7 +7,7 @@ import {
   playSound,
   resolveSoundPath,
 } from "./player";
-import type { BtConfig } from "./types";
+import type { SoundConfig } from "./types";
 
 let nextPid = 1000;
 
@@ -18,12 +18,15 @@ vi.mock("./coordinator", () => ({
   })),
 }));
 
-const mockConfig: BtConfig = {
+const mockConfig: SoundConfig = {
   enabled: true,
-  soundDir: "/fake/sounds",
+  activePack: "test-pack",
+  packs: {
+    "test-pack": { soundDir: "/fake/sounds" },
+  },
   categories: {
     startup: {
-      description: "BT-7274 startup",
+      description: "Startup",
       files: ["startup.mp3"],
     },
     affirmative: {
@@ -54,22 +57,24 @@ const mockConfig: BtConfig = {
   },
 };
 
+const soundDir = "/fake/sounds";
+
 beforeEach(() => {
   vi.mocked(coordinator.spawnSoundProcess).mockClear();
 });
 
 describe("playCategory", () => {
   it("plays a sound from the category", () => {
-    playCategory(mockConfig, "startup");
+    playCategory(mockConfig, soundDir, "startup");
     expect(coordinator.spawnSoundProcess).toHaveBeenCalledOnce();
     expect(coordinator.spawnSoundProcess).toHaveBeenCalledWith(
-      expect.objectContaining({ soundDir: "/fake/sounds" }),
+      mockConfig,
       "/fake/sounds/startup.mp3",
     );
   });
 
   it("does nothing for unknown category", () => {
-    playCategory(mockConfig, "nonexistent");
+    playCategory(mockConfig, soundDir, "nonexistent");
     expect(coordinator.spawnSoundProcess).not.toHaveBeenCalled();
   });
 });
@@ -90,7 +95,7 @@ describe("listCategories", () => {
     expect(result).toHaveLength(6);
     expect(result[0]).toEqual({
       name: "startup",
-      description: "BT-7274 startup",
+      description: "Startup",
     });
     expect(result[1]).toEqual({
       name: "affirmative",
@@ -126,7 +131,7 @@ describe("pickSoundFile", () => {
 
 describe("resolveSoundPath", () => {
   it("resolves a file relative to soundDir", () => {
-    const result = resolveSoundPath(mockConfig, "startup.mp3");
+    const result = resolveSoundPath("/fake/sounds", "startup.mp3");
     expect(result).toBe("/fake/sounds/startup.mp3");
   });
 });

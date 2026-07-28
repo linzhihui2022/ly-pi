@@ -49220,7 +49220,7 @@ function myBack(pi) {
   });
 }
 
-// my-bt/index.ts
+// my-sound/index.ts
 import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { join as join3, resolve } from "node:path";
 
@@ -49236,10 +49236,10 @@ function resolveExtDir(importMeta) {
   return process.cwd();
 }
 
-// my-bt/player.ts
+// my-sound/player.ts
 import { join as join2 } from "node:path";
 
-// my-bt/coordinator.ts
+// my-sound/coordinator.ts
 import { exec } from "node:child_process";
 import {
   existsSync,
@@ -49251,12 +49251,12 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 function onExecDone() {}
-var GLOBAL_BT_DIR = join(homedir(), ".my-bt");
-var DEFAULT_PID_FILE = join(GLOBAL_BT_DIR, "playing.json");
-var DEFAULT_LOCK_DIR = join(GLOBAL_BT_DIR, ".lock");
-var DEFAULT_SOUND_PID_FILE = join(GLOBAL_BT_DIR, "sound-pids.json");
-var DEFAULT_SOUND_LOCK_DIR = join(GLOBAL_BT_DIR, ".sound-lock");
-function ensureGlobalDir(dir = GLOBAL_BT_DIR) {
+var GLOBAL_SOUND_DIR = join(homedir(), ".pi", "my-sound");
+var DEFAULT_PID_FILE = join(GLOBAL_SOUND_DIR, "playing.json");
+var DEFAULT_LOCK_DIR = join(GLOBAL_SOUND_DIR, ".lock");
+var DEFAULT_SOUND_PID_FILE = join(GLOBAL_SOUND_DIR, "sound-pids.json");
+var DEFAULT_SOUND_LOCK_DIR = join(GLOBAL_SOUND_DIR, ".sound-lock");
+function ensureGlobalDir(dir = GLOBAL_SOUND_DIR) {
   if (!existsSync(dir))
     mkdirSync(dir, { recursive: true });
 }
@@ -49270,7 +49270,7 @@ function acquireGlobalLock(lockDir = DEFAULT_LOCK_DIR, options = {}) {
       return;
     } catch {
       if (attempts >= maxRetries) {
-        throw new Error(`[my-bt] Failed to acquire global lock: ${lockDir}`);
+        throw new Error(`[my-sound] Failed to acquire global lock: ${lockDir}`);
       }
       attempts++;
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, retryDelayMs);
@@ -49316,7 +49316,7 @@ function recordPids(pids, pidFile = DEFAULT_PID_FILE, lockDir = DEFAULT_LOCK_DIR
     writeFileSync(pidFile, JSON.stringify(state, null, 2));
   }, lockDir);
 }
-function spawnSoundProcess(_config, filePath, runtimeDir = GLOBAL_BT_DIR) {
+function spawnSoundProcess(_config, filePath, runtimeDir = GLOBAL_SOUND_DIR) {
   const pidFile = join(runtimeDir, "sound-pids.json");
   const lockDir = join(runtimeDir, ".sound-lock");
   killPlayingProcesses(pidFile, lockDir);
@@ -49327,7 +49327,7 @@ function spawnSoundProcess(_config, filePath, runtimeDir = GLOBAL_BT_DIR) {
   return child;
 }
 
-// my-bt/player.ts
+// my-sound/player.ts
 function listCategories(config) {
   return Object.entries(config.categories).map(([name, cat]) => ({
     name,
@@ -49346,39 +49346,44 @@ function pickSoundFile(config, category) {
   lastPicked[category] = next;
   return cat.files[next];
 }
-function resolveSoundPath(config, file) {
-  return join2(config.soundDir, file);
+function resolveSoundPath(soundDir, file) {
+  return join2(soundDir, file);
 }
 function playSound(config, filePath) {
   spawnSoundProcess(config, filePath);
 }
-function playCategory(config, category, _onError) {
+function playCategory(config, soundDir, category, _onError) {
   const file = pickSoundFile(config, category);
   if (!file)
     return;
-  playSound(config, resolveSoundPath(config, file));
+  playSound(config, resolveSoundPath(soundDir, file));
 }
 
-// my-bt/index.ts
+// my-sound/index.ts
 var EXT_DIR = resolveExtDir(import.meta);
-var CONFIG_PATH = join3(EXT_DIR, "my-bt.json");
+var CONFIG_PATH = join3(EXT_DIR, "my-sound.json");
+function resolveSoundDir(config) {
+  const pack = config.packs[config.activePack];
+  if (!pack)
+    return resolve(EXT_DIR, "sounds");
+  return resolve(EXT_DIR, pack.soundDir);
+}
 function loadConfig() {
   const raw = readFileSync2(CONFIG_PATH, "utf-8");
   const config = JSON.parse(raw);
-  return { ...config, soundDir: resolve(EXT_DIR, config.soundDir) };
+  return config;
 }
 function saveConfig(config) {
-  const raw = readFileSync2(CONFIG_PATH, "utf-8");
-  const existing = JSON.parse(raw);
-  const payload = { ...existing, enabled: config.enabled };
-  writeFileSync2(CONFIG_PATH, `${JSON.stringify(payload, null, 2)}
+  writeFileSync2(CONFIG_PATH, `${JSON.stringify(config, null, 2)}
 `, "utf-8");
 }
-function myBt(pi) {
+function mySound(pi) {
   let config;
+  let soundDir;
   let lastPlayedCategory;
   try {
     config = loadConfig();
+    soundDir = resolveSoundDir(config);
   } catch {
     return;
   }
@@ -49402,7 +49407,7 @@ function myBt(pi) {
         return;
       }
       lastPlayedCategory = category;
-      playCategory(config, category, ctx.ui.notify);
+      playCategory(config, soundDir, category, ctx.ui.notify);
     });
   }
   if (config.toolEventMap) {
@@ -49413,7 +49418,7 @@ function myBt(pi) {
       if (!category)
         return;
       lastPlayedCategory = category;
-      playCategory(config, category, ctx.ui.notify);
+      playCategory(config, soundDir, category, ctx.ui.notify);
     });
   }
   if (config.permissionEventMap) {
@@ -49424,27 +49429,30 @@ function myBt(pi) {
       if (!category)
         return;
       lastPlayedCategory = category;
-      playCategory(config, category);
+      playCategory(config, soundDir, category);
     });
   }
-  pi.registerCommand("bt", {
-    description: "BT-7274 voice pack — list, play, or toggle sounds",
+  pi.registerCommand("sound", {
+    description: "Sound pack — list, play, toggle sounds, or switch packs",
     handler: async (args, ctx) => {
       try {
         config = loadConfig();
+        soundDir = resolveSoundDir(config);
       } catch {
-        ctx.ui.notify("BT-7274: Config not found or invalid", "error");
+        ctx.ui.notify("Sound: Config not found or invalid", "error");
         return;
       }
       if (!args) {
         const cats = listCategories(config);
-        const lines = ["\uD83C\uDF99️  BT-7274 Voice Pack"];
+        const packNames = Object.keys(config.packs);
+        const lines = [`\uD83C\uDF99️  Sound — ${config.activePack}`];
         for (const cat of cats) {
-          lines.push(`  /bt ${cat.name}  —  ${cat.description}`);
+          lines.push(`  /sound ${cat.name}  —  ${cat.description}`);
         }
-        lines.push("  /bt all  —  播放全部");
-        lines.push(`  /bt on  —  开启 (${config.enabled ? "当前" : ""})`);
-        lines.push(`  /bt off  —  关闭 (${!config.enabled ? "当前" : ""})`);
+        lines.push("  /sound all  —  播放全部");
+        lines.push("  /sound packs  —  列出语音包");
+        lines.push(`  /sound on  —  开启 (${config.enabled ? "当前" : ""})`);
+        lines.push(`  /sound off  —  关闭 (${!config.enabled ? "当前" : ""})`);
         ctx.ui.notify(lines.join(`
 `), "info");
         return;
@@ -49452,42 +49460,69 @@ function myBt(pi) {
       if (args === "on") {
         config.enabled = true;
         saveConfig(config);
-        ctx.ui.notify("\uD83C\uDF99️  BT-7274: 已开启", "info");
+        ctx.ui.notify("\uD83C\uDF99️  Sound: 已开启", "info");
         return;
       }
       if (args === "off") {
         config.enabled = false;
         saveConfig(config);
-        ctx.ui.notify("\uD83C\uDF99️  BT-7274: 已关闭", "info");
+        ctx.ui.notify("\uD83C\uDF99️  Sound: 已关闭", "info");
+        return;
+      }
+      if (args === "packs") {
+        const packNames = Object.keys(config.packs);
+        const lines = ["\uD83C\uDF99️  Voice Packs"];
+        for (const name of packNames) {
+          const marker = name === config.activePack ? "  ◀ 当前" : "";
+          lines.push(`  /sound pack ${name}${marker}`);
+        }
+        ctx.ui.notify(lines.join(`
+`), "info");
+        return;
+      }
+      if (args.startsWith("pack ")) {
+        const packName = args.slice(5).trim();
+        if (!packName) {
+          ctx.ui.notify("Sound: 用法 — /sound pack <name>", "warning");
+          return;
+        }
+        if (!config.packs[packName]) {
+          ctx.ui.notify(`Sound: 未知语音包 "${packName}"。用 /sound packs 查看可用语音包。`, "warning");
+          return;
+        }
+        config.activePack = packName;
+        soundDir = resolveSoundDir(config);
+        saveConfig(config);
+        ctx.ui.notify(`\uD83C\uDF99️  Sound: 已切换到 ${packName}`, "info");
         return;
       }
       if (args === "all") {
         let playNext = function() {
           if (i >= cats.length)
             return;
-          playCategory(config, cats[i].name, ctx.ui.notify);
+          playCategory(config, soundDir, cats[i].name, ctx.ui.notify);
           i++;
           setTimeout(playNext, 1500);
         };
         if (!config.enabled) {
-          ctx.ui.notify("\uD83C\uDF99️  BT-7274: 已关闭，用 /bt on 开启", "warning");
+          ctx.ui.notify("\uD83C\uDF99️  Sound: 已关闭，用 /sound on 开启", "warning");
           return;
         }
         const cats = listCategories(config);
-        ctx.ui.notify(`\uD83C\uDF99️  BT-7274: 播放全部 (${cats.length} 分类)`, "info");
+        ctx.ui.notify(`\uD83C\uDF99️  Sound: 播放全部 (${cats.length} 分类)`, "info");
         let i = 0;
         playNext();
         return;
       }
       if (!config.enabled) {
-        ctx.ui.notify("\uD83C\uDF99️  BT-7274: 已关闭，用 /bt on 开启", "warning");
+        ctx.ui.notify("\uD83C\uDF99️  Sound: 已关闭，用 /sound on 开启", "warning");
         return;
       }
       if (config.categories[args]) {
-        playCategory(config, args, ctx.ui.notify);
-        ctx.ui.notify(`\uD83C\uDF99️  BT-7274: ${config.categories[args].description}`, "info");
+        playCategory(config, soundDir, args, ctx.ui.notify);
+        ctx.ui.notify(`\uD83C\uDF99️  Sound: ${config.categories[args].description}`, "info");
       } else {
-        ctx.ui.notify(`BT-7274: 未知分类 "${args}"。用 /bt 查看可用分类。`, "warning");
+        ctx.ui.notify(`Sound: 未知分类 "${args}"。用 /sound 查看可用分类。`, "warning");
       }
     }
   });
@@ -61242,7 +61277,7 @@ async function ly_pi_default(pi) {
   myReload(pi);
   myBack(pi);
   myHtml(pi);
-  myBt(pi);
+  mySound(pi);
   myHud(pi);
 }
 export {

@@ -1,4 +1,11 @@
 {
+  "enabled": true,
+  "activePack": "bt-7274",
+  "packs": {
+    "bt-7274": {
+      "soundDir": "sounds/bt-7274"
+    }
+  },
   "categories": {
     "affirmative": {
       "description": "确认 / 执行命令",
@@ -30,7 +37,7 @@
       "files": ["你还好吗.wav", "这边.wav"]
     },
     "startup": {
-      "description": "BT-7274 启动 / 上线",
+      "description": "启动 / 上线",
       "files": [
         "准备好登机.wav",
         "我看到你也很高兴.wav",
@@ -43,7 +50,6 @@
       "files": ["电量低，电力不足.wav", "动力不足.wav", "能量不足.wav"]
     }
   },
-  "enabled": true,
   "eventMap": {
     "agent_end": "completed",
     "agent_start": "engaging",
@@ -52,7 +58,6 @@
   "permissionEventMap": {
     "permissions:ui_prompt": "question"
   },
-  "soundDir": "sounds",
   "toolEventMap": {
     "ask_user_question": "question"
   }

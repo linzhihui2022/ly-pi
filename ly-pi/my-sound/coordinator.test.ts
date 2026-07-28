@@ -146,7 +146,7 @@ describe("recordPids / killPlayingProcesses", () => {
 
 describe("spawnSoundProcess", () => {
   it("kills old sound processes and returns child pid", () => {
-    const config = { soundDir: "/fake/sounds" } as BtConfig;
+    const config = { activePack: "test", packs: { test: { soundDir: "/fake/sounds" } } } as SoundConfig;
     const result = spawnSoundProcess(config, "startup.wav", TEST_DIR);
     expect(result.pid).toBeGreaterThan(0);
     expect(exec).toHaveBeenCalledWith(
@@ -160,7 +160,7 @@ describe("spawnSoundProcess", () => {
   });
 
   it("records pid when child has no pid is a no-op", () => {
-    const config = { soundDir: "/fake/sounds" } as BtConfig;
+    const config = { activePack: "test", packs: { test: { soundDir: "/fake/sounds" } } } as SoundConfig;
     vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
       cb?.(null, "", "");
       return { pid: undefined } as ChildProcess;
@@ -170,7 +170,7 @@ describe("spawnSoundProcess", () => {
   });
 
   it("invokes error callback when exec returns an error", () => {
-    const config = { soundDir: "/fake/sounds" } as BtConfig;
+    const config = { activePack: "test", packs: { test: { soundDir: "/fake/sounds" } } } as SoundConfig;
     vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
       cb?.(new Error("killed"), "", "");
       return { pid: 7777 } as ChildProcess;
@@ -181,7 +181,7 @@ describe("spawnSoundProcess", () => {
   });
 
   it("covers sound exec callback without error", () => {
-    const config = { soundDir: "/fake/sounds" } as BtConfig;
+    const config = { activePack: "test", packs: { test: { soundDir: "/fake/sounds" } } } as SoundConfig;
     let savedCb: ExecCallback | undefined;
     vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
       savedCb = cb;
@@ -192,7 +192,7 @@ describe("spawnSoundProcess", () => {
   });
 
   it("covers sound exec callback with error", () => {
-    const config = { soundDir: "/fake/sounds" } as BtConfig;
+    const config = { activePack: "test", packs: { test: { soundDir: "/fake/sounds" } } } as SoundConfig;
     let savedCb: ExecCallback | undefined;
     vi.mocked(exec).mockImplementationOnce((_cmd, _options, cb) => {
       savedCb = cb;

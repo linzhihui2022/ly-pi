@@ -21,9 +21,12 @@ vi.mock("./player", async (importOriginal) => {
 
 const DEFAULT_CONFIG = {
   enabled: true,
-  soundDir: "sounds",
+  activePack: "test-pack",
+  packs: {
+    "test-pack": { soundDir: "sounds" },
+  },
   categories: {
-    startup: { description: "BT-7274 startup", files: ["startup.mp3"] },
+    startup: { description: "Startup", files: ["startup.mp3"] },
     engaging: { description: "Engaging", files: ["engage.mp3"] },
     completed: { description: "Task completed", files: ["done.mp3"] },
   },
@@ -79,7 +82,7 @@ async function loadModule() {
   return await import("./index");
 }
 
-describe("my-bt extension", () => {
+describe("my-sound extension", () => {
   beforeEach(() => {
     registeredEvents.clear();
     registeredCommands.clear();
@@ -101,11 +104,11 @@ describe("my-bt extension", () => {
     expect(typeof mod.default).toBe("function");
   });
 
-  it("registers /bt command", async () => {
+  it("registers /sound command", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
     mod.default(mockPi);
-    expect(registeredCommands.has("bt")).toBe(true);
+    expect(registeredCommands.has("sound")).toBe(true);
   });
 
   it("registers session_start handler", async () => {
@@ -151,12 +154,12 @@ describe("my-bt extension", () => {
     expect(playCategory).not.toHaveBeenCalled();
   });
 
-  it("toggles off via /bt off and persists", async () => {
+  it("toggles off via /sound off and persists", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = mustGet(registeredCommands, "bt");
+    const cmd = mustGet(registeredCommands, "sound");
     await cmd.handler("off", mockCtx);
 
     expect(mockNotify).toHaveBeenCalledWith(
@@ -170,14 +173,14 @@ describe("my-bt extension", () => {
     expect(saved.enabled).toBe(false);
   });
 
-  it("toggles on via /bt on and persists", async () => {
+  it("toggles on via /sound on and persists", async () => {
     vi.mocked(readFileSync).mockReturnValue(
       JSON.stringify({ ...DEFAULT_CONFIG, enabled: false }),
     );
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = mustGet(registeredCommands, "bt");
+    const cmd = mustGet(registeredCommands, "sound");
     await cmd.handler("on", mockCtx);
 
     expect(mockNotify).toHaveBeenCalledWith(
@@ -198,7 +201,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = mustGet(registeredCommands, "bt");
+    const cmd = mustGet(registeredCommands, "sound");
     await cmd.handler("startup", mockCtx);
     expect(playCategory).not.toHaveBeenCalled();
   });
@@ -209,16 +212,16 @@ describe("my-bt extension", () => {
     });
     const mod = await loadModule();
     mod.default(mockPi);
-    expect(registeredCommands.has("bt")).toBe(false);
+    expect(registeredCommands.has("sound")).toBe(false);
     expect(registeredEvents.size).toBe(0);
   });
 
-  it("lists categories when /bt is called without args", async () => {
+  it("lists categories when /sound is called without args", async () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = mustGet(registeredCommands, "bt");
+    const cmd = mustGet(registeredCommands, "sound");
     await cmd.handler(undefined, mockCtx);
 
     expect(mockNotify).toHaveBeenCalledOnce();
@@ -226,17 +229,17 @@ describe("my-bt extension", () => {
     expect(msg).toContain("startup");
     expect(msg).toContain("engaging");
     expect(msg).toContain("completed");
-    expect(msg).toContain("/bt on");
-    expect(msg).toContain("/bt off");
+    expect(msg).toContain("/sound on");
+    expect(msg).toContain("/sound off");
   });
 
-  it("plays all categories via /bt all", async () => {
+  it("plays all categories via /sound all", async () => {
     vi.useFakeTimers();
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = mustGet(registeredCommands, "bt");
+    const cmd = mustGet(registeredCommands, "sound");
     await cmd.handler("all", mockCtx);
 
     expect(playCategory).toHaveBeenCalledTimes(1);
@@ -248,14 +251,14 @@ describe("my-bt extension", () => {
     vi.useRealTimers();
   });
 
-  it("warns when /bt all is called while disabled", async () => {
+  it("warns when /sound all is called while disabled", async () => {
     vi.mocked(readFileSync).mockReturnValue(
       JSON.stringify({ ...DEFAULT_CONFIG, enabled: false }),
     );
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = mustGet(registeredCommands, "bt");
+    const cmd = mustGet(registeredCommands, "sound");
     await cmd.handler("all", mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
@@ -270,11 +273,12 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = mustGet(registeredCommands, "bt");
+    const cmd = mustGet(registeredCommands, "sound");
     await cmd.handler("startup", mockCtx);
 
     expect(playCategory).toHaveBeenCalledWith(
-      expect.objectContaining({ soundDir: expect.any(String) }),
+      expect.objectContaining({ activePack: "test-pack" }),
+      expect.any(String),
       "startup",
       expect.any(Function),
     );
@@ -285,7 +289,7 @@ describe("my-bt extension", () => {
     const mod = await loadModule();
     mod.default(mockPi);
 
-    const cmd = mustGet(registeredCommands, "bt");
+    const cmd = mustGet(registeredCommands, "sound");
     await cmd.handler("nope", mockCtx);
 
     expect(playCategory).not.toHaveBeenCalled();
@@ -305,7 +309,7 @@ describe("my-bt extension", () => {
       throw new Error("not found");
     });
 
-    const cmd = mustGet(registeredCommands, "bt");
+    const cmd = mustGet(registeredCommands, "sound");
     await cmd.handler("startup", mockCtx);
 
     expect(mockNotify).toHaveBeenCalledWith(
@@ -334,18 +338,11 @@ describe("my-bt extension", () => {
     );
   });
 
-  it("plays sound and overlay on permissions:ui_prompt when enabled", async () => {
+  it("plays sound on permissions:ui_prompt when enabled", async () => {
     const configWithPermission = {
       ...DEFAULT_CONFIG,
       permissionEventMap: {
         "permissions:ui_prompt": "warning",
-      },
-      overlayTextMap: {
-        permissions_ui_prompt: {
-          type: "WARNING",
-          title: "侦测到危险操作",
-          subtitle: "铁御，请确认权限",
-        },
       },
     };
     vi.mocked(readFileSync).mockReturnValue(
@@ -367,6 +364,7 @@ describe("my-bt extension", () => {
 
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ permissionEventMap: expect.any(Object) }),
+      expect.any(String),
       "warning",
     );
   });
@@ -460,6 +458,7 @@ describe("my-bt extension", () => {
 
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ toolEventMap: expect.any(Object) }),
+      expect.any(String),
       "question",
       expect.any(Function),
     );
@@ -523,6 +522,7 @@ describe("my-bt extension", () => {
     toolHandler?.({ toolName: "ask_user_question" }, mockCtx);
     expect(playCategory).toHaveBeenLastCalledWith(
       expect.objectContaining({ toolEventMap: expect.any(Object) }),
+      expect.any(String),
       "question",
       expect.any(Function),
     );
@@ -544,6 +544,7 @@ describe("my-bt extension", () => {
     agentStartHandler?.({}, mockCtx);
     expect(playCategory).toHaveBeenLastCalledWith(
       expect.objectContaining({ eventMap: expect.any(Object) }),
+      expect.any(String),
       "engaging",
       expect.any(Function),
     );
@@ -553,6 +554,7 @@ describe("my-bt extension", () => {
 
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ eventMap: expect.any(Object) }),
+      expect.any(String),
       "completed",
       expect.any(Function),
     );
@@ -581,6 +583,7 @@ describe("my-bt extension", () => {
     expect(playCategory).toHaveBeenCalledOnce();
     expect(playCategory).toHaveBeenCalledWith(
       expect.objectContaining({ eventMap: expect.any(Object) }),
+      expect.any(String),
       "completed",
       expect.any(Function),
     );

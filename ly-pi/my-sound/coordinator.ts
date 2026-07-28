@@ -13,13 +13,13 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { BtConfig } from "./types";
+import type { SoundConfig } from "./types";
 
-export const GLOBAL_BT_DIR = join(homedir(), ".my-bt");
-export const DEFAULT_PID_FILE = join(GLOBAL_BT_DIR, "playing.json");
-export const DEFAULT_LOCK_DIR = join(GLOBAL_BT_DIR, ".lock");
-export const DEFAULT_SOUND_PID_FILE = join(GLOBAL_BT_DIR, "sound-pids.json");
-export const DEFAULT_SOUND_LOCK_DIR = join(GLOBAL_BT_DIR, ".sound-lock");
+export const GLOBAL_SOUND_DIR = join(homedir(), ".pi", "my-sound");
+export const DEFAULT_PID_FILE = join(GLOBAL_SOUND_DIR, "playing.json");
+export const DEFAULT_LOCK_DIR = join(GLOBAL_SOUND_DIR, ".lock");
+export const DEFAULT_SOUND_PID_FILE = join(GLOBAL_SOUND_DIR, "sound-pids.json");
+export const DEFAULT_SOUND_LOCK_DIR = join(GLOBAL_SOUND_DIR, ".sound-lock");
 
 interface CoordinatorState {
   pids: number[];
@@ -32,7 +32,7 @@ export interface LockOptions {
   retryDelayMs?: number;
 }
 
-export function ensureGlobalDir(dir: string = GLOBAL_BT_DIR): void {
+export function ensureGlobalDir(dir: string = GLOBAL_SOUND_DIR): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
@@ -49,7 +49,7 @@ export function acquireGlobalLock(
       return;
     } catch {
       if (attempts >= maxRetries) {
-        throw new Error(`[my-bt] Failed to acquire global lock: ${lockDir}`);
+        throw new Error(`[my-sound] Failed to acquire global lock: ${lockDir}`);
       }
       attempts++;
       Atomics.wait(
@@ -120,9 +120,9 @@ export function recordPids(
 }
 
 export function spawnSoundProcess(
-  _config: BtConfig,
+  _config: SoundConfig,
   filePath: string,
-  runtimeDir: string = GLOBAL_BT_DIR,
+  runtimeDir: string = GLOBAL_SOUND_DIR,
 ): ChildProcess {
   const pidFile = join(runtimeDir, "sound-pids.json");
   const lockDir = join(runtimeDir, ".sound-lock");

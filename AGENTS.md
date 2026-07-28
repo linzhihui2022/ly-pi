@@ -58,7 +58,7 @@ bun run --cwd ly-pi test -- my-hud
 
 ## 配置规范
 
-- JSON 配置文件放在扩展包根目录（如 `ly-pi/my-bt.json`），用 `EXT_DIR` 解析加载，部署脚本随 `index.js` 一并拷贝
+- JSON 配置文件放在扩展包根目录（如 `ly-pi/my-sound.json`），用 `EXT_DIR` 解析加载，部署脚本随 `index.js` 一并拷贝
 - 支持热重载（通过 `/reload`）
 - 纯配置扩展统一放在 `pi-config/`
 - 扩展运行时使用 TypeBox 做类型校验

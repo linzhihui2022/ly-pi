@@ -161,9 +161,9 @@ async function write(path: string, data: string | Uint8Array) {
   );
   console.log("rpiv-todo: deployed");
 
-  // Extension-local configs (my-bt, my-back) → flattened at extension root
+  // Extension-local configs (my-sound, my-back) → flattened at extension root
   const extDir = join(agentDir, "extensions", "ly-pi");
-  await write(join(extDir, "my-bt.json"), Bun.file(join(configDir, "my-bt.json")));
+  await write(join(extDir, "my-sound.json"), Bun.file(join(configDir, "my-sound.json")));
   await write(join(extDir, "my-back.json"), Bun.file(join(configDir, "my-back.json")));
   console.log("Extension configs: deployed");
 }

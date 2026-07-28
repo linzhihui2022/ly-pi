@@ -21,7 +21,7 @@ configure/
 │   ├── my-reload/          # 扩展热重载自动恢复
 │   ├── my-back/            # /back 命令
 │   ├── my-html/            # /html 渲染
-│   ├── my-bt/              # BT-7274 语音包
+│   ├── my-sound/           # 音效反馈 + 语音包管理
 │   ├── my-hud/             # 自定义 HUD 状态栏
 │   └── web-preview/        # 内部工具库：HTML 预览 server + 文档骨架
 ├── pi-config/              # 纯配置扩展（权限规则、工具显示、子代理配置）
@@ -69,7 +69,7 @@ configure/
 | **my-reload** | 扩展热重载自动恢复：`request_reload` 工具标记后，reload 完成自动发送继续指令 |
 | **my-back** | `/back` 命令：撤销最近一条用户消息并将文本放回编辑器 |
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
-| **my-bt** | BT-7274 语音包：会话生命周期事件触发音频，`/bt` 命令控制 |
+| **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
 
 ---
