@@ -1,5 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { mkdtempSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -87,7 +93,14 @@ describe("appendCost", () => {
 
   it("appends multiple lines to the same file", () => {
     appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
-    appendCost(TEST_SESSION, TEST_CWD, "advocate-analysis", 0.005, "anthropic/claude-sonnet-4", opts());
+    appendCost(
+      TEST_SESSION,
+      TEST_CWD,
+      "advocate-analysis",
+      0.005,
+      "anthropic/claude-sonnet-4",
+      opts(),
+    );
 
     const lines = readFileSync(TEST_FILE, "utf-8").trim().split("\n");
     expect(lines).toHaveLength(2);
@@ -133,7 +146,10 @@ describe("appendCost", () => {
     // Clean up
     const defaultFile = getCostsFilePath(TEST_SESSION, TEST_CWD);
     if (existsSync(defaultFile)) {
-      rmSync(join(getCostsDir(), encodeProjectDir(TEST_CWD)), { recursive: true, force: true });
+      rmSync(join(getCostsDir(), encodeProjectDir(TEST_CWD)), {
+        recursive: true,
+        force: true,
+      });
     }
   });
 });
@@ -174,7 +190,9 @@ describe("aggregateCosts", () => {
   });
 
   it("returns empty aggregation when costs dir does not exist (no cwd)", () => {
-    const result = aggregateCosts(undefined, { costsDir: "/nonexistent/costs/dir" });
+    const result = aggregateCosts(undefined, {
+      costsDir: "/nonexistent/costs/dir",
+    });
     expect(result.judge.totalCost).toBe(0);
   });
 
@@ -209,27 +227,42 @@ describe("aggregateCosts", () => {
     // judge: 0.001 + 0.002 + 0.003 = 0.006, 3 calls
     expect(result.judge.totalCost).toBeCloseTo(0.006, 6);
     expect(result.judge.calls).toBe(3);
-    expect(result.judge.byModel["openai/gpt-4o"].totalCost).toBeCloseTo(0.006, 6);
+    expect(result.judge.byModel["openai/gpt-4o"].totalCost).toBeCloseTo(
+      0.006,
+      6,
+    );
     expect(result.judge.byModel["openai/gpt-4o"].calls).toBe(3);
 
     // advocate-analysis: 0.005, 1 call
     const advAnalysis = result.advocate.analysis;
     expect(advAnalysis.totalCost).toBeCloseTo(0.005, 6);
     expect(advAnalysis.calls).toBe(1);
-    expect(advAnalysis.byModel["anthropic/claude-sonnet-4"].totalCost).toBeCloseTo(0.005, 6);
+    expect(
+      advAnalysis.byModel["anthropic/claude-sonnet-4"].totalCost,
+    ).toBeCloseTo(0.005, 6);
   });
 
   it("aggregates by daily buckets", () => {
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
     appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
-    appendCost(TEST_SESSION, TEST_CWD, "prosecutor-analysis", 0.008, "anthropic/claude-sonnet-4", opts());
+    appendCost(
+      TEST_SESSION,
+      TEST_CWD,
+      "prosecutor-analysis",
+      0.008,
+      "anthropic/claude-sonnet-4",
+      opts(),
+    );
 
     const result = aggregateCosts(TEST_CWD, opts());
 
     expect(result.judge.daily[today].totalCost).toBeCloseTo(0.001, 6);
     expect(result.judge.daily[today].calls).toBe(1);
 
-    expect(result.prosecutor.analysis.daily[today].totalCost).toBeCloseTo(0.008, 6);
+    expect(result.prosecutor.analysis.daily[today].totalCost).toBeCloseTo(
+      0.008,
+      6,
+    );
     expect(result.prosecutor.analysis.daily[today].calls).toBe(1);
   });
 
@@ -258,7 +291,12 @@ describe("aggregateCosts", () => {
     writeFileSync(
       TEST_FILE,
       [
-        JSON.stringify({ type: "judge", cost: 0.001, model: "openai/gpt-4o", ts: new Date().toISOString() }),
+        JSON.stringify({
+          type: "judge",
+          cost: 0.001,
+          model: "openai/gpt-4o",
+          ts: new Date().toISOString(),
+        }),
         JSON.stringify({ type: "judge" }),
         JSON.stringify({ cost: 0.001 }),
         "",
@@ -310,8 +348,18 @@ describe("aggregateCosts", () => {
     writeFileSync(
       TEST_FILE,
       [
-        JSON.stringify({ type: "judge", cost: 0.001, model: "openai/gpt-4o", ts: new Date().toISOString() }),
-        JSON.stringify({ type: "invalid-type", cost: 0.005, model: "x", ts: new Date().toISOString() }),
+        JSON.stringify({
+          type: "judge",
+          cost: 0.001,
+          model: "openai/gpt-4o",
+          ts: new Date().toISOString(),
+        }),
+        JSON.stringify({
+          type: "invalid-type",
+          cost: 0.005,
+          model: "x",
+          ts: new Date().toISOString(),
+        }),
         "",
       ].join("\n"),
       "utf-8",
@@ -323,8 +371,22 @@ describe("aggregateCosts", () => {
   });
 
   it("aggregates advocate-merge and prosecutor-merge types", () => {
-    appendCost(TEST_SESSION, TEST_CWD, "advocate-merge", 0.002, "anthropic/claude-sonnet-4", opts());
-    appendCost(TEST_SESSION, TEST_CWD, "prosecutor-merge", 0.003, "anthropic/claude-sonnet-4", opts());
+    appendCost(
+      TEST_SESSION,
+      TEST_CWD,
+      "advocate-merge",
+      0.002,
+      "anthropic/claude-sonnet-4",
+      opts(),
+    );
+    appendCost(
+      TEST_SESSION,
+      TEST_CWD,
+      "prosecutor-merge",
+      0.003,
+      "anthropic/claude-sonnet-4",
+      opts(),
+    );
 
     const result = aggregateCosts(TEST_CWD, opts());
     expect(result.advocate.merge.totalCost).toBeCloseTo(0.002, 6);
@@ -346,7 +408,12 @@ describe("aggregateCosts", () => {
     writeFileSync(
       TEST_FILE,
       [
-        JSON.stringify({ type: "judge", cost: 0.001, model: "openai/gpt-4o", ts: new Date().toISOString() }),
+        JSON.stringify({
+          type: "judge",
+          cost: 0.001,
+          model: "openai/gpt-4o",
+          ts: new Date().toISOString(),
+        }),
         "42",
         '"hello"',
         "null",
@@ -364,8 +431,18 @@ describe("aggregateCosts", () => {
     writeFileSync(
       TEST_FILE,
       [
-        JSON.stringify({ type: "judge", cost: 0.001, model: "openai/gpt-4o", ts: new Date().toISOString() }),
-        JSON.stringify({ type: "judge", cost: NaN, model: "x", ts: new Date().toISOString() }),
+        JSON.stringify({
+          type: "judge",
+          cost: 0.001,
+          model: "openai/gpt-4o",
+          ts: new Date().toISOString(),
+        }),
+        JSON.stringify({
+          type: "judge",
+          cost: NaN,
+          model: "x",
+          ts: new Date().toISOString(),
+        }),
         "",
       ].join("\n"),
       "utf-8",
@@ -378,8 +455,22 @@ describe("aggregateCosts", () => {
 
   it("populates models sorted by cost descending", () => {
     appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
-    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.005, "anthropic/claude", opts());
-    appendCost(TEST_SESSION, TEST_CWD, "advocate-analysis", 0.002, "openai/gpt-4o", opts());
+    appendCost(
+      TEST_SESSION,
+      TEST_CWD,
+      "judge",
+      0.005,
+      "anthropic/claude",
+      opts(),
+    );
+    appendCost(
+      TEST_SESSION,
+      TEST_CWD,
+      "advocate-analysis",
+      0.002,
+      "openai/gpt-4o",
+      opts(),
+    );
 
     const result = aggregateCosts(TEST_CWD, opts());
     expect(result.models).toHaveLength(2);
@@ -425,9 +516,24 @@ describe("aggregateCosts", () => {
     writeFileSync(
       TEST_FILE,
       [
-        JSON.stringify({ type: "judge", cost: 0.001, model: "x", ts: "2026-07-23T10:00:00.000Z" }),
-        JSON.stringify({ type: "advocate-analysis", cost: 0.002, model: "x", ts: "2026-07-23T11:00:00.000Z" }),
-        JSON.stringify({ type: "prosecutor-merge", cost: 0.003, model: "x", ts: "2026-07-24T10:00:00.000Z" }),
+        JSON.stringify({
+          type: "judge",
+          cost: 0.001,
+          model: "x",
+          ts: "2026-07-23T10:00:00.000Z",
+        }),
+        JSON.stringify({
+          type: "advocate-analysis",
+          cost: 0.002,
+          model: "x",
+          ts: "2026-07-23T11:00:00.000Z",
+        }),
+        JSON.stringify({
+          type: "prosecutor-merge",
+          cost: 0.003,
+          model: "x",
+          ts: "2026-07-24T10:00:00.000Z",
+        }),
         "",
       ].join("\n"),
       "utf-8",
@@ -439,7 +545,10 @@ describe("aggregateCosts", () => {
     expect(result.daily["2026-07-23"].judge.totalCost).toBeCloseTo(0.001, 6);
     expect(result.daily["2026-07-24"].totalCost).toBeCloseTo(0.003, 6);
     expect(result.daily["2026-07-24"].totalCalls).toBe(1);
-    expect(result.daily["2026-07-24"].prosecutor.merge.totalCost).toBeCloseTo(0.003, 6);
+    expect(result.daily["2026-07-24"].prosecutor.merge.totalCost).toBeCloseTo(
+      0.003,
+      6,
+    );
   });
 
   it("skips non-file entries in project dir when scanning all", () => {

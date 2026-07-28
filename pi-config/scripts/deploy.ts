@@ -50,16 +50,10 @@ await Bun.write(
 // rpiv-todo → ~/.config/rpiv-todo/config.json
 const rpivTodoDest = join(homedir(), ".config/rpiv-todo");
 await mkdir(rpivTodoDest, { recursive: true });
-await Bun.write(
-  join(rpivTodoDest, "config.json"),
-  Bun.file("rpiv-todo.json"),
-);
+await Bun.write(join(rpivTodoDest, "config.json"), Bun.file("rpiv-todo.json"));
 
 // mcp → ~/.pi/agent/mcp.json
-await Bun.write(
-  join(homedir(), ".pi/agent/mcp.json"),
-  Bun.file("mcp.json"),
-);
+await Bun.write(join(homedir(), ".pi/agent/mcp.json"), Bun.file("mcp.json"));
 
 // web-search → ~/.pi/web-search.json
 await Bun.write(

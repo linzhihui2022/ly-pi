@@ -69,7 +69,9 @@ export function createAdvocate(config: Config): AdvocateFn {
 
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
-      log.error("advocate model not found", { configured: config.professorModel });
+      log.error("advocate model not found", {
+        configured: config.professorModel,
+      });
       return {
         error: `未找到教授模型: ${config.professorModel}`,
       };
@@ -145,8 +147,12 @@ export function createAdvocate(config: Config): AdvocateFn {
       // Surface API-level errors before content extraction.
       const errResp = response as Record<string, unknown>;
       if (errResp.stopReason === "error" || errResp.errorMessage) {
-        log.error("advocate API error", { detail: errResp.errorMessage || errResp.stopReason });
-        return { error: `教授模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
+        log.error("advocate API error", {
+          detail: errResp.errorMessage || errResp.stopReason,
+        });
+        return {
+          error: `教授模型调用失败: ${errResp.errorMessage || errResp.stopReason}`,
+        };
       }
 
       const text =
@@ -289,7 +295,9 @@ export function createMerger(config: Config): MergerFn {
 
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
-      log.error("merger model not found", { configured: config.professorModel });
+      log.error("merger model not found", {
+        configured: config.professorModel,
+      });
       return { error: `未找到教授模型` };
     }
 

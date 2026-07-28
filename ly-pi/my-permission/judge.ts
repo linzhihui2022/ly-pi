@@ -75,10 +75,7 @@ export function createJudge(
       if (response.stopReason === "error" || response.errorMessage) {
         const detail = response.errorMessage ?? response.stopReason;
         log.error("judge API error", { detail, model: resolved.id });
-        return failureResult(
-          `法官模型调用失败: ${detail}`,
-          input,
-        );
+        return failureResult(`法官模型调用失败: ${detail}`, input);
       }
 
       const parsed = parseJudgeResponse(response);
@@ -93,7 +90,9 @@ export function createJudge(
         });
         return parsed;
       }
-      log.warn("judge parse failed", { content: JSON.stringify(response.content) });
+      log.warn("judge parse failed", {
+        content: JSON.stringify(response.content),
+      });
       return failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
       clearTimeout(timeout);

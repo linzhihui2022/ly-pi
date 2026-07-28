@@ -12,12 +12,12 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { createLogger, type Logger, type WriteFn } from "../src/shared/logger";
-import { renderLogPage, type LogEntryWithTimestamp } from "../src/shared/log-page";
 import {
-  servePreviewFile,
-  stopPreviewServer,
-} from "../src/shared/preview";
+  type LogEntryWithTimestamp,
+  renderLogPage,
+} from "../src/shared/log-page";
+import { createLogger, type Logger, type WriteFn } from "../src/shared/logger";
+import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
 
 const LOG_CUSTOM_TYPE = "ly-log";
 const LOG_CONFIG_CUSTOM_TYPE = "ly-log-config";
@@ -55,9 +55,7 @@ function restoreEnabled(ctx: ExtensionContext): void {
   _enabled = false;
 }
 
-function collectLogEntries(
-  ctx: ExtensionContext,
-): LogEntryWithTimestamp[] {
+function collectLogEntries(ctx: ExtensionContext): LogEntryWithTimestamp[] {
   const entries = ctx.sessionManager.getEntries();
   const result: LogEntryWithTimestamp[] = [];
   for (const entry of entries) {

@@ -179,11 +179,7 @@ describe("renderCostPage", () => {
 
     const html = renderCostPage(agg);
     expect(html).toContain("显示最近 20 条，共 25 条会话");
-    // Only 20 session rows in tbody (plus one total row at bottom)
-    const rowCount = (html.match(/<tr>/g) || []).length;
-    // header row + 5 summary role rows + 1 total + 20 session rows + 1 header = 28
-    // Actually: 1 thead tr in summary + 1 thead tr in sessions + 20 session tbody trs
-    // Let's just check oldest excluded, newest included
+    // Oldest session excluded, newest included
     expect(html).not.toContain("s000");
     expect(html).not.toContain("s004");
     expect(html).toContain("s024");

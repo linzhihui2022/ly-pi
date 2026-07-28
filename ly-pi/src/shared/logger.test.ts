@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createLogger } from "./logger";
 import type { LogEntry, WriteFn } from "./logger";
+import { createLogger } from "./logger";
 
 describe("createLogger", () => {
   function captureWrite(): { entries: LogEntry[]; write: WriteFn } {
@@ -16,7 +16,11 @@ describe("createLogger", () => {
     logger.debug("hello");
 
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ level: "debug", source: "test", msg: "hello" });
+    expect(entries[0]).toMatchObject({
+      level: "debug",
+      source: "test",
+      msg: "hello",
+    });
   });
 
   it("info writes a log entry with level info", () => {
@@ -26,7 +30,11 @@ describe("createLogger", () => {
     logger.info("hello");
 
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ level: "info", source: "test", msg: "hello" });
+    expect(entries[0]).toMatchObject({
+      level: "info",
+      source: "test",
+      msg: "hello",
+    });
   });
 
   it("warn writes a log entry with level warn", () => {
@@ -36,7 +44,11 @@ describe("createLogger", () => {
     logger.warn("hello");
 
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ level: "warn", source: "test", msg: "hello" });
+    expect(entries[0]).toMatchObject({
+      level: "warn",
+      source: "test",
+      msg: "hello",
+    });
   });
 
   it("error writes a log entry with level error", () => {
@@ -46,7 +58,11 @@ describe("createLogger", () => {
     logger.error("hello");
 
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ level: "error", source: "test", msg: "hello" });
+    expect(entries[0]).toMatchObject({
+      level: "error",
+      source: "test",
+      msg: "hello",
+    });
   });
 
   it("attaches optional data to the entry", () => {

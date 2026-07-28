@@ -49233,11 +49233,6 @@ function resolveExtDir(importMeta) {
       return dirname(fileURLToPath(importMeta.url));
     } catch {}
   }
-  if (!globalThis.__PI_TEST_SKIP_DIRNAME) {
-    try {
-      return eval("__dirname");
-    } catch {}
-  }
   return process.cwd();
 }
 
@@ -53067,14 +53062,16 @@ function parseRemoteUrl(remoteUrl) {
     return null;
   const httpsMatch = trimmed.match(/^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/);
   if (httpsMatch) {
+    const [, owner, repoWithGit] = httpsMatch;
     return {
-      owner: httpsMatch[1],
-      repo: httpsMatch[2]?.replace(/\.git$/, "")
+      owner,
+      repo: repoWithGit?.replace(/\.git$/, "")
     };
   }
   const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
   if (sshMatch) {
-    return { owner: sshMatch[1], repo: sshMatch[2]?.replace(/\.git$/, "") };
+    const [, owner, repoWithGit] = sshMatch;
+    return { owner, repo: repoWithGit?.replace(/\.git$/, "") };
   }
   return null;
 }
@@ -53738,24 +53735,6 @@ function myHud(pi) {
   });
 }
 
-// src/shared/logger.ts
-function createLogger(source, write) {
-  return {
-    debug(msg, data) {
-      write({ level: "debug", source, msg, data });
-    },
-    info(msg, data) {
-      write({ level: "info", source, msg, data });
-    },
-    warn(msg, data) {
-      write({ level: "warn", source, msg, data });
-    },
-    error(msg, data) {
-      write({ level: "error", source, msg, data });
-    }
-  };
-}
-
 // src/shared/log-page.ts
 var PAGE_CSS2 = `body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -54153,6 +54132,24 @@ ${rows}
   });
 }
 
+// src/shared/logger.ts
+function createLogger(source, write) {
+  return {
+    debug(msg, data) {
+      write({ level: "debug", source, msg, data });
+    },
+    info(msg, data) {
+      write({ level: "info", source, msg, data });
+    },
+    warn(msg, data) {
+      write({ level: "warn", source, msg, data });
+    },
+    error(msg, data) {
+      write({ level: "error", source, msg, data });
+    }
+  };
+}
+
 // my-log/index.ts
 var LOG_CUSTOM_TYPE = "ly-log";
 var LOG_CONFIG_CUSTOM_TYPE = "ly-log-config";
@@ -54238,6 +54235,10 @@ function myLog(pi) {
     await stopPreviewServer();
   });
 }
+
+// my-permission/index.ts
+import { writeFileSync as writeFileSync4 } from "node:fs";
+import { join as join10 } from "node:path";
 
 // ../node_modules/.bun/typebox@1.2.2/node_modules/typebox/build/system/memory/memory.mjs
 var exports_memory = {};
@@ -58372,67 +58373,6 @@ __export(exports_typebox, {
   Array: () => _Array_,
   Any: () => Any
 });
-// my-reload/index.ts
-var MARKER_TYPE = "reload_marker";
-var CONTINUE_MESSAGE = "继续之前的工作";
-function myReload(pi) {
-  pi.registerTool({
-    name: "request_reload",
-    label: "Request Reload",
-    description: "Mark that the current session needs an extension reload before continuing. " + "Call this after deploying extension changes, then tell the user to run /reload. " + "After reload, the agent will automatically continue working.",
-    parameters: exports_typebox.Object({
-      reason: exports_typebox.String({
-        description: "Why a reload is needed (e.g. 'modified my-hud render logic')"
-      })
-    }),
-    async execute(_toolCallId, params) {
-      pi.appendEntry(MARKER_TYPE, {
-        reason: params.reason,
-        pending: true
-      });
-      return {
-        content: [
-          {
-            type: "text",
-            text: `已标记需要 reload。原因：${params.reason}
-
-` + `请执行 \`/reload\` 以重新加载扩展，之后 agent 将自动继续。`
-          }
-        ],
-        details: {}
-      };
-    }
-  });
-  pi.on("session_start", (event, ctx) => {
-    if (event.reason !== "reload")
-      return;
-    const entries = ctx.sessionManager.getEntries();
-    if (entries.length === 0)
-      return;
-    let markerIndex = -1;
-    for (let i = entries.length - 1;i >= 0; i--) {
-      const entry = entries[i];
-      if (entry.type === "message" && entry.message?.role === "user") {
-        return;
-      }
-      if (entry.type === "custom" && entry.customType === MARKER_TYPE) {
-        const data = entry.data;
-        if (data?.pending) {
-          markerIndex = i;
-          break;
-        }
-      }
-    }
-    if (markerIndex === -1)
-      return;
-    pi.sendUserMessage(CONTINUE_MESSAGE);
-  });
-}
-
-// my-permission/index.ts
-import { writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join10 } from "node:path";
-
 // src/shared/ansi.ts
 var ANSI = {
   reset: "\x1B[0m",
@@ -58451,7 +58391,11 @@ function createAuthResolver(getApiKeyAndHeaders) {
   if (typeof getApiKeyAndHeaders === "function") {
     return async (model) => {
       const auth = await getApiKeyAndHeaders(model);
-      return auth.ok ? { apiKey: auth.apiKey, headers: auth.headers, env: auth.env } : undefined;
+      return auth.ok ? {
+        apiKey: auth.apiKey,
+        headers: auth.headers,
+        env: auth.env
+      } : undefined;
     };
   }
   return async () => {
@@ -58478,6 +58422,250 @@ function loadFile(path2) {
     return readFileSync6(path2, "utf-8");
   } catch {
     return "";
+  }
+}
+
+// my-permission/chief.ts
+import { complete } from "@earendil-works/pi-ai";
+var log = createDevLogger("my-permission:chief");
+function createChief(config) {
+  return async function analyze(currentJudgeMd, judgePrompt, cwd, instruction, resolveModel, getAuth) {
+    if (!currentJudgeMd.trim()) {
+      return { error: "项目尚未创建 JUDGE.md，无需审计" };
+    }
+    const parts = config.professorModel.split("/");
+    if (parts.length !== 2) {
+      return {
+        error: `professorModel 格式无效: ${config.professorModel}`
+      };
+    }
+    const model = resolveModel(parts[0], parts[1]);
+    if (!model) {
+      log.error("chief model not found", { configured: config.professorModel });
+      return { error: `未找到审判长模型: ${config.professorModel}` };
+    }
+    log.debug("chief model resolved", {
+      provider: model.provider,
+      model: model.id
+    });
+    const prompt = buildChiefPrompt(currentJudgeMd, judgePrompt, cwd, instruction);
+    const auth = await getAuth(model);
+    try {
+      const context = {
+        systemPrompt: [
+          "你是 my-permission 权限系统的审判长（Chief Judge）。",
+          "你的任务不是看案例，而是直接审视 JUDGE.md 规则文件本身的质量。",
+          "",
+          "## 审查维度",
+          "",
+          "1. **矛盾规则**：两条规则覆盖同一场景但结论相反（一条 allow，一条 deny）",
+          "2. **过宽规则**：一条 allow 规则的范围远超实际需要，留下了安全隐患",
+          "3. **可合并规则**：多条规则表述不同但语义相同或可以归纳为更精炼的一条",
+          "4. **遗漏盲区**：应该覆盖但完全没有规则保护的重要安全场景",
+          "5. **冗余规则**：语义已被其他规则完全覆盖的多余规则",
+          "",
+          "## 输出格式",
+          "",
+          "只回复严格 JSON，不要包含其他文字：",
+          "{",
+          '  "suggestions": [',
+          '    {"type": "add", "rule": "新规则文本", "reason": "添加原因"},',
+          '    {"type": "remove", "rule": "要删除的规则原文", "reason": "删除原因"},',
+          '    {"type": "modify", "oldRule": "当前规则原文", "newRule": "改写后的规则", "reason": "改写原因"},',
+          '    {"type": "merge", "oldRules": ["规则1原文", "规则2原文"], "newRule": "合并后的规则", "reason": "合并原因"}',
+          "  ],",
+          '  "summary": "审计 N 条规则，发现 ..."',
+          "}",
+          "",
+          "关键规则：",
+          "- oldRule/oldRules 必须精确匹配 JUDGE.md 中的原文（一字不差）",
+          "- newRule 保持原风格的祈使句，一行一条",
+          "- 只报告确实存在的问题，不要为了凑数而误报",
+          "- 如果没有问题，suggestions 设为空数组 []",
+          "- 直接输出 JSON，不要 markdown 代码块"
+        ].join(`
+`),
+        messages: [
+          { role: "user", content: prompt, timestamp: Date.now() }
+        ]
+      };
+      const response = await complete(model, context, {
+        thinking: config.professorThinking,
+        apiKey: auth?.apiKey,
+        headers: auth?.headers,
+        env: auth?.env
+      });
+      const cost = response.usage?.cost?.total;
+      const errResp = response;
+      if (errResp.stopReason === "error" || errResp.errorMessage) {
+        log.error("chief API error", {
+          detail: errResp.errorMessage || errResp.stopReason
+        });
+        return {
+          error: `审判长模型调用失败: ${errResp.errorMessage || errResp.stopReason}`
+        };
+      }
+      const text = response.content.find((c) => c.type === "text")?.text || response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
+      if (!text) {
+        log.error("chief empty response");
+        return { error: "审判长模型返回了空内容" };
+      }
+      const parsed = parseChiefJson(text);
+      if (!parsed) {
+        log.error("chief parse failed");
+        return { error: "审判长模型返回了无法解析的 JSON" };
+      }
+      log.info("chief completed", {
+        findings: parsed.suggestions.length,
+        cost
+      });
+      return { suggestion: parsed, cost };
+    } catch (err) {
+      log.error("chief call failed", { error: err.message });
+      return { error: `审判长模型调用失败: ${err.message}` };
+    }
+  };
+}
+function createChiefMerger(config) {
+  return async function merge(currentJudgeMd, selectedSuggestions, resolveModel, getAuth) {
+    const parts = config.professorModel.split("/");
+    if (parts.length !== 2) {
+      return { error: "professorModel 格式无效" };
+    }
+    const model = resolveModel(parts[0], parts[1]);
+    if (!model) {
+      log.error("chief merger model not found", {
+        configured: config.professorModel
+      });
+      return { error: "未找到审判长合并模型" };
+    }
+    const auth = await getAuth(model);
+    const opsText = selectedSuggestions.map((s, i) => {
+      switch (s.type) {
+        case "add":
+          return `${i + 1}. [新增] ${s.rule}
+   原因: ${s.reason}`;
+        case "remove":
+          return `${i + 1}. [删除] ${s.rule}
+   原因: ${s.reason}`;
+        case "modify":
+          return `${i + 1}. [改写] "${s.oldRule}" → "${s.newRule}"
+   原因: ${s.reason}`;
+        case "merge":
+          return `${i + 1}. [合并] ${(s.oldRules ?? []).map((r) => `"${r}"`).join(" + ")} → "${s.newRule}"
+   原因: ${s.reason}`;
+        default:
+          return `${i + 1}. [未知] ${JSON.stringify(s)}`;
+      }
+    }).join(`
+
+`);
+    try {
+      const context = {
+        systemPrompt: [
+          "你是 JUDGE.md 的编辑。将审判长的建议应用到现有的 JUDGE.md 中。",
+          "",
+          "操作类型：",
+          "- [新增]：追加新规则到末尾或合适的位置",
+          "- [删除]：移除完全匹配的规则行",
+          "- [改写]：将 oldRule 替换为 newRule",
+          "- [合并]：将多条 oldRules 替换为一条 newRule，删除原文，插入合并后的规则",
+          "",
+          "规则：",
+          "- 保留所有未被操作的规则原文",
+          "- 去除重复：如果操作结果与已有规则语义相同，跳过该操作",
+          "- 保持简短精炼，一行一条",
+          "- 直接输出完整的 JUDGE.md 文本，不要包含解释或 markdown 代码块"
+        ].join(`
+`),
+        messages: [
+          {
+            role: "user",
+            content: [
+              "现有 JUDGE.md：",
+              currentJudgeMd || "（空）",
+              "",
+              "审判长的操作建议：",
+              opsText,
+              "",
+              "请应用这些操作，直接输出完整的 JUDGE.md："
+            ].join(`
+`),
+            timestamp: Date.now()
+          }
+        ]
+      };
+      const response = await complete(model, context, {
+        apiKey: auth?.apiKey,
+        headers: auth?.headers,
+        env: auth?.env
+      });
+      const cost = response.usage?.cost?.total;
+      const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
+      if (!text) {
+        log.error("chief merger empty response");
+        return { error: "审判长合并模型返回了空内容" };
+      }
+      log.info("chief merger completed", {
+        operations: selectedSuggestions.length,
+        cost
+      });
+      return { mergedText: text.trim(), cost };
+    } catch (err) {
+      log.error("chief merger call failed", { error: err.message });
+      return { error: `审判长合并模型调用失败: ${err.message}` };
+    }
+  };
+}
+function buildChiefPrompt(currentJudgeMd, judgePrompt, cwd, instruction) {
+  const parts = [
+    "以下是 my-permission 权限系统当前使用的 JUDGE.md 和法官提示词。",
+    "请从规则本身出发，审计 JUDGE.md 的质量。"
+  ];
+  if (instruction) {
+    parts.push("", "## 用户额外要求", "", instruction);
+  }
+  parts.push("", `当前项目工作目录: ${cwd}`, "", "---", "", "## 法官提示词（理解规则使用场景）", "", "```", judgePrompt || "（未加载）", "```", "", "---", "", `## 当前 JUDGE.md（共 ${currentJudgeMd.split(`
+`).filter((l) => l.trim()).length} 条规则）`, "", currentJudgeMd);
+  return parts.join(`
+`);
+}
+function parseChiefJson(text) {
+  const jsonMatch = /\{[\s\S]*\}/.exec(text);
+  if (!jsonMatch)
+    return;
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed || typeof parsed !== "object")
+      return;
+    const p = parsed;
+    if (!Array.isArray(p.suggestions) || typeof p.summary !== "string") {
+      return;
+    }
+    const suggestions = p.suggestions.filter((item) => {
+      if (typeof item !== "object" || item === null)
+        return false;
+      const s = item;
+      if (typeof s.type !== "string" || !["add", "remove", "modify", "merge"].includes(s.type))
+        return false;
+      if (typeof s.reason !== "string")
+        return false;
+      switch (s.type) {
+        case "add":
+          return typeof s.rule === "string";
+        case "remove":
+          return typeof s.rule === "string";
+        case "modify":
+          return typeof s.oldRule === "string" && typeof s.newRule === "string";
+        case "merge":
+          return Array.isArray(s.oldRules) && s.oldRules.every((r) => typeof r === "string") && typeof s.newRule === "string";
+        default:
+          return false;
+      }
+    });
+    return { suggestions, summary: p.summary };
+  } catch {
+    return;
   }
 }
 
@@ -58529,6 +58717,305 @@ async function loadConfig2(configPath) {
   }
 }
 
+// my-permission/cost-page.ts
+var CNY = 7;
+var PAGE_CSS3 = `body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #cdd6f4;
+  background: #1e1e2e;
+  margin: 0;
+  padding: 0;
+}
+.page-header {
+  padding: 1.5rem 1rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid #313244;
+}
+.page-header h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #cba6f7;
+  margin: 0 0 0.35rem;
+}
+.page-header p {
+  color: #7f849c;
+  font-size: 0.85rem;
+  margin: 0;
+}
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2rem;
+}
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #cba6f7;
+  margin: 2rem 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #45475a;
+}
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  overflow: hidden;
+}
+th, td {
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #313244;
+  font-size: 0.85rem;
+}
+th {
+  background: #313244;
+  color: #cba6f7;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+td.num {
+  color: #7f849c;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+td.cost {
+  color: #f38ba8;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+td.total {
+  font-weight: 700;
+  color: #cba6f7;
+}
+tbody tr:last-child td {
+  border-bottom: none;
+}
+tbody tr:nth-child(even) td {
+  background: #232436;
+}
+tbody tr:hover td {
+  background: #313244;
+}
+.page-footer {
+  text-align: center;
+  padding: 1rem 1rem 2rem;
+  font-size: 0.8rem;
+  color: #7f849c;
+  border-top: 1px solid #313244;
+  margin-top: 2rem;
+}`;
+function renderCostPage(agg) {
+  return buildHtmlDocument({
+    title: "法庭成本统计",
+    bodyHtml: [
+      renderHeader(agg),
+      "  <main>",
+      renderSummaryTable(agg),
+      renderModelTable(agg),
+      renderDailyTable(agg),
+      renderSessionTable(agg),
+      renderFooter()
+    ].join(`
+`),
+    css: PAGE_CSS3
+  });
+}
+function renderHeader(agg) {
+  const total = grandTotal(agg);
+  return `  <header class="page-header">
+    <h1>法庭成本统计</h1>
+    <p>CNY (USD × 7) · ${agg.sessions.length} 个会话 · ${toCny(total.cost)} · ${total.calls} 次调用</p>
+  </header>`;
+}
+function renderSummaryTable(agg) {
+  const total = grandTotal(agg);
+  const rows = buildRoleRows(agg);
+  return `    <h2 class="section-title">角色汇总</h2>
+    <table>
+      <thead>
+        <tr><th>角色</th><th>调用次数</th><th>成本</th></tr>
+      </thead>
+      <tbody>
+${rows}
+        <tr>
+          <td class="num total">总计</td>
+          <td class="num total">${total.calls}</td>
+          <td class="cost total">${toCny(total.cost)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+function renderModelTable(agg) {
+  if (agg.models.length === 0)
+    return "";
+  const rows = agg.models.map((m) => `        <tr>
+          <td>${escapeHtml3(m.model)}</td>
+          <td class="num">${m.calls}</td>
+          <td class="cost">${toCny(m.totalCost)}</td>
+        </tr>`).join(`
+`);
+  return `    <h2 class="section-title">模型分布</h2>
+    <table>
+      <thead>
+        <tr><th>模型</th><th>调用次数</th><th>成本</th></tr>
+      </thead>
+      <tbody>
+${rows}
+      </tbody>
+    </table>`;
+}
+function renderDailyTable(agg) {
+  const dates = Object.keys(agg.daily).sort();
+  if (dates.length === 0)
+    return "";
+  const rows = dates.map((date) => {
+    const d = agg.daily[date];
+    return `        <tr>
+          <td>${date}</td>
+          <td class="num">${d.judge.calls}</td>
+          <td class="cost">${toCny(d.judge.totalCost)}</td>
+          <td class="num">${d.advocate.analysis.calls + d.advocate.merge.calls}</td>
+          <td class="cost">${toCny(d.advocate.analysis.totalCost + d.advocate.merge.totalCost)}</td>
+          <td class="num">${d.prosecutor.analysis.calls + d.prosecutor.merge.calls}</td>
+          <td class="cost">${toCny(d.prosecutor.analysis.totalCost + d.prosecutor.merge.totalCost)}</td>
+          <td class="num">${d.chief.analysis.calls + d.chief.merge.calls}</td>
+          <td class="cost">${toCny(d.chief.analysis.totalCost + d.chief.merge.totalCost)}</td>
+          <td class="num">${d.totalCalls}</td>
+          <td class="cost total">${toCny(d.totalCost)}</td>
+        </tr>`;
+  }).join(`
+`);
+  return `    <h2 class="section-title">每日明细</h2>
+    <table>
+      <thead>
+        <tr><th>日期</th><th>Judge 调用</th><th>Judge 成本</th><th>Advocate 调用</th><th>Advocate 成本</th><th>Prosecutor 调用</th><th>Prosecutor 成本</th><th>Chief 调用</th><th>Chief 成本</th><th>合计调用</th><th>合计成本</th></tr>
+      </thead>
+      <tbody>
+${rows}
+      </tbody>
+    </table>`;
+}
+function renderSessionTable(agg) {
+  if (agg.sessions.length === 0)
+    return "";
+  const limit = 20;
+  const shown = agg.sessions.slice(-limit);
+  const truncated = agg.sessions.length > limit ? `    <p style="color:#7f849c;font-size:0.8rem;margin:0.5rem 0 0">显示最近 ${limit} 条，共 ${agg.sessions.length} 条会话</p>
+` : "";
+  const rows = shown.map((s) => renderSessionRow(s)).join(`
+`);
+  return `    <h2 class="section-title">会话明细</h2>
+${truncated}    <table>
+      <thead>
+        <tr><th>会话</th><th>时间</th><th>Judge</th><th>Advocate</th><th>Prosecutor</th><th>Chief</th><th>调用</th><th>成本</th></tr>
+      </thead>
+      <tbody>
+${rows}
+      </tbody>
+    </table>`;
+}
+function renderSessionRow(s) {
+  const shortId = s.sessionId.slice(0, 8);
+  const timeRange = s.firstTs ? `${s.firstTs.slice(0, 16)} ~ ${s.lastTs.slice(0, 16)}` : "—";
+  const advCost = s.advocate.analysis.totalCost + s.advocate.merge.totalCost;
+  const prosCost = s.prosecutor.analysis.totalCost + s.prosecutor.merge.totalCost;
+  const chiefCost = s.chief.analysis.totalCost + s.chief.merge.totalCost;
+  return `        <tr>
+          <td>${escapeHtml3(shortId)}</td>
+          <td>${escapeHtml3(timeRange)}</td>
+          <td class="cost">${toCny(s.judge.totalCost)}</td>
+          <td class="cost">${toCny(advCost)}</td>
+          <td class="cost">${toCny(prosCost)}</td>
+          <td class="cost">${toCny(chiefCost)}</td>
+          <td class="num">${s.totalCalls}</td>
+          <td class="cost total">${toCny(s.totalCost)}</td>
+        </tr>`;
+}
+function renderFooter() {
+  return `  </main>
+  <footer class="page-footer">Generated by pi · my-permission</footer>`;
+}
+function buildRoleRows(agg) {
+  const rows = [
+    {
+      label: "Judge",
+      cost: agg.judge.totalCost,
+      calls: agg.judge.calls
+    },
+    {
+      label: "Advocate (分析)",
+      cost: agg.advocate.analysis.totalCost,
+      calls: agg.advocate.analysis.calls
+    },
+    {
+      label: "Advocate (合并)",
+      cost: agg.advocate.merge.totalCost,
+      calls: agg.advocate.merge.calls
+    },
+    {
+      label: "Prosecutor (分析)",
+      cost: agg.prosecutor.analysis.totalCost,
+      calls: agg.prosecutor.analysis.calls
+    },
+    {
+      label: "Prosecutor (合并)",
+      cost: agg.prosecutor.merge.totalCost,
+      calls: agg.prosecutor.merge.calls
+    },
+    {
+      label: "Chief (分析)",
+      cost: agg.chief.analysis.totalCost,
+      calls: agg.chief.analysis.calls
+    },
+    {
+      label: "Chief (合并)",
+      cost: agg.chief.merge.totalCost,
+      calls: agg.chief.merge.calls
+    }
+  ];
+  return rows.map((row) => `        <tr>
+          <td>${escapeHtml3(row.label)}</td>
+          <td class="num">${row.calls}</td>
+          <td class="cost">${toCny(row.cost)}</td>
+        </tr>`).join(`
+`);
+}
+function grandTotal(agg) {
+  let cost = 0;
+  let calls = 0;
+  cost += agg.judge.totalCost;
+  calls += agg.judge.calls;
+  cost += agg.advocate.analysis.totalCost;
+  calls += agg.advocate.analysis.calls;
+  cost += agg.advocate.merge.totalCost;
+  calls += agg.advocate.merge.calls;
+  cost += agg.prosecutor.analysis.totalCost;
+  calls += agg.prosecutor.analysis.calls;
+  cost += agg.prosecutor.merge.totalCost;
+  calls += agg.prosecutor.merge.calls;
+  cost += agg.chief.analysis.totalCost;
+  calls += agg.chief.analysis.calls;
+  cost += agg.chief.merge.totalCost;
+  calls += agg.chief.merge.calls;
+  return { cost, calls };
+}
+function toCny(usd) {
+  return `¥${(usd * CNY).toFixed(2)}`;
+}
+function escapeHtml3(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 // my-permission/cost-tracker.ts
 import {
   appendFileSync,
@@ -58537,9 +59024,8 @@ import {
   readdirSync,
   readFileSync as readFileSync7
 } from "node:fs";
-import { basename as basename2 } from "node:path";
 import { homedir as homedir2 } from "node:os";
-import { join as join8 } from "node:path";
+import { basename as basename2, join as join8 } from "node:path";
 var COST_TYPES = [
   "judge",
   "advocate-analysis",
@@ -58822,322 +59308,20 @@ function aggregateCosts(cwd, opts) {
   return result;
 }
 
-// my-permission/cost-page.ts
-var CNY = 7;
-var PAGE_CSS3 = `body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.6;
-  color: #cdd6f4;
-  background: #1e1e2e;
-  margin: 0;
-  padding: 0;
-}
-.page-header {
-  padding: 1.5rem 1rem 1rem;
-  text-align: center;
-  border-bottom: 1px solid #313244;
-}
-.page-header h1 {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: #cba6f7;
-  margin: 0 0 0.35rem;
-}
-.page-header p {
-  color: #7f849c;
-  font-size: 0.85rem;
-  margin: 0;
-}
-main {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 2rem;
-}
-.section-title {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #cba6f7;
-  margin: 2rem 0 0.75rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid #45475a;
-}
-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  border: 1px solid #313244;
-  border-radius: 8px;
-  overflow: hidden;
-}
-th, td {
-  padding: 8px 12px;
-  text-align: left;
-  vertical-align: top;
-  border-bottom: 1px solid #313244;
-  font-size: 0.85rem;
-}
-th {
-  background: #313244;
-  color: #cba6f7;
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-}
-td.num {
-  color: #7f849c;
-  text-align: right;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-td.cost {
-  color: #f38ba8;
-  text-align: right;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-td.total {
-  font-weight: 700;
-  color: #cba6f7;
-}
-tbody tr:last-child td {
-  border-bottom: none;
-}
-tbody tr:nth-child(even) td {
-  background: #232436;
-}
-tbody tr:hover td {
-  background: #313244;
-}
-.page-footer {
-  text-align: center;
-  padding: 1rem 1rem 2rem;
-  font-size: 0.8rem;
-  color: #7f849c;
-  border-top: 1px solid #313244;
-  margin-top: 2rem;
-}`;
-function renderCostPage(agg) {
-  return buildHtmlDocument({
-    title: "法庭成本统计",
-    bodyHtml: [
-      renderHeader(agg),
-      "  <main>",
-      renderSummaryTable(agg),
-      renderModelTable(agg),
-      renderDailyTable(agg),
-      renderSessionTable(agg),
-      renderFooter()
-    ].join(`
-`),
-    css: PAGE_CSS3
-  });
-}
-function renderHeader(agg) {
-  const total = grandTotal(agg);
-  return `  <header class="page-header">
-    <h1>法庭成本统计</h1>
-    <p>CNY (USD × 7) · ${agg.sessions.length} 个会话 · ${toCny(total.cost)} · ${total.calls} 次调用</p>
-  </header>`;
-}
-function renderSummaryTable(agg) {
-  const total = grandTotal(agg);
-  const rows = buildRoleRows(agg);
-  return `    <h2 class="section-title">角色汇总</h2>
-    <table>
-      <thead>
-        <tr><th>角色</th><th>调用次数</th><th>成本</th></tr>
-      </thead>
-      <tbody>
-${rows}
-        <tr>
-          <td class="num total">总计</td>
-          <td class="num total">${total.calls}</td>
-          <td class="cost total">${toCny(total.cost)}</td>
-        </tr>
-      </tbody>
-    </table>`;
-}
-function renderModelTable(agg) {
-  if (agg.models.length === 0)
-    return "";
-  const rows = agg.models.map((m) => `        <tr>
-          <td>${escapeHtml3(m.model)}</td>
-          <td class="num">${m.calls}</td>
-          <td class="cost">${toCny(m.totalCost)}</td>
-        </tr>`).join(`
-`);
-  return `    <h2 class="section-title">模型分布</h2>
-    <table>
-      <thead>
-        <tr><th>模型</th><th>调用次数</th><th>成本</th></tr>
-      </thead>
-      <tbody>
-${rows}
-      </tbody>
-    </table>`;
-}
-function renderDailyTable(agg) {
-  const dates = Object.keys(agg.daily).sort();
-  if (dates.length === 0)
-    return "";
-  const rows = dates.map((date) => {
-    const d = agg.daily[date];
-    return `        <tr>
-          <td>${date}</td>
-          <td class="num">${d.judge.calls}</td>
-          <td class="cost">${toCny(d.judge.totalCost)}</td>
-          <td class="num">${d.advocate.analysis.calls + d.advocate.merge.calls}</td>
-          <td class="cost">${toCny(d.advocate.analysis.totalCost + d.advocate.merge.totalCost)}</td>
-          <td class="num">${d.prosecutor.analysis.calls + d.prosecutor.merge.calls}</td>
-          <td class="cost">${toCny(d.prosecutor.analysis.totalCost + d.prosecutor.merge.totalCost)}</td>
-          <td class="num">${d.chief.analysis.calls + d.chief.merge.calls}</td>
-          <td class="cost">${toCny(d.chief.analysis.totalCost + d.chief.merge.totalCost)}</td>
-          <td class="num">${d.totalCalls}</td>
-          <td class="cost total">${toCny(d.totalCost)}</td>
-        </tr>`;
-  }).join(`
-`);
-  return `    <h2 class="section-title">每日明细</h2>
-    <table>
-      <thead>
-        <tr><th>日期</th><th>Judge 调用</th><th>Judge 成本</th><th>Advocate 调用</th><th>Advocate 成本</th><th>Prosecutor 调用</th><th>Prosecutor 成本</th><th>Chief 调用</th><th>Chief 成本</th><th>合计调用</th><th>合计成本</th></tr>
-      </thead>
-      <tbody>
-${rows}
-      </tbody>
-    </table>`;
-}
-function renderSessionTable(agg) {
-  if (agg.sessions.length === 0)
-    return "";
-  const limit = 20;
-  const shown = agg.sessions.slice(-limit);
-  const truncated = agg.sessions.length > limit ? `    <p style="color:#7f849c;font-size:0.8rem;margin:0.5rem 0 0">显示最近 ${limit} 条，共 ${agg.sessions.length} 条会话</p>
-` : "";
-  const rows = shown.map((s) => renderSessionRow(s)).join(`
-`);
-  return `    <h2 class="section-title">会话明细</h2>
-${truncated}    <table>
-      <thead>
-        <tr><th>会话</th><th>时间</th><th>Judge</th><th>Advocate</th><th>Prosecutor</th><th>Chief</th><th>调用</th><th>成本</th></tr>
-      </thead>
-      <tbody>
-${rows}
-      </tbody>
-    </table>`;
-}
-function renderSessionRow(s) {
-  const shortId = s.sessionId.slice(0, 8);
-  const timeRange = s.firstTs ? `${s.firstTs.slice(0, 16)} ~ ${s.lastTs.slice(0, 16)}` : "—";
-  const advCalls = s.advocate.analysis.calls + s.advocate.merge.calls;
-  const advCost = s.advocate.analysis.totalCost + s.advocate.merge.totalCost;
-  const prosCalls = s.prosecutor.analysis.calls + s.prosecutor.merge.calls;
-  const prosCost = s.prosecutor.analysis.totalCost + s.prosecutor.merge.totalCost;
-  const chiefCalls = s.chief.analysis.calls + s.chief.merge.calls;
-  const chiefCost = s.chief.analysis.totalCost + s.chief.merge.totalCost;
-  return `        <tr>
-          <td>${escapeHtml3(shortId)}</td>
-          <td>${escapeHtml3(timeRange)}</td>
-          <td class="cost">${toCny(s.judge.totalCost)}</td>
-          <td class="cost">${toCny(advCost)}</td>
-          <td class="cost">${toCny(prosCost)}</td>
-          <td class="cost">${toCny(chiefCost)}</td>
-          <td class="num">${s.totalCalls}</td>
-          <td class="cost total">${toCny(s.totalCost)}</td>
-        </tr>`;
-}
-function renderFooter() {
-  return `  </main>
-  <footer class="page-footer">Generated by pi · my-permission</footer>`;
-}
-function buildRoleRows(agg) {
-  const rows = [
-    {
-      label: "Judge",
-      cost: agg.judge.totalCost,
-      calls: agg.judge.calls
-    },
-    {
-      label: "Advocate (分析)",
-      cost: agg.advocate.analysis.totalCost,
-      calls: agg.advocate.analysis.calls
-    },
-    {
-      label: "Advocate (合并)",
-      cost: agg.advocate.merge.totalCost,
-      calls: agg.advocate.merge.calls
-    },
-    {
-      label: "Prosecutor (分析)",
-      cost: agg.prosecutor.analysis.totalCost,
-      calls: agg.prosecutor.analysis.calls
-    },
-    {
-      label: "Prosecutor (合并)",
-      cost: agg.prosecutor.merge.totalCost,
-      calls: agg.prosecutor.merge.calls
-    },
-    {
-      label: "Chief (分析)",
-      cost: agg.chief.analysis.totalCost,
-      calls: agg.chief.analysis.calls
-    },
-    {
-      label: "Chief (合并)",
-      cost: agg.chief.merge.totalCost,
-      calls: agg.chief.merge.calls
-    }
-  ];
-  return rows.map((row) => `        <tr>
-          <td>${escapeHtml3(row.label)}</td>
-          <td class="num">${row.calls}</td>
-          <td class="cost">${toCny(row.cost)}</td>
-        </tr>`).join(`
-`);
-}
-function grandTotal(agg) {
-  let cost = 0;
-  let calls = 0;
-  cost += agg.judge.totalCost;
-  calls += agg.judge.calls;
-  cost += agg.advocate.analysis.totalCost;
-  calls += agg.advocate.analysis.calls;
-  cost += agg.advocate.merge.totalCost;
-  calls += agg.advocate.merge.calls;
-  cost += agg.prosecutor.analysis.totalCost;
-  calls += agg.prosecutor.analysis.calls;
-  cost += agg.prosecutor.merge.totalCost;
-  calls += agg.prosecutor.merge.calls;
-  cost += agg.chief.analysis.totalCost;
-  calls += agg.chief.analysis.calls;
-  cost += agg.chief.merge.totalCost;
-  calls += agg.chief.merge.calls;
-  return { cost, calls };
-}
-function toCny(usd) {
-  return `¥${(usd * CNY).toFixed(2)}`;
-}
-function escapeHtml3(text) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
-
 // my-permission/judge.ts
-import { complete } from "@earendil-works/pi-ai";
-var log = createDevLogger("my-permission:judge");
+import { complete as complete2 } from "@earendil-works/pi-ai";
+var log2 = createDevLogger("my-permission:judge");
 function createJudge(config, deps) {
   return async function judge(input, cwd, model, resolveModel) {
     const resolved = resolveJudgeModel(config, resolveModel, model);
     if (!resolved) {
-      log.warn("judge model not found", {
+      log2.warn("judge model not found", {
         configured: config.judgeModel,
         fallback: model ? `${model.provider}/${model.id}` : "none"
       });
       return failureResult("未找到可用的法官模型，请手动确认", input);
     }
-    log.debug("judge model resolved", {
+    log2.debug("judge model resolved", {
       provider: resolved.provider,
       model: resolved.id,
       configured: config.judgeModel
@@ -59167,18 +59351,18 @@ function createJudge(config, deps) {
         completeOpts.apiKey = auth.apiKey;
       if (auth?.headers)
         completeOpts.headers = auth.headers;
-      const response = await complete(resolved, context, completeOpts);
+      const response = await complete2(resolved, context, completeOpts);
       clearTimeout(timeout);
       if (response.stopReason === "error" || response.errorMessage) {
         const detail = response.errorMessage ?? response.stopReason;
-        log.error("judge API error", { detail, model: resolved.id });
+        log2.error("judge API error", { detail, model: resolved.id });
         return failureResult(`法官模型调用失败: ${detail}`, input);
       }
       const parsed = parseJudgeResponse(response);
       if (parsed) {
         parsed.cost = response.usage?.cost?.total;
         parsed.modelUsed = `${resolved.provider}/${resolved.id}`;
-        log.info("judge verdict", {
+        log2.info("judge verdict", {
           safe: parsed.safe,
           score: parsed.score,
           cost: parsed.cost,
@@ -59186,11 +59370,13 @@ function createJudge(config, deps) {
         });
         return parsed;
       }
-      log.warn("judge parse failed", { content: JSON.stringify(response.content) });
+      log2.warn("judge parse failed", {
+        content: JSON.stringify(response.content)
+      });
       return failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
       clearTimeout(timeout);
-      log.error("judge call failed", { error: error.message });
+      log2.error("judge call failed", { error: error.message });
       if (controller.signal.aborted) {
         return failureResult(`法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`, input);
       }
@@ -59393,7 +59579,7 @@ var FILTER_JS2 = `function filterLogs(filter) {
   }
 }`;
 function renderJudgeLogPage(logs) {
-  const rows = logs.map((log2, index) => renderRow2(log2, index + 1)).reverse().join(`
+  const rows = logs.map((log3, index) => renderRow2(log3, index + 1)).reverse().join(`
 `);
   return buildHtmlDocument({
     title: "法官判断日志",
@@ -59421,19 +59607,19 @@ ${rows}
     js: FILTER_JS2
   });
 }
-function renderRow2(log2, num) {
-  const verdictClass = log2.safe ? "safe" : "unsafe";
-  const verdictLabel = log2.safe ? "✓ 安全" : "✗ 不安全";
-  const scoreText = log2.score !== undefined ? `（${log2.score}/10）` : "";
-  const userCell = log2.safe !== false ? '<td class="na">—</td>' : log2.userApproved ? '<td class="approved">✓ 批准</td>' : '<td class="denied">✗ 拒绝</td>';
-  return `        <tr data-safe="${log2.safe}">
+function renderRow2(log3, num) {
+  const verdictClass = log3.safe ? "safe" : "unsafe";
+  const verdictLabel = log3.safe ? "✓ 安全" : "✗ 不安全";
+  const scoreText = log3.score !== undefined ? `（${log3.score}/10）` : "";
+  const userCell = log3.safe !== false ? '<td class="na">—</td>' : log3.userApproved ? '<td class="approved">✓ 批准</td>' : '<td class="denied">✗ 拒绝</td>';
+  return `        <tr data-safe="${log3.safe}">
           <td class="num">${num}</td>
-          <td>${escapeHtml4(log2.toolName)}</td>
-          <td class="command"><code>${escapeHtml4(log2.value)}</code></td>
+          <td>${escapeHtml4(log3.toolName)}</td>
+          <td class="command"><code>${escapeHtml4(log3.value)}</code></td>
           <td class="${verdictClass}">${verdictLabel}${scoreText}</td>
           ${userCell}
-          <td>${escapeHtml4(log2.toolFor)}</td>
-          <td>${escapeHtml4(log2.reason)}</td>
+          <td>${escapeHtml4(log3.toolFor)}</td>
+          <td>${escapeHtml4(log3.reason)}</td>
         </tr>`;
 }
 function escapeHtml4(text) {
@@ -59441,8 +59627,8 @@ function escapeHtml4(text) {
 }
 
 // my-permission/professor.ts
-import { complete as complete2 } from "@earendil-works/pi-ai";
-var log2 = createDevLogger("my-permission:professor");
+import { complete as complete3 } from "@earendil-works/pi-ai";
+var log3 = createDevLogger("my-permission:professor");
 function createAdvocate(config) {
   return async function analyze(cases, cwd, resolveModel, getAuth, currentJudgeMd, judgePrompt) {
     if (cases.length === 0) {
@@ -59456,12 +59642,14 @@ function createAdvocate(config) {
     }
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
-      log2.error("advocate model not found", { configured: config.professorModel });
+      log3.error("advocate model not found", {
+        configured: config.professorModel
+      });
       return {
         error: `未找到教授模型: ${config.professorModel}`
       };
     }
-    log2.debug("advocate model resolved", {
+    log3.debug("advocate model resolved", {
       provider: model.provider,
       model: model.id,
       configured: config.professorModel
@@ -59518,7 +59706,7 @@ function createAdvocate(config) {
           { role: "user", content: prompt, timestamp: Date.now() }
         ]
       };
-      const response = await complete2(model, context, {
+      const response = await complete3(model, context, {
         thinking: config.professorThinking,
         apiKey: auth?.apiKey,
         headers: auth?.headers,
@@ -59527,20 +59715,24 @@ function createAdvocate(config) {
       const cost = response.usage?.cost?.total;
       const errResp = response;
       if (errResp.stopReason === "error" || errResp.errorMessage) {
-        log2.error("advocate API error", { detail: errResp.errorMessage || errResp.stopReason });
-        return { error: `教授模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
+        log3.error("advocate API error", {
+          detail: errResp.errorMessage || errResp.stopReason
+        });
+        return {
+          error: `教授模型调用失败: ${errResp.errorMessage || errResp.stopReason}`
+        };
       }
       const text = response.content.find((c) => c.type === "text")?.text || response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
-        log2.error("advocate empty response");
+        log3.error("advocate empty response");
         return { error: "教授模型返回了空内容" };
       }
       const parsed = parseAdvocateJson(text);
       if (!parsed) {
-        log2.error("advocate parse failed");
+        log3.error("advocate parse failed");
         return { error: "教授模型返回了无法解析的 JSON" };
       }
-      log2.info("advocate completed", {
+      log3.info("advocate completed", {
         cases: cases.length,
         add: parsed.add.length,
         remove: parsed.remove.length,
@@ -59627,7 +59819,9 @@ function createMerger(config) {
     }
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
-      log2.error("merger model not found", { configured: config.professorModel });
+      log3.error("merger model not found", {
+        configured: config.professorModel
+      });
       return { error: `未找到教授模型` };
     }
     const auth = await getAuth(model);
@@ -59665,7 +59859,7 @@ function createMerger(config) {
           }
         ]
       };
-      const response = await complete2(model, context, {
+      const response = await complete3(model, context, {
         apiKey: auth?.apiKey,
         headers: auth?.headers,
         env: auth?.env
@@ -59673,21 +59867,21 @@ function createMerger(config) {
       const cost = response.usage?.cost?.total;
       const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
-        log2.error("merger empty response");
+        log3.error("merger empty response");
         return { error: "融合模型返回了空内容" };
       }
-      log2.info("merger completed", { rules: selectedRules.length, cost });
+      log3.info("merger completed", { rules: selectedRules.length, cost });
       return { mergedText: text.trim(), cost };
     } catch (err) {
-      log2.error("merger call failed", { error: err.message });
+      log3.error("merger call failed", { error: err.message });
       return { error: `融合模型调用失败: ${err.message}` };
     }
   };
 }
 
 // my-permission/prosecutor.ts
-import { complete as complete3 } from "@earendil-works/pi-ai";
-var log3 = createDevLogger("my-permission:prosecutor");
+import { complete as complete4 } from "@earendil-works/pi-ai";
+var log4 = createDevLogger("my-permission:prosecutor");
 function createProsecutor(config) {
   return async function analyze(allowedEntries, cwd, resolveModel, getAuth, currentJudgeMd, judgePrompt) {
     if (allowedEntries.length === 0) {
@@ -59701,12 +59895,14 @@ function createProsecutor(config) {
     }
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
-      log3.error("prosecutor model not found", { configured: config.professorModel });
+      log4.error("prosecutor model not found", {
+        configured: config.professorModel
+      });
       return {
         error: `未找到审查模型: ${config.professorModel}`
       };
     }
-    log3.debug("prosecutor model resolved", {
+    log4.debug("prosecutor model resolved", {
       provider: model.provider,
       model: model.id,
       configured: config.professorModel
@@ -59760,7 +59956,7 @@ function createProsecutor(config) {
           { role: "user", content: prompt, timestamp: Date.now() }
         ]
       };
-      const response = await complete3(model, context, {
+      const response = await complete4(model, context, {
         thinking: config.professorThinking,
         apiKey: auth?.apiKey,
         headers: auth?.headers,
@@ -59769,27 +59965,31 @@ function createProsecutor(config) {
       const cost = response.usage?.cost?.total;
       const errResp = response;
       if (errResp.stopReason === "error" || errResp.errorMessage) {
-        log3.error("prosecutor API error", { detail: errResp.errorMessage || errResp.stopReason });
-        return { error: `审查模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
+        log4.error("prosecutor API error", {
+          detail: errResp.errorMessage || errResp.stopReason
+        });
+        return {
+          error: `审查模型调用失败: ${errResp.errorMessage || errResp.stopReason}`
+        };
       }
       const text = response.content.find((c) => c.type === "text")?.text || response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
       if (!text) {
-        log3.error("prosecutor empty response");
+        log4.error("prosecutor empty response");
         return { error: "审查模型返回了空内容" };
       }
       const parsed = parseProsecutorJson(text);
       if (!parsed) {
-        log3.error("prosecutor parse failed");
+        log4.error("prosecutor parse failed");
         return { error: "审查模型返回了无法解析的 JSON" };
       }
-      log3.info("prosecutor completed", {
+      log4.info("prosecutor completed", {
         reviewed: allowedEntries.length,
         findings: parsed.add.length,
         cost
       });
       return { suggestion: parsed, cost };
     } catch (err) {
-      log3.error("prosecutor call failed", { error: err.message });
+      log4.error("prosecutor call failed", { error: err.message });
       return {
         error: `审查模型调用失败: ${err.message}`
       };
@@ -59855,240 +60055,6 @@ function buildProsecutorPrompt(allowedEntries, currentJudgeMd, judgePrompt, cwd)
     entryList
   ].join(`
 `);
-}
-
-// my-permission/chief.ts
-import { complete as complete4 } from "@earendil-works/pi-ai";
-var log4 = createDevLogger("my-permission:chief");
-function createChief(config) {
-  return async function analyze(currentJudgeMd, judgePrompt, cwd, instruction, resolveModel, getAuth) {
-    if (!currentJudgeMd.trim()) {
-      return { error: "项目尚未创建 JUDGE.md，无需审计" };
-    }
-    const parts = config.professorModel.split("/");
-    if (parts.length !== 2) {
-      return {
-        error: `professorModel 格式无效: ${config.professorModel}`
-      };
-    }
-    const model = resolveModel(parts[0], parts[1]);
-    if (!model) {
-      log4.error("chief model not found", { configured: config.professorModel });
-      return { error: `未找到审判长模型: ${config.professorModel}` };
-    }
-    log4.debug("chief model resolved", {
-      provider: model.provider,
-      model: model.id
-    });
-    const prompt = buildChiefPrompt(currentJudgeMd, judgePrompt, cwd, instruction);
-    const auth = await getAuth(model);
-    try {
-      const context = {
-        systemPrompt: [
-          "你是 my-permission 权限系统的审判长（Chief Judge）。",
-          "你的任务不是看案例，而是直接审视 JUDGE.md 规则文件本身的质量。",
-          "",
-          "## 审查维度",
-          "",
-          "1. **矛盾规则**：两条规则覆盖同一场景但结论相反（一条 allow，一条 deny）",
-          "2. **过宽规则**：一条 allow 规则的范围远超实际需要，留下了安全隐患",
-          "3. **可合并规则**：多条规则表述不同但语义相同或可以归纳为更精炼的一条",
-          "4. **遗漏盲区**：应该覆盖但完全没有规则保护的重要安全场景",
-          "5. **冗余规则**：语义已被其他规则完全覆盖的多余规则",
-          "",
-          "## 输出格式",
-          "",
-          "只回复严格 JSON，不要包含其他文字：",
-          "{",
-          '  "suggestions": [',
-          '    {"type": "add", "rule": "新规则文本", "reason": "添加原因"},',
-          '    {"type": "remove", "rule": "要删除的规则原文", "reason": "删除原因"},',
-          '    {"type": "modify", "oldRule": "当前规则原文", "newRule": "改写后的规则", "reason": "改写原因"},',
-          '    {"type": "merge", "oldRules": ["规则1原文", "规则2原文"], "newRule": "合并后的规则", "reason": "合并原因"}',
-          "  ],",
-          '  "summary": "审计 N 条规则，发现 ..."',
-          "}",
-          "",
-          "关键规则：",
-          "- oldRule/oldRules 必须精确匹配 JUDGE.md 中的原文（一字不差）",
-          "- newRule 保持原风格的祈使句，一行一条",
-          "- 只报告确实存在的问题，不要为了凑数而误报",
-          "- 如果没有问题，suggestions 设为空数组 []",
-          "- 直接输出 JSON，不要 markdown 代码块"
-        ].join(`
-`),
-        messages: [
-          { role: "user", content: prompt, timestamp: Date.now() }
-        ]
-      };
-      const response = await complete4(model, context, {
-        thinking: config.professorThinking,
-        apiKey: auth?.apiKey,
-        headers: auth?.headers,
-        env: auth?.env
-      });
-      const cost = response.usage?.cost?.total;
-      const errResp = response;
-      if (errResp.stopReason === "error" || errResp.errorMessage) {
-        log4.error("chief API error", { detail: errResp.errorMessage || errResp.stopReason });
-        return { error: `审判长模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
-      }
-      const text = response.content.find((c) => c.type === "text")?.text || response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
-      if (!text) {
-        log4.error("chief empty response");
-        return { error: "审判长模型返回了空内容" };
-      }
-      const parsed = parseChiefJson(text);
-      if (!parsed) {
-        log4.error("chief parse failed");
-        return { error: "审判长模型返回了无法解析的 JSON" };
-      }
-      log4.info("chief completed", {
-        findings: parsed.suggestions.length,
-        cost
-      });
-      return { suggestion: parsed, cost };
-    } catch (err) {
-      log4.error("chief call failed", { error: err.message });
-      return { error: `审判长模型调用失败: ${err.message}` };
-    }
-  };
-}
-function createChiefMerger(config) {
-  return async function merge(currentJudgeMd, selectedSuggestions, resolveModel, getAuth) {
-    const parts = config.professorModel.split("/");
-    if (parts.length !== 2) {
-      return { error: "professorModel 格式无效" };
-    }
-    const model = resolveModel(parts[0], parts[1]);
-    if (!model) {
-      log4.error("chief merger model not found", { configured: config.professorModel });
-      return { error: "未找到审判长合并模型" };
-    }
-    const auth = await getAuth(model);
-    const opsText = selectedSuggestions.map((s, i) => {
-      switch (s.type) {
-        case "add":
-          return `${i + 1}. [新增] ${s.rule}
-   原因: ${s.reason}`;
-        case "remove":
-          return `${i + 1}. [删除] ${s.rule}
-   原因: ${s.reason}`;
-        case "modify":
-          return `${i + 1}. [改写] "${s.oldRule}" → "${s.newRule}"
-   原因: ${s.reason}`;
-        case "merge":
-          return `${i + 1}. [合并] ${(s.oldRules ?? []).map((r) => `"${r}"`).join(" + ")} → "${s.newRule}"
-   原因: ${s.reason}`;
-      }
-    }).join(`
-
-`);
-    try {
-      const context = {
-        systemPrompt: [
-          "你是 JUDGE.md 的编辑。将审判长的建议应用到现有的 JUDGE.md 中。",
-          "",
-          "操作类型：",
-          "- [新增]：追加新规则到末尾或合适的位置",
-          "- [删除]：移除完全匹配的规则行",
-          "- [改写]：将 oldRule 替换为 newRule",
-          "- [合并]：将多条 oldRules 替换为一条 newRule，删除原文，插入合并后的规则",
-          "",
-          "规则：",
-          "- 保留所有未被操作的规则原文",
-          "- 去除重复：如果操作结果与已有规则语义相同，跳过该操作",
-          "- 保持简短精炼，一行一条",
-          "- 直接输出完整的 JUDGE.md 文本，不要包含解释或 markdown 代码块"
-        ].join(`
-`),
-        messages: [
-          {
-            role: "user",
-            content: [
-              "现有 JUDGE.md：",
-              currentJudgeMd || "（空）",
-              "",
-              "审判长的操作建议：",
-              opsText,
-              "",
-              "请应用这些操作，直接输出完整的 JUDGE.md："
-            ].join(`
-`),
-            timestamp: Date.now()
-          }
-        ]
-      };
-      const response = await complete4(model, context, {
-        apiKey: auth?.apiKey,
-        headers: auth?.headers,
-        env: auth?.env
-      });
-      const cost = response.usage?.cost?.total;
-      const text = response.content.find((c) => c.type === "text")?.text ?? response.content.flatMap((c) => Object.entries(c).filter(([k, v]) => k !== "type" && typeof v === "string" && v.length > 0).map(([, v]) => v)).join("");
-      if (!text) {
-        log4.error("chief merger empty response");
-        return { error: "审判长合并模型返回了空内容" };
-      }
-      log4.info("chief merger completed", {
-        operations: selectedSuggestions.length,
-        cost
-      });
-      return { mergedText: text.trim(), cost };
-    } catch (err) {
-      log4.error("chief merger call failed", { error: err.message });
-      return { error: `审判长合并模型调用失败: ${err.message}` };
-    }
-  };
-}
-function buildChiefPrompt(currentJudgeMd, judgePrompt, cwd, instruction) {
-  const parts = [
-    "以下是 my-permission 权限系统当前使用的 JUDGE.md 和法官提示词。",
-    "请从规则本身出发，审计 JUDGE.md 的质量。"
-  ];
-  if (instruction) {
-    parts.push("", "## 用户额外要求", "", instruction);
-  }
-  parts.push("", `当前项目工作目录: ${cwd}`, "", "---", "", "## 法官提示词（理解规则使用场景）", "", "```", judgePrompt || "（未加载）", "```", "", "---", "", `## 当前 JUDGE.md（共 ${currentJudgeMd.split(`
-`).filter((l) => l.trim()).length} 条规则）`, "", currentJudgeMd);
-  return parts.join(`
-`);
-}
-function parseChiefJson(text) {
-  const jsonMatch = /\{[\s\S]*\}/.exec(text);
-  if (!jsonMatch)
-    return;
-  try {
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (!parsed || typeof parsed !== "object")
-      return;
-    const p = parsed;
-    if (!Array.isArray(p.suggestions) || typeof p.summary !== "string") {
-      return;
-    }
-    const suggestions = p.suggestions.filter((item) => {
-      if (typeof item !== "object" || item === null)
-        return false;
-      const s = item;
-      if (typeof s.type !== "string" || !["add", "remove", "modify", "merge"].includes(s.type))
-        return false;
-      if (typeof s.reason !== "string")
-        return false;
-      switch (s.type) {
-        case "add":
-          return typeof s.rule === "string";
-        case "remove":
-          return typeof s.rule === "string";
-        case "modify":
-          return typeof s.oldRule === "string" && typeof s.newRule === "string";
-        case "merge":
-          return Array.isArray(s.oldRules) && s.oldRules.every((r) => typeof r === "string") && typeof s.newRule === "string";
-      }
-    });
-    return { suggestions, summary: p.summary };
-  } catch {
-    return;
-  }
 }
 
 // my-permission/utils.ts
@@ -60846,7 +60812,7 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
     execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
       const instruction = _params.instruction;
       const currentJudgeMd = loadFile(join10(process.cwd(), "JUDGE.md"));
-      if (!currentJudgeMd || !currentJudgeMd.trim()) {
+      if (!currentJudgeMd?.trim()) {
         return {
           content: [
             {
@@ -60975,6 +60941,63 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
       return;
     }
     return { block: true, reason: `User denied: ${judgeResult.reason}` };
+  });
+}
+
+// my-reload/index.ts
+var MARKER_TYPE = "reload_marker";
+var CONTINUE_MESSAGE = "继续之前的工作";
+function myReload(pi) {
+  pi.registerTool({
+    name: "request_reload",
+    label: "Request Reload",
+    description: "Mark that the current session needs an extension reload before continuing. " + "Call this after deploying extension changes, then tell the user to run /reload. " + "After reload, the agent will automatically continue working.",
+    parameters: exports_typebox.Object({
+      reason: exports_typebox.String({
+        description: "Why a reload is needed (e.g. 'modified my-hud render logic')"
+      })
+    }),
+    async execute(_toolCallId, params) {
+      pi.appendEntry(MARKER_TYPE, {
+        reason: params.reason,
+        pending: true
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `已标记需要 reload。原因：${params.reason}
+
+` + `请执行 \`/reload\` 以重新加载扩展，之后 agent 将自动继续。`
+          }
+        ],
+        details: {}
+      };
+    }
+  });
+  pi.on("session_start", (event, ctx) => {
+    if (event.reason !== "reload")
+      return;
+    const entries = ctx.sessionManager.getEntries();
+    if (entries.length === 0)
+      return;
+    let markerIndex = -1;
+    for (let i = entries.length - 1;i >= 0; i--) {
+      const entry = entries[i];
+      if (entry.type === "message" && entry.message?.role === "user") {
+        return;
+      }
+      if (entry.type === "custom" && entry.customType === MARKER_TYPE) {
+        const data = entry.data;
+        if (data?.pending) {
+          markerIndex = i;
+          break;
+        }
+      }
+    }
+    if (markerIndex === -1)
+      return;
+    pi.sendUserMessage(CONTINUE_MESSAGE);
   });
 }
 

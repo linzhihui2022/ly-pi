@@ -318,8 +318,7 @@ function renderDataCell(data: unknown): string {
   if (data === undefined || data === null) {
     return '<td class="data-cell"><code>—</code></td>';
   }
-  const text =
-    typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  const text = typeof data === "string" ? data : JSON.stringify(data, null, 2);
   return `<td class="data-cell"><code>${escapeHtml(text)}</code></td>`;
 }
 

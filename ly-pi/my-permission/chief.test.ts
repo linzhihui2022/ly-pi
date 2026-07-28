@@ -53,7 +53,14 @@ function jsonResponse(obj: unknown) {
 describe("createChief", () => {
   it("returns error when JUDGE.md is empty", async () => {
     const chief = createChief(config);
-    const result = await chief("", "", "/repo", undefined, resolveModelOk, getAuthOk);
+    const result = await chief(
+      "",
+      "",
+      "/repo",
+      undefined,
+      resolveModelOk,
+      getAuthOk,
+    );
     expect(result.error).toBe("项目尚未创建 JUDGE.md，无需审计");
   });
 

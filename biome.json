@@ -12,6 +12,9 @@
     "enabled": true,
     "rules": {
       "preset": "recommended"
+    },
+    "domains": {
+      "test": "recommended"
     }
   },
   "javascript": {
@@ -20,6 +23,15 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noExplicitAny": "off" },
+          "style": { "noNonNullAssertion": "off" }
+        }
+      }
+    },
     {
       "includes": ["**/dist/**", "**/.cursor/**", "coverage/**", ".turbo/**"],
       "formatter": { "enabled": false }

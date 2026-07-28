@@ -57,7 +57,9 @@ export function createProsecutor(config: Config): ProsecutorFn {
 
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
-      log.error("prosecutor model not found", { configured: config.professorModel });
+      log.error("prosecutor model not found", {
+        configured: config.professorModel,
+      });
       return {
         error: `未找到审查模型: ${config.professorModel}`,
       };
@@ -135,8 +137,12 @@ export function createProsecutor(config: Config): ProsecutorFn {
       // Surface API-level errors before content extraction.
       const errResp = response as Record<string, unknown>;
       if (errResp.stopReason === "error" || errResp.errorMessage) {
-        log.error("prosecutor API error", { detail: errResp.errorMessage || errResp.stopReason });
-        return { error: `审查模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
+        log.error("prosecutor API error", {
+          detail: errResp.errorMessage || errResp.stopReason,
+        });
+        return {
+          error: `审查模型调用失败: ${errResp.errorMessage || errResp.stopReason}`,
+        };
       }
 
       const text =

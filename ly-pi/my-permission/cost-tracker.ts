@@ -5,9 +5,8 @@ import {
   readdirSync,
   readFileSync,
 } from "node:fs";
-import { basename } from "node:path";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 export const COST_TYPES = [
   "judge",
@@ -318,12 +317,7 @@ export function aggregateCosts(
           addToBucket(result.judge, entry.cost, entry.model, date);
           break;
         case "advocate-analysis":
-          addToBucket(
-            result.advocate.analysis,
-            entry.cost,
-            entry.model,
-            date,
-          );
+          addToBucket(result.advocate.analysis, entry.cost, entry.model, date);
           break;
         case "advocate-merge":
           addToBucket(result.advocate.merge, entry.cost, entry.model, date);
@@ -337,28 +331,13 @@ export function aggregateCosts(
           );
           break;
         case "prosecutor-merge":
-          addToBucket(
-            result.prosecutor.merge,
-            entry.cost,
-            entry.model,
-            date,
-          );
+          addToBucket(result.prosecutor.merge, entry.cost, entry.model, date);
           break;
         case "chief-analysis":
-          addToBucket(
-            result.chief.analysis,
-            entry.cost,
-            entry.model,
-            date,
-          );
+          addToBucket(result.chief.analysis, entry.cost, entry.model, date);
           break;
         case "chief-merge":
-          addToBucket(
-            result.chief.merge,
-            entry.cost,
-            entry.model,
-            date,
-          );
+          addToBucket(result.chief.merge, entry.cost, entry.model, date);
           break;
       }
 
@@ -472,8 +451,8 @@ export function aggregateCosts(
     .sort((a, b) => b.totalCost - a.totalCost);
 
   // Build sorted session list
-  result.sessions = Array.from(sessionMap.values()).sort(
-    (a, b) => a.firstTs.localeCompare(b.firstTs),
+  result.sessions = Array.from(sessionMap.values()).sort((a, b) =>
+    a.firstTs.localeCompare(b.firstTs),
   );
 
   return result;

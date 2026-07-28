@@ -14,15 +14,15 @@ import {
 import { resolveExtDir } from "../src/shared/ext-dir";
 import { loadFile } from "../src/shared/file";
 import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
+import type { ChiefSuggestionItem } from "./chief";
+import { createChief, createChiefMerger } from "./chief";
 import { loadConfig } from "./config";
-import { aggregateCosts, appendCost } from "./cost-tracker";
 import { renderCostPage } from "./cost-page";
+import { aggregateCosts, appendCost } from "./cost-tracker";
 import { createJudge } from "./judge";
 import { renderJudgeLogPage } from "./log-page";
 import { createAdvocate, createMerger } from "./professor";
 import { createProsecutor } from "./prosecutor";
-import { createChief, createChiefMerger } from "./chief";
-import type { ChiefSuggestionItem } from "./chief";
 import { decide } from "./rules";
 import {
   collectAllowed,
@@ -618,8 +618,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     label: "审判长",
     description:
       "审计 JUDGE.md 规则本身的质量——发现矛盾、过宽、冗余、遗漏，输出 add/remove/modify/merge 建议。当用户提到审判长、规则审计、规则审查、规则矛盾、规则冲突、过宽规则时调用此工具。",
-    promptSnippet:
-      "permission_chief — 审计 JUDGE.md 规则质量，发现矛盾与盲区",
+    promptSnippet: "permission_chief — 审计 JUDGE.md 规则质量，发现矛盾与盲区",
     parameters: Type.Object({
       instruction: Type.Optional(Type.String()),
     }),
@@ -627,7 +626,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       const instruction = (_params as { instruction?: string }).instruction;
       const currentJudgeMd = loadFile(join(process.cwd(), "JUDGE.md"));
 
-      if (!currentJudgeMd || !currentJudgeMd.trim()) {
+      if (!currentJudgeMd?.trim()) {
         return {
           content: [
             {

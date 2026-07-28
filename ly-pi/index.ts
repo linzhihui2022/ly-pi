@@ -5,8 +5,8 @@ import myCdGuard from "./my-cd-guard/index";
 import myHtml from "./my-html/index";
 import myHud from "./my-hud/index";
 import myLog from "./my-log/index";
-import myReload from "./my-reload/index";
 import myPermission from "./my-permission/index";
+import myReload from "./my-reload/index";
 import myScriptGuard from "./my-script-guard/index";
 
 export default async function (pi: ExtensionAPI): Promise<void> {

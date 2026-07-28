@@ -63,10 +63,7 @@ export default function myReload(pi: ExtensionAPI): void {
     let markerIndex = -1;
     for (let i = entries.length - 1; i >= 0; i--) {
       const entry = entries[i];
-      if (
-        entry.type === "message" &&
-        entry.message?.role === "user"
-      ) {
+      if (entry.type === "message" && entry.message?.role === "user") {
         // User interacted since the marker was set — don't auto-continue.
         return;
       }

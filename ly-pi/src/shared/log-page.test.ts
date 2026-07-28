@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { renderLogPage } from "./log-page";
 import type { LogEntryWithTimestamp } from "./log-page";
+import { renderLogPage } from "./log-page";
 
 function log(
   overrides: Partial<LogEntryWithTimestamp> = {},
@@ -106,7 +106,9 @@ describe("renderLogPage", () => {
   it("escapes HTML in message", () => {
     const html = renderLogPage([log({ msg: '<script>alert("xss")</script>' })]);
     // The user input <script> should be escaped to &lt;script&gt;
-    expect(html).toContain("&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;");
+    expect(html).toContain(
+      "&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;",
+    );
   });
 
   it("escapes HTML in data string", () => {
@@ -129,7 +131,7 @@ describe("renderLogPage", () => {
   it("renders full HTML document with DOCTYPE", () => {
     const html = renderLogPage([log()]);
     expect(html).toContain("<!DOCTYPE html>");
-    expect(html).toContain("<html lang=\"zh-CN\">");
+    expect(html).toContain('<html lang="zh-CN">');
     expect(html).toContain("<title>开发日志</title>");
   });
 });

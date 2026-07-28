@@ -9,7 +9,7 @@
     "forceTopLevelAsync": false,
     "globalConcurrencyLimit": 5,
     "maxSubagentSpawnsPerSession": 0,
-    "maxSubagentDepth": 0,
+    "maxSubagentDepth": 1,
     "parallel": {
       "maxTasks": 4,
       "concurrency": 2

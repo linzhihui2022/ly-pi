@@ -67,14 +67,19 @@ describe("request_reload tool", () => {
     expect(toolDef).not.toBeNull();
     expect(toolDef!.name).toBe("request_reload");
     expect(toolDef!.description).toBeTruthy();
-    const schema = toolDef!.parameters as { properties: Record<string, unknown>; required: string[] };
+    const schema = toolDef!.parameters as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
     expect(schema.properties.reason).toBeDefined();
     expect(schema.required).toContain("reason");
   });
 
   it("appends a pending reload_marker entry and returns a user-facing message", async () => {
     const { toolDef, appendEntryCalls } = setup();
-    const result = await toolDef!.execute("call-1", { reason: "changed my-hud render logic" });
+    const result = await toolDef!.execute("call-1", {
+      reason: "changed my-hud render logic",
+    });
     expect(appendEntryCalls).toHaveLength(1);
     expect(appendEntryCalls[0].type).toBe(MARKER_TYPE);
     expect(appendEntryCalls[0].data).toEqual({
@@ -82,7 +87,8 @@ describe("request_reload tool", () => {
       pending: true,
     });
     expect(result).toHaveProperty("content");
-    const text = (result as { content: Array<{ type: string; text: string }> }).content[0].text;
+    const text = (result as { content: Array<{ type: string; text: string }> })
+      .content[0].text;
     expect(text).toContain("reload");
     expect(text).toContain("changed my-hud render logic");
   });
@@ -143,7 +149,10 @@ describe("session_start auto-resume", () => {
       sessionManager: {
         getEntries: () => [
           makeUserEntry("help me refactor"),
-          makeCustomEntry(MARKER_TYPE, { reason: "changed my-hud", pending: true }),
+          makeCustomEntry(MARKER_TYPE, {
+            reason: "changed my-hud",
+            pending: true,
+          }),
           makeSystemEntry("toolResult", "已标记，请 /reload"),
           makeSystemEntry("assistant", "ok 已标记"),
         ],
@@ -162,7 +171,10 @@ describe("session_start auto-resume", () => {
       hasUI: true,
       sessionManager: {
         getEntries: () => [
-          makeCustomEntry(MARKER_TYPE, { reason: "changed my-hud", pending: true }),
+          makeCustomEntry(MARKER_TYPE, {
+            reason: "changed my-hud",
+            pending: true,
+          }),
           makeUserEntry("actually wait let me check something"),
         ],
       },
@@ -178,7 +190,10 @@ describe("session_start auto-resume", () => {
       hasUI: true,
       sessionManager: {
         getEntries: () => [
-          makeCustomEntry(MARKER_TYPE, { reason: "changed my-hud", pending: true }),
+          makeCustomEntry(MARKER_TYPE, {
+            reason: "changed my-hud",
+            pending: true,
+          }),
           makeSystemEntry("toolResult", "已标记"),
           makeUserEntry("wait, let me check something first"),
           makeSystemEntry("assistant", "ok checking..."),
@@ -197,7 +212,10 @@ describe("session_start auto-resume", () => {
       sessionManager: {
         getEntries: () => [
           makeUserEntry("hello"),
-          makeCustomEntry(MARKER_TYPE, { reason: "was reloaded", pending: false }),
+          makeCustomEntry(MARKER_TYPE, {
+            reason: "was reloaded",
+            pending: false,
+          }),
         ],
       },
     };

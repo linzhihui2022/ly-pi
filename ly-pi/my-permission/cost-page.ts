@@ -1,5 +1,5 @@
 import { buildHtmlDocument } from "../web-preview/index";
-import type { CostAggregation, DailySummary, SessionSummary } from "./cost-tracker";
+import type { CostAggregation, SessionSummary } from "./cost-tracker";
 
 const CNY = 7;
 
@@ -228,18 +228,10 @@ function renderSessionRow(s: SessionSummary): string {
   const timeRange = s.firstTs
     ? `${s.firstTs.slice(0, 16)} ~ ${s.lastTs.slice(0, 16)}`
     : "—";
-  const advCalls =
-    s.advocate.analysis.calls + s.advocate.merge.calls;
-  const advCost =
-    s.advocate.analysis.totalCost + s.advocate.merge.totalCost;
-  const prosCalls =
-    s.prosecutor.analysis.calls + s.prosecutor.merge.calls;
+  const advCost = s.advocate.analysis.totalCost + s.advocate.merge.totalCost;
   const prosCost =
     s.prosecutor.analysis.totalCost + s.prosecutor.merge.totalCost;
-  const chiefCalls =
-    s.chief.analysis.calls + s.chief.merge.calls;
-  const chiefCost =
-    s.chief.analysis.totalCost + s.chief.merge.totalCost;
+  const chiefCost = s.chief.analysis.totalCost + s.chief.merge.totalCost;
 
   return `        <tr>
           <td>${escapeHtml(shortId)}</td>

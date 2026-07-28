@@ -28,7 +28,13 @@ export function createAuthResolver(getApiKeyAndHeaders: unknown): AuthResolver {
         }>
       )(model);
       return auth.ok
-        ? { apiKey: auth.apiKey, headers: auth.headers, env: (auth as Record<string, unknown>).env as Record<string, string> | undefined }
+        ? {
+            apiKey: auth.apiKey,
+            headers: auth.headers,
+            env: (auth as Record<string, unknown>).env as
+              | Record<string, string>
+              | undefined,
+          }
         : undefined;
     };
   }

@@ -155,8 +155,12 @@ export function createChief(config: Config): ChiefFn {
 
       const errResp = response as Record<string, unknown>;
       if (errResp.stopReason === "error" || errResp.errorMessage) {
-        log.error("chief API error", { detail: errResp.errorMessage || errResp.stopReason });
-        return { error: `审判长模型调用失败: ${errResp.errorMessage || errResp.stopReason}` };
+        log.error("chief API error", {
+          detail: errResp.errorMessage || errResp.stopReason,
+        });
+        return {
+          error: `审判长模型调用失败: ${errResp.errorMessage || errResp.stopReason}`,
+        };
       }
 
       const text =
@@ -214,7 +218,9 @@ export function createChiefMerger(config: Config): ChiefMergerFn {
 
     const model = resolveModel(parts[0], parts[1]);
     if (!model) {
-      log.error("chief merger model not found", { configured: config.professorModel });
+      log.error("chief merger model not found", {
+        configured: config.professorModel,
+      });
       return { error: "未找到审判长合并模型" };
     }
 
@@ -231,6 +237,8 @@ export function createChiefMerger(config: Config): ChiefMergerFn {
             return `${i + 1}. [改写] "${s.oldRule}" → "${s.newRule}"\n   原因: ${s.reason}`;
           case "merge":
             return `${i + 1}. [合并] ${(s.oldRules ?? []).map((r) => `"${r}"`).join(" + ")} → "${s.newRule}"\n   原因: ${s.reason}`;
+          default:
+            return `${i + 1}. [未知] ${JSON.stringify(s)}`;
         }
       })
       .join("\n\n");
@@ -374,13 +382,17 @@ function parseChiefJson(text: string): ChiefSuggestion | undefined {
           case "remove":
             return typeof s.rule === "string";
           case "modify":
-            return typeof s.oldRule === "string" && typeof s.newRule === "string";
+            return (
+              typeof s.oldRule === "string" && typeof s.newRule === "string"
+            );
           case "merge":
             return (
               Array.isArray(s.oldRules) &&
               s.oldRules.every((r: unknown) => typeof r === "string") &&
               typeof s.newRule === "string"
             );
+          default:
+            return false;
         }
       },
     );
