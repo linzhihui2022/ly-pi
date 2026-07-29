@@ -53333,7 +53333,33 @@ function pickRandomMessage() {
 
 // my-hud/index.ts
 var EXT_DIR2 = join5(homedir2(), ".pi", "agent", "extensions", "ly-pi");
+function colorLine(theme, line) {
+  const rawStatus = line.slice(0, 2);
+  const rest = line.slice(2);
+  const color = statusColor(rawStatus);
+  const ch = rawStatus.trim() || rawStatus;
+  const lead = rawStatus[0] === " " ? " " : "";
+  const trail = rawStatus[1] === " " ? " " : "";
+  const prefix = lead + (color ? theme.fg(color, ch) : ch) + trail;
+  return prefix + theme.fg("dim", rest);
+}
+function statusColor(status) {
+  const ch = status.replace(/[ .]/g, "")[0];
+  if (!ch)
+    return;
+  const map = {
+    A: "success",
+    M: "warning",
+    D: "error",
+    R: "info",
+    U: "error",
+    "?": "dim",
+    "!": "dim"
+  };
+  return map[ch];
+}
 var MEMORY_WIDGET_KEY = "my-hud-memory-warning";
+var GST_LINE_LIMIT = 10;
 function myHud(pi) {
   let currentTui = null;
   let bar;
@@ -53396,6 +53422,29 @@ function myHud(pi) {
       } catch {
         ctx.ui.notify(pr.url, "info");
       }
+    }
+  });
+  pi.registerCommand("gst", {
+    description: "Show git status (--short)",
+    handler: async (_args, ctx) => {
+      const result = await pi.exec("git", ["status", "--short"], {
+        cwd: ctx.cwd,
+        timeout: 3000
+      });
+      const output = result.stdout.trim();
+      if (!output) {
+        ctx.ui.notify("working tree clean", "info");
+        return;
+      }
+      const theme = ctx.ui.theme;
+      const allLines = output.split(`
+`);
+      const truncated = allLines.length > GST_LINE_LIMIT ? allLines.slice(0, GST_LINE_LIMIT) : allLines;
+      const colored = truncated.map((line) => colorLine(theme, line)).join(`
+`);
+      const suffix = allLines.length > GST_LINE_LIMIT ? `
+...and ${allLines.length - GST_LINE_LIMIT} more` : "";
+      ctx.ui.notify(" " + colored + suffix, "info");
     }
   });
   pi.registerCommand("mem", {
