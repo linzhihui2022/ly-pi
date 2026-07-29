@@ -17,4 +17,17 @@ describe("resolveExtDir", () => {
   it("falls back to process.cwd() when importMeta is missing", () => {
     expect(resolveExtDir()).toBe(process.cwd());
   });
+
+  it("uses import.meta.url as bare path when fileURLToPath fails", () => {
+    const bare = { url: "/some/path/to/index.js" } as ImportMeta;
+    expect(resolveExtDir(bare)).toBe("/some/path/to");
+  });
+
+  it("uses import.meta.dirname when url is not a valid path", () => {
+    const withDirname = {
+      url: "unknown-scheme://foo/index.js",
+      dirname: "/custom/dir",
+    } as unknown as ImportMeta;
+    expect(resolveExtDir(withDirname)).toBe("/custom/dir");
+  });
 });

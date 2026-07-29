@@ -49164,242 +49164,6 @@ var require_lib = __commonJS((exports, module) => {
   module.exports = hljs;
 });
 
-// shared/guard-harness.ts
-import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
-function createGuardHarness(pi, guards) {
-  let cwd = "";
-  const escalationCounts = {};
-  pi.on("session_start", (_event, ctx) => {
-    cwd = ctx.cwd;
-    for (const guard of guards) {
-      try {
-        guard.onSessionStart?.(cwd);
-      } catch (err) {
-        console.warn(`[guard-harness] Guard "${guard.name}" onSessionStart error:`, err);
-      }
-    }
-  });
-  pi.on("before_agent_start", async (event) => {
-    let prompt = event.systemPrompt;
-    for (const guard of guards) {
-      try {
-        const result = guard.onBeforeAgentStart?.(prompt, cwd);
-        if (result !== undefined)
-          prompt = result;
-      } catch (err) {
-        console.warn(`[guard-harness] Guard "${guard.name}" onBeforeAgentStart error:`, err);
-      }
-    }
-    return { systemPrompt: prompt };
-  });
-  pi.on("tool_call", async (event, ctx) => {
-    if (!isToolCallEventType("bash", event))
-      return;
-    for (const guard of guards) {
-      try {
-        const detection = guard.detect(event.input.command, ctx.cwd);
-        if (!detection)
-          continue;
-        if (guard.escalation) {
-          escalationCounts[guard.name] = (escalationCounts[guard.name] ?? 0) + 1;
-          if (escalationCounts[guard.name] > guard.escalation.threshold && ctx.hasUI) {
-            const { title, body } = guard.escalation.buildConfirm(detection, escalationCounts[guard.name]);
-            const allowed = await ctx.ui.confirm(title, body);
-            if (allowed)
-              continue;
-          }
-        }
-        const result = await guard.react(detection, event, ctx);
-        if (result?.block)
-          return result;
-      } catch (err) {
-        console.warn(`[guard-harness] Guard "${guard.name}" error:`, err);
-      }
-    }
-    return;
-  });
-}
-
-// my-cd-guard/index.ts
-import { realpathSync } from "node:fs";
-
-// my-cd-guard/detector.ts
-var identity = (p) => p;
-var LEADING_CD_RE = /^\s*cd\s+(?:"([^"]*)"|'([^']*)'|([^;&\s]+))\s*(&&|;)?\s*/;
-function normalizeTarget(raw, cwd) {
-  let target = raw;
-  if (target === "." || target === "./")
-    target = cwd;
-  if (target.length > 1)
-    target = target.replace(/\/+$/, "");
-  return target;
-}
-function safeRealpath(path, realpath) {
-  try {
-    return realpath(path);
-  } catch {
-    return path;
-  }
-}
-function stripRedundantCd(command, cwd, realpath = identity) {
-  const match = LEADING_CD_RE.exec(command);
-  if (!match)
-    return;
-  const target = normalizeTarget(match[1] ?? match[2] ?? match[3], cwd);
-  if (safeRealpath(target, realpath) !== safeRealpath(cwd, realpath)) {
-    return;
-  }
-  const hasMore = match[4] !== undefined;
-  const rest = hasMore ? command.slice(match[0].length) : "";
-  return {
-    command: rest.trim().length > 0 ? rest : "true",
-    stripped: match[0]
-  };
-}
-
-// my-cd-guard/index.ts
-var cdGuard = {
-  name: "cd-guard",
-  detect: (command, cwd) => stripRedundantCd(command, cwd, realpathSync),
-  react: (detection, event, ctx) => {
-    event.input.command = detection.command;
-    if (ctx.hasUI) {
-      ctx.ui.notify(`已自动剥掉冗余 cd 前缀：${detection.stripped.trim()}`, "info");
-    }
-  },
-  onBeforeAgentStart: (systemPrompt, cwd) => systemPrompt + `
-
-CRITICAL: All bash commands execute in ${cwd}. NEVER prefix commands with \`cd ${cwd} &&\` — it is redundant and will be automatically stripped. Run the command directly instead.`
-};
-
-// my-script-guard/detector.ts
-var MAX_EVAL_LENGTH = 80;
-var INTERPRETER = String.raw`(python(?:\d(?:\.\d+)?)?|node|ruby|perl|php)`;
-var PREFIXES = String.raw`(?:(?:time|sudo|nice|command|uv\s+run|env(?:\s+[A-Za-z_]\w*=\S*)*)\s+)*`;
-var EVAL_RE = new RegExp(String.raw`(?:^|[|;&\n])\s*${PREFIXES}${INTERPRETER}\b(?:\s+-\w+)*?\s+-(?:c|e|r)\s+("((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)')`, "s");
-var HEREDOC_RE = new RegExp(String.raw`(?:^|[|;&\n])\s*${PREFIXES}${INTERPRETER}\b(?:\s+-\w+|\s+-(?=\s))*\s*(\u003c\u003c\u003c|\u003c\u003c)-?\s*['"]?(\w*)`);
-function extractHeredocBody(command, matchEnd, operator, delimiter) {
-  if (operator === "<<<") {
-    return command.slice(matchEnd).trim().replace(/^['"]|['"]$/g, "");
-  }
-  const bodyStart = command.indexOf(`
-`, matchEnd);
-  if (bodyStart === -1)
-    return "";
-  const lines = command.slice(bodyStart + 1).split(`
-`);
-  const end = lines.findIndex((line) => line.trim() === delimiter);
-  return (end === -1 ? lines : lines.slice(0, end)).join(`
-`);
-}
-function detectInlineScript(command) {
-  const evalMatch = EVAL_RE.exec(command);
-  if (evalMatch) {
-    const code = evalMatch[3] ?? evalMatch[4];
-    if (code.length > MAX_EVAL_LENGTH || code.includes(`
-`)) {
-      return { interpreter: evalMatch[1], kind: "eval", code };
-    }
-  }
-  const heredocMatch = HEREDOC_RE.exec(command);
-  if (heredocMatch) {
-    const code = extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, heredocMatch[2], heredocMatch[3]);
-    return { interpreter: heredocMatch[1], kind: "heredoc", code };
-  }
-  return;
-}
-var MAX_INLINE_CONTENT_LENGTH = 80;
-var ANY_HEREDOC_RE = /<<-?\s*['"]?(\w+)['"]?/g;
-var TEE_WITH_TARGET_RE = /\btee\s+(?:-\w+\s+)*("[^"]*"|'[^']*'|\S+)/;
-var REDIRECT_TARGET_RE = />>?\s*("[^"]*"|'[^']*'|\S+)/;
-var ECHO_REDIRECT_RE = /(?:^|[|;&\n])\s*(echo|printf)\b([^>]*?)>>?\s*("[^"]*"|'[^']*'|\S+)/gs;
-function unquote(value) {
-  return value.replace(/^['"]|['"]$/g, "");
-}
-function lineOf(haystack, index) {
-  const start = haystack.lastIndexOf(`
-`, index) + 1;
-  const nl = haystack.indexOf(`
-`, index);
-  return haystack.slice(start, nl === -1 ? haystack.length : nl);
-}
-function detectFileWriteBypass(command) {
-  for (const echoMatch of command.matchAll(ECHO_REDIRECT_RE)) {
-    const content = echoMatch[2].trim();
-    if (content.length > MAX_INLINE_CONTENT_LENGTH || content.includes(`
-`)) {
-      return {
-        kind: "file-write",
-        tool: echoMatch[1],
-        target: unquote(echoMatch[3]),
-        code: content
-      };
-    }
-  }
-  for (const heredocMatch of command.matchAll(ANY_HEREDOC_RE)) {
-    const line = lineOf(command, heredocMatch.index);
-    const teeMatch = TEE_WITH_TARGET_RE.exec(line);
-    if (teeMatch) {
-      return {
-        kind: "file-write",
-        tool: "tee",
-        target: unquote(teeMatch[1]),
-        code: extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, "<<", heredocMatch[1])
-      };
-    }
-    if (/\bcat\b/.test(line)) {
-      const redirectMatch = REDIRECT_TARGET_RE.exec(line);
-      if (redirectMatch) {
-        return {
-          kind: "file-write",
-          tool: "cat",
-          target: unquote(redirectMatch[1]),
-          code: extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, "<<", heredocMatch[1])
-        };
-      }
-    }
-  }
-  return;
-}
-var PREVIEW_LIMIT = 500;
-function buildReason(detection) {
-  if (detection.kind === "file-write") {
-    return `Blocked file write via bash (${detection.tool} → ${detection.target}). ` + "Use the write/edit tools to create or modify files instead of heredocs or output redirects. " + "Short one-liners (80 chars or less, single line) are fine.";
-  }
-  return `Blocked inline ${detection.interpreter} script (${detection.kind}). ` + "Do not run long inline scripts via bash. " + "Prefer dedicated tools (read/write/edit/grep) for file and text operations. " + `If a script is genuinely required, write it to a file with the write tool, then run \`${detection.interpreter} <file>\`.`;
-}
-function buildConfirmMessage(detection, blockedCount) {
-  const preview = detection.code.length > PREVIEW_LIMIT ? `${detection.code.slice(0, PREVIEW_LIMIT)}…` : detection.code;
-  if (detection.kind === "file-write") {
-    return {
-      title: `文件写入旁路已被拦截 ${blockedCount} 次，是否放行？`,
-      body: [`方式：${detection.tool} → ${detection.target}`, "", preview].join(`
-`)
-    };
-  }
-  return {
-    title: `内联脚本已被拦截 ${blockedCount} 次，是否放行？`,
-    body: [
-      `解释器：${detection.interpreter}`,
-      `形式：${detection.kind}`,
-      "",
-      preview
-    ].join(`
-`)
-  };
-}
-
-// my-script-guard/index.ts
-var scriptGuard = {
-  name: "script-guard",
-  detect: (command) => detectInlineScript(command) ?? detectFileWriteBypass(command),
-  react: (detection) => ({ block: true, reason: buildReason(detection) }),
-  escalation: {
-    threshold: 3,
-    buildConfirm: buildConfirmMessage
-  }
-};
-
 // my-back/back.ts
 function findLastUserMessageEntry(branch) {
   for (let i = branch.length - 1;i >= 0; i--) {
@@ -49456,323 +49220,67 @@ function myBack(pi) {
   });
 }
 
-// my-sound/index.ts
-import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { join as join3, resolve } from "node:path";
+// my-cd-guard/index.ts
+import { realpathSync } from "node:fs";
 
-// src/shared/ext-dir.ts
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-function resolveExtDir(importMeta) {
-  if (importMeta) {
-    try {
-      return dirname(fileURLToPath(importMeta.url));
-    } catch {}
-  }
-  return process.cwd();
+// my-cd-guard/detector.ts
+var identity = (p) => p;
+var LEADING_CD_RE = /^\s*cd\s+(?:"([^"]*)"|'([^']*)'|([^;&\s]+))\s*(&&|;)?\s*/;
+function normalizeTarget(raw, cwd) {
+  let target = raw;
+  if (target === "." || target === "./")
+    target = cwd;
+  if (target.length > 1)
+    target = target.replace(/\/+$/, "");
+  return target;
 }
-
-// my-sound/player.ts
-import { join as join2 } from "node:path";
-
-// my-sound/coordinator.ts
-import { exec } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmdirSync,
-  writeFileSync
-} from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-function onExecDone() {}
-var GLOBAL_SOUND_DIR = join(homedir(), ".pi", "my-sound");
-var DEFAULT_PID_FILE = join(GLOBAL_SOUND_DIR, "playing.json");
-var DEFAULT_LOCK_DIR = join(GLOBAL_SOUND_DIR, ".lock");
-var DEFAULT_SOUND_PID_FILE = join(GLOBAL_SOUND_DIR, "sound-pids.json");
-var DEFAULT_SOUND_LOCK_DIR = join(GLOBAL_SOUND_DIR, ".sound-lock");
-function ensureGlobalDir(dir = GLOBAL_SOUND_DIR) {
-  if (!existsSync(dir))
-    mkdirSync(dir, { recursive: true });
-}
-function acquireGlobalLock(lockDir = DEFAULT_LOCK_DIR, options = {}) {
-  ensureGlobalDir();
-  const { maxRetries = 500, retryDelayMs = 10 } = options;
-  let attempts = 0;
-  while (true) {
-    try {
-      mkdirSync(lockDir, { recursive: false });
-      return;
-    } catch {
-      if (attempts >= maxRetries) {
-        throw new Error(`[my-sound] Failed to acquire global lock: ${lockDir}`);
-      }
-      attempts++;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, retryDelayMs);
-    }
-  }
-}
-function releaseGlobalLock(lockDir = DEFAULT_LOCK_DIR) {
+function safeRealpath(path, realpath) {
   try {
-    rmdirSync(lockDir);
-  } catch {}
-}
-function withGlobalLock(fn, lockDir = DEFAULT_LOCK_DIR) {
-  acquireGlobalLock(lockDir);
-  try {
-    return fn();
-  } finally {
-    releaseGlobalLock(lockDir);
-  }
-}
-function killPlayingProcesses(pidFile = DEFAULT_PID_FILE, lockDir = DEFAULT_LOCK_DIR) {
-  withGlobalLock(() => {
-    let state;
-    try {
-      state = JSON.parse(readFileSync(pidFile, "utf-8"));
-    } catch {
-      return;
-    }
-    for (const pid of state.pids) {
-      try {
-        process.kill(pid, "SIGTERM");
-      } catch {}
-    }
-  }, lockDir);
-}
-function recordPids(pids, pidFile = DEFAULT_PID_FILE, lockDir = DEFAULT_LOCK_DIR) {
-  withGlobalLock(() => {
-    ensureGlobalDir();
-    const state = {
-      pids,
-      version: 1,
-      updatedAt: Date.now()
-    };
-    writeFileSync(pidFile, JSON.stringify(state, null, 2));
-  }, lockDir);
-}
-function spawnSoundProcess(_config, filePath, runtimeDir = GLOBAL_SOUND_DIR) {
-  const pidFile = join(runtimeDir, "sound-pids.json");
-  const lockDir = join(runtimeDir, ".sound-lock");
-  killPlayingProcesses(pidFile, lockDir);
-  const child = exec(`afplay "${filePath}"`, onExecDone);
-  if (child.pid) {
-    recordPids([child.pid], pidFile, lockDir);
-  }
-  return child;
-}
-
-// my-sound/player.ts
-function listCategories(config) {
-  return Object.entries(config.categories).map(([name, cat]) => ({
-    name,
-    description: cat.description
-  }));
-}
-var lastPicked = {};
-function pickSoundFile(config, category) {
-  const cat = config.categories[category];
-  if (!cat || cat.files.length === 0)
-    return;
-  if (cat.files.length === 1)
-    return cat.files[0];
-  const prev = lastPicked[category] ?? -1;
-  const next = (prev + 1) % cat.files.length;
-  lastPicked[category] = next;
-  return cat.files[next];
-}
-function resolveSoundPath(soundDir, file) {
-  return join2(soundDir, file);
-}
-function playSound(config, filePath) {
-  spawnSoundProcess(config, filePath);
-}
-function playCategory(config, soundDir, category, _onError) {
-  const file = pickSoundFile(config, category);
-  if (!file)
-    return;
-  playSound(config, resolveSoundPath(soundDir, file));
-}
-
-// my-sound/index.ts
-var EXT_DIR = resolveExtDir(import.meta);
-var CONFIG_PATH = join3(EXT_DIR, "my-sound.json");
-function resolveSoundDir(config) {
-  const pack = config.packs[config.activePack];
-  if (!pack)
-    return resolve(EXT_DIR, "sounds");
-  return resolve(EXT_DIR, pack.soundDir);
-}
-function loadConfig() {
-  const raw = readFileSync2(CONFIG_PATH, "utf-8");
-  const config = JSON.parse(raw);
-  return config;
-}
-function saveConfig(config) {
-  writeFileSync2(CONFIG_PATH, `${JSON.stringify(config, null, 2)}
-`, "utf-8");
-}
-function mySound(pi) {
-  let config;
-  let soundDir;
-  let lastPlayedCategory;
-  try {
-    config = loadConfig();
-    soundDir = resolveSoundDir(config);
+    return realpath(path);
   } catch {
+    return path;
+  }
+}
+function stripRedundantCd(command, cwd, realpath = identity) {
+  const match = LEADING_CD_RE.exec(command);
+  if (!match)
+    return;
+  const target = normalizeTarget(match[1] ?? match[2] ?? match[3], cwd);
+  if (safeRealpath(target, realpath) !== safeRealpath(cwd, realpath)) {
     return;
   }
-  const VALID_EVENTS = new Set([
-    "session_start",
-    "session_shutdown",
-    "agent_start",
-    "agent_end",
-    "turn_start",
-    "turn_end",
-    "tool_result"
-  ]);
-  for (const [eventName, category] of Object.entries(config.eventMap)) {
-    if (!VALID_EVENTS.has(eventName))
-      continue;
-    pi.on(eventName, (_event, ctx) => {
-      if (!config.enabled)
-        return;
-      if (eventName === "agent_end" && lastPlayedCategory === "question") {
-        lastPlayedCategory = undefined;
-        return;
-      }
-      lastPlayedCategory = category;
-      playCategory(config, soundDir, category, ctx.ui.notify);
-    });
-  }
-  if (config.toolEventMap) {
-    pi.on("tool_call", (event, ctx) => {
-      if (!config.enabled)
-        return;
-      const category = config.toolEventMap?.[event.toolName];
-      if (!category)
-        return;
-      lastPlayedCategory = category;
-      playCategory(config, soundDir, category, ctx.ui.notify);
-    });
-  }
-  if (config.permissionEventMap) {
-    pi.events?.on("permissions:ui_prompt", () => {
-      if (!config.enabled)
-        return;
-      const category = config.permissionEventMap?.["permissions:ui_prompt"];
-      if (!category)
-        return;
-      lastPlayedCategory = category;
-      playCategory(config, soundDir, category);
-    });
-  }
-  pi.registerCommand("sound", {
-    description: "Sound pack — list, play, toggle sounds, or switch packs",
-    handler: async (args, ctx) => {
-      try {
-        config = loadConfig();
-        soundDir = resolveSoundDir(config);
-      } catch {
-        ctx.ui.notify("Sound: Config not found or invalid", "error");
-        return;
-      }
-      if (!args) {
-        const cats = listCategories(config);
-        const packNames = Object.keys(config.packs);
-        const lines = [`\uD83C\uDF99️  Sound — ${config.activePack}`];
-        for (const cat of cats) {
-          lines.push(`  /sound ${cat.name}  —  ${cat.description}`);
-        }
-        lines.push("  /sound all  —  播放全部");
-        lines.push("  /sound packs  —  列出语音包");
-        lines.push(`  /sound on  —  开启 (${config.enabled ? "当前" : ""})`);
-        lines.push(`  /sound off  —  关闭 (${!config.enabled ? "当前" : ""})`);
-        ctx.ui.notify(lines.join(`
-`), "info");
-        return;
-      }
-      if (args === "on") {
-        config.enabled = true;
-        saveConfig(config);
-        ctx.ui.notify("\uD83C\uDF99️  Sound: 已开启", "info");
-        return;
-      }
-      if (args === "off") {
-        config.enabled = false;
-        saveConfig(config);
-        ctx.ui.notify("\uD83C\uDF99️  Sound: 已关闭", "info");
-        return;
-      }
-      if (args === "packs") {
-        const packNames = Object.keys(config.packs);
-        const lines = ["\uD83C\uDF99️  Voice Packs"];
-        for (const name of packNames) {
-          const marker = name === config.activePack ? "  ◀ 当前" : "";
-          lines.push(`  /sound pack ${name}${marker}`);
-        }
-        ctx.ui.notify(lines.join(`
-`), "info");
-        return;
-      }
-      if (args.startsWith("pack ")) {
-        const packName = args.slice(5).trim();
-        if (!packName) {
-          ctx.ui.notify("Sound: 用法 — /sound pack <name>", "warning");
-          return;
-        }
-        if (!config.packs[packName]) {
-          ctx.ui.notify(`Sound: 未知语音包 "${packName}"。用 /sound packs 查看可用语音包。`, "warning");
-          return;
-        }
-        config.activePack = packName;
-        soundDir = resolveSoundDir(config);
-        saveConfig(config);
-        ctx.ui.notify(`\uD83C\uDF99️  Sound: 已切换到 ${packName}`, "info");
-        return;
-      }
-      if (args === "all") {
-        let playNext = function() {
-          if (i >= cats.length)
-            return;
-          playCategory(config, soundDir, cats[i].name, ctx.ui.notify);
-          i++;
-          setTimeout(playNext, 1500);
-        };
-        if (!config.enabled) {
-          ctx.ui.notify("\uD83C\uDF99️  Sound: 已关闭，用 /sound on 开启", "warning");
-          return;
-        }
-        const cats = listCategories(config);
-        ctx.ui.notify(`\uD83C\uDF99️  Sound: 播放全部 (${cats.length} 分类)`, "info");
-        let i = 0;
-        playNext();
-        return;
-      }
-      if (!config.enabled) {
-        ctx.ui.notify("\uD83C\uDF99️  Sound: 已关闭，用 /sound on 开启", "warning");
-        return;
-      }
-      if (config.categories[args]) {
-        playCategory(config, soundDir, args, ctx.ui.notify);
-        ctx.ui.notify(`\uD83C\uDF99️  Sound: ${config.categories[args].description}`, "info");
-      } else {
-        ctx.ui.notify(`Sound: 未知分类 "${args}"。用 /sound 查看可用分类。`, "warning");
-      }
-    }
-  });
+  const hasMore = match[4] !== undefined;
+  const rest = hasMore ? command.slice(match[0].length) : "";
+  return {
+    command: rest.trim().length > 0 ? rest : "true",
+    stripped: match[0]
+  };
 }
+
+// my-cd-guard/index.ts
+var cdGuard = {
+  name: "cd-guard",
+  detect: (command, cwd) => stripRedundantCd(command, cwd, realpathSync),
+  react: (detection, event, ctx) => {
+    event.input.command = detection.command;
+    if (ctx.hasUI) {
+      ctx.ui.notify(`已自动剥掉冗余 cd 前缀：${detection.stripped.trim()}`, "info");
+    }
+  },
+  onBeforeAgentStart: (systemPrompt, cwd) => systemPrompt + `
+
+CRITICAL: All bash commands execute in ${cwd}. NEVER prefix commands with \`cd ${cwd} &&\` — it is redundant and will be automatically stripped. Run the command directly instead.`
+};
 
 // src/shared/preview.ts
-import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync3 } from "node:fs";
-import { join as join5 } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join as join2 } from "node:path";
 
 // ../node_modules/.bun/open@10.2.0/node_modules/open/index.js
 import process7 from "node:process";
 import { Buffer } from "node:buffer";
 import path from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { fileURLToPath } from "node:url";
 import { promisify as promisify5 } from "node:util";
 import childProcess from "node:child_process";
 import fs5, { constants as fsConstants2 } from "node:fs/promises";
@@ -50025,7 +49533,7 @@ async function defaultBrowser2() {
 
 // ../node_modules/.bun/open@10.2.0/node_modules/open/index.js
 var execFile5 = promisify5(childProcess.execFile);
-var __dirname2 = path.dirname(fileURLToPath2(import.meta.url));
+var __dirname2 = path.dirname(fileURLToPath(import.meta.url));
 var localXdgOpenPath = path.join(__dirname2, "xdg-open");
 var { platform, arch } = process7;
 async function getWindowsDefaultBrowserFromWsl() {
@@ -50188,14 +49696,14 @@ var baseOpen = async (options) => {
   }
   const subprocess = childProcess.spawn(command, cliArguments, childProcessOptions);
   if (options.wait) {
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve, reject) => {
       subprocess.once("error", reject);
       subprocess.once("close", (exitCode) => {
         if (!options.allowNonzeroExitCode && exitCode > 0) {
           reject(new Error(`Exited with code ${exitCode}`));
           return;
         }
-        resolve2(subprocess);
+        resolve(subprocess);
       });
     });
   }
@@ -50292,15 +49800,15 @@ ${scriptBlock}</body>
 </html>`;
 }
 // web-preview/server.ts
-import { existsSync as existsSync2, readFileSync as readFileSync3 } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join as join4 } from "node:path";
-var PREVIEW_DIR = join4(tmpdir(), "pi-html-preview");
+import { join } from "node:path";
+var PREVIEW_DIR = join(tmpdir(), "pi-html-preview");
 var DEFAULT_PORT = 3456;
 var activeServer = null;
 async function findAvailablePort(startPort, host, maxAttempts = 100) {
-  return new Promise((resolve2, reject) => {
+  return new Promise((resolve, reject) => {
     let currentPort = startPort;
     function tryPort() {
       if (currentPort >= startPort + maxAttempts) {
@@ -50317,7 +49825,7 @@ async function findAvailablePort(startPort, host, maxAttempts = 100) {
         }
       });
       testServer.once("listening", () => {
-        testServer.close(() => resolve2(currentPort));
+        testServer.close(() => resolve(currentPort));
       });
       testServer.listen(currentPort, host);
     }
@@ -50344,14 +49852,14 @@ async function ensurePreviewServer(options) {
     }
     if (urlPath.endsWith(".html")) {
       const fileName = urlPath.slice(1);
-      const filePath = join4(PREVIEW_DIR, fileName);
-      if (!existsSync2(filePath)) {
+      const filePath = join(PREVIEW_DIR, fileName);
+      if (!existsSync(filePath)) {
         res.writeHead(404);
         res.end("Not found");
         return;
       }
       try {
-        const content = readFileSync3(filePath, "utf-8");
+        const content = readFileSync(filePath, "utf-8");
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(content);
       } catch {
@@ -50363,7 +49871,7 @@ async function ensurePreviewServer(options) {
     res.writeHead(404);
     res.end("Not found");
   });
-  await new Promise((resolve2) => server.listen(port, options.host, resolve2));
+  await new Promise((resolve) => server.listen(port, options.host, resolve));
   activeServer = { port, url, server };
   return activeServer;
 }
@@ -50372,16 +49880,16 @@ async function stopPreviewServer() {
     return;
   const { server } = activeServer;
   activeServer = null;
-  return new Promise((resolve2) => {
-    server.close(() => resolve2());
+  return new Promise((resolve) => {
+    server.close(() => resolve());
   });
 }
 // src/shared/preview.ts
 async function servePreviewFile(sessionId, fileName, content, options = {}) {
-  const sessionDir = join5(PREVIEW_DIR, sessionId);
-  mkdirSync2(sessionDir, { recursive: true });
-  const filePath = join5(sessionDir, fileName);
-  writeFileSync3(filePath, content, "utf-8");
+  const sessionDir = join2(PREVIEW_DIR, sessionId);
+  mkdirSync(sessionDir, { recursive: true });
+  const filePath = join2(sessionDir, fileName);
+  writeFileSync(filePath, content, "utf-8");
   const server = await ensurePreviewServer({
     host: options.host ?? "127.0.0.1",
     urlHost: options.urlHost ?? "localhost",
@@ -50393,8 +49901,9 @@ async function servePreviewFile(sessionId, fileName, content, options = {}) {
 }
 
 // my-html/render.ts
-import { readFileSync as readFileSync4 } from "node:fs";
-import { join as join6 } from "node:path";
+import { readFileSync as readFileSync2 } from "node:fs";
+import { homedir } from "node:os";
+import { join as join3 } from "node:path";
 
 // ../node_modules/.bun/highlight.js@11.11.1/node_modules/highlight.js/es/index.js
 var import_lib = __toESM(require_lib(), 1);
@@ -52609,7 +52118,7 @@ function escape3(html2, encode) {
 }
 
 // my-html/render.ts
-var EXT_DIR2 = resolveExtDir(import.meta);
+var EXT_DIR = join3(homedir(), ".pi", "agent", "extensions", "ly-pi");
 var CATPPUCCIN_MOCHA_HLJS = `/* Catppuccin Mocha for Highlight.js */
 .markdown-body .hljs,
 .markdown-body .hljs-subst {
@@ -52660,11 +52169,11 @@ var CATPPUCCIN_MOCHA_HLJS = `/* Catppuccin Mocha for Highlight.js */
 .markdown-body .hljs-template-variable { color: #f2cdcd; }
 .markdown-body .hljs-addition { color: #a6e3a1; background: rgba(166,227,161,0.15); }
 .markdown-body .hljs-deletion { color: #f38ba8; background: rgba(243,139,168,0.15); }`;
-function loadCss(cssDir = EXT_DIR2) {
+function loadCss(cssDir = EXT_DIR) {
   try {
-    const githubPath = join6(cssDir, "node_modules", "github-markdown-css", "github-markdown-dark.css");
+    const githubPath = join3(cssDir, "node_modules", "github-markdown-css", "github-markdown-dark.css");
     return {
-      github: readFileSync4(githubPath, "utf-8"),
+      github: readFileSync2(githubPath, "utf-8"),
       highlight: CATPPUCCIN_MOCHA_HLJS
     };
   } catch {
@@ -53086,6 +52595,8 @@ function myHtml(pi) {
 
 // my-hud/index.ts
 import { truncateToWidth as truncateToWidth2 } from "@earendil-works/pi-tui";
+import { homedir as homedir2 } from "node:os";
+import { join as join5 } from "node:path";
 
 // my-hud/bar.ts
 import { basename } from "node:path";
@@ -53172,9 +52683,9 @@ function formatCacheRate(input, cacheRead) {
 }
 
 // my-hud/git.ts
-import { exec as exec2 } from "node:child_process";
+import { exec } from "node:child_process";
 import { promisify as promisify6 } from "node:util";
-var execAsync = promisify6(exec2);
+var execAsync = promisify6(exec);
 async function getGitStatus(cwd) {
   try {
     const [statusResult, stashResult] = await Promise.all([
@@ -53235,13 +52746,13 @@ function parseGitStatus(statusOutput, stashOutput) {
 }
 
 // my-hud/pr.ts
-import { exec as exec3, execFile as execFile6 } from "node:child_process";
-var execAsync2 = (command, options2) => new Promise((resolve2, reject) => {
-  exec3(command, options2, (err, stdout, stderr) => {
+import { exec as exec2, execFile as execFile6 } from "node:child_process";
+var execAsync2 = (command, options2) => new Promise((resolve, reject) => {
+  exec2(command, options2, (err, stdout, stderr) => {
     if (err) {
       reject(err);
     } else {
-      resolve2({ stdout, stderr });
+      resolve({ stdout, stderr });
     }
   });
 });
@@ -53351,12 +52862,12 @@ async function getPullRequestForCurrentBranch(cwd, token) {
 }
 function openUrl(url) {
   const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  return new Promise((resolve2, reject) => {
+  return new Promise((resolve, reject) => {
     execFile6(command, [url], (error) => {
       if (error) {
         reject(error);
       } else {
-        resolve2();
+        resolve();
       }
     });
   });
@@ -53742,8 +53253,8 @@ class Bar {
 }
 
 // my-hud/config.ts
-import { readFileSync as readFileSync5 } from "node:fs";
-import { join as join7 } from "node:path";
+import { readFileSync as readFileSync3 } from "node:fs";
+import { join as join4 } from "node:path";
 var DEFAULT_HUD_CONFIG = {
   modelShortNames: {},
   hiddenFields: []
@@ -53759,7 +53270,7 @@ function isStringArray(value) {
 }
 function loadHudConfig(dir) {
   try {
-    const raw = readFileSync5(join7(dir, "my-hud.json"), "utf-8");
+    const raw = readFileSync3(join4(dir, "my-hud.json"), "utf-8");
     const parsed = JSON.parse(raw);
     return {
       modelShortNames: isStringMap(parsed?.modelShortNames) ? parsed.modelShortNames : {},
@@ -53821,12 +53332,12 @@ function pickRandomMessage() {
 }
 
 // my-hud/index.ts
-var EXT_DIR3 = resolveExtDir(import.meta);
+var EXT_DIR2 = join5(homedir2(), ".pi", "agent", "extensions", "ly-pi");
 var MEMORY_WIDGET_KEY = "my-hud-memory-warning";
 function myHud(pi) {
   let currentTui = null;
   let bar;
-  const hudConfig = loadHudConfig(EXT_DIR3);
+  const hudConfig = loadHudConfig(EXT_DIR2);
   setModelShortNames(hudConfig.modelShortNames);
   setHiddenFields(hudConfig.hiddenFields);
   function requestRender() {
@@ -54441,8 +53952,8 @@ function myLog(pi) {
 }
 
 // my-permission/index.ts
-import { writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join10 } from "node:path";
+import { writeFileSync as writeFileSync2 } from "node:fs";
+import { join as join8 } from "node:path";
 
 // ../node_modules/.bun/typebox@1.2.2/node_modules/typebox/build/system/memory/memory.mjs
 var exports_memory = {};
@@ -58620,10 +58131,10 @@ function createAuthResolverWithFallback(getApiKeyAndHeaders, getApiKeyForProvide
 }
 
 // src/shared/file.ts
-import { readFileSync as readFileSync6 } from "node:fs";
+import { readFileSync as readFileSync4 } from "node:fs";
 function loadFile(path2) {
   try {
-    return readFileSync6(path2, "utf-8");
+    return readFileSync4(path2, "utf-8");
   } catch {
     return "";
   }
@@ -59062,43 +58573,6 @@ var config = {
   }
 };
 
-// my-permission/judge-prompt.ts
-var JUDGE_PROMPT = `你是一名编码助手的安全门禁。评估以下工具调用是否可以自动执行。
-
-当前工作目录：{{cwd}}
-工具名：{{toolName}}
-工具输入（已脱敏）：{{toolInput}}
-
-只回复严格 JSON：
-{
-  "safe": boolean,
-  "score": number, // 1-10，分数越高越安全
-  "reason": "一句话说明为什么安全或不安全",
-  "toolFor": "一句话说明该工具调用会做什么"
-}
-
-## 判定方法论：意图链分析（Intent Chain Analysis）
-
-不要只看工具名，要追踪工具调用的完整语义链——数据从哪来、往哪去、最终效果落在哪里。
-
-安全：工具调用的最终效果不超出当前项目边界，不产生不可逆副作用。
-
-不安全（满足任一即判 unsafe）：
-- 数据流向项目外部（管道末端是网络请求如 curl/wget、文件上传、外部 API 调用）
-- 通过间接方式执行代码（-e/-c 参数、heredoc 管道给解释器如 python/node/perl）
-- 写入内容未经过用户显式确认（heredoc 写入文件、git apply/hash-object 注入）
-- 依赖来源非可信仓库（从外部 URL 安装包、未签名的 tgz/git 源、非官方 registry）
-- 破坏性操作无明确项目内目标（rm -rf 无具体路径、sudo、chmod 777 等系统级修改）
-
-安全示例：
-- 只读操作：git status/diff/log、读取项目内文件、列出目录
-- 构建与测试：bun test、tsc、vitest、项目构建命令
-- 安装项目声明的依赖：bun install、npm ci
-- 修改项目内文件：write/edit 项目源码
-
-保持简洁。不要包含 markdown 格式。
-`;
-
 // my-permission/cost-page.ts
 var CNY = 7;
 var PAGE_CSS3 = `body {
@@ -59393,13 +58867,13 @@ function escapeHtml3(text) {
 // my-permission/cost-tracker.ts
 import {
   appendFileSync,
-  existsSync as existsSync3,
-  mkdirSync as mkdirSync3,
+  existsSync as existsSync2,
+  mkdirSync as mkdirSync2,
   readdirSync,
-  readFileSync as readFileSync7
+  readFileSync as readFileSync5
 } from "node:fs";
-import { homedir as homedir2 } from "node:os";
-import { basename as basename2, join as join8 } from "node:path";
+import { homedir as homedir3 } from "node:os";
+import { basename as basename2, join as join6 } from "node:path";
 var COST_TYPES = [
   "judge",
   "advocate-analysis",
@@ -59414,17 +58888,17 @@ function encodeProjectDir(cwd) {
   return `--${trimmed.replace(/\//g, "-")}--`;
 }
 function getCostsDir() {
-  return join8(homedir2(), ".pi", "costs");
+  return join6(homedir3(), ".pi", "costs");
 }
 function getCostsFilePath(sessionId, cwd, costsDir) {
-  return join8(costsDir ?? getCostsDir(), encodeProjectDir(cwd), `${sessionId}.jsonl`);
+  return join6(costsDir ?? getCostsDir(), encodeProjectDir(cwd), `${sessionId}.jsonl`);
 }
 function appendCost(sessionId, cwd, type, cost, model, opts) {
   const baseDir = opts?.costsDir ?? getCostsDir();
   const filePath = getCostsFilePath(sessionId, cwd, baseDir);
-  const dir = join8(baseDir, encodeProjectDir(cwd));
-  if (!existsSync3(dir)) {
-    mkdirSync3(dir, { recursive: true });
+  const dir = join6(baseDir, encodeProjectDir(cwd));
+  if (!existsSync2(dir)) {
+    mkdirSync2(dir, { recursive: true });
   }
   const entry = JSON.stringify({
     type,
@@ -59547,7 +59021,7 @@ function aggregateCosts(cwd, opts) {
   const modelMap = new Map;
   const sessionMap = new Map;
   function processFile(filePath, sessionId) {
-    const content = readFileSync7(filePath, "utf-8");
+    const content = readFileSync5(filePath, "utf-8");
     for (const line of content.split(`
 `)) {
       const entry = parseLine(line);
@@ -59650,30 +59124,30 @@ function aggregateCosts(cwd, opts) {
     }
   }
   if (cwd) {
-    const projectDir = join8(costsDir, encodeProjectDir(cwd));
-    if (existsSync3(projectDir)) {
+    const projectDir = join6(costsDir, encodeProjectDir(cwd));
+    if (existsSync2(projectDir)) {
       const files = readdirSync(projectDir, { withFileTypes: true });
       for (const file of files) {
         if (!file.isFile() || !file.name.endsWith(".jsonl"))
           continue;
         const sessionId = basename2(file.name, ".jsonl");
-        processFile(join8(projectDir, file.name), sessionId);
+        processFile(join6(projectDir, file.name), sessionId);
       }
     }
   } else {
-    if (!existsSync3(costsDir))
+    if (!existsSync2(costsDir))
       return result;
     const entries = readdirSync(costsDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory())
         continue;
-      const projectDir = join8(costsDir, entry.name);
+      const projectDir = join6(costsDir, entry.name);
       const files = readdirSync(projectDir, { withFileTypes: true });
       for (const file of files) {
         if (!file.isFile() || !file.name.endsWith(".jsonl"))
           continue;
         const sessionId = basename2(file.name, ".jsonl");
-        processFile(join8(projectDir, file.name), sessionId);
+        processFile(join6(projectDir, file.name), sessionId);
       }
     }
   }
@@ -59805,6 +59279,43 @@ function parseJudgeResponse(response) {
     return;
   }
 }
+
+// my-permission/judge-prompt.ts
+var JUDGE_PROMPT = `你是一名编码助手的安全门禁。评估以下工具调用是否可以自动执行。
+
+当前工作目录：{{cwd}}
+工具名：{{toolName}}
+工具输入（已脱敏）：{{toolInput}}
+
+只回复严格 JSON：
+{
+  "safe": boolean,
+  "score": number, // 1-10，分数越高越安全
+  "reason": "一句话说明为什么安全或不安全",
+  "toolFor": "一句话说明该工具调用会做什么"
+}
+
+## 判定方法论：意图链分析（Intent Chain Analysis）
+
+不要只看工具名，要追踪工具调用的完整语义链——数据从哪来、往哪去、最终效果落在哪里。
+
+安全：工具调用的最终效果不超出当前项目边界，不产生不可逆副作用。
+
+不安全（满足任一即判 unsafe）：
+- 数据流向项目外部（管道末端是网络请求如 curl/wget、文件上传、外部 API 调用）
+- 通过间接方式执行代码（-e/-c 参数、heredoc 管道给解释器如 python/node/perl）
+- 写入内容未经过用户显式确认（heredoc 写入文件、git apply/hash-object 注入）
+- 依赖来源非可信仓库（从外部 URL 安装包、未签名的 tgz/git 源、非官方 registry）
+- 破坏性操作无明确项目内目标（rm -rf 无具体路径、sudo、chmod 777 等系统级修改）
+
+安全示例：
+- 只读操作：git status/diff/log、读取项目内文件、列出目录
+- 构建与测试：bun test、tsc、vitest、项目构建命令
+- 安装项目声明的依赖：bun install、npm ci
+- 修改项目内文件：write/edit 项目源码
+
+保持简洁。不要包含 markdown 格式。
+`;
 
 // my-permission/log-page.ts
 var PAGE_CSS4 = `body {
@@ -60256,17 +59767,17 @@ function parseProsecutorJson(text) {
 
 // my-permission/utils.ts
 import { realpathSync as realpathSync2 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import { join as join9, resolve as resolve2 } from "node:path";
+import { homedir as homedir4 } from "node:os";
+import { join as join7, resolve } from "node:path";
 function expandHome(path2) {
   if (path2 === "~" || path2.startsWith("~/")) {
-    return path2.replace("~", homedir3());
+    return path2.replace("~", homedir4());
   }
   return path2;
 }
 function isExternalPath(path2, cwd) {
-  const absolute = path2.startsWith("/") || path2.startsWith("~") ? resolve2(expandHome(path2)) : resolve2(cwd, path2);
-  const cwdAbsolute = resolve2(cwd);
+  const absolute = path2.startsWith("/") || path2.startsWith("~") ? resolve(expandHome(path2)) : resolve(cwd, path2);
+  const cwdAbsolute = resolve(cwd);
   return !absolute.startsWith(`${cwdAbsolute}/`) && absolute !== cwdAbsolute;
 }
 function splitBashCommandUnits(command) {
@@ -60343,7 +59854,7 @@ function resolveSymlinkedPaths(paths, cwd) {
   const resolved = [...paths];
   for (const p of paths) {
     try {
-      const full = p.startsWith("/") || p.startsWith("~") ? join9(p.startsWith("~") ? process.env.HOME ?? "/home" : "/", p.replace(/^~/, "")) : join9(cwd, p);
+      const full = p.startsWith("/") || p.startsWith("~") ? join7(p.startsWith("~") ? process.env.HOME ?? "/home" : "/", p.replace(/^~/, "")) : join7(cwd, p);
       const real = realpathSync2(full);
       if (real !== full) {
         resolved.push(real);
@@ -60725,7 +60236,7 @@ function suggestionTypeDetail(item) {
 }
 async function myPermission(pi) {
   const judgePrompt = JUDGE_PROMPT;
-  const localJudge = loadFile(join10(process.cwd(), "JUDGE.md"));
+  const localJudge = loadFile(join8(process.cwd(), "JUDGE.md"));
   const cache = createSessionCache();
   const child = isChildSession();
   async function mergeAndWrite(ctx, opts) {
@@ -60750,7 +60261,7 @@ async function myPermission(pi) {
     const diffBody = formatDiff(opts.currentJudgeMd, mergeResult.mergedText);
     const write = await ctx.ui.confirm(`${opts.emoji} ${opts.label}融合完成 — 确认写入？`, diffBody);
     if (write) {
-      writeFileSync4(join10(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
+      writeFileSync2(join8(process.cwd(), "JUDGE.md"), mergeResult.mergedText, "utf-8");
       return {
         content: [
           {
@@ -60819,7 +60330,7 @@ async function myPermission(pi) {
       }
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const advocate = createAdvocate(config);
-      const currentJudgeMd = loadFile(join10(process.cwd(), "JUDGE.md"));
+      const currentJudgeMd = loadFile(join8(process.cwd(), "JUDGE.md"));
       const result = await advocate(cases, ctx.cwd, resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
@@ -60898,7 +60409,7 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
       }
       const resolveModel = (provider, id) => ctx.modelRegistry.find(provider, id);
       const prosecutor = createProsecutor(config);
-      const currentJudgeMd = loadFile(join10(process.cwd(), "JUDGE.md"));
+      const currentJudgeMd = loadFile(join8(process.cwd(), "JUDGE.md"));
       const result = await prosecutor(allowed, ctx.cwd, resolveModel, createAuthResolverWithFallback(ctx.modelRegistry.getApiKeyAndHeaders, (p) => ctx.modelRegistry.getApiKeyForProvider(p)), currentJudgeMd, judgePrompt);
       if (result.error) {
         return {
@@ -60966,7 +60477,7 @@ ${ANSI.yellow}原因: ${item.reason}${ANSI.reset}`);
     }),
     execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
       const instruction = _params.instruction;
-      const currentJudgeMd = loadFile(join10(process.cwd(), "JUDGE.md"));
+      const currentJudgeMd = loadFile(join8(process.cwd(), "JUDGE.md"));
       if (!currentJudgeMd?.trim()) {
         return {
           content: [
@@ -61158,6 +60669,491 @@ function myReload(pi) {
     if (markerIndex === -1)
       return;
     pi.sendUserMessage(CONTINUE_MESSAGE);
+  });
+}
+
+// my-script-guard/detector.ts
+var MAX_EVAL_LENGTH = 80;
+var INTERPRETER = String.raw`(python(?:\d(?:\.\d+)?)?|node|ruby|perl|php)`;
+var PREFIXES = String.raw`(?:(?:time|sudo|nice|command|uv\s+run|env(?:\s+[A-Za-z_]\w*=\S*)*)\s+)*`;
+var EVAL_RE = new RegExp(String.raw`(?:^|[|;&\n])\s*${PREFIXES}${INTERPRETER}\b(?:\s+-\w+)*?\s+-(?:c|e|r)\s+("((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)')`, "s");
+var HEREDOC_RE = new RegExp(String.raw`(?:^|[|;&\n])\s*${PREFIXES}${INTERPRETER}\b(?:\s+-\w+|\s+-(?=\s))*\s*(\u003c\u003c\u003c|\u003c\u003c)-?\s*['"]?(\w*)`);
+function extractHeredocBody(command, matchEnd, operator, delimiter) {
+  if (operator === "<<<") {
+    return command.slice(matchEnd).trim().replace(/^['"]|['"]$/g, "");
+  }
+  const bodyStart = command.indexOf(`
+`, matchEnd);
+  if (bodyStart === -1)
+    return "";
+  const lines = command.slice(bodyStart + 1).split(`
+`);
+  const end = lines.findIndex((line) => line.trim() === delimiter);
+  return (end === -1 ? lines : lines.slice(0, end)).join(`
+`);
+}
+function detectInlineScript(command) {
+  const evalMatch = EVAL_RE.exec(command);
+  if (evalMatch) {
+    const code = evalMatch[3] ?? evalMatch[4];
+    if (code.length > MAX_EVAL_LENGTH || code.includes(`
+`)) {
+      return { interpreter: evalMatch[1], kind: "eval", code };
+    }
+  }
+  const heredocMatch = HEREDOC_RE.exec(command);
+  if (heredocMatch) {
+    const code = extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, heredocMatch[2], heredocMatch[3]);
+    return { interpreter: heredocMatch[1], kind: "heredoc", code };
+  }
+  return;
+}
+var MAX_INLINE_CONTENT_LENGTH = 80;
+var ANY_HEREDOC_RE = /<<-?\s*['"]?(\w+)['"]?/g;
+var TEE_WITH_TARGET_RE = /\btee\s+(?:-\w+\s+)*("[^"]*"|'[^']*'|\S+)/;
+var REDIRECT_TARGET_RE = />>?\s*("[^"]*"|'[^']*'|\S+)/;
+var ECHO_REDIRECT_RE = /(?:^|[|;&\n])\s*(echo|printf)\b([^>]*?)>>?\s*("[^"]*"|'[^']*'|\S+)/gs;
+function unquote(value2) {
+  return value2.replace(/^['"]|['"]$/g, "");
+}
+function lineOf(haystack, index) {
+  const start = haystack.lastIndexOf(`
+`, index) + 1;
+  const nl = haystack.indexOf(`
+`, index);
+  return haystack.slice(start, nl === -1 ? haystack.length : nl);
+}
+function detectFileWriteBypass(command) {
+  for (const echoMatch of command.matchAll(ECHO_REDIRECT_RE)) {
+    const content = echoMatch[2].trim();
+    if (content.length > MAX_INLINE_CONTENT_LENGTH || content.includes(`
+`)) {
+      return {
+        kind: "file-write",
+        tool: echoMatch[1],
+        target: unquote(echoMatch[3]),
+        code: content
+      };
+    }
+  }
+  for (const heredocMatch of command.matchAll(ANY_HEREDOC_RE)) {
+    const line = lineOf(command, heredocMatch.index);
+    const teeMatch = TEE_WITH_TARGET_RE.exec(line);
+    if (teeMatch) {
+      return {
+        kind: "file-write",
+        tool: "tee",
+        target: unquote(teeMatch[1]),
+        code: extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, "<<", heredocMatch[1])
+      };
+    }
+    if (/\bcat\b/.test(line)) {
+      const redirectMatch = REDIRECT_TARGET_RE.exec(line);
+      if (redirectMatch) {
+        return {
+          kind: "file-write",
+          tool: "cat",
+          target: unquote(redirectMatch[1]),
+          code: extractHeredocBody(command, heredocMatch.index + heredocMatch[0].length, "<<", heredocMatch[1])
+        };
+      }
+    }
+  }
+  return;
+}
+var PREVIEW_LIMIT = 500;
+function buildReason(detection) {
+  if (detection.kind === "file-write") {
+    return `Blocked file write via bash (${detection.tool} → ${detection.target}). ` + "Use the write/edit tools to create or modify files instead of heredocs or output redirects. " + "Short one-liners (80 chars or less, single line) are fine.";
+  }
+  return `Blocked inline ${detection.interpreter} script (${detection.kind}). ` + "Do not run long inline scripts via bash. " + "Prefer dedicated tools (read/write/edit/grep) for file and text operations. " + `If a script is genuinely required, write it to a file with the write tool, then run \`${detection.interpreter} <file>\`.`;
+}
+function buildConfirmMessage(detection, blockedCount) {
+  const preview = detection.code.length > PREVIEW_LIMIT ? `${detection.code.slice(0, PREVIEW_LIMIT)}…` : detection.code;
+  if (detection.kind === "file-write") {
+    return {
+      title: `文件写入旁路已被拦截 ${blockedCount} 次，是否放行？`,
+      body: [`方式：${detection.tool} → ${detection.target}`, "", preview].join(`
+`)
+    };
+  }
+  return {
+    title: `内联脚本已被拦截 ${blockedCount} 次，是否放行？`,
+    body: [
+      `解释器：${detection.interpreter}`,
+      `形式：${detection.kind}`,
+      "",
+      preview
+    ].join(`
+`)
+  };
+}
+
+// my-script-guard/index.ts
+var scriptGuard = {
+  name: "script-guard",
+  detect: (command) => detectInlineScript(command) ?? detectFileWriteBypass(command),
+  react: (detection) => ({ block: true, reason: buildReason(detection) }),
+  escalation: {
+    threshold: 3,
+    buildConfirm: buildConfirmMessage
+  }
+};
+
+// my-sound/index.ts
+import { readFileSync as readFileSync7, writeFileSync as writeFileSync4 } from "node:fs";
+import { homedir as homedir6 } from "node:os";
+import { join as join11, resolve as resolve2 } from "node:path";
+
+// my-sound/player.ts
+import { join as join10 } from "node:path";
+
+// my-sound/coordinator.ts
+import { exec as exec3 } from "node:child_process";
+import {
+  existsSync as existsSync3,
+  mkdirSync as mkdirSync3,
+  readFileSync as readFileSync6,
+  rmdirSync,
+  writeFileSync as writeFileSync3
+} from "node:fs";
+import { homedir as homedir5 } from "node:os";
+import { join as join9 } from "node:path";
+function onExecDone() {}
+var GLOBAL_SOUND_DIR = join9(homedir5(), ".pi", "my-sound");
+var DEFAULT_PID_FILE = join9(GLOBAL_SOUND_DIR, "playing.json");
+var DEFAULT_LOCK_DIR = join9(GLOBAL_SOUND_DIR, ".lock");
+var DEFAULT_SOUND_PID_FILE = join9(GLOBAL_SOUND_DIR, "sound-pids.json");
+var DEFAULT_SOUND_LOCK_DIR = join9(GLOBAL_SOUND_DIR, ".sound-lock");
+function ensureGlobalDir(dir = GLOBAL_SOUND_DIR) {
+  if (!existsSync3(dir))
+    mkdirSync3(dir, { recursive: true });
+}
+function acquireGlobalLock(lockDir = DEFAULT_LOCK_DIR, options2 = {}) {
+  ensureGlobalDir();
+  const { maxRetries = 500, retryDelayMs = 10 } = options2;
+  let attempts = 0;
+  while (true) {
+    try {
+      mkdirSync3(lockDir, { recursive: false });
+      return;
+    } catch {
+      if (attempts >= maxRetries) {
+        throw new Error(`[my-sound] Failed to acquire global lock: ${lockDir}`);
+      }
+      attempts++;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, retryDelayMs);
+    }
+  }
+}
+function releaseGlobalLock(lockDir = DEFAULT_LOCK_DIR) {
+  try {
+    rmdirSync(lockDir);
+  } catch {}
+}
+function withGlobalLock(fn, lockDir = DEFAULT_LOCK_DIR) {
+  acquireGlobalLock(lockDir);
+  try {
+    return fn();
+  } finally {
+    releaseGlobalLock(lockDir);
+  }
+}
+function killPlayingProcesses(pidFile = DEFAULT_PID_FILE, lockDir = DEFAULT_LOCK_DIR) {
+  withGlobalLock(() => {
+    let state;
+    try {
+      state = JSON.parse(readFileSync6(pidFile, "utf-8"));
+    } catch {
+      return;
+    }
+    for (const pid of state.pids) {
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {}
+    }
+  }, lockDir);
+}
+function recordPids(pids, pidFile = DEFAULT_PID_FILE, lockDir = DEFAULT_LOCK_DIR) {
+  withGlobalLock(() => {
+    ensureGlobalDir();
+    const state = {
+      pids,
+      version: 1,
+      updatedAt: Date.now()
+    };
+    writeFileSync3(pidFile, JSON.stringify(state, null, 2));
+  }, lockDir);
+}
+function spawnSoundProcess(_config2, filePath, runtimeDir = GLOBAL_SOUND_DIR) {
+  const pidFile = join9(runtimeDir, "sound-pids.json");
+  const lockDir = join9(runtimeDir, ".sound-lock");
+  killPlayingProcesses(pidFile, lockDir);
+  const child = exec3(`afplay "${filePath}"`, onExecDone);
+  if (child.pid) {
+    recordPids([child.pid], pidFile, lockDir);
+  }
+  return child;
+}
+
+// my-sound/player.ts
+function listCategories(config2) {
+  return Object.entries(config2.categories).map(([name, cat]) => ({
+    name,
+    description: cat.description
+  }));
+}
+var lastPicked = {};
+function pickSoundFile(config2, category) {
+  const cat = config2.categories[category];
+  if (!cat || cat.files.length === 0)
+    return;
+  if (cat.files.length === 1)
+    return cat.files[0];
+  const prev = lastPicked[category] ?? -1;
+  const next = (prev + 1) % cat.files.length;
+  lastPicked[category] = next;
+  return cat.files[next];
+}
+function resolveSoundPath(soundDir, file) {
+  return join10(soundDir, file);
+}
+function playSound(config2, filePath) {
+  spawnSoundProcess(config2, filePath);
+}
+function playCategory(config2, soundDir, category, _onError) {
+  const file = pickSoundFile(config2, category);
+  if (!file)
+    return;
+  playSound(config2, resolveSoundPath(soundDir, file));
+}
+
+// my-sound/index.ts
+var EXT_DIR3 = join11(homedir6(), ".pi", "agent", "extensions", "ly-pi");
+var CONFIG_PATH = join11(EXT_DIR3, "my-sound.json");
+function resolveSoundDir(config2) {
+  const pack = config2.packs[config2.activePack];
+  if (!pack)
+    return resolve2(EXT_DIR3, "sounds");
+  return resolve2(EXT_DIR3, pack.soundDir);
+}
+function loadConfig() {
+  const raw = readFileSync7(CONFIG_PATH, "utf-8");
+  const config2 = JSON.parse(raw);
+  return config2;
+}
+function saveConfig(config2) {
+  writeFileSync4(CONFIG_PATH, `${JSON.stringify(config2, null, 2)}
+`, "utf-8");
+}
+function mySound(pi) {
+  pi.registerCommand("sound", {
+    description: "音效反馈 — 播放/开关/切换语音包",
+    handler: async (args, ctx) => {
+      let config3;
+      let soundDir2;
+      try {
+        config3 = loadConfig();
+        soundDir2 = resolveSoundDir(config3);
+      } catch (e) {
+        ctx.ui.notify(`Sound: Config error — ${e instanceof Error ? e.message : String(e)}`, "error");
+        return;
+      }
+      if (!args) {
+        const cats = listCategories(config3);
+        const packNames = Object.keys(config3.packs);
+        const lines = [`\uD83C\uDF99️  Sound — ${config3.activePack}`];
+        for (const cat of cats) {
+          lines.push(`  /sound ${cat.name}  —  ${cat.description}`);
+        }
+        lines.push("  /sound all  —  播放全部");
+        lines.push("  /sound packs  —  列出语音包");
+        lines.push(`  /sound on  —  开启 (${config3.enabled ? "当前" : ""})`);
+        lines.push(`  /sound off  —  关闭 (${!config3.enabled ? "当前" : ""})`);
+        ctx.ui.notify(lines.join(`
+`), "info");
+        return;
+      }
+      if (args === "on") {
+        config3.enabled = true;
+        saveConfig(config3);
+        ctx.ui.notify("\uD83C\uDF99️  Sound: 已开启", "info");
+        return;
+      }
+      if (args === "off") {
+        config3.enabled = false;
+        saveConfig(config3);
+        ctx.ui.notify("\uD83C\uDF99️  Sound: 已关闭", "info");
+        return;
+      }
+      if (args === "packs") {
+        const packNames = Object.keys(config3.packs);
+        const lines = ["\uD83C\uDF99️  Voice Packs"];
+        for (const name of packNames) {
+          const marker = name === config3.activePack ? "  ◀ 当前" : "";
+          lines.push(`  /sound pack ${name}${marker}`);
+        }
+        ctx.ui.notify(lines.join(`
+`), "info");
+        return;
+      }
+      if (args.startsWith("pack ")) {
+        const packName = args.slice(5).trim();
+        if (!packName) {
+          ctx.ui.notify("Sound: 用法 — /sound pack <name>", "warning");
+          return;
+        }
+        if (!config3.packs[packName]) {
+          ctx.ui.notify(`Sound: 未知语音包 "${packName}"。用 /sound packs 查看可用语音包。`, "warning");
+          return;
+        }
+        config3.activePack = packName;
+        soundDir2 = resolveSoundDir(config3);
+        saveConfig(config3);
+        ctx.ui.notify(`\uD83C\uDF99️  Sound: 已切换到 ${packName}`, "info");
+        return;
+      }
+      if (args === "all") {
+        let playNext = function() {
+          if (i >= cats.length)
+            return;
+          playCategory(config3, soundDir2, cats[i].name, ctx.ui.notify);
+          i++;
+          setTimeout(playNext, 1500);
+        };
+        if (!config3.enabled) {
+          ctx.ui.notify("\uD83C\uDF99️  Sound: 已关闭，用 /sound on 开启", "warning");
+          return;
+        }
+        const cats = listCategories(config3);
+        ctx.ui.notify(`\uD83C\uDF99️  Sound: 播放全部 (${cats.length} 分类)`, "info");
+        let i = 0;
+        playNext();
+        return;
+      }
+      if (!config3.enabled) {
+        ctx.ui.notify("\uD83C\uDF99️  Sound: 已关闭，用 /sound on 开启", "warning");
+        return;
+      }
+      if (config3.categories[args]) {
+        playCategory(config3, soundDir2, args, ctx.ui.notify);
+        ctx.ui.notify(`\uD83C\uDF99️  Sound: ${config3.categories[args].description}`, "info");
+      } else {
+        ctx.ui.notify(`Sound: 未知分类 "${args}"。用 /sound 查看可用分类。`, "warning");
+      }
+    }
+  });
+  let config2;
+  let soundDir;
+  try {
+    config2 = loadConfig();
+    soundDir = resolveSoundDir(config2);
+  } catch {
+    return;
+  }
+  let lastPlayedCategory;
+  const VALID_EVENTS = new Set([
+    "session_start",
+    "session_shutdown",
+    "agent_start",
+    "agent_end",
+    "turn_start",
+    "turn_end",
+    "tool_result"
+  ]);
+  for (const [eventName, category] of Object.entries(config2.eventMap)) {
+    if (!VALID_EVENTS.has(eventName))
+      continue;
+    pi.on(eventName, (_event, ctx) => {
+      if (!config2.enabled)
+        return;
+      if (eventName === "agent_end" && lastPlayedCategory === "question") {
+        lastPlayedCategory = undefined;
+        return;
+      }
+      lastPlayedCategory = category;
+      playCategory(config2, soundDir, category, ctx.ui.notify);
+    });
+  }
+  if (config2.toolEventMap) {
+    pi.on("tool_call", (event, ctx) => {
+      if (!config2.enabled)
+        return;
+      const category = config2.toolEventMap?.[event.toolName];
+      if (!category)
+        return;
+      lastPlayedCategory = category;
+      playCategory(config2, soundDir, category, ctx.ui.notify);
+    });
+  }
+  if (config2.permissionEventMap) {
+    try {
+      pi.events?.on("permissions:ui_prompt", () => {
+        if (!config2.enabled)
+          return;
+        const category = config2.permissionEventMap?.["permissions:ui_prompt"];
+        if (!category)
+          return;
+        lastPlayedCategory = category;
+        playCategory(config2, soundDir, category);
+      });
+    } catch {}
+  }
+}
+
+// shared/guard-harness.ts
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
+function createGuardHarness(pi, guards) {
+  let cwd = "";
+  const escalationCounts = {};
+  pi.on("session_start", (_event, ctx) => {
+    cwd = ctx.cwd;
+    for (const guard of guards) {
+      try {
+        guard.onSessionStart?.(cwd);
+      } catch (err) {
+        console.warn(`[guard-harness] Guard "${guard.name}" onSessionStart error:`, err);
+      }
+    }
+  });
+  pi.on("before_agent_start", async (event) => {
+    let prompt = event.systemPrompt;
+    for (const guard of guards) {
+      try {
+        const result = guard.onBeforeAgentStart?.(prompt, cwd);
+        if (result !== undefined)
+          prompt = result;
+      } catch (err) {
+        console.warn(`[guard-harness] Guard "${guard.name}" onBeforeAgentStart error:`, err);
+      }
+    }
+    return { systemPrompt: prompt };
+  });
+  pi.on("tool_call", async (event, ctx) => {
+    if (!isToolCallEventType("bash", event))
+      return;
+    for (const guard of guards) {
+      try {
+        const detection = guard.detect(event.input.command, ctx.cwd);
+        if (!detection)
+          continue;
+        if (guard.escalation) {
+          escalationCounts[guard.name] = (escalationCounts[guard.name] ?? 0) + 1;
+          if (escalationCounts[guard.name] > guard.escalation.threshold && ctx.hasUI) {
+            const { title, body } = guard.escalation.buildConfirm(detection, escalationCounts[guard.name]);
+            const allowed = await ctx.ui.confirm(title, body);
+            if (allowed)
+              continue;
+          }
+        }
+        const result = await guard.react(detection, event, ctx);
+        if (result?.block)
+          return result;
+      } catch (err) {
+        console.warn(`[guard-harness] Guard "${guard.name}" error:`, err);
+      }
+    }
+    return;
   });
 }
 

@@ -206,13 +206,14 @@ describe("my-sound extension", () => {
     expect(playCategory).not.toHaveBeenCalled();
   });
 
-  it("silently exits when config is invalid", async () => {
+  it("registers /sound command even when config is invalid", async () => {
     vi.mocked(readFileSync).mockImplementation(() => {
       throw new Error("not found");
     });
     const mod = await loadModule();
     mod.default(mockPi);
-    expect(registeredCommands.has("sound")).toBe(false);
+    // Command is always registered regardless of config load success
+    expect(registeredCommands.has("sound")).toBe(true);
     expect(registeredEvents.size).toBe(0);
   });
 
@@ -313,7 +314,7 @@ describe("my-sound extension", () => {
     await cmd.handler("startup", mockCtx);
 
     expect(mockNotify).toHaveBeenCalledWith(
-      expect.stringContaining("Config not found or invalid"),
+      expect.stringContaining("Config error"),
       "error",
     );
   });

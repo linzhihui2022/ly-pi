@@ -14,7 +14,8 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { resolveExtDir } from "../src/shared/ext-dir";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Bar } from "./bar";
 import { loadHudConfig } from "./config";
 import { setModelShortNames } from "./format";
@@ -26,7 +27,7 @@ import { setHiddenFields } from "./render";
 import { getLastUserMessage } from "./session";
 import { pickRandomMessage } from "./working";
 
-const EXT_DIR = resolveExtDir(import.meta);
+const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
 
 export { Bar } from "./bar";
 export {

@@ -1,14 +1,14 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { resolveExtDir } from "../src/shared/ext-dir";
 import { listCategories, playCategory } from "./player";
 import type { SoundConfig } from "./types";
 
-const EXT_DIR = resolveExtDir(import.meta);
+const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
 
 const CONFIG_PATH = join(EXT_DIR, "my-sound.json");
 
@@ -29,86 +29,27 @@ function saveConfig(config: SoundConfig): void {
 }
 
 export default function mySound(pi: ExtensionAPI): void {
-  let config: SoundConfig;
-  let soundDir: string;
-  let lastPlayedCategory: string | undefined;
-  try {
-    config = loadConfig();
-    soundDir = resolveSoundDir(config);
-  } catch {
-    // Config not found or invalid - extension won't play sounds
-    return;
-  }
-
-  // ── Event-driven playback ──
-
-  const VALID_EVENTS = new Set([
-    "session_start",
-    "session_shutdown",
-    "agent_start",
-    "agent_end",
-    "turn_start",
-    "turn_end",
-    "tool_result",
-  ]);
-
-  for (const [eventName, category] of Object.entries(config.eventMap)) {
-    if (!VALID_EVENTS.has(eventName)) continue;
-    // biome-ignore lint/suspicious/noExplicitAny: dynamic event name validated against VALID_EVENTS above
-    pi.on(eventName as any, (_event, ctx) => {
-      if (!config.enabled) return;
-      if (eventName === "agent_end" && lastPlayedCategory === "question") {
-        lastPlayedCategory = undefined;
-        return;
-      }
-      lastPlayedCategory = category;
-      playCategory(config, soundDir, category, ctx.ui.notify);
-    });
-  }
-
-  // ── Tool-driven playback ──
-
-  if (config.toolEventMap) {
-    pi.on("tool_call", (event, ctx) => {
-      if (!config.enabled) return;
-      const category = config.toolEventMap?.[event.toolName];
-      if (!category) return;
-      lastPlayedCategory = category;
-      playCategory(config, soundDir, category, ctx.ui.notify);
-    });
-  }
-
-  // ── Permission event-driven playback ──
-
-  if (config.permissionEventMap) {
-    pi.events?.on("permissions:ui_prompt", () => {
-      if (!config.enabled) return;
-      const category = config.permissionEventMap?.["permissions:ui_prompt"];
-      if (!category) return;
-      // EventBus handlers don't receive a UI context, so errors are silent.
-      lastPlayedCategory = category;
-      playCategory(config, soundDir, category);
-    });
-  }
-
-  // ── /sound command ──
-
+  // Always register /sound command — even if config fails, make it visible
   pi.registerCommand("sound", {
-    description: "Sound pack — list, play, toggle sounds, or switch packs",
+    description: "音效反馈 — 播放/开关/切换语音包",
     handler: async (args: string | undefined, ctx: ExtensionContext) => {
       // Reload config in case it was updated
+      let config: SoundConfig;
+      let soundDir: string;
       try {
         config = loadConfig();
         soundDir = resolveSoundDir(config);
-      } catch {
-        ctx.ui.notify("Sound: Config not found or invalid", "error");
+      } catch (e) {
+        ctx.ui.notify(
+          `Sound: Config error — ${e instanceof Error ? e.message : String(e)}`,
+          "error",
+        );
         return;
       }
 
       if (!args) {
-        // List categories and packs
         const cats = listCategories(config);
-        const _packNames = Object.keys(config.packs);
+        const packNames = Object.keys(config.packs);
         const lines = [`🎙️  Sound — ${config.activePack}`];
         for (const cat of cats) {
           lines.push(`  /sound ${cat.name}  —  ${cat.description}`);
@@ -171,7 +112,6 @@ export default function mySound(pi: ExtensionAPI): void {
           ctx.ui.notify("🎙️  Sound: 已关闭，用 /sound on 开启", "warning");
           return;
         }
-        // Play all categories sequentially (fire-and-forget, non-blocking)
         const cats = listCategories(config);
         ctx.ui.notify(`🎙️  Sound: 播放全部 (${cats.length} 分类)`, "info");
         let i = 0;
@@ -185,7 +125,6 @@ export default function mySound(pi: ExtensionAPI): void {
         return;
       }
 
-      // Play specific category
       if (!config.enabled) {
         ctx.ui.notify("🎙️  Sound: 已关闭，用 /sound on 开启", "warning");
         return;
@@ -205,4 +144,66 @@ export default function mySound(pi: ExtensionAPI): void {
       }
     },
   });
+
+  // Attempt to load config for event-driven playback.
+  // Failures here are non-fatal — /sound command is already registered.
+  let config: SoundConfig;
+  let soundDir: string;
+  try {
+    config = loadConfig();
+    soundDir = resolveSoundDir(config);
+  } catch {
+    // Config not found or invalid — events won't play sounds
+    return;
+  }
+
+  let lastPlayedCategory: string | undefined;
+
+  const VALID_EVENTS = new Set([
+    "session_start",
+    "session_shutdown",
+    "agent_start",
+    "agent_end",
+    "turn_start",
+    "turn_end",
+    "tool_result",
+  ]);
+
+  for (const [eventName, category] of Object.entries(config.eventMap)) {
+    if (!VALID_EVENTS.has(eventName)) continue;
+    // biome-ignore lint/suspicious/noExplicitAny: dynamic event name validated against VALID_EVENTS above
+    pi.on(eventName as any, (_event, ctx) => {
+      if (!config.enabled) return;
+      if (eventName === "agent_end" && lastPlayedCategory === "question") {
+        lastPlayedCategory = undefined;
+        return;
+      }
+      lastPlayedCategory = category;
+      playCategory(config, soundDir, category, ctx.ui.notify);
+    });
+  }
+
+  if (config.toolEventMap) {
+    pi.on("tool_call", (event, ctx) => {
+      if (!config.enabled) return;
+      const category = config.toolEventMap?.[event.toolName];
+      if (!category) return;
+      lastPlayedCategory = category;
+      playCategory(config, soundDir, category, ctx.ui.notify);
+    });
+  }
+
+  if (config.permissionEventMap) {
+    try {
+      pi.events?.on("permissions:ui_prompt", () => {
+        if (!config.enabled) return;
+        const category = config.permissionEventMap?.["permissions:ui_prompt"];
+        if (!category) return;
+        lastPlayedCategory = category;
+        playCategory(config, soundDir, category);
+      });
+    } catch {
+      // EventBus may not support this event — non-fatal
+    }
+  }
 }

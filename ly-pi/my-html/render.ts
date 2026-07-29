@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import hljs from "highlight.js";
 import { Marked } from "marked";
 import { markedHighlight } from "marked-highlight";
-import { resolveExtDir } from "../src/shared/ext-dir";
 import { buildHtmlDocument as buildPreviewDocument } from "../web-preview/index";
 
-const EXT_DIR = resolveExtDir(import.meta);
+const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
 
 const CATPPUCCIN_MOCHA_HLJS = `/* Catppuccin Mocha for Highlight.js */
 .markdown-body .hljs,
