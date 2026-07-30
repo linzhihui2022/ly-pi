@@ -220,6 +220,7 @@ export class Bar {
       judgeStats: this.runningJudgeStats,
       judgeCost: this.runningJudgeCost,
       logEnabled: this.logEnabled,
+      thinkingLevel: this.ctx.thinkingLevel,
     });
     return [line];
   }

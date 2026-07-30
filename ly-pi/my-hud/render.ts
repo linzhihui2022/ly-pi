@@ -38,6 +38,7 @@ export function buildStatusLine(
     gitStatus,
     pullRequest,
     judgeStats,
+    thinkingLevel,
   } = data;
   const show = (field: string): boolean => !hiddenFields.has(field);
   const project =
@@ -47,10 +48,11 @@ export function buildStatusLine(
     parts.push(theme.fg("mdCode", `${icon("project")}${project}`));
   }
   if (show("model")) {
+    const modelLabel = shortModelName(modelName.trim());
     parts.push(
       theme.fg(
         "mdHeading",
-        `${icon("model")}${shortModelName(modelName.trim())}`,
+        `${icon("model")}${modelLabel}${thinkingLevel ? `·${thinkingLevel}` : ""}`,
       ),
     );
   }

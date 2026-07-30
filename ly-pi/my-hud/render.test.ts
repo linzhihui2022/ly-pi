@@ -102,6 +102,22 @@ describe("buildStatusLine with PR", () => {
     });
     expect(line).toContain("12/3/0.49");
   });
+
+  it("appends thinking level after the model name", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+      thinkingLevel: "max",
+    });
+    expect(line).toContain("gpt-4·max");
+  });
+
+  it("omits thinking level when undefined", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, baseData);
+    expect(line).toContain("gpt-4");
+    expect(line).not.toContain("·");
+  });
 });
 
 describe("hiddenFields", () => {

@@ -913,6 +913,30 @@ describe("Bar", () => {
     expect(lines[0]).toContain("feature-x");
   });
 
+  it("renders thinking level after the model name", async () => {
+    const { Bar } = await loadModule();
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const theme = createMockTheme();
+    const ctx = {
+      cwd: "/home/user/my-project",
+      model: { id: "gpt-4" },
+      thinkingLevel: "max",
+      sessionManager: { getEntries: () => [] },
+      getContextUsage: () => ({ percent: 10, contextWindow: 128000 }),
+    };
+
+    bar.setUICtx({ setWidget } as any);
+    bar.setContext(ctx as any);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory(mockTui, theme);
+    const lines = component.render(200);
+
+    expect(lines[0]).toContain("gpt-4·max");
+  });
+
   it("calls dispose on uiCtx", async () => {
     const { Bar } = await loadModule();
     const bar = new Bar();
@@ -1287,6 +1311,25 @@ describe("my-hud extension", () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
     expect(registeredEvents.has("model_select")).toBe(true);
+  });
+
+  it("registers thinking_level_select handler", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+    expect(registeredEvents.has("thinking_level_select")).toBe(true);
+  });
+
+  it("thinking_level_select handler triggers requestRender when currentTui is set", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+
+    const sessionStartHandler = registeredEvents.get("session_start")!;
+    sessionStartHandler({}, { ...mockCtx, hasUI: true });
+
+    const thinkingLevelHandler = registeredEvents.get("thinking_level_select")!;
+    mockTui.requestRender.mockClear();
+    thinkingLevelHandler();
+    expect(mockTui.requestRender).toHaveBeenCalled();
   });
 
   it("registers session_start handler", async () => {

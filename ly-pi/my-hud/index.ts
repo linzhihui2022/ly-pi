@@ -124,6 +124,7 @@ export default function myHud(pi: ExtensionAPI): void {
   });
 
   pi.on("model_select", requestRender);
+  pi.on("thinking_level_select", requestRender);
   pi.on("turn_end", () => {
     bar?.invalidateGitStatus();
     bar?.invalidatePullRequest();

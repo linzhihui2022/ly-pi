@@ -39,4 +39,6 @@ export interface StatusLineData {
   judgeCost?: number;
   /** Whether developer logging is enabled. */
   logEnabled?: boolean;
+  /** Current thinking level (e.g. "max"), appended to the model name. */
+  thinkingLevel?: string;
 }
