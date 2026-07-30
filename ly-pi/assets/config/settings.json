@@ -32,6 +32,7 @@
   },
   "subagentRuntime": {
     "toolDescriptionMode": "compact",
+    "artifactDir": "session",
     "asyncWidget": true,
     "asyncByDefault": false,
     "waitTool": {
