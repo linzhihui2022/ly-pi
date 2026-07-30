@@ -2,7 +2,7 @@
 
 我的终端、Shell、AI 编码 Agent 全家桶 —— Git 版本管理，一键部署。
 
-> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，所有 9 个 Pi 扩展合并为统一入口 `ly-pi`，包含 6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
+> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，所有 10 个 Pi 扩展合并为统一入口 `ly-pi`，包含 6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
 
 > 需求与规格的管理方式见下文「文档系统」一节。
 
@@ -12,7 +12,7 @@
 
 ```
 configure/
-├── ly-pi/                  # 统一扩展入口（单包，含全部 9 个子模块）
+├── ly-pi/                  # 统一扩展入口（单包，含全部 10 个子模块）
 │   ├── index.ts            # 入口：按序注册所有子模块
 │   ├── my-cd-guard/        # 冗余 cd 前缀自动纠正
 │   ├── my-script-guard/    # 内联脚本硬拦截 + 急迫升级
@@ -23,6 +23,7 @@ configure/
 │   ├── my-html/            # /html 渲染
 │   ├── my-sound/           # 音效反馈 + 语音包管理
 │   ├── my-hud/             # 自定义 HUD 状态栏
+│   ├── my-vision/          # 按模型视觉能力注入图片处理规则
 │   └── web-preview/        # 内部工具库：HTML 预览 server + 文档骨架
 ├── pi-config/              # 纯配置扩展（权限规则、工具显示、子代理配置）
 ├── pi-skills/skills/       # 自定义技能（6 个）
@@ -71,6 +72,7 @@ configure/
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
+| **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |
 
 ---
 
