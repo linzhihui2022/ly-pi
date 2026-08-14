@@ -2,7 +2,7 @@
 
 我的终端、Shell、AI 编码 Agent 全家桶 —— Git 版本管理，一键部署。
 
-> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，所有 10 个 Pi 扩展合并为统一入口 `ly-pi`，包含 6 个技能、5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
+> 围绕 [Pi Coding Agent](https://pi.dev) 构建的完整开发环境，所有 10 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理、音效统一收纳在 `ly-pi/assets/` 随部署分发；含 5 个 PR 审查子代理定义（通用角色由 `pi-subagents` 官方包提供）、Catppuccin Mocha 主题等。
 
 > 需求与规格的管理方式见下文「文档系统」一节。
 
@@ -12,37 +12,41 @@
 
 ```
 configure/
-├── ly-pi/                  # 统一扩展入口（单包，含全部 10 个子模块）
-│   ├── index.ts            # 入口：按序注册所有子模块
-│   ├── my-cd-guard/        # 冗余 cd 前缀自动纠正
-│   ├── my-script-guard/    # 内联脚本硬拦截 + 急迫升级
-│   ├── my-log/             # 开发日志：/ly-log 命令 + 浏览器查看
-│   ├── my-permission/      # 工具调用权限拦截器 + 模型法官
-│   ├── my-reload/          # 扩展热重载自动恢复
-│   ├── my-back/            # /back 命令
-│   ├── my-html/            # /html 渲染
-│   ├── my-sound/           # 音效反馈 + 语音包管理
-│   ├── my-hud/             # 自定义 HUD 状态栏
-│   ├── my-vision/          # 按模型视觉能力注入图片处理规则
-│   └── web-preview/        # 内部工具库：HTML 预览 server + 文档骨架
-├── pi-config/              # 纯配置扩展（权限规则、工具显示、子代理配置）
-├── pi-skills/skills/       # 自定义技能（6 个）
-├── pi-themes/              # 自定义主题（Catppuccin Mocha）
-├── pi-agents/              # 子代理定义（5 个 PR 审查角色）
-├── mcp/                    # MCP 服务器配置
-├── settings/               # Pi 设置（子代理模型映射）
-├── tools/check-docs/       # 文档一致性校验
-├── docs/agents/            # Matt skills 配置（issue tracker、标签、domain docs）
-├── .scratch/               # 本地 issue tracker：需求规格与票据
-│
+├── ly-pi/                    # 统一扩展入口（单包，含全部 10 个子模块）
+│   ├── index.ts              # 入口：按序注册所有子模块
+│   ├── my-cd-guard/          # 冗余 cd 前缀自动纠正
+│   ├── my-script-guard/      # 内联脚本硬拦截 + 急迫升级
+│   ├── my-log/               # 开发日志：/ly-log 命令 + 浏览器查看
+│   ├── my-permission/        # 工具调用权限拦截器 + 模型法官
+│   ├── my-reload/            # 扩展热重载自动恢复
+│   ├── my-back/              # /back 命令
+│   ├── my-html/              # /html 渲染
+│   ├── my-sound/             # 音效反馈 + 语音包管理
+│   ├── my-hud/               # 自定义 HUD 状态栏
+│   ├── my-vision/            # 按模型视觉能力注入图片处理规则
+│   ├── web-preview/          # 内部工具库：HTML 预览 server + 文档骨架
+│   ├── shared/               # 跨模块共享（guard-harness 等）
+│   ├── assets/               # 部署资产（随 bun run deploy 分发到 ~/.pi/agent/）
+│   │   ├── config/           # 纯配置源文件：settings、mcp、tool-display、sound 等
+│   │   ├── skills/           # 仓库自有技能（review-pr）
+│   │   ├── themes/           # Catppuccin Mocha 主题
+│   │   ├── agents/           # 子代理定义（5 个 PR 审查角色 + image-reader）
+│   │   └── sounds/           # BT-7274 音效包
+│   └── settings-schema.json  # settings.json 的运行时校验 schema（部署时校验）
 ├── scripts/
-│   └── deploy-all.ts       # 统一部署脚本（build → test → deploy）
-├── starship.toml           # Starship 终端提示符
-├── wezterm.lua             # WezTerm 终端配置
-├── MY-AGENTS.md            # 全局 Agent 指令 → ~/.pi/agent/AGENTS.md
-├── AGENTS.md               # configure 仓库自身的开发指南
-├── install.sh              # 一键部署入口
-└── package.json            # Monorepo 根配置
+│   └── deploy-all.ts         # 统一部署流水线（build → test → deploy all）
+├── tools/check-docs/         # 文档一致性校验
+├── docs/agents/              # Matt skills 配置（issue tracker、标签、domain docs）
+├── .scratch/                 # 本地 issue tracker：需求规格与票据
+│
+├── starship.toml             # Starship 终端提示符
+├── wezterm.lua               # WezTerm 终端配置
+├── MY-AGENTS.md              # 全局 Agent 指令 → ~/.pi/agent/AGENTS.md
+├── AGENTS.md                 # configure 仓库自身的开发指南
+├── JUDGE.md                  # my-permission 模型法官的项目级规则
+├── biome.json                # Biome 格式/lint 配置
+├── install.sh                # 一键部署入口
+└── package.json              # Monorepo 根配置
 ```
 
 ---
@@ -78,11 +82,13 @@ configure/
 
 ## 🎯 技能
 
+- **仓库自有**（`ly-pi/assets/skills/`，随 deploy 快照式部署）：`review-pr` — 并行调度专职 reviewer 子代理做多维度 PR 审查
+- **由 [mattpocock/skills](https://github.com/mattpocock/skills) 工作流提供**（外部安装，不镜像到本仓库），驱动「需求与规格」流程：
+
 | 技能 | 用途 |
 |------|------|
 | auditing-plan-implementation | 审计实现是否符合计划、票据或设计文档 |
 | creating-pull-requests | 创建 GitHub pull request 时整理描述与验证步骤 |
-| review-pr | 对 PR diff 做多维度代码审查 |
 | split-design-into-tickets | 将设计文档拆分为可执行票据 |
 | web-search-researcher | 检索训练数据之外的最新信息 |
 | writing-plan-for-ticket | 将 Linear 风格票据转换为实施计划 |
@@ -91,13 +97,13 @@ configure/
 
 ## 🎨 主题
 
-- **Catppuccin Mocha** — 深色主题，完整覆盖 TUI 元素（用户消息、工具状态、Markdown、语法高亮、差异视图、思考模式等）
+- **Catppuccin Mocha** — 深色主题，完整覆盖 TUI 元素（用户消息、工具状态、Markdown、语法高亮、差异视图、思考模式等）。源文件在 `ly-pi/assets/themes/catppuccin-mocha.json`，部署到 `~/.pi/agent/themes/`。
 
 ---
 
 ## 🤖 子代理
 
-运行时使用 [`pi-subagents`](https://pi.dev/packages/pi-subagents)。通用角色（scout、delegate、researcher、context-builder、planner、oracle、reviewer、worker）由 `pi-subagents` 官方包提供；`pi-agents/*.md` 只保留 5 个 PR 审查角色，采用其 agent frontmatter 并部署到 `~/.pi/agent/agents/`。通用角色的模型与 fallback 由 `settings/settings.json` 统一覆盖。
+运行时使用 [`pi-subagents`](https://pi.dev/packages/pi-subagents)。通用角色（scout、delegate、researcher、context-builder、planner、oracle、reviewer、worker）由 `pi-subagents` 官方包提供；`ly-pi/assets/agents/*.md` 只保留 5 个 PR 审查角色（另有 `image-reader` 供 my-vision 委托非视觉模型读图），部署到 `~/.pi/agent/agents/`。通用角色的模型与 fallback 由 `ly-pi/assets/config/settings.json` 统一覆盖。
 
 | 子代理 | 模型 | 用途 |
 |--------|------|------|
@@ -111,12 +117,18 @@ configure/
 
 ## ⚙️ 纯配置
 
+所有配置源文件统一放在 `ly-pi/assets/config/`，修改后执行 `bun run deploy` 部署到 `~/.pi/agent/`（不要直接改部署副本）：
+
 | 配置 | 说明 |
 |------|------|
-| `pi-config/pi-permission-system.json` | 权限规则：`env`/`.env` 禁止、bash 命令分类控制 |
-| `pi-config/pi-tool-display.json` | 工具显示：read/grep/bash 输出模式、diff 风格 |
-| `settings/settings.json` | 子代理模型绑定与 fallback |
-| `mcp/mcp.json` | MCP 服务器配置（Chrome DevTools、Notion、Linear 等） |
+| `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
+| `assets/config/pi-tool-display.json` | 工具显示：read/grep/bash 输出模式、diff 风格 |
+| `assets/config/settings.json` | 子代理模型绑定与 fallback（部署时按 `settings-schema.json` 校验） |
+| `assets/config/mcp.json` | MCP 服务器配置（Chrome DevTools、Notion、Linear 等） |
+| `assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
+| `assets/config/my-back.json` | `/back` 命令配置 |
+| `assets/config/append-system.md` | 追加到系统提示的全局指令 |
+| `assets/config/web-search.json` / `rpiv-todo.json` | 第三方扩展配置 |
 
 ---
 

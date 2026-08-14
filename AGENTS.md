@@ -8,8 +8,8 @@
 |-----------|------|
 | `MY-AGENTS.md` | 全局偏好（软链接到 `~/.pi/agent/AGENTS.md` 和 `~/.claude/CLAUDE.md`） |
 | `ly-pi/` | 统一扩展入口（单包，含全部 10 个子模块） |
-| `pi-skills/` | 自定义技能 |
-| `pi-themes/` | 自定义主题 |
+| `ly-pi/assets/skills/` | 仓库自有技能（review-pr） |
+| `ly-pi/assets/themes/` | 自定义主题（Catppuccin Mocha） |
 | `scripts/deploy-all.ts` | 统一部署流水线（build → test → deploy all） |
 | `install.sh` | 一键部署（`bun run deploy`） |
 | `starship.toml` | Starship 终端提示符 |
@@ -59,14 +59,14 @@ bun run --cwd ly-pi test -- my-hud
 ## 配置规范
 
 - **修改 pi 配置时，先查本项目是否有源文件**。许多 pi 配置（settings.json、扩展配置等）的源文件在 `ly-pi/assets/config/` 下，通过 `bun run deploy` 部署到 `~/.pi/agent/`。修改时应改源文件再 deploy，不要直接改 `~/.pi/agent/` 下的部署副本。
-- JSON 配置文件放在扩展包根目录（如 `ly-pi/my-sound.json`），用 `EXT_DIR` 解析加载，部署脚本随 `index.js` 一并拷贝
+- JSON 配置文件统一放在 `ly-pi/assets/config/`（如 `my-sound.json`、`my-back.json`），部署脚本随 `index.js` 一并拷贝
 - 支持热重载（通过 `/reload`）
-- 纯配置扩展统一放在 `pi-config/`
+- 纯配置统一放在 `ly-pi/assets/config/`
 - 扩展运行时使用 TypeBox 做类型校验
 - 格式与 lint 使用 Biome：`bun run format` / `bun run check`
-- `pi-skills/skills/` 仅维护仓库自有技能，不镜像或迁移外部技能副本；部署为快照式，会清除本机已删除的旧副本
-- 子代理运行时为 `npm:pi-subagents`，不得与 `npm:@gotgenes/pi-subagents` 并装；`pi-agents/` 仅保留 5 个 PR 审查角色，通用角色由官方包提供
-- `pi-themes/scripts/deploy.ts` 只部署 `*.json` 主题文件，排除 `package.json`（Pi 会把目录下所有 `.json` 当主题加载，非主题文件会导致校验错误）
+- `ly-pi/assets/skills/` 仅维护仓库自有技能（review-pr），不镜像或迁移外部技能副本；部署为快照式，会清除本机已删除的旧副本
+- 子代理运行时为 `npm:pi-subagents`，不得与 `npm:@gotgenes/pi-subagents` 并装；`ly-pi/assets/agents/` 仅保留 5 个 PR 审查角色（另有 image-reader 供 my-vision 委托），通用角色由官方包提供
+- 主题部署（`ly-pi/scripts/deploy.ts`）只拷贝 `assets/themes/` 下的 `*.json` 主题文件，排除其他文件（Pi 会把目录下所有 `.json` 当主题加载，非主题文件会导致校验错误）
 
 ### 需求与规格工作流
 
