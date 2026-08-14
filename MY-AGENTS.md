@@ -16,6 +16,7 @@
 - 格式：`feat(scope): title`（约定式提交）
 - 类型：`feat` / `fix` / `refactor` / `chore` / `docs` / `test` / `perf`
 - 全英文，祈使句，首字母小写，不加句号
+- `git push` 超时（网络故障、长时间无响应）时不要直接重试，先询问我
 
 ## 环境变量安全
 
