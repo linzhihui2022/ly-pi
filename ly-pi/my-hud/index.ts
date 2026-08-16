@@ -9,14 +9,14 @@
  *   - dist/modes/interactive/components/footer.js (token aggregation, color thresholds)
  */
 
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { Bar } from "./bar";
 import { loadHudConfig } from "./config";
 import { setModelShortNames } from "./format";
@@ -188,15 +188,17 @@ export default function myHud(pi: ExtensionAPI): void {
       }
       const theme = ctx.ui.theme;
       const allLines = output.split("\n");
-      const truncated = allLines.length > GST_LINE_LIMIT
-        ? allLines.slice(0, GST_LINE_LIMIT)
-        : allLines;
+      const truncated =
+        allLines.length > GST_LINE_LIMIT
+          ? allLines.slice(0, GST_LINE_LIMIT)
+          : allLines;
       const colored = truncated
         .map((line) => colorLine(theme, line))
         .join("\n");
-      const suffix = allLines.length > GST_LINE_LIMIT
-        ? `\n...and ${allLines.length - GST_LINE_LIMIT} more`
-        : "";
+      const suffix =
+        allLines.length > GST_LINE_LIMIT
+          ? `\n...and ${allLines.length - GST_LINE_LIMIT} more`
+          : "";
       ctx.ui.notify(" " + colored + suffix, "info");
     },
   });
