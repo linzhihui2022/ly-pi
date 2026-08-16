@@ -12,7 +12,7 @@
 
 ```
 configure/
-├── ly-pi/                    # 统一扩展入口（单包，含全部 10 个子模块）
+├── ly-pi/                    # 统一扩展入口（单包，含全部 11 个子模块）
 │   ├── index.ts              # 入口：按序注册所有子模块
 │   ├── my-cd-guard/          # 冗余 cd 前缀自动纠正
 │   ├── my-script-guard/      # 内联脚本硬拦截 + 急迫升级
@@ -20,6 +20,7 @@ configure/
 │   ├── my-permission/        # 工具调用权限拦截器 + 模型法官
 │   ├── my-reload/            # 扩展热重载自动恢复
 │   ├── my-back/              # /back 命令
+│   ├── my-diff/              # /diff 命令：git status 选择器 + diff 查看器
 │   ├── my-html/              # /html 渲染
 │   ├── my-sound/             # 音效反馈 + 语音包管理
 │   ├── my-hud/               # 自定义 HUD 状态栏
@@ -74,6 +75,7 @@ configure/
 | **my-permission** | 工具调用权限拦截器：确定性规则 + `deepseek-v4-flash` 模型法官 + 子代理差异化处理 |
 | **my-reload** | 扩展热重载自动恢复：`request_reload` 工具标记后，reload 完成自动发送继续指令 |
 | **my-back** | `/back` 命令：撤销最近一条用户消息并将文本放回编辑器 |
+| **my-diff** | `/diff` 命令：git status 选择器 + 主题配色 diff 查看器（纯 TUI，不经过 agent） |
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-hud** | 自定义单行状态栏：项目名、模型（含思考级别）、Git 分支与状态、PR 链接、上下文百分比（颜色阈值）、Token 与成本、权限统计、Hide thinking 状态 |
