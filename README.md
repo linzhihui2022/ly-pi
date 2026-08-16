@@ -41,6 +41,7 @@ configure/
 │
 ├── starship.toml             # Starship 终端提示符
 ├── wezterm.lua               # WezTerm 终端配置
+├── piw.zsh                   # piw 命令：新 WezTerm tab 以指定目录启动 pi（由 ~/.zshrc source）
 ├── MY-AGENTS.md              # 全局 Agent 指令 → ~/.pi/agent/AGENTS.md、~/.claude/CLAUDE.md、~/.dsh/AGENTS.md
 ├── AGENTS.md                 # configure 仓库自身的开发指南
 ├── JUDGE.md                  # my-permission 模型法官的项目级规则
@@ -149,6 +150,9 @@ ln -sf "$REPO/wezterm.lua" ~/.wezterm.lua
 ln -sf "$REPO/MY-AGENTS.md" ~/.pi/agent/AGENTS.md
 ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
+
+# piw 命令（在 ~/.zshrc 中加一行）
+# source "$REPO/piw.zsh"
 
 # 部署扩展、技能、主题、子代理、设置、MCP
 "$REPO/install.sh"
