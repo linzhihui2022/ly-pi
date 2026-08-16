@@ -130,8 +130,8 @@ class DiffViewComponent {
   handleInput(data: string): void {
     if (matchesKey(data, Key.up)) this.scrollBy(-1);
     else if (matchesKey(data, Key.down)) this.scrollBy(1);
-    else if (matchesKey(data, Key.pageUp)) this.scrollBy(-this.pageSize());
-    else if (matchesKey(data, Key.pageDown)) this.scrollBy(this.pageSize());
+    else if (matchesKey(data, Key.left)) this.scrollBy(-this.pageSize());
+    else if (matchesKey(data, Key.right)) this.scrollBy(this.pageSize());
     else if (matchesKey(data, Key.escape)) this.done();
   }
 
@@ -146,7 +146,7 @@ class DiffViewComponent {
     return [
       this.theme.fg("accent", this.theme.bold(this.view.title)),
       ...visible.map((line) => this.colorize(line, width)),
-      this.theme.fg("dim", `↑↓ scroll • PgUp/PgDn page • esc back${progress}`),
+      this.theme.fg("dim", `↑↓ scroll • ←→ page • esc back${progress}`),
     ];
   }
 

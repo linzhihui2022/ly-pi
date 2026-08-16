@@ -20,7 +20,7 @@ Status: ready-for-agent
 6. As a pi 用户, I want 选中已跟踪文件后看到 `git diff HEAD` 合并视图, so that 我能一次看到该文件相对上次提交的全部改动（staged + unstaged）
 7. As a pi 用户, I want 选中 untracked 文件后看到文件全文, so that 没有 diff 可言的新文件也能被查看
 8. As a pi 用户, I want diff 行用主题配色区分增删（toolDiffAdded/Removed/Context）, so that 视图与我熟悉的 pi 工具输出视觉一致
-9. As a pi 用户, I want diff 视图支持 ↑↓/PgUp/PgDn 滚动且标题栏显示状态与路径, so that 长 diff 也能完整翻阅且始终知道自己在看哪个文件
+9. As a pi 用户, I want diff 视图支持 ↑↓ 滚动、←→ 翻页且标题栏显示状态与路径, so that 长 diff 也能完整翻阅且始终知道自己在看哪个文件
 10. As a pi 用户, I want 看完一个文件按 Esc 返回列表继续挑下一个, so that 一次 `/diff` 就能 review 完一圈改动
 11. As a pi 用户, I want 在列表上按 Esc 退出命令, so that 浏览结束时能干净地回到会话
 12. As a pi 用户, I want 工作区干净时看到 "working tree clean" 提示后退出, so that 我不对着空列表困惑
