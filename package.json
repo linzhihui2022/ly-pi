@@ -11,7 +11,8 @@
     "check-docs": "bun run tools/check-docs/index.ts",
     "format": "biome format --write .",
     "check": "biome check --write .",
-    "lint": "biome check ."
+    "lint": "biome check .",
+    "verify": "bun run lint && bun run --cwd ly-pi typecheck && bun run --cwd ly-pi test && bun run check-docs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",

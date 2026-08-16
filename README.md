@@ -59,7 +59,7 @@ configure/
 
 - **需求规格**：`/to-spec` 产出到 `.scratch/<feature-slug>/spec.md`，`/to-tickets` 拆票到 `.scratch/<feature-slug>/issues/`
 - **耐久文档**：`README.md`（本文件）、`AGENTS.md` / `MY-AGENTS.md`（开发规范）、`docs/agents/`（skill 配置）
-- **一致性防线**：`bun run check-docs` 校验文档与仓库现实对齐
+- **一致性防线**：`bun run verify` 硬性验收（lint + typecheck + 测试 + 文档一致性）
 
 ---
 

@@ -76,15 +76,15 @@ bun run --cwd ly-pi test -- my-hud
 - 票据约定（`NN-slug` 编号、`Status:` 行、认领/解决流程）见 `docs/agents/issue-tracker.md`
 - `.scratch/` 纳入 git，即本仓库的本地 issue tracker
 - 文档修正类变更（README、AGENTS.md 等耐久文档的内容更新）直接修改，不需要走 spec
-- 一致性防线：`bun run check-docs` 校验文档与仓库现实对齐（README 扩展表、相对链接、`.scratch/` 票据约定、旧体系文件复活）
+- 一致性防线：`bun run verify` 硬性验收（biome lint + tsgo typecheck + vitest 测试 + check-docs 文档一致性）
 
 ## 一致性约束
 
-**硬性规则：完成任何工作后，必须运行 `bun run check-docs` 验证文档与代码的一致性。** 检查未通过不得视为工作完成。
+**硬性规则：完成任何工作后，必须运行 `bun run verify` 验收——biome lint + tsgo typecheck + vitest 全量测试 + check-docs 四件套，任一环节未通过不得视为工作完成。** deploy 流水线（build → test → deploy）刻意不含 typecheck/lint：验收是硬性，部署不强制。
 
-- 修改了 README、AGENTS.md、或任何 `docs/` 下的耐久文档 → 跑 check-docs
-- 新增/删除/重命名文件或目录 → 跑 check-docs
-- 修改了 `.scratch/` 下的票据或规格 → 跑 check-docs
+- 修改了 README、AGENTS.md、或任何 `docs/` 下的耐久文档 → 跑 verify
+- 新增/删除/重命名文件或目录 → 跑 verify
+- 修改了 `.scratch/` 下的票据或规格 → 跑 verify
 - 即使以上都不适用，在工作结束前也应跑一次作为兜底验证
 
 ## Agent skills
