@@ -33,6 +33,11 @@ vi.mock("./pr", () => ({
   ),
 }));
 
+vi.mock("./hide-thinking", () => ({
+  getHideThinking: vi.fn(() => false),
+}));
+
+import { getHideThinking } from "./hide-thinking";
 import { getPullRequestNumber, getRemoteUrl, parseRemoteUrl } from "./pr";
 
 function createMockTheme(): any {
@@ -280,5 +285,39 @@ describe("Bar PR caching", () => {
     const component = factory(mockTui, theme);
 
     expect(component.render(200)[0]).toContain("1/1/0.49");
+  });
+
+  it("shows the hideThinking indicator when settings enable it", () => {
+    vi.mocked(getHideThinking).mockReturnValue(true);
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const theme = createMockTheme();
+
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(createCtx() as unknown as ExtensionContext);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory(mockTui, theme);
+
+    expect(component.render(200)[0]).toContain("\uf070");
+    expect(component.render(200)[0]).not.toContain("\uf06e");
+  });
+
+  it("shows the visible-thinking icon when settings disable it", () => {
+    vi.mocked(getHideThinking).mockReturnValue(false);
+    const bar = new Bar();
+    const setWidget = vi.fn();
+    const theme = createMockTheme();
+
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(createCtx() as unknown as ExtensionContext);
+    bar.update();
+
+    const factory = setWidget.mock.calls[0][1];
+    const component = factory(mockTui, theme);
+
+    expect(component.render(200)[0]).toContain("\uf06e");
+    expect(component.render(200)[0]).not.toContain("\uf070");
   });
 });

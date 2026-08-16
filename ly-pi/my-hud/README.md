@@ -15,6 +15,7 @@ Replaces the built-in footer with a compact, always-on status bar showing:
 | Cache Read |  | Cumulative cache-read tokens this session |
 | Cost |  | Estimated cost in CNY (USD × 7) |
 | Permission |  | Judge allowed/denied counts and judge cost in CNY |
+| Hide Thinking |  | Pi's "Hide thinking" state — eye = visible, eye-slash = hidden (reads `hideThinkingBlock` from settings.json) |
 
 ## Context Thresholds
 
@@ -42,7 +43,7 @@ Optional `my-hud.json` inside the extension directory (reloaded via `/reload`):
 ```
 
 - `modelShortNames` — map full model IDs to short display names (overrides builtins)
-- `hiddenFields` — hide status line fields; valid keys: `project`, `model`, `branch`, `gitStatus`, `context`, `input`, `output`, `cacheRead`, `cost`, `cacheRate`, `permission`
+- `hiddenFields` — hide status line fields; valid keys: `project`, `model`, `branch`, `gitStatus`, `context`, `input`, `output`, `cacheRead`, `cost`, `cacheRate`, `permission`, `hideThinking`
 
 Missing or invalid config falls back to defaults silently.
 

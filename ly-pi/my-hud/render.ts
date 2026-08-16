@@ -39,6 +39,7 @@ export function buildStatusLine(
     pullRequest,
     judgeStats,
     thinkingLevel,
+    hideThinking,
   } = data;
   const show = (field: string): boolean => !hiddenFields.has(field);
   const project =
@@ -137,6 +138,14 @@ export function buildStatusLine(
 
   if (show("log") && data.logEnabled) {
     parts.push(theme.fg("accent", `${icon("log")}LOG`));
+  }
+
+  if (show("hideThinking")) {
+    parts.push(
+      hideThinking
+        ? theme.fg("thinkingMedium", `${icon("thinkingHidden")}THINK`)
+        : theme.fg("dim", `${icon("thinkingVisible")}THINK`),
+    );
   }
 
   return truncateToWidth(parts.join(" "), width);

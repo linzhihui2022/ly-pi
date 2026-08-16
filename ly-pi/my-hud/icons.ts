@@ -19,6 +19,8 @@ const icons = {
   terminal: "\uf120  ",
   shield: "\uf132 ",
   log: "\uf02d ",
+  thinkingHidden: "\uf070 ",
+  thinkingVisible: "\uf06e ",
 } as const;
 
 export type IconName = keyof typeof icons;

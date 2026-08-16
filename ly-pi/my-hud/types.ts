@@ -41,4 +41,6 @@ export interface StatusLineData {
   logEnabled?: boolean;
   /** Current thinking level (e.g. "max"), appended to the model name. */
   thinkingLevel?: string;
+  /** Whether pi hides thinking blocks (hideThinkingBlock setting). */
+  hideThinking?: boolean;
 }

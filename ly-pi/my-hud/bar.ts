@@ -2,7 +2,8 @@
  * aboveEditor widget bar — displays session stats (project, model, tokens, cost, git status).
  */
 
-import { basename } from "node:path";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import type {
   ExtensionContext,
   ExtensionUIContext,
@@ -11,6 +12,7 @@ import type {
 import type { TUI } from "@earendil-works/pi-tui";
 import { contextColored } from "./format";
 import { getGitStatus } from "./git";
+import { getHideThinking } from "./hide-thinking";
 import { getPullRequestNumber, getRemoteUrl, parseRemoteUrl } from "./pr";
 import { buildStatusLine } from "./render";
 import {
@@ -23,8 +25,10 @@ import type { GitStatus, PullRequestInfo, TokenUsage } from "./types";
 const WIDGET_KEY = "my-hud-bar";
 const GIT_STATUS_CACHE_TTL = 5000;
 const PR_CACHE_TTL = 5000;
+const DEFAULT_SETTINGS_PATH = join(homedir(), ".pi", "agent", "settings.json");
 
 export class Bar {
+  constructor(private readonly settingsPath = DEFAULT_SETTINGS_PATH) {}
   private uiCtx: ExtensionUIContext | undefined;
   private ctx: ExtensionContext | undefined;
   private tui: TUI | undefined;
@@ -221,6 +225,7 @@ export class Bar {
       judgeCost: this.runningJudgeCost,
       logEnabled: this.logEnabled,
       thinkingLevel: this.ctx.thinkingLevel,
+      hideThinking: getHideThinking(this.settingsPath),
     });
     return [line];
   }

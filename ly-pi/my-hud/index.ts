@@ -199,7 +199,7 @@ export default function myHud(pi: ExtensionAPI): void {
         allLines.length > GST_LINE_LIMIT
           ? `\n...and ${allLines.length - GST_LINE_LIMIT} more`
           : "";
-      ctx.ui.notify(" " + colored + suffix, "info");
+      ctx.ui.notify(` ${colored}${suffix}`, "info");
     },
   });
 

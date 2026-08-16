@@ -47,6 +47,10 @@ vi.mock("./memory", () => ({
   checkMemoryPressure: vi.fn(),
 }));
 
+vi.mock("./hide-thinking", () => ({
+  getHideThinking: vi.fn(() => false),
+}));
+
 // ── Mocks ──
 
 const registeredEvents = new Map<string, (...args: any[]) => any>();

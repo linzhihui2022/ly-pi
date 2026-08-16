@@ -271,3 +271,48 @@ describe("buildStatusLine log indicator", () => {
     expect(line).not.toContain("LOG");
   });
 });
+
+describe("buildStatusLine hideThinking indicator", () => {
+  afterEach(() => {
+    setHiddenFields([]);
+  });
+
+  it("shows the hidden-thinking icon when hideThinking is true", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+      hideThinking: true,
+    });
+    expect(line).toContain("\uf070");
+    expect(line).not.toContain("\uf06e");
+  });
+
+  it("shows the visible-thinking icon when hideThinking is false", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+      hideThinking: false,
+    });
+    expect(line).toContain("\uf06e");
+    expect(line).not.toContain("\uf070");
+  });
+
+  it("shows the visible-thinking icon when hideThinking is undefined", () => {
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+    });
+    expect(line).toContain("\uf06e");
+  });
+
+  it("hides both icons when hiddenFields includes hideThinking", () => {
+    setHiddenFields(["hideThinking"]);
+    const theme = createMockTheme();
+    const line = buildStatusLine(theme, 200, {
+      ...baseData,
+      hideThinking: true,
+    });
+    expect(line).not.toContain("\uf070");
+    expect(line).not.toContain("\uf06e");
+  });
+});
