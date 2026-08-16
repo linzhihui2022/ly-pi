@@ -2,6 +2,7 @@ import { cpSync, existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { BunFile } from "bun";
 
 // ── Staging ────────────────────────────────────────────────────────────────
 const STAGING = process.env.PI_STAGING_DIR ?? join(homedir(), ".pi");
@@ -111,7 +112,7 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-async function write(path: string, data: string | Uint8Array) {
+async function write(path: string, data: string | Uint8Array | BunFile) {
   await mkdir(join(path, ".."), { recursive: true });
   await Bun.write(path, data);
 }

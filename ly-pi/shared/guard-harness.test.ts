@@ -1,7 +1,20 @@
+import type { ToolCallEventResult } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import { createGuardHarness, type GuardConfig } from "./guard-harness";
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
+
+interface TypedHandlers {
+  tool_call: (
+    event: unknown,
+    ctx: unknown,
+  ) => Promise<ToolCallEventResult | undefined>;
+  before_agent_start: (
+    event: unknown,
+    ctx: unknown,
+  ) => Promise<{ systemPrompt: string } | undefined>;
+  [name: string]: Handler;
+}
 
 function setup(guards: GuardConfig[]) {
   const handlers: Record<string, Handler> = {};
@@ -11,7 +24,7 @@ function setup(guards: GuardConfig[]) {
     }),
   };
   createGuardHarness(pi as never, guards);
-  return { handlers, pi };
+  return { handlers: handlers as TypedHandlers, pi };
 }
 
 function bashEvent(command: string) {
@@ -256,7 +269,10 @@ describe("createGuardHarness", () => {
     it("tracks escalation counters per guard independently", async () => {
       const reactA = vi.fn().mockReturnValue({ block: true, reason: "A" });
       const reactB = vi.fn().mockReturnValue({ block: true, reason: "B" });
-      const makeGuard = (name: string, react: () => unknown): GuardConfig => ({
+      const makeGuard = (
+        name: string,
+        react: GuardConfig["react"],
+      ): GuardConfig => ({
         name,
         detect: () => ({ x: 1 }),
         react,
