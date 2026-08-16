@@ -925,13 +925,13 @@ describe("Bar", () => {
     const ctx = {
       cwd: "/home/user/my-project",
       model: { id: "gpt-4" },
-      thinkingLevel: "max",
       sessionManager: { getEntries: () => [] },
       getContextUsage: () => ({ percent: 10, contextWindow: 128000 }),
     };
 
     bar.setUICtx({ setWidget } as any);
     bar.setContext(ctx as any);
+    bar.setThinkingLevelSource(() => "max");
     bar.update();
 
     const factory = setWidget.mock.calls[0][1];

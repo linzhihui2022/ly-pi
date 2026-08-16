@@ -141,10 +141,7 @@ export default function mySound(pi: ExtensionAPI): void {
 
       if (pack.categories[args]) {
         playCategory(pack, soundDir, args, ctx.ui.notify);
-        ctx.ui.notify(
-          `🎙️  Sound: ${pack.categories[args].description}`,
-          "info",
-        );
+        ctx.ui.notify(`🎙️  Sound: ${pack.categories[args].description}`, "info");
       } else {
         ctx.ui.notify(
           `Sound: 未知分类 "${args}"。用 /sound 查看可用分类。`,

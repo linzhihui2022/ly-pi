@@ -8,26 +8,23 @@ import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
 export interface GuardConfig<TDet = unknown> {
   name: string;
-  detect: (command: string, cwd: string) => TDet | undefined;
-  react: (
+  // Method shorthand (not property arrows) keeps these bivariant under
+  // strictFunctionTypes, so GuardConfig<Specific> stays assignable to
+  // GuardConfig (used as the harness element type).
+  detect(command: string, cwd: string): TDet | undefined;
+  react(
     detection: TDet,
     event: BashToolCallEvent,
     ctx: ExtensionContext,
-  ) =>
-    | undefined
-    | ToolCallEventResult
-    | Promise<undefined | ToolCallEventResult>;
-  onSessionStart?: (cwd: string) => void;
-  onBeforeAgentStart?: (
-    systemPrompt: string,
-    cwd: string,
-  ) => string | undefined;
+  ): undefined | ToolCallEventResult | Promise<undefined | ToolCallEventResult>;
+  onSessionStart?(cwd: string): void;
+  onBeforeAgentStart?(systemPrompt: string, cwd: string): string | undefined;
   escalation?: {
     threshold: number;
-    buildConfirm: (
+    buildConfirm(
       detection: TDet,
       count: number,
-    ) => { title: string; body: string };
+    ): { title: string; body: string };
   };
 }
 

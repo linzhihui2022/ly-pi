@@ -7,20 +7,20 @@ const EXT_PATH = "/Users/lychee/.pi/agent/extensions/ly-pi/index.js";
 const mockPi = {
   registeredCommands: [],
   registeredEvents: [],
-  on(event, handler) {
+  on(event, _handler) {
     this.registeredEvents.push(event);
     console.log(`  [pi.on] "${event}" registered`);
   },
-  registerCommand(name, opts) {
+  registerCommand(name, _opts) {
     this.registeredCommands.push(name);
     console.log(`  [pi.registerCommand] "/${name}" registered`);
   },
   events: {
-    on(event, handler) {
+    on(event, _handler) {
       mockPi.registeredEvents.push(event);
       console.log(`  [pi.events.on] "${event}" registered`);
-    }
-  }
+    },
+  },
 };
 
 // We want to call the mySound function specifically from the built bundle.
@@ -41,7 +41,7 @@ try {
     }
     console.log("\nCommands registered:", mockPi.registeredCommands);
     console.log("Events registered:", mockPi.registeredEvents);
-    
+
     if (mockPi.registeredCommands.includes("sound")) {
       console.log("\n✅ /sound command WAS registered successfully!");
     } else {

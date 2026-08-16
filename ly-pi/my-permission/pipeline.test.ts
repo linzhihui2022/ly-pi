@@ -311,12 +311,12 @@ describe("createRoleAnalyzer", () => {
       ],
     });
 
-    const getAuth = vi.fn(async () => ({ apiKey: "my-key" }));
+    const getAuth = vi.fn(async (_model: Model<Api>) => ({ apiKey: "my-key" }));
     const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
     await analyzer(["item"], "/repo", "", "", resolveModelOk, getAuth);
 
     expect(getAuth).toHaveBeenCalledTimes(1);
-    const calledModel = getAuth.mock.calls[0][0] as Model<Api>;
+    const calledModel = getAuth.mock.calls[0][0];
     expect(calledModel.id).toBe("deepseek-v4-pro");
   });
 

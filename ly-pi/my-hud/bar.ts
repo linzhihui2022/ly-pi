@@ -31,6 +31,7 @@ export class Bar {
   constructor(private readonly settingsPath = DEFAULT_SETTINGS_PATH) {}
   private uiCtx: ExtensionUIContext | undefined;
   private ctx: ExtensionContext | undefined;
+  private thinkingLevelFn: (() => string) | undefined;
   private tui: TUI | undefined;
   private branch: string | null = null;
   private gitStatus: GitStatus | null = null;
@@ -67,6 +68,12 @@ export class Bar {
 
   setContext(ctx: ExtensionContext): void {
     this.ctx = ctx;
+  }
+
+  /** ExtensionContext no longer exposes thinkingLevel (pi 0.78); the level
+   *  lives on ExtensionAPI, so the module injects a getter here. */
+  setThinkingLevelSource(fn: () => string): void {
+    this.thinkingLevelFn = fn;
   }
 
   setUICtx(ctx: ExtensionUIContext): void {
@@ -224,7 +231,7 @@ export class Bar {
       judgeStats: this.runningJudgeStats,
       judgeCost: this.runningJudgeCost,
       logEnabled: this.logEnabled,
-      thinkingLevel: this.ctx.thinkingLevel,
+      thinkingLevel: this.thinkingLevelFn?.(),
       hideThinking: getHideThinking(this.settingsPath),
     });
     return [line];
@@ -237,6 +244,7 @@ export class Bar {
     this.tui = undefined;
     this.uiCtx = undefined;
     this.ctx = undefined;
+    this.thinkingLevelFn = undefined;
     this.branch = null;
     this.gitStatus = null;
     this.gitStatusCacheTime = 0;

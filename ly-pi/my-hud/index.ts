@@ -15,6 +15,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
   Theme,
+  ThemeColor,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { Bar } from "./bar";
@@ -43,14 +44,14 @@ function colorLine(theme: Theme, line: string): string {
   return prefix + theme.fg("dim", rest);
 }
 
-function statusColor(status: string): string | undefined {
+function statusColor(status: string): ThemeColor | undefined {
   const ch = status.replace(/[ .]/g, "")[0];
   if (!ch) return undefined;
-  const map: Record<string, string> = {
+  const map: Record<string, ThemeColor> = {
     A: "success",
     M: "warning",
     D: "error",
-    R: "info",
+    R: "accent",
     U: "error",
     "?": "dim",
     "!": "dim",
@@ -220,6 +221,7 @@ export default function myHud(pi: ExtensionAPI): void {
     bar ??= new Bar();
     bar.setUICtx(ctx.ui);
     bar.setContext(ctx);
+    bar.setThinkingLevelSource(() => pi.getThinkingLevel());
     bar.update();
 
     ctx.ui.setFooter((tui, theme, footerData) => {

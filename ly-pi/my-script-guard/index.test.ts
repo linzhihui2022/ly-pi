@@ -26,8 +26,7 @@ describe("scriptGuard", () => {
     it("returns detection for long inline eval", () => {
       const result = scriptGuard.detect(LONG_EVAL, "/repo");
       expect(result).toBeDefined();
-      expect(result!.interpreter).toBe("python3");
-      expect(result!.kind).toBe("eval");
+      expect(result).toMatchObject({ interpreter: "python3", kind: "eval" });
     });
 
     it("returns detection for file write bypass", () => {

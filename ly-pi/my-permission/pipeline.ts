@@ -147,7 +147,7 @@ export function createRoleAnalyzer<TInput, TResult>(
       const cost = response.usage?.cost?.total;
 
       // Surface API-level errors
-      const errResp = response as Record<string, unknown>;
+      const errResp = response as unknown as Record<string, unknown>;
       if (errResp.stopReason === "error" || errResp.errorMessage) {
         log.error(`${roleConfig.modelLabel} API error`, {
           detail: errResp.errorMessage || errResp.stopReason,

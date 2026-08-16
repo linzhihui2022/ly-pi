@@ -3,6 +3,13 @@ import myReload from "./index";
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
 
+interface ToolDef {
+  name: string;
+  description: string;
+  parameters: unknown;
+  execute: (...args: unknown[]) => unknown;
+}
+
 const MARKER_TYPE = "reload_marker";
 const CONTINUE_MESSAGE = "继续之前的工作";
 
@@ -10,19 +17,14 @@ function setup() {
   const appendEntryCalls: Array<{ type: string; data: unknown }> = [];
   const sendUserMessageCalls: string[] = [];
   const handlers: Record<string, Handler> = {};
-  let toolDef: {
-    name: string;
-    description: string;
-    parameters: unknown;
-    execute: (...args: unknown[]) => unknown;
-  } | null = null;
+  const toolDefs: ToolDef[] = [];
 
   const pi = {
     on: vi.fn((name: string, h: Handler) => {
       handlers[name] = h;
     }),
-    registerTool: vi.fn((def: typeof toolDef) => {
-      toolDef = def;
+    registerTool: vi.fn((def: ToolDef) => {
+      toolDefs.push(def);
     }),
     appendEntry: vi.fn((type: string, data: unknown) => {
       appendEntryCalls.push({ type, data });
@@ -34,7 +36,13 @@ function setup() {
 
   myReload(pi as never);
 
-  return { handlers, toolDef, appendEntryCalls, sendUserMessageCalls, pi };
+  return {
+    handlers,
+    toolDef: toolDefs[0] ?? null,
+    appendEntryCalls,
+    sendUserMessageCalls,
+    pi,
+  };
 }
 
 // ── Helpers ──

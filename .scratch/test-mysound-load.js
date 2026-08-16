@@ -1,10 +1,12 @@
 // Simulate mySound loading to check for errors
-import { readFileSync, existsSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Simulate the build-time EXT_DIR resolution
-const EXT_DIR = dirname(fileURLToPath("file:///Users/lychee/.pi/agent/extensions/ly-pi/index.js"));
+const EXT_DIR = dirname(
+  fileURLToPath("file:///Users/lychee/.pi/agent/extensions/ly-pi/index.js"),
+);
 const CONFIG_PATH = join(EXT_DIR, "my-sound.json");
 
 console.log("EXT_DIR:", EXT_DIR);
@@ -23,7 +25,12 @@ try {
 
   if (!pack) {
     const fallbackDir = resolve(EXT_DIR, "sounds");
-    console.log("No pack found, fallback:", fallbackDir, "exists:", existsSync(fallbackDir));
+    console.log(
+      "No pack found, fallback:",
+      fallbackDir,
+      "exists:",
+      existsSync(fallbackDir),
+    );
   } else {
     const soundDir = resolve(EXT_DIR, pack.soundDir);
     console.log("soundDir:", soundDir, "exists:", existsSync(soundDir));
