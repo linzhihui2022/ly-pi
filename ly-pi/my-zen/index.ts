@@ -32,6 +32,7 @@ import {
   parseZenMode,
   saveZenConfig,
   setToolDisplayOverrides,
+  syncThemeWithMode,
   ZEN_CONFIG_PATH,
   ZEN_MODES,
   type ZenMode,
@@ -343,6 +344,10 @@ function renderZenResult(
 export default function myZen(pi: ExtensionAPI): void {
   const home = homedir();
   currentMode = loadZenConfig(ZEN_CONFIG_PATH).mode;
+  // Keep the theme aligned with the mode (inverted user message colors live
+  // in the zen theme variant). Silent heal: the switch takes effect on the
+  // next reload.
+  syncThemeWithMode(currentMode);
 
   if (currentMode !== "off") {
     // User messages: zero vertical padding, accent bar at the left edge.
@@ -453,6 +458,7 @@ export default function myZen(pi: ExtensionAPI): void {
       currentMode = next;
       try {
         saveZenConfig(ZEN_CONFIG_PATH, { mode: next });
+        syncThemeWithMode(next);
       } catch (err) {
         ctx.ui.notify(
           `配置写入失败：${err instanceof Error ? err.message : String(err)}`,

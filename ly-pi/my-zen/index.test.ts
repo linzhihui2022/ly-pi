@@ -36,6 +36,9 @@ vi.mock("@earendil-works/pi-tui", () => ({
 
 // ── Mock fs: path-aware, switchable contents; writes are captured ───────────
 let zenConfigContent = JSON.stringify({ mode: "on" });
+let settingsContent: string | undefined = JSON.stringify({
+  theme: "catppuccin-mocha-zen",
+});
 let toolDisplayConfigContent: string | undefined = JSON.stringify({
   debug: false,
   registerToolOverrides: {
@@ -54,6 +57,12 @@ const writtenFiles: Array<{ path: string; data: string }> = [];
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn((path: string) => {
     if (path.includes("my-zen")) return zenConfigContent;
+    if (path.includes("settings.json")) {
+      if (settingsContent === undefined) {
+        throw new Error("ENOENT");
+      }
+      return settingsContent;
+    }
     if (path.includes("pi-tool-display")) {
       if (toolDisplayConfigContent === undefined) {
         throw new Error("ENOENT");
@@ -244,6 +253,7 @@ beforeEach(() => {
     ];
   };
   zenConfigContent = JSON.stringify({ mode: "on" });
+  settingsContent = JSON.stringify({ theme: "catppuccin-mocha-zen" });
   toolDisplayConfigContent = JSON.stringify({
     debug: false,
     registerToolOverrides: { read: false, write: false },
@@ -728,6 +738,7 @@ describe("my-zen extension (off mode)", () => {
 
   beforeEach(() => {
     zenConfigContent = JSON.stringify({ mode: "off" });
+    settingsContent = JSON.stringify({ theme: "catppuccin-mocha" });
     // restore the native prototype between tests (patches are prototype-global)
     const proto =
       MockToolExecutionComponent.prototype as unknown as Record<
@@ -766,6 +777,13 @@ describe("my-zen extension (off mode)", () => {
     const zenWrite = writtenFiles.find((f) => f.path.includes("my-zen"));
     expect(JSON.parse(zenWrite?.data ?? "{}")).toEqual({ mode: "on" });
 
+    const settingsWrite = writtenFiles.find((f) =>
+      f.path.includes("settings.json"),
+    );
+    expect(JSON.parse(settingsWrite?.data ?? "{}").theme).toBe(
+      "catppuccin-mocha-zen",
+    );
+
     const displayWrite = writtenFiles.find((f) =>
       f.path.includes("pi-tool-display"),
     );
@@ -798,6 +816,14 @@ describe("/zen command", () => {
     ).toBe(true);
     // unrelated keys are preserved
     expect(parsed.mcpOutputMode).toBe("hidden");
+
+    // theme follows the mode: off hands the default (non-inverted) theme back
+    const settingsWrite = writtenFiles.find((f) =>
+      f.path.includes("settings.json"),
+    );
+    expect(JSON.parse(settingsWrite?.data ?? "{}").theme).toBe(
+      "catppuccin-mocha",
+    );
 
     expect(ctx.reload).toHaveBeenCalled();
     expect(ctx.ui.notify).toHaveBeenCalledWith(
@@ -837,10 +863,58 @@ describe("/zen command", () => {
 
     const zenWrite = writtenFiles.find((f) => f.path.includes("my-zen"));
     expect(JSON.parse(zenWrite?.data ?? "{}")).toEqual({ mode: "off" });
+    const settingsWrite = writtenFiles.find((f) =>
+      f.path.includes("settings.json"),
+    );
+    expect(JSON.parse(settingsWrite?.data ?? "{}").theme).toBe(
+      "catppuccin-mocha",
+    );
     expect(ctx.reload).toHaveBeenCalled();
     expect(ctx.ui.notify).toHaveBeenCalledWith(
       expect.stringContaining("off"),
       "info",
+    );
+  });
+
+  it("switches the theme to the zen variant when turning on", async () => {
+    zenConfigContent = JSON.stringify({ mode: "off" });
+    settingsContent = JSON.stringify({ theme: "catppuccin-mocha" });
+    await initExtension();
+    const ctx = makeCtx();
+    await zenCommand().handler("on", ctx as never);
+
+    const settingsWrite = writtenFiles.find((f) =>
+      f.path.includes("settings.json"),
+    );
+    expect(JSON.parse(settingsWrite?.data ?? "{}").theme).toBe(
+      "catppuccin-mocha-zen",
+    );
+    expect(ctx.reload).toHaveBeenCalled();
+  });
+
+  it("heals the theme on load when mode is on but theme is default", async () => {
+    settingsContent = JSON.stringify({ theme: "catppuccin-mocha" });
+    await initExtension();
+    const settingsWrite = writtenFiles.find((f) =>
+      f.path.includes("settings.json"),
+    );
+    expect(JSON.parse(settingsWrite?.data ?? "{}").theme).toBe(
+      "catppuccin-mocha-zen",
+    );
+  });
+
+  it("does not touch settings when the theme already matches", async () => {
+    await initExtension();
+    expect(writtenFiles.some((f) => f.path.includes("settings.json"))).toBe(
+      false,
+    );
+  });
+
+  it("leaves a missing settings file alone on load", async () => {
+    settingsContent = undefined;
+    await initExtension();
+    expect(writtenFiles.some((f) => f.path.includes("settings.json"))).toBe(
+      false,
     );
   });
 

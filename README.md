@@ -78,7 +78,7 @@ configure/
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
 | **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |
-| **my-zen** | 禅模式渲染：内置工具（read/bash/edit/write/grep/find/ls）用 `renderShell: "self"` 去掉外壳 padding，执行中一行 dim 摘要、完成后 0 行隐形；错误与非零退出码单行红色提示，`ctrl+o` 展开全文。patch 共享组件 `ToolExecutionComponent` 原型，对全部非内置工具（MCP、扩展工具，如 todo/web_search/chrome-devtools）应用同样渲染（各扩展的 ExtensionAPI 对象彼此独立，registerTool 拦截只能覆盖 ly-pi 自身，组件原型 patch 才能全局生效）。user 消息 patch `rebuild` 强制零垂直 padding（保留原生整行背景色条与左右边距，与 pi-tool-display 的 render patch 无冲突）。`/zen` 切换开关，`/zen off` 交还 pi-tool-display（自动改写双方配置并 reload） |
+| **my-zen** | 禅模式渲染：内置工具（read/bash/edit/write/grep/find/ls）用 `renderShell: "self"` 去掉外壳 padding，执行中一行 dim 摘要、完成后 0 行隐形；错误与非零退出码单行红色提示，`ctrl+o` 展开全文。patch 共享组件 `ToolExecutionComponent` 原型，对全部非内置工具（MCP、扩展工具，如 todo/web_search/chrome-devtools）应用同样渲染（各扩展的 ExtensionAPI 对象彼此独立，registerTool 拦截只能覆盖 ly-pi 自身，组件原型 patch 才能全局生效）。user 消息 patch `rebuild` 强制零垂直 padding（保留原生整行背景色条与左右边距，与 pi-tool-display 的 render patch 无冲突）。`/zen` 切换开关，切换时同步 `settings.json` 的 theme（zen 主题 `catppuccin-mocha-zen` 反色 user message / off 交还默认主题与 pi-tool-display，自动改写双方配置并 reload） |
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
-  "name": "catppuccin-mocha",
+  "name": "catppuccin-mocha-zen",
   "vars": {
     "rosewater": "#f5e0dc",
     "flamingo": "#f2cdcd",
@@ -42,8 +42,8 @@
     "text": "text",
     "thinkingText": "subtext0",
     "selectedBg": "surface0",
-    "userMessageBg": "surface0",
-    "userMessageText": "text",
+    "userMessageBg": "subtext0",
+    "userMessageText": "base",
     "customMessageBg": "surface0",
     "customMessageText": "text",
     "customMessageLabel": "blue",

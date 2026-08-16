@@ -8,6 +8,7 @@ import {
   parseZenMode,
   saveZenConfig,
   setToolDisplayOverrides,
+  syncThemeWithMode,
 } from "./config";
 
 let dir: string;
@@ -146,5 +147,61 @@ describe("setToolDisplayOverrides", () => {
     writeFileSync(path, "oops{");
     expect(setToolDisplayOverrides(true, path)).toBe(false);
     expect(readFileSync(path, "utf-8")).toBe("oops{");
+  });
+});
+
+describe("syncThemeWithMode", () => {
+  let settingsPath: string;
+
+  beforeEach(() => {
+    settingsPath = join(dir, "settings.json");
+  });
+
+  it("writes the zen theme when mode is on and theme differs", () => {
+    writeFileSync(settingsPath, JSON.stringify({ theme: "catppuccin-mocha" }));
+    expect(syncThemeWithMode("on", settingsPath)).toBe(true);
+    const written = JSON.parse(readFileSync(settingsPath, "utf-8"));
+    expect(written.theme).toBe("catppuccin-mocha-zen");
+  });
+
+  it("does not write when mode is on and theme already matches", () => {
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({ theme: "catppuccin-mocha-zen" }),
+    );
+    expect(syncThemeWithMode("on", settingsPath)).toBe(false);
+  });
+
+  it("writes the default theme when mode is off and theme is zen", () => {
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({ theme: "catppuccin-mocha-zen" }),
+    );
+    expect(syncThemeWithMode("off", settingsPath)).toBe(true);
+    const written = JSON.parse(readFileSync(settingsPath, "utf-8"));
+    expect(written.theme).toBe("catppuccin-mocha");
+  });
+
+  it("does not write when mode is off and theme is default", () => {
+    writeFileSync(settingsPath, JSON.stringify({ theme: "catppuccin-mocha" }));
+    expect(syncThemeWithMode("off", settingsPath)).toBe(false);
+  });
+
+  it("writes the theme when the field is missing", () => {
+    writeFileSync(settingsPath, JSON.stringify({ quietStartup: true }));
+    expect(syncThemeWithMode("on", settingsPath)).toBe(true);
+    const written = JSON.parse(readFileSync(settingsPath, "utf-8"));
+    expect(written.theme).toBe("catppuccin-mocha-zen");
+    expect(written.quietStartup).toBe(true);
+  });
+
+  it("returns false when the settings file does not exist", () => {
+    expect(syncThemeWithMode("on", settingsPath)).toBe(false);
+  });
+
+  it("returns false on invalid JSON without writing", () => {
+    writeFileSync(settingsPath, "oops{");
+    expect(syncThemeWithMode("on", settingsPath)).toBe(false);
+    expect(readFileSync(settingsPath, "utf-8")).toBe("oops{");
   });
 });

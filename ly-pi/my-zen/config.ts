@@ -33,6 +33,40 @@ export const TOOL_DISPLAY_CONFIG_PATH = join(
   "config.json",
 );
 
+export const SETTINGS_PATH = join(homedir(), ".pi", "agent", "settings.json");
+
+export const ZEN_THEME_NAME = "catppuccin-mocha-zen";
+export const DEFAULT_THEME_NAME = "catppuccin-mocha";
+
+export function expectedThemeForMode(mode: ZenMode): string {
+  return mode === "on" ? ZEN_THEME_NAME : DEFAULT_THEME_NAME;
+}
+
+/**
+ * Keep settings.json's theme aligned with the zen mode. The inverted user
+ * message colors live in the zen theme, so switching modes must switch
+ * themes too. Returns true when the settings file was rewritten.
+ */
+export function syncThemeWithMode(
+  mode: ZenMode,
+  settingsPath: string = SETTINGS_PATH,
+): boolean {
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(readFileSync(settingsPath, "utf-8")) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return false;
+  }
+  const expected = expectedThemeForMode(mode);
+  if (raw.theme === expected) return false;
+  raw.theme = expected;
+  writeFileSync(settingsPath, `${JSON.stringify(raw, null, 2)}\n`, "utf-8");
+  return true;
+}
+
 const TOOL_OVERRIDE_KEYS = [
   "read",
   "grep",
