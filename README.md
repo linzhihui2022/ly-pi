@@ -12,7 +12,7 @@
 
 ```
 configure/
-├── ly-pi/                    # 统一扩展入口（单包，含全部 11 个子模块）
+├── ly-pi/                    # 统一扩展入口（单包，含全部 10 个子模块）
 │   ├── index.ts              # 入口：按序注册所有子模块
 │   ├── my-cd-guard/          # 冗余 cd 前缀自动纠正
 │   ├── my-script-guard/      # 内联脚本硬拦截 + 急迫升级
@@ -24,7 +24,6 @@ configure/
 │   ├── my-sound/             # 音效反馈 + 语音包管理
 │   ├── my-hud/               # 自定义 HUD 状态栏
 │   ├── my-vision/            # 按模型视觉能力注入图片处理规则
-│   ├── my-zen/               # 内置工具禅模式渲染（self-shell，/zen 开关）
 │   ├── web-preview/          # 内部工具库：HTML 预览 server + 文档骨架
 │   ├── shared/               # 跨模块共享（guard-harness 等）
 │   ├── assets/               # 部署资产（随 bun run deploy 分发到 ~/.pi/agent/）
@@ -78,7 +77,6 @@ configure/
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-hud** | 自定义单行状态栏：项目名、模型、Git 分支、上下文窗口百分比（颜色阈值）、Token 用量与成本 |
 | **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |
-| **my-zen** | 禅模式渲染：内置工具（read/bash/edit/write/grep/find/ls）用 `renderShell: "self"` 去掉外壳 padding，执行中一行 dim 摘要、完成后 0 行隐形；错误与非零退出码单行红色提示，`ctrl+o` 展开全文。patch 共享组件 `ToolExecutionComponent` 原型，对全部非内置工具（MCP、扩展工具，如 todo/web_search/chrome-devtools）应用同样渲染（各扩展的 ExtensionAPI 对象彼此独立，registerTool 拦截只能覆盖 ly-pi 自身，组件原型 patch 才能全局生效）。user 消息 patch `rebuild` 强制零垂直 padding（保留原生整行背景色条与左右边距，与 pi-tool-display 的 render patch 无冲突）。`/zen` 切换开关，切换时同步 `settings.json` 的 theme（zen 主题 `catppuccin-mocha-zen` 反色 user message / off 交还默认主题与 pi-tool-display，自动改写双方配置并 reload） |
 
 ---
 
@@ -124,11 +122,10 @@ configure/
 | 配置 | 说明 |
 |------|------|
 | `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
-| `assets/config/pi-tool-display.json` | pi-tool-display 配置：registerToolOverrides 与 enableNativeUserMessageBox 已关闭（工具与 user 消息渲染由 my-zen 接管），保留 MCP 输出隐藏等功能 |
+| `assets/config/pi-tool-display.json` | pi-tool-display 配置：registerToolOverrides 接管内置工具渲染、enableNativeUserMessageBox 接管 user 消息渲染，保留 MCP 输出隐藏等功能 |
 | `assets/config/settings.json` | 子代理模型绑定与 fallback（部署时按 `settings-schema.json` 校验） |
 | `assets/config/mcp.json` | MCP 服务器配置（Chrome DevTools、Notion、Linear 等） |
 | `assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
-| `assets/config/my-zen.json` | my-zen 禅模式开关（`on` / `off` 交还 pi-tool-display） |
 | `assets/config/my-back.json` | `/back` 命令配置 |
 | `assets/config/append-system.md` | 追加到系统提示的全局指令 |
 | `assets/config/web-search.json` / `rpiv-todo.json` | 第三方扩展配置 |

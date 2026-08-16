@@ -193,12 +193,6 @@ async function write(path: string, data: string | Uint8Array) {
       label: "my-sound.json",
     },
     {
-      src: "my-zen.json",
-      dest: "my-zen.json",
-      base: extDir,
-      label: "my-zen.json",
-    },
-    {
       src: "my-back.json",
       dest: "my-back.json",
       base: extDir,
