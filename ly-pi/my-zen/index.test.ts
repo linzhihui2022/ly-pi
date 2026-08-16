@@ -146,10 +146,11 @@ const registeredTools = new Map<string, ToolDef>();
 const registeredCommands = new Map<string, CommandDef>();
 type EventHandler = (event: never, ctx: never) => unknown;
 const eventHandlers = new Map<string, EventHandler[]>();
+const originalRegisterTool = vi.fn((def: ToolDef) => {
+  registeredTools.set(def.name, def);
+});
 const mockPi = {
-  registerTool: vi.fn((def: ToolDef) => {
-    registeredTools.set(def.name, def);
-  }),
+  registerTool: originalRegisterTool,
   registerCommand: vi.fn((name: string, def: CommandDef) => {
     registeredCommands.set(name, def);
   }),
@@ -187,6 +188,8 @@ beforeEach(() => {
   registeredCommands.clear();
   eventHandlers.clear();
   writtenFiles.length = 0;
+  // my-zen wraps pi.registerTool; restore the plain mock between tests
+  mockPi.registerTool = originalRegisterTool;
   // restore the native rebuild between tests (patches are prototype-global)
   MockUserMessageComponent.prototype.rebuild = function (this: {
     children: Array<{
@@ -496,6 +499,176 @@ describe("my-zen extension (on mode)", () => {
       expect(component?.render(120).join("\n")).toContain("image");
     });
   });
+
+  describe("global tool interceptor", () => {
+    interface ForeignTool {
+      name: string;
+      description?: string;
+      parameters?: unknown;
+      execute?: () => Promise<unknown>;
+      renderShell?: string;
+      renderCall?: (
+        args: Record<string, unknown>,
+        theme: unknown,
+        context?: { isPartial?: boolean; expanded?: boolean },
+      ) => { render: (w: number) => string[] };
+      renderResult?: (
+        result: unknown,
+        options: { expanded: boolean; isPartial: boolean },
+        theme: unknown,
+        context?: { isError?: boolean },
+      ) => { render: (w: number) => string[] };
+    }
+
+    const foreignResult = (text: string) => ({
+      content: [{ type: "text", text }],
+    });
+    const plainComponent = (lines: string[]) => ({ render: () => lines });
+
+    async function flushMicrotasks() {
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+
+    it("wraps pi.registerTool when zen is on", async () => {
+      await initExtension();
+      expect(mockPi.registerTool).not.toBe(originalRegisterTool);
+    });
+
+    it("zenifies a foreign tool with existing renderers after registration", async () => {
+      await initExtension();
+      const originalCall = vi.fn(() => plainComponent(["native call"]));
+      const originalResult = vi.fn(() => plainComponent(["native result"]));
+      const def: ForeignTool = {
+        name: "chrome-devtools_click",
+        renderShell: "default",
+        renderCall: originalCall,
+        renderResult: originalResult,
+      };
+      mockPi.registerTool(def as never);
+      await flushMicrotasks();
+
+      expect(def.renderShell).toBe("self");
+
+      const settledCall = def.renderCall?.(
+        { uid: "7" },
+        theme,
+        { isPartial: false, expanded: false },
+      );
+      expect(settledCall?.render(80)).toHaveLength(0);
+
+      const runningCall = def.renderCall?.(
+        { uid: "7" },
+        theme,
+        { isPartial: true, expanded: false },
+      );
+      expect(runningCall?.render(80)).toEqual(["chrome-devtools_click 7"]);
+
+      const expandedCall = def.renderCall?.(
+        { uid: "7" },
+        theme,
+        { isPartial: false, expanded: true },
+      );
+      expect(originalCall).toHaveBeenCalled();
+      expect(expandedCall?.render(80)).toEqual(["native call"]);
+
+      const settledResult = def.renderResult?.(
+        foreignResult("ok"),
+        { expanded: false, isPartial: false },
+        theme,
+        {},
+      );
+      expect(settledResult?.render(80)).toHaveLength(0);
+
+      const errorResult = def.renderResult?.(
+        foreignResult("boom\nmore"),
+        { expanded: false, isPartial: false },
+        theme,
+        { isError: true },
+      );
+      expect(errorResult?.render(80)).toEqual(["boom"]);
+
+      const expandedResult = def.renderResult?.(
+        foreignResult("ok"),
+        { expanded: true, isPartial: false },
+        theme,
+        {},
+      );
+      expect(originalResult).toHaveBeenCalled();
+      expect(expandedResult?.render(80)).toEqual(["native result"]);
+    });
+
+    it("adds a zen renderCall to tools without one", async () => {
+      await initExtension();
+      const def: ForeignTool = { name: "web_search" };
+      mockPi.registerTool(def as never);
+      await flushMicrotasks();
+
+      const running = def.renderCall?.(
+        { query: "hello" },
+        theme,
+        { isPartial: true, expanded: false },
+      );
+      expect(running?.render(80)).toEqual(["web_search hello"]);
+    });
+
+    it("falls back to extracted text when expanding a tool without renderResult", async () => {
+      await initExtension();
+      const def: ForeignTool = { name: "web_search" };
+      mockPi.registerTool(def as never);
+      await flushMicrotasks();
+
+      const expanded = def.renderResult?.(
+        foreignResult("answer text"),
+        { expanded: true, isPartial: false },
+        theme,
+        {},
+      );
+      expect(expanded?.render(80)).toEqual(["answer text"]);
+    });
+
+    it("leaves the seven zen-owned built-in names untouched", async () => {
+      await initExtension();
+      const def: ForeignTool = {
+        name: "bash",
+        renderCall: vi.fn(() => plainComponent(["native call"])),
+      };
+      mockPi.registerTool(def as never);
+      await flushMicrotasks();
+
+      const out = def.renderCall?.(
+        { command: "ls" },
+        theme,
+        { isPartial: false, expanded: false },
+      );
+      expect(out?.render(80)).toEqual(["native call"]);
+    });
+
+    it("does not double-wrap a tool that registers twice", async () => {
+      await initExtension();
+      const def: ForeignTool = {
+        name: "todo",
+        renderCall: vi.fn(() => plainComponent(["native call"])),
+      };
+      mockPi.registerTool(def as never);
+      mockPi.registerTool(def as never);
+      await flushMicrotasks();
+
+      const running = def.renderCall?.(
+        { action: "list" },
+        theme,
+        { isPartial: true, expanded: false },
+      );
+      expect(running?.render(80)).toEqual(["todo list"]);
+    });
+
+    it("restores pi.registerTool on session shutdown with reason reload", async () => {
+      await initExtension();
+      expect(mockPi.registerTool).not.toBe(originalRegisterTool);
+      await emit("session_shutdown", { reason: "reload" }, {});
+      expect(mockPi.registerTool).toBe(originalRegisterTool);
+    });
+  });
 });
 
 describe("my-zen extension (off mode)", () => {
@@ -514,6 +687,15 @@ describe("my-zen extension (off mode)", () => {
     const instance = new MockUserMessageComponent();
     MockUserMessageComponent.prototype.rebuild.call(instance);
     expect(instance.outputPad).toBe(1);
+  });
+
+  it("does not wrap pi.registerTool", async () => {
+    await initExtension();
+    expect(mockPi.registerTool).toBe(originalRegisterTool);
+    const def: { name: string; renderCall?: unknown } = { name: "web_search" };
+    mockPi.registerTool(def as never);
+    await Promise.resolve();
+    expect(def.renderCall).toBeUndefined();
   });
 
   it("bare /zen toggles back to on, writes both configs and reloads", async () => {

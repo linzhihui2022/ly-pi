@@ -6,6 +6,7 @@ import {
   firstLine,
   flattenCommand,
   formatCallText,
+  formatGenericCallText,
   hasImage,
   shortenPath,
   truncate,
@@ -247,5 +248,53 @@ describe("formatCallText", () => {
 
   it("formats unknown tool as its name", () => {
     expect(formatCallText("mystery", {}, home)).toBe("mystery");
+  });
+});
+
+describe("formatGenericCallText", () => {
+  it("uses the first non-empty string argument as the summary", () => {
+    expect(
+      formatGenericCallText("chrome-devtools_click", {
+        uid: "12",
+        includeSnapshot: false,
+      }),
+    ).toBe("chrome-devtools_click 12");
+  });
+
+  it("collapses multi-line strings into a single line", () => {
+    expect(
+      formatGenericCallText("web_search", {
+        query: "line one\nline two",
+      }),
+    ).toBe("web_search line one line two");
+  });
+
+  it("skips empty strings when searching for the summary argument", () => {
+    expect(formatGenericCallText("mcp", { server: "", tool: "search" })).toBe(
+      "mcp search",
+    );
+  });
+
+  it("falls back to the arg count when no string argument exists", () => {
+    expect(formatGenericCallText("todo", { count: 3, enable: true })).toBe(
+      "todo (2 args)",
+    );
+  });
+
+  it("falls back to the bare tool name with no arguments", () => {
+    expect(formatGenericCallText("mcp", {})).toBe("mcp");
+  });
+
+  it("treats undefined args as empty", () => {
+    expect(
+      formatGenericCallText("mcp", undefined as unknown as Record<string, unknown>),
+    ).toBe("mcp");
+  });
+
+  it("truncates very long summaries", () => {
+    const long = "x".repeat(200);
+    const out = formatGenericCallText("fetch", { url: long });
+    expect(out.length).toBeLessThanOrEqual("fetch ".length + 80);
+    expect(out.endsWith("…")).toBe(true);
   });
 });

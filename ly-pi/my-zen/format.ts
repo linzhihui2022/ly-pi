@@ -64,6 +64,24 @@ export function countLines(text: string): number {
 }
 
 const MAX_COMMAND_LENGTH = 120;
+const MAX_GENERIC_ARG_LENGTH = 80;
+
+/** Format the single-line renderCall summary for a non-built-in tool. */
+export function formatGenericCallText(
+  tool: string,
+  args: Record<string, unknown>,
+): string {
+  const values = Object.values(args ?? {});
+  const firstString = values.find(
+    (v) => typeof v === "string" && v.trim().length > 0,
+  );
+  if (typeof firstString === "string") {
+    const collapsed = firstString.replace(/\s+/g, " ").trim();
+    return `${tool} ${truncate(collapsed, MAX_GENERIC_ARG_LENGTH)}`;
+  }
+  if (values.length > 0) return `${tool} (${values.length} args)`;
+  return tool;
+}
 
 /** Format the single-line renderCall summary for a built-in tool. */
 export function formatCallText(

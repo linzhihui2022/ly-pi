@@ -40,6 +40,7 @@ import {
   extractText,
   firstLine,
   formatCallText,
+  formatGenericCallText,
   hasImage,
   type ToolResultLike,
 } from "./format";
@@ -142,6 +143,104 @@ function restoreUserMessageRebuild(): void {
   }
 }
 
+// ── Global tool interceptor ─────────────────────────────────────────────────
+// pi-tool-display force-decorates MCP tools (overrideExistingRenderers: true)
+// with a persistent "MCP xxx" call line that survives settling — zen mode
+// wants zero lines. Extensions cannot enumerate real tool definitions
+// (getAllTools returns copies), so we intercept pi.registerTool and zenify
+// each non-built-in tool after all synchronous decorations settle —
+// queueMicrotask wins regardless of interceptor nesting order.
+
+const ZEN_OWNED_TOOLS = new Set([
+  "read",
+  "bash",
+  "edit",
+  "write",
+  "grep",
+  "find",
+  "ls",
+]);
+
+interface ForeignToolDefinition {
+  name?: string;
+  renderShell?: string;
+  renderCall?: (
+    args: Record<string, unknown>,
+    theme: Theme,
+    context?: { isPartial?: boolean; expanded?: boolean },
+  ) => unknown;
+  renderResult?: (
+    result: ToolResultLike,
+    options: { expanded?: boolean; isPartial?: boolean },
+    theme: Theme,
+    context?: { isError?: boolean },
+  ) => unknown;
+}
+
+const zenifiedTools = new WeakSet<object>();
+
+function zenifyForeignTool(tool: ForeignToolDefinition): void {
+  if (zenifiedTools.has(tool)) return;
+  zenifiedTools.add(tool);
+
+  const name = tool.name ?? "tool";
+  const originalCall = tool.renderCall;
+  const originalResult = tool.renderResult;
+
+  tool.renderShell = "self";
+  tool.renderCall = (args, theme, context) => {
+    const expanded = context?.expanded ?? false;
+    const isPartial = context?.isPartial ?? true;
+    if (expanded && originalCall) {
+      return originalCall(args, theme, context);
+    }
+    if (!expanded && !isPartial) return EMPTY_COMPONENT;
+    return new Text(
+      theme.fg("dim", formatGenericCallText(name, args ?? {})),
+      0,
+      0,
+    );
+  };
+  tool.renderResult = (result, options, theme, context) => {
+    if (options?.isPartial) return EMPTY_COMPONENT;
+    if (context?.isError) {
+      const text = extractText(result);
+      return new Text(theme.fg("error", firstLine(text ?? name)), 0, 0);
+    }
+    if (!(options?.expanded ?? false)) return EMPTY_COMPONENT;
+    if (originalResult) return originalResult(result, options, theme, context);
+    const text = extractText(result);
+    return text
+      ? new Text(theme.fg("toolOutput", text.trimEnd()), 0, 0)
+      : EMPTY_COMPONENT;
+  };
+}
+
+let savedRegisterTool: ExtensionAPI["registerTool"] | undefined;
+let wrappedRegisterTool: ExtensionAPI["registerTool"] | undefined;
+
+function installRegisterToolInterceptor(pi: ExtensionAPI): void {
+  const previous = pi.registerTool;
+  const wrapped = ((tool: Parameters<ExtensionAPI["registerTool"]>[0]) => {
+    previous.call(pi, tool);
+    if (!ZEN_OWNED_TOOLS.has(tool.name)) {
+      queueMicrotask(() =>
+        zenifyForeignTool(tool as unknown as ForeignToolDefinition),
+      );
+    }
+  }) as ExtensionAPI["registerTool"];
+  savedRegisterTool = previous;
+  wrappedRegisterTool = wrapped;
+  pi.registerTool = wrapped;
+}
+
+function restoreRegisterToolInterceptor(pi: ExtensionAPI): void {
+  if (wrappedRegisterTool && pi.registerTool === wrappedRegisterTool) {
+    pi.registerTool = savedRegisterTool as ExtensionAPI["registerTool"];
+  }
+  wrappedRegisterTool = undefined;
+}
+
 function colorizeDiff(diff: string, theme: Theme): string {
   return diff
     .split("\n")
@@ -209,12 +308,15 @@ export default function myZen(pi: ExtensionAPI): void {
   if (currentMode !== "off") {
     // User messages: zero vertical padding, accent bar at the left edge.
     patchUserMessageRebuild();
+    // Foreign tools: zen renderers applied after every synchronous decoration.
+    installRegisterToolInterceptor(pi);
     pi.on("session_start", async (_event, ctx) => {
       activeTheme = ctx.ui.theme;
     });
     pi.on("session_shutdown", async (event) => {
       if ((event as { reason?: string }).reason === "reload") {
         restoreUserMessageRebuild();
+        restoreRegisterToolInterceptor(pi);
       }
     });
 
