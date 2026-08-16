@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { classifyStatusError, parseStatusList } from "./git";
+import {
+  classifyStatusError,
+  fetchChangedFiles,
+  fetchDiffHead,
+  fetchUntrackedContent,
+  parseStatusList,
+} from "./git";
 
 describe("parseStatusList", () => {
   it("returns empty list for clean tree", () => {
@@ -78,5 +84,88 @@ describe("classifyStatusError", () => {
   it("classifies non-Error values as fatal", () => {
     expect(classifyStatusError("boom")).toBe("fatal");
     expect(classifyStatusError(undefined)).toBe("fatal");
+  });
+});
+
+// Wiring tests at the git/fs boundary: inject fakes per mocking.md (DI at
+// system boundaries). These lock OUR half of the contract — what command we
+// send and how output/errors flow — not git's behavior itself.
+describe("fetchChangedFiles wiring", () => {
+  const okRun = (stdout: string) => async () => ({ stdout });
+
+  it("sends porcelain status with quotepath disabled in the given cwd", async () => {
+    const calls: Array<{ cmd: string; opts: { cwd: string } }> = [];
+    const run = async (cmd: string, opts: { cwd: string }) => {
+      calls.push({ cmd, opts });
+      return { stdout: "" };
+    };
+    await fetchChangedFiles("/repo", run);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].cmd).toContain("core.quotepath=false");
+    expect(calls[0].cmd).toContain("status --porcelain");
+    expect(calls[0].opts.cwd).toBe("/repo");
+  });
+
+  it("parses stdout into the changed-file list", async () => {
+    const files = await fetchChangedFiles(
+      "/repo",
+      okRun(" M b.ts\n?? 中文.ts\n"),
+    );
+    expect(files).toEqual([
+      { status: "M", path: "b.ts" },
+      { status: "?", path: "中文.ts" },
+    ]);
+  });
+
+  it("returns null for not-a-repo errors", async () => {
+    const run = async () => {
+      throw new Error("fatal: not a git repository (or any of the parent)");
+    };
+    expect(await fetchChangedFiles("/nowhere", run)).toBeNull();
+  });
+
+  it("rethrows fatal errors", async () => {
+    const run = async () => {
+      throw new Error("Command timed out");
+    };
+    await expect(fetchChangedFiles("/repo", run)).rejects.toThrow(
+      "Command timed out",
+    );
+  });
+});
+
+describe("fetchDiffHead wiring", () => {
+  it("sends git diff HEAD with the JSON-quoted path", async () => {
+    const calls: string[] = [];
+    const run = async (cmd: string) => {
+      calls.push(cmd);
+      return { stdout: "diff-output" };
+    };
+    const out = await fetchDiffHead("/repo", 'src/sp "ace".ts', run);
+    expect(out).toBe("diff-output");
+    expect(calls[0]).toContain("git diff HEAD --");
+    expect(calls[0]).toContain('"src/sp \\"ace\\".ts"');
+  });
+});
+
+describe("fetchUntrackedContent wiring", () => {
+  it("reads <cwd>/<path> as utf8", async () => {
+    const seen: string[] = [];
+    const read = async (p: string) => {
+      seen.push(p);
+      return "file-content";
+    };
+    const out = await fetchUntrackedContent("/repo", "src/u.ts", read);
+    expect(out).toBe("file-content");
+    expect(seen[0]).toBe("/repo/src/u.ts");
+  });
+
+  it("propagates read failures", async () => {
+    const read = async () => {
+      throw new Error("ENOENT");
+    };
+    await expect(
+      fetchUntrackedContent("/repo", "gone.ts", read),
+    ).rejects.toThrow("ENOENT");
   });
 });

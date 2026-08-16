@@ -10,6 +10,15 @@ import type { ChangedFile } from "./types";
 
 const execAsync = promisify(exec);
 
+/** Shell-out seam for tests (DI per mocking.md: inject at system boundaries). */
+export type ExecRunner = (
+  command: string,
+  options: { cwd: string; timeout: number; maxBuffer?: number },
+) => Promise<{ stdout: string }>;
+
+/** File-read seam for tests. */
+export type FileReader = (path: string, encoding: "utf8") => Promise<string>;
+
 /**
  * Parse `git status --porcelain` (v1) output into changed files.
  * The command runs with `-c core.quotepath=false`, so paths arrive
@@ -60,9 +69,10 @@ export function classifyStatusError(err: unknown): "not-repo" | "fatal" {
  */
 export async function fetchChangedFiles(
   cwd: string,
+  run: ExecRunner = execAsync,
 ): Promise<ChangedFile[] | null> {
   try {
-    const { stdout } = await execAsync(
+    const { stdout } = await run(
       "git -c core.quotepath=false status --porcelain",
       { cwd, timeout: 3000 },
     );
@@ -79,18 +89,21 @@ export async function fetchChangedFiles(
 export async function fetchUntrackedContent(
   cwd: string,
   path: string,
+  read: FileReader = readFile,
 ): Promise<string> {
-  return readFile(join(cwd, path), "utf8");
+  return read(join(cwd, path), "utf8");
 }
 
 /** Fetch `git diff HEAD -- <path>` for a tracked file. */
 export async function fetchDiffHead(
   cwd: string,
   path: string,
+  run: ExecRunner = execAsync,
 ): Promise<string> {
-  const { stdout } = await execAsync(
-    `git diff HEAD -- ${JSON.stringify(path)}`,
-    { cwd, timeout: 5000, maxBuffer: 16 * 1024 * 1024 },
-  );
+  const { stdout } = await run(`git diff HEAD -- ${JSON.stringify(path)}`, {
+    cwd,
+    timeout: 5000,
+    maxBuffer: 16 * 1024 * 1024,
+  });
   return stdout;
 }
