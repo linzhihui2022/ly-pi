@@ -4,10 +4,19 @@
 
 **Blocked by:** 01 — 打通主干：/diff 选择器 + 已跟踪文件 diff 直通
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] 二进制文件/diff 选中后显示占位提示文案
-- [ ] 输出超 500 行（diff 与 untracked 全文同标准）显示占位提示文案
-- [ ] 恰好 500 行正常展示，501 行触发占位（边界清晰）
-- [ ] 二进制检测与行数阈值分支有单元测试，覆盖率达标
-- [ ] `bun run check-docs` 通过
+- [x] 二进制文件/diff 选中后显示占位提示文案
+- [x] 输出超 500 行（diff 与 untracked 全文同标准）显示占位提示文案
+- [x] 恰好 500 行正常展示，501 行触发占位（边界清晰）
+- [x] 二进制检测与行数阈值分支有单元测试，覆盖率达标
+- [x] `bun run check-docs` 通过
+
+## Comments
+
+实现备忘（2026-08）：
+
+- 护栏收敛在 `buildDiffView`（view.ts）：先判二进制（NUL 字节或 git 的 `Binary files ... differ` 标记）→ "Binary file, not shown"；再判行数 > 500 → "Output too large (N lines, limit 500), not shown"
+- 占位文案作为 DiffView.lines 的单行输出，随主题 context 色渲染，视图组件零改动
+- 500/501 边界、NUL 内容、git 二进制 diff 三类分支均有 fixture 测试
+- 已 `bun run deploy`；`/reload` 后可验证。至此 spec 全部三票完成

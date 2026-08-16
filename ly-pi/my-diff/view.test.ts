@@ -58,4 +58,31 @@ describe("buildDiffView", () => {
     expect(view.title).toBe("? src/u.ts");
     expect(view.lines).toEqual(["line1", "line2"]);
   });
+
+  it("replaces binary content (NUL byte) with a placeholder", () => {
+    const view = buildDiffView({ status: "?", path: "a.png" }, "PNG\0\x01\x02");
+    expect(view.lines).toEqual(["Binary file, not shown"]);
+  });
+
+  it("replaces git binary diff output with a placeholder", () => {
+    const view = buildDiffView(
+      { status: "M", path: "a.png" },
+      "Binary files a/a.png and b/a.png differ\n",
+    );
+    expect(view.lines).toEqual(["Binary file, not shown"]);
+  });
+
+  it("shows content at exactly 500 lines", () => {
+    const raw = Array.from({ length: 500 }, (_, i) => `+line ${i}`).join("\n");
+    const view = buildDiffView({ status: "M", path: "a.ts" }, raw);
+    expect(view.lines).toHaveLength(500);
+  });
+
+  it("replaces content at 501 lines with a placeholder", () => {
+    const raw = Array.from({ length: 501 }, (_, i) => `+line ${i}`).join("\n");
+    const view = buildDiffView({ status: "M", path: "a.ts" }, raw);
+    expect(view.lines).toEqual([
+      "Output too large (501 lines, limit 500), not shown",
+    ]);
+  });
 });

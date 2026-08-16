@@ -20,11 +20,30 @@ export function classifyDiffLine(line: string): DiffLineKind {
   return "context";
 }
 
-/** Build the render-ready diff view: title plus content lines. */
+const MAX_LINES = 500;
+
+/** Build the render-ready diff view: title plus content lines.
+ *  Guardrails: binary content and output over MAX_LINES collapse to a
+ *  single placeholder line instead of rendering. */
 export function buildDiffView(file: ChangedFile, raw: string): DiffView {
+  const title = formatListItem(file);
+  if (isBinary(raw)) {
+    return { title, lines: ["Binary file, not shown"] };
+  }
   const text = raw.endsWith("\n") ? raw.slice(0, -1) : raw;
-  return {
-    title: formatListItem(file),
-    lines: text === "" ? [] : text.split("\n"),
-  };
+  const lines = text === "" ? [] : text.split("\n");
+  if (lines.length > MAX_LINES) {
+    return {
+      title,
+      lines: [
+        `Output too large (${lines.length} lines, limit ${MAX_LINES}), not shown`,
+      ],
+    };
+  }
+  return { title, lines };
+}
+
+/** Binary heuristic: NUL byte (untracked content) or git's binary diff marker. */
+function isBinary(raw: string): boolean {
+  return raw.includes("\0") || raw.startsWith("Binary files ");
 }
