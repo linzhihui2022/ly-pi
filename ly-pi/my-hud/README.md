@@ -8,7 +8,8 @@ Replaces the built-in footer with a compact, always-on status bar showing:
 |-------|------|-------------|
 | Project |  | Current directory basename |
 | Model |  | Active LLM model ID |
-| Branch |  | Git branch (hidden if not in a repo) |
+| Branch |  | Git branch (hidden if not in a repo), PR number linked when found |
+| Git Status | — | Dirty counts in starship style: `++staged`, `~unstaged`, `?untracked`, `*stashed`, `!!conflicted`, `⇡ahead⇣behind` |
 | Context |  /  /  | Context window usage % with color-coded thresholds |
 | Input |  | Cumulative input tokens this session |
 | Output |  | Cumulative output tokens this session |
