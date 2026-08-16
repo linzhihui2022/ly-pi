@@ -31,7 +31,13 @@ export function buildDiffView(file: ChangedFile, raw: string): DiffView {
     return { title, lines: ["Binary file, not shown"] };
   }
   const text = raw.endsWith("\n") ? raw.slice(0, -1) : raw;
-  const lines = text === "" ? [] : text.split("\n");
+  if (text === "") {
+    return {
+      title,
+      lines: [file.status === "?" ? "(empty file)" : "(no diff output)"],
+    };
+  }
+  const lines = text.split("\n");
   if (lines.length > MAX_LINES) {
     return {
       title,
@@ -43,7 +49,7 @@ export function buildDiffView(file: ChangedFile, raw: string): DiffView {
   return { title, lines };
 }
 
-/** Binary heuristic: NUL byte (untracked content) or git's binary diff marker. */
+/** Binary heuristic: NUL byte (untracked content) or git's binary diff marker line. */
 function isBinary(raw: string): boolean {
-  return raw.includes("\0") || raw.startsWith("Binary files ");
+  return raw.includes("\0") || /^Binary files /m.test(raw);
 }

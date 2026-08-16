@@ -45,9 +45,14 @@ describe("buildDiffView", () => {
     expect(view.lines).toEqual(["+a", "+b"]);
   });
 
-  it("yields empty lines for empty diff", () => {
+  it("shows a placeholder for empty diff (mode-only change)", () => {
     const view = buildDiffView({ status: "M", path: "a.ts" }, "");
-    expect(view.lines).toEqual([]);
+    expect(view.lines).toEqual(["(no diff output)"]);
+  });
+
+  it("shows a placeholder for empty untracked file", () => {
+    const view = buildDiffView({ status: "?", path: "u.ts" }, "");
+    expect(view.lines).toEqual(["(empty file)"]);
   });
 
   it("titles untracked full text with ?", () => {
@@ -67,7 +72,7 @@ describe("buildDiffView", () => {
   it("replaces git binary diff output with a placeholder", () => {
     const view = buildDiffView(
       { status: "M", path: "a.png" },
-      "Binary files a/a.png and b/a.png differ\n",
+      "diff --git a/a.png b/a.png\nindex d5d07bb..64ec8fa 100644\nBinary files a/a.png and b/a.png differ\n",
     );
     expect(view.lines).toEqual(["Binary file, not shown"]);
   });

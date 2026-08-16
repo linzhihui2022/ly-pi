@@ -20,3 +20,5 @@
 - 占位文案作为 DiffView.lines 的单行输出，随主题 context 色渲染，视图组件零改动
 - 500/501 边界、NUL 内容、git 二进制 diff 三类分支均有 fixture 测试
 - 已 `bun run deploy`；`/reload` 后可验证。至此 spec 全部三票完成
+
+Review 修复：二进制检测从 `startsWith` 改为多行匹配 `/^Binary files /m`——真实 `git diff HEAD` 输出以 `diff --git` 头开头，原实现永不触发且测试 fixture 省略了 diff 头造成虚假绿色；fixture 已改为真实输出形态。另补空内容占位：tracked 空 diff → `(no diff output)`，untracked 空文件 → `(empty file)`。

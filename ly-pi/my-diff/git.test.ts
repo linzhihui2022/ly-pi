@@ -47,9 +47,9 @@ describe("parseStatusList", () => {
     ]);
   });
 
-  it("unquotes C-style quoted paths", () => {
-    expect(parseStatusList(' M "src/sp ace.ts"\n')).toEqual([
-      { status: "M", path: "src/sp ace.ts" },
+  it("passes non-ASCII paths through unchanged (git runs with core.quotepath=false)", () => {
+    expect(parseStatusList("?? 中文.ts\n")).toEqual([
+      { status: "?", path: "中文.ts" },
     ]);
   });
 

@@ -25,3 +25,5 @@
 - TUI：`SelectList` + `DynamicBorder` 选择器（`getSelectListTheme()` 无参，读全局主题）；diff 视图为自绘滚动组件（↑↓/PgUp/PgDn，预算 = terminal.rows - 8），主题 token `toolDiffAdded/Removed/Context`
 - 中途澄清：曾提出「全程框定在 pi widget 里」诉求，调查确认 `setWidget` 纯展示不接收键盘输入，用户权衡后选择维持 ui.custom 原设计
 - 已 `bun run deploy`；`/reload` 后可手动验证
+
+Review 修复（code-review 双轴后）：git status 改用 `-c core.quotepath=false`（修复 CJK 路径八进制转义被 unquote 损坏的问题，unquote 删除）；排序从 localeCompare 改为码元序（locale 无关）；git status 超时不再误报「不是 git 仓库」（仅 not-a-repo 返回 null，其余失败抛出并提示）；移除 diff 视图底部进度指示（spec 未要求）；清除 ticket-01 残留过期注释。

@@ -12,7 +12,8 @@ const execAsync = promisify(exec);
 
 /**
  * Parse `git status --porcelain` (v1) output into changed files.
- * Tracked entries only in ticket 01; untracked (??) arrives in ticket 02.
+ * The command runs with `-c core.quotepath=false`, so paths arrive
+ * unquoted as raw UTF-8 — no unescaping needed here.
  * Any tracked state that is not a pure add maps to "M"
  * (modified/deleted/renamed/conflicted are all "changed vs HEAD").
  */
@@ -29,38 +30,37 @@ export function parseStatusList(porcelain: string): ChangedFile[] {
     const rawPath = line.slice(3);
     // Renames/copies: "old -> new" — the file to diff is the new path.
     const arrow = rawPath.indexOf(" -> ");
-    const path = unquote(arrow === -1 ? rawPath : rawPath.slice(arrow + 4));
+    const path = arrow === -1 ? rawPath : rawPath.slice(arrow + 4);
     if (!path) continue;
 
     const status = x === "?" ? "?" : x === "A" || y === "A" ? "A" : "M";
     byPath.set(path, { status, path });
   }
 
-  return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path));
-}
-
-/** Unquote C-style quoted path from porcelain output. */
-function unquote(path: string): string {
-  if (!path.startsWith('"') || !path.endsWith('"')) return path;
-  return path
-    .slice(1, -1)
-    .replace(/\\(.)/g, (_m, ch: string) => (ch === "n" ? "\n" : ch));
+  // Code-unit order: locale-independent, identical on every machine.
+  return [...byPath.values()].sort((a, b) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+  );
 }
 
 /**
- * Fetch changed files for cwd, or null when not a git repo / git unavailable.
+ * Fetch changed files for cwd.
+ * null = not a git repo; other failures (timeout, killed) throw.
  */
 export async function fetchChangedFiles(
   cwd: string,
 ): Promise<ChangedFile[] | null> {
   try {
-    const { stdout } = await execAsync("git status --porcelain", {
-      cwd,
-      timeout: 3000,
-    });
+    const { stdout } = await execAsync(
+      "git -c core.quotepath=false status --porcelain",
+      { cwd, timeout: 3000 },
+    );
     return parseStatusList(stdout);
-  } catch {
-    return null;
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("not a git repository")) {
+      return null;
+    }
+    throw err;
   }
 }
 

@@ -39,7 +39,16 @@ export default function myDiff(pi: ExtensionAPI): void {
         return;
       }
 
-      const files = await fetchChangedFiles(ctx.cwd);
+      let files: ChangedFile[] | null;
+      try {
+        files = await fetchChangedFiles(ctx.cwd);
+      } catch (err) {
+        ctx.ui.notify(
+          `git status 执行失败：${err instanceof Error ? err.message : String(err)}`,
+          "error",
+        );
+        return;
+      }
       if (files === null) {
         ctx.ui.notify("当前目录不是 git 仓库", "error");
         return;
@@ -80,7 +89,9 @@ function pickFile(
 
   return ctx.ui.custom<ChangedFile | null>((tui, theme, _kb, done) => {
     const container = new Container();
-    container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
+    const border = () =>
+      new DynamicBorder((s: string) => theme.fg("accent", s));
+    container.addChild(border());
     container.addChild(
       new Text(theme.fg("accent", theme.bold("Changed files")), 1, 0),
     );
@@ -96,7 +107,7 @@ function pickFile(
     container.addChild(
       new Text(theme.fg("dim", "↑↓ navigate • enter diff • esc quit"), 1, 0),
     );
-    container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
+    container.addChild(border());
     return {
       render: (w: number) => container.render(w),
       invalidate: () => container.invalidate(),
@@ -137,16 +148,11 @@ class DiffViewComponent {
 
   render(width: number): string[] {
     const budget = this.pageSize();
-    const total = this.view.lines.length;
     const visible = this.view.lines.slice(this.offset, this.offset + budget);
-    const progress =
-      total > budget
-        ? ` • ${this.offset + 1}-${Math.min(this.offset + budget, total)}/${total}`
-        : "";
     return [
       this.theme.fg("accent", this.theme.bold(this.view.title)),
       ...visible.map((line) => this.colorize(line, width)),
-      this.theme.fg("dim", `↑↓ scroll • ←→ page • esc back${progress}`),
+      this.theme.fg("dim", "↑↓ scroll • ←→ page • esc back"),
     ];
   }
 
