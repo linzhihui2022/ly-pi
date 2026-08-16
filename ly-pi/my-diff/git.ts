@@ -44,6 +44,17 @@ export function parseStatusList(porcelain: string): ChangedFile[] {
 }
 
 /**
+ * Classify a `git status` failure: only git's own "not a git repository"
+ * fatal means the cwd is outside a repo; everything else (timeout, killed,
+ * missing binary) is a genuine failure the caller should surface.
+ */
+export function classifyStatusError(err: unknown): "not-repo" | "fatal" {
+  return err instanceof Error && err.message.includes("not a git repository")
+    ? "not-repo"
+    : "fatal";
+}
+
+/**
  * Fetch changed files for cwd.
  * null = not a git repo; other failures (timeout, killed) throw.
  */
@@ -57,7 +68,7 @@ export async function fetchChangedFiles(
     );
     return parseStatusList(stdout);
   } catch (err) {
-    if (err instanceof Error && err.message.includes("not a git repository")) {
+    if (classifyStatusError(err) === "not-repo") {
       return null;
     }
     throw err;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseStatusList } from "./git";
+import { classifyStatusError, parseStatusList } from "./git";
 
 describe("parseStatusList", () => {
   it("returns empty list for clean tree", () => {
@@ -58,5 +58,25 @@ describe("parseStatusList", () => {
       { status: "M", path: "a.ts" },
       { status: "M", path: "b.ts" },
     ]);
+  });
+});
+
+describe("classifyStatusError", () => {
+  it("classifies git's not-a-repo fatal as not-repo", () => {
+    const err = new Error(
+      "Command failed: git ...\nfatal: not a git repository (or any of the parent directories): .git",
+    );
+    expect(classifyStatusError(err)).toBe("not-repo");
+  });
+
+  it("classifies timeouts and other failures as fatal", () => {
+    expect(
+      classifyStatusError(new Error("Command failed: git ...\nkilled: true")),
+    ).toBe("fatal");
+  });
+
+  it("classifies non-Error values as fatal", () => {
+    expect(classifyStatusError("boom")).toBe("fatal");
+    expect(classifyStatusError(undefined)).toBe("fatal");
   });
 });
