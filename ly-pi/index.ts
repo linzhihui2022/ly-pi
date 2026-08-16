@@ -9,6 +9,7 @@ import myReload from "./my-reload/index";
 import { scriptGuard } from "./my-script-guard/index";
 import mySound from "./my-sound/index";
 import myVision from "./my-vision/index";
+import myZen from "./my-zen/index";
 import { createGuardHarness } from "./shared/guard-harness";
 
 export default async function (pi: ExtensionAPI): Promise<void> {
@@ -21,4 +22,5 @@ export default async function (pi: ExtensionAPI): Promise<void> {
   mySound(pi);
   myHud(pi);
   myVision(pi);
+  myZen(pi);
 }
