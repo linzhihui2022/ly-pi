@@ -48,7 +48,7 @@ bun run --cwd ly-pi test
 bun run --cwd ly-pi test -- my-hud
 ```
 
-覆盖率硬性要求：branches/functions/lines/statements 全部 100%。
+覆盖率阈值以 `vitest.config.ts` 为准（当前 branches 90 / functions 91 / lines 94 / statements 93）。
 排除项：types.ts、index.ts（集成测试）。
 
 - 先写测试，确认失败
