@@ -10,13 +10,23 @@
       "keepRecentTokens": 20000,
       "reserveTokens": 16384
     },
+    "defaultModel": "k3-256k",
     "defaultProjectTrust": "always",
+    "defaultProvider": "kimi-coding",
     "defaultThinkingLevel": "max",
     "doubleEscapeAction": "none",
     "editorPaddingX": 1,
     "enableInstallTelemetry": false,
-    "hideThinkingBlock": true,
-    "quietStartup": true
+    "fullscreenScrollbar": "always",
+    "quietStartup": true,
+    "showHardwareCursor": false,
+    "terminal": {
+      "clearOnShrink": false,
+      "showTerminalProgress": true
+    },
+    "theme": "catppuccin-mocha",
+    "treeFilterMode": "no-tools",
+    "tuiMode": "fullscreen"
   },
   "subagents": {
     "disableThinking": false,

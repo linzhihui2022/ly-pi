@@ -117,6 +117,11 @@
           "enum": ["all", "one-at-a-time"],
           "description": "How follow-up messages are sent"
         },
+        "fullscreenScrollbar": {
+          "type": "string",
+          "enum": ["hidden", "auto", "always"],
+          "description": "Scrollbar visibility in fullscreen mode"
+        },
         "hideThinkingBlock": {
           "type": "boolean",
           "description": "Hide thinking blocks in output"
@@ -263,6 +268,10 @@
             "clearOnShrink": {
               "type": "boolean",
               "description": "Clear empty rows when content shrinks"
+            },
+            "showTerminalProgress": {
+              "type": "boolean",
+              "description": "Emit terminal progress escape sequences (OSC 9;4)"
             }
           },
           "additionalProperties": false
@@ -297,6 +306,11 @@
           "type": "string",
           "enum": ["default", "no-tools", "user-only", "labeled-only", "all"],
           "description": "Default filter for /tree"
+        },
+        "tuiMode": {
+          "type": "string",
+          "enum": ["regular", "fullscreen"],
+          "description": "TUI rendering mode: inline 'regular' or 'fullscreen'"
         },
         "warnings": {
           "type": "object",
