@@ -7,23 +7,19 @@ import {
   playSound,
   resolveSoundPath,
 } from "./player";
-import type { SoundConfig } from "./types";
+import type { SoundPack } from "./types";
 
 let nextPid = 1000;
 
 vi.mock("./coordinator", () => ({
-  spawnSoundProcess: vi.fn((_config, filePath) => ({
+  spawnSoundProcess: vi.fn((filePath: string) => ({
     pid: nextPid++,
     cmd: `afplay "${filePath}"`,
   })),
 }));
 
-const mockConfig: SoundConfig = {
-  enabled: true,
-  activePack: "test-pack",
-  packs: {
-    "test-pack": { soundDir: "/fake/sounds" },
-  },
+const mockPack: SoundPack = {
+  soundDir: "/fake/sounds",
   categories: {
     startup: {
       description: "Startup",
@@ -50,11 +46,6 @@ const mockConfig: SoundConfig = {
       files: ["error_1.mp3", "error_2.mp3"],
     },
   },
-  eventMap: {
-    session_start: "startup",
-    agent_start: "engaging",
-    agent_end: "completed",
-  },
 };
 
 const soundDir = "/fake/sounds";
@@ -65,25 +56,23 @@ beforeEach(() => {
 
 describe("playCategory", () => {
   it("plays a sound from the category", () => {
-    playCategory(mockConfig, soundDir, "startup");
+    playCategory(mockPack, soundDir, "startup");
     expect(coordinator.spawnSoundProcess).toHaveBeenCalledOnce();
     expect(coordinator.spawnSoundProcess).toHaveBeenCalledWith(
-      mockConfig,
       "/fake/sounds/startup.mp3",
     );
   });
 
   it("does nothing for unknown category", () => {
-    playCategory(mockConfig, soundDir, "nonexistent");
+    playCategory(mockPack, soundDir, "nonexistent");
     expect(coordinator.spawnSoundProcess).not.toHaveBeenCalled();
   });
 });
 
 describe("playSound", () => {
   it("spawns sound process", () => {
-    playSound(mockConfig, "/fake/sounds/custom.mp3");
+    playSound("/fake/sounds/custom.mp3");
     expect(coordinator.spawnSoundProcess).toHaveBeenCalledWith(
-      mockConfig,
       "/fake/sounds/custom.mp3",
     );
   });
@@ -91,7 +80,7 @@ describe("playSound", () => {
 
 describe("listCategories", () => {
   it("returns all category names and descriptions", () => {
-    const result = listCategories(mockConfig);
+    const result = listCategories(mockPack);
     expect(result).toHaveLength(6);
     expect(result[0]).toEqual({
       name: "startup",
@@ -106,7 +95,7 @@ describe("listCategories", () => {
 
 describe("pickSoundFile", () => {
   it("returns the only file when single file exists", () => {
-    const result = pickSoundFile(mockConfig, "startup");
+    const result = pickSoundFile(mockPack, "startup");
     expect(result).toBe("startup.mp3");
   });
 
@@ -114,7 +103,7 @@ describe("pickSoundFile", () => {
     // Run multiple times to verify it's deterministic (not random)
     const results = new Set<string>();
     for (let i = 0; i < 20; i++) {
-      const file = pickSoundFile(mockConfig, "affirmative");
+      const file = pickSoundFile(mockPack, "affirmative");
       expect(file).toBeDefined();
       if (file) results.add(file);
     }
@@ -124,7 +113,18 @@ describe("pickSoundFile", () => {
   });
 
   it("returns undefined for unknown category", () => {
-    const result = pickSoundFile(mockConfig, "nonexistent");
+    const result = pickSoundFile(mockPack, "nonexistent");
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined when the category has no files", () => {
+    const emptyPack: SoundPack = {
+      soundDir: "/fake/sounds",
+      categories: {
+        startup: { description: "Startup", files: [] },
+      },
+    };
+    const result = pickSoundFile(emptyPack, "startup");
     expect(result).toBeUndefined();
   });
 });

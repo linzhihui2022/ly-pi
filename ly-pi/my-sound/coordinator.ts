@@ -13,7 +13,6 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { SoundConfig } from "./types";
 
 export const GLOBAL_SOUND_DIR = join(homedir(), ".pi", "my-sound");
 export const DEFAULT_PID_FILE = join(GLOBAL_SOUND_DIR, "playing.json");
@@ -120,7 +119,6 @@ export function recordPids(
 }
 
 export function spawnSoundProcess(
-  _config: SoundConfig,
   filePath: string,
   runtimeDir: string = GLOBAL_SOUND_DIR,
 ): ChildProcess {

@@ -6,7 +6,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { listCategories, playCategory } from "./player";
-import type { SoundConfig } from "./types";
+import type { SoundConfig, SoundPack } from "./types";
 
 const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
 
@@ -36,9 +36,19 @@ export default function mySound(pi: ExtensionAPI): void {
       // Reload config in case it was updated
       let config: SoundConfig;
       let soundDir: string;
+      let pack: SoundPack;
       try {
         config = loadConfig();
         soundDir = resolveSoundDir(config);
+        const activePack = config.packs[config.activePack];
+        if (!activePack) {
+          ctx.ui.notify(
+            `Sound: 语音包 "${config.activePack}" 未在 packs 中定义`,
+            "error",
+          );
+          return;
+        }
+        pack = activePack;
       } catch (e) {
         ctx.ui.notify(
           `Sound: Config error — ${e instanceof Error ? e.message : String(e)}`,
@@ -48,8 +58,7 @@ export default function mySound(pi: ExtensionAPI): void {
       }
 
       if (!args) {
-        const cats = listCategories(config);
-        const packNames = Object.keys(config.packs);
+        const cats = listCategories(pack);
         const lines = [`🎙️  Sound — ${config.activePack}`];
         for (const cat of cats) {
           lines.push(`  /sound ${cat.name}  —  ${cat.description}`);
@@ -112,12 +121,12 @@ export default function mySound(pi: ExtensionAPI): void {
           ctx.ui.notify("🎙️  Sound: 已关闭，用 /sound on 开启", "warning");
           return;
         }
-        const cats = listCategories(config);
+        const cats = listCategories(pack);
         ctx.ui.notify(`🎙️  Sound: 播放全部 (${cats.length} 分类)`, "info");
         let i = 0;
         function playNext(): void {
           if (i >= cats.length) return;
-          playCategory(config, soundDir, cats[i].name, ctx.ui.notify);
+          playCategory(pack, soundDir, cats[i].name, ctx.ui.notify);
           i++;
           setTimeout(playNext, 1500);
         }
@@ -130,10 +139,10 @@ export default function mySound(pi: ExtensionAPI): void {
         return;
       }
 
-      if (config.categories[args]) {
-        playCategory(config, soundDir, args, ctx.ui.notify);
+      if (pack.categories[args]) {
+        playCategory(pack, soundDir, args, ctx.ui.notify);
         ctx.ui.notify(
-          `🎙️  Sound: ${config.categories[args].description}`,
+          `🎙️  Sound: ${pack.categories[args].description}`,
           "info",
         );
       } else {
@@ -149,9 +158,14 @@ export default function mySound(pi: ExtensionAPI): void {
   // Failures here are non-fatal — /sound command is already registered.
   let config: SoundConfig;
   let soundDir: string;
+  let pack: SoundPack;
   try {
     config = loadConfig();
     soundDir = resolveSoundDir(config);
+    const activePack = config.packs[config.activePack];
+    // activePack missing from packs — events won't play sounds
+    if (!activePack) return;
+    pack = activePack;
   } catch {
     // Config not found or invalid — events won't play sounds
     return;
@@ -179,7 +193,7 @@ export default function mySound(pi: ExtensionAPI): void {
         return;
       }
       lastPlayedCategory = category;
-      playCategory(config, soundDir, category, ctx.ui.notify);
+      playCategory(pack, soundDir, category, ctx.ui.notify);
     });
   }
 
@@ -189,7 +203,7 @@ export default function mySound(pi: ExtensionAPI): void {
       const category = config.toolEventMap?.[event.toolName];
       if (!category) return;
       lastPlayedCategory = category;
-      playCategory(config, soundDir, category, ctx.ui.notify);
+      playCategory(pack, soundDir, category, ctx.ui.notify);
     });
   }
 
@@ -200,7 +214,7 @@ export default function mySound(pi: ExtensionAPI): void {
         const category = config.permissionEventMap?.["permissions:ui_prompt"];
         if (!category) return;
         lastPlayedCategory = category;
-        playCategory(config, soundDir, category);
+        playCategory(pack, soundDir, category);
       });
     } catch {
       // EventBus may not support this event — non-fatal

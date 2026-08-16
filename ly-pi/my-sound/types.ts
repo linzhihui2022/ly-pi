@@ -1,5 +1,6 @@
 export interface SoundPack {
   soundDir: string;
+  categories: Record<string, SoundCategory>;
 }
 
 export interface SoundCategory {
@@ -11,7 +12,6 @@ export interface SoundConfig {
   enabled: boolean;
   activePack: string;
   packs: Record<string, SoundPack>;
-  categories: Record<string, SoundCategory>;
   eventMap: Record<string, string>;
   /** Maps tool names (e.g. "ask_user_question") to sound categories */
   toolEventMap?: Record<string, string>;

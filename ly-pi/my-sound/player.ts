@@ -1,14 +1,14 @@
 import { join } from "node:path";
 import { spawnSoundProcess } from "./coordinator";
-import type { SoundConfig } from "./types";
+import type { SoundPack } from "./types";
 
 /**
  * List all available sound categories with their descriptions.
  */
 export function listCategories(
-  config: SoundConfig,
+  pack: SoundPack,
 ): { name: string; description: string }[] {
-  return Object.entries(config.categories).map(([name, cat]) => ({
+  return Object.entries(pack.categories).map(([name, cat]) => ({
     name,
     description: cat.description,
   }));
@@ -21,10 +21,10 @@ export function listCategories(
 const lastPicked: Record<string, number> = {};
 
 export function pickSoundFile(
-  config: SoundConfig,
+  pack: SoundPack,
   category: string,
 ): string | undefined {
-  const cat = config.categories[category];
+  const cat = pack.categories[category];
   if (!cat || cat.files.length === 0) return undefined;
 
   if (cat.files.length === 1) return cat.files[0];
@@ -48,8 +48,8 @@ export function resolveSoundPath(soundDir: string, file: string): string {
  * Fire-and-forget — resolves immediately.
  * Errors are reported via the optional onError callback instead of stderr.
  */
-export function playSound(config: SoundConfig, filePath: string): void {
-  spawnSoundProcess(config, filePath);
+export function playSound(filePath: string): void {
+  spawnSoundProcess(filePath);
 }
 
 /**
@@ -57,12 +57,12 @@ export function playSound(config: SoundConfig, filePath: string): void {
  * Errors are reported via the optional onError callback.
  */
 export function playCategory(
-  config: SoundConfig,
+  pack: SoundPack,
   soundDir: string,
   category: string,
   _onError?: (message: string) => void,
 ): void {
-  const file = pickSoundFile(config, category);
+  const file = pickSoundFile(pack, category);
   if (!file) return;
-  playSound(config, resolveSoundPath(soundDir, file));
+  playSound(resolveSoundPath(soundDir, file));
 }

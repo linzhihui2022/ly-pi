@@ -23,12 +23,14 @@ const DEFAULT_CONFIG = {
   enabled: true,
   activePack: "test-pack",
   packs: {
-    "test-pack": { soundDir: "sounds" },
-  },
-  categories: {
-    startup: { description: "Startup", files: ["startup.mp3"] },
-    engaging: { description: "Engaging", files: ["engage.mp3"] },
-    completed: { description: "Task completed", files: ["done.mp3"] },
+    "test-pack": {
+      soundDir: "sounds",
+      categories: {
+        startup: { description: "Startup", files: ["startup.mp3"] },
+        engaging: { description: "Engaging", files: ["engage.mp3"] },
+        completed: { description: "Task completed", files: ["done.mp3"] },
+      },
+    },
   },
   eventMap: {
     session_start: "startup",
@@ -278,7 +280,7 @@ describe("my-sound extension", () => {
     await cmd.handler("startup", mockCtx);
 
     expect(playCategory).toHaveBeenCalledWith(
-      expect.objectContaining({ activePack: "test-pack" }),
+      expect.objectContaining({ soundDir: "sounds" }),
       expect.any(String),
       "startup",
       expect.any(Function),
@@ -364,7 +366,7 @@ describe("my-sound extension", () => {
     });
 
     expect(playCategory).toHaveBeenCalledWith(
-      expect.objectContaining({ permissionEventMap: expect.any(Object) }),
+      expect.objectContaining({ soundDir: "sounds" }),
       expect.any(String),
       "warning",
     );
@@ -458,7 +460,7 @@ describe("my-sound extension", () => {
     handler?.({ toolName: "ask_user_question" }, mockCtx);
 
     expect(playCategory).toHaveBeenCalledWith(
-      expect.objectContaining({ toolEventMap: expect.any(Object) }),
+      expect.objectContaining({ soundDir: "sounds" }),
       expect.any(String),
       "question",
       expect.any(Function),
@@ -522,7 +524,7 @@ describe("my-sound extension", () => {
 
     toolHandler?.({ toolName: "ask_user_question" }, mockCtx);
     expect(playCategory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ toolEventMap: expect.any(Object) }),
+      expect.objectContaining({ soundDir: "sounds" }),
       expect.any(String),
       "question",
       expect.any(Function),
@@ -544,7 +546,7 @@ describe("my-sound extension", () => {
 
     agentStartHandler?.({}, mockCtx);
     expect(playCategory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ eventMap: expect.any(Object) }),
+      expect.objectContaining({ soundDir: "sounds" }),
       expect.any(String),
       "engaging",
       expect.any(Function),
@@ -554,7 +556,7 @@ describe("my-sound extension", () => {
     agentEndHandler?.({}, mockCtx);
 
     expect(playCategory).toHaveBeenCalledWith(
-      expect.objectContaining({ eventMap: expect.any(Object) }),
+      expect.objectContaining({ soundDir: "sounds" }),
       expect.any(String),
       "completed",
       expect.any(Function),
@@ -583,10 +585,28 @@ describe("my-sound extension", () => {
 
     expect(playCategory).toHaveBeenCalledOnce();
     expect(playCategory).toHaveBeenCalledWith(
-      expect.objectContaining({ eventMap: expect.any(Object) }),
+      expect.objectContaining({ soundDir: "sounds" }),
       expect.any(String),
       "completed",
       expect.any(Function),
+    );
+  });
+
+  it("notifies error when activePack is missing from packs", async () => {
+    const configMissingPack = {
+      ...DEFAULT_CONFIG,
+      activePack: "ghost-pack",
+    };
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(configMissingPack));
+    const mod = await loadModule();
+    mod.default(mockPi);
+
+    const cmd = mustGet(registeredCommands, "sound");
+    await cmd.handler(undefined, mockCtx);
+
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.stringContaining("ghost-pack"),
+      "error",
     );
   });
 });
