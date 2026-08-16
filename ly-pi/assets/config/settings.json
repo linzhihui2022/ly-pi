@@ -17,7 +17,6 @@
     "doubleEscapeAction": "none",
     "editorPaddingX": 1,
     "enableInstallTelemetry": false,
-    "fullscreenScrollbar": "always",
     "quietStartup": true,
     "showHardwareCursor": false,
     "terminal": {
@@ -25,8 +24,7 @@
       "showTerminalProgress": true
     },
     "theme": "catppuccin-mocha",
-    "treeFilterMode": "no-tools",
-    "tuiMode": "fullscreen"
+    "treeFilterMode": "no-tools"
   },
   "subagents": {
     "disableThinking": false,
