@@ -13,6 +13,9 @@ import myZen from "./my-zen/index";
 import { createGuardHarness } from "./shared/guard-harness";
 
 export default async function (pi: ExtensionAPI): Promise<void> {
+  // my-zen first: its registerTool interceptor must be installed before any
+  // other module (myReload, myPermission, ...) registers tools.
+  myZen(pi);
   createGuardHarness(pi, [cdGuard, scriptGuard]);
   myLog(pi);
   await myPermission(pi);
@@ -22,5 +25,4 @@ export default async function (pi: ExtensionAPI): Promise<void> {
   mySound(pi);
   myHud(pi);
   myVision(pi);
-  myZen(pi);
 }
