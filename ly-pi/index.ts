@@ -13,8 +13,8 @@ import myZen from "./my-zen/index";
 import { createGuardHarness } from "./shared/guard-harness";
 
 export default async function (pi: ExtensionAPI): Promise<void> {
-  // my-zen first: its registerTool interceptor must be installed before any
-  // other module (myReload, myPermission, ...) registers tools.
+  // my-zen first: it patches the shared ToolExecutionComponent prototype,
+  // which must happen before any session renders a tool call.
   myZen(pi);
   createGuardHarness(pi, [cdGuard, scriptGuard]);
   myLog(pi);

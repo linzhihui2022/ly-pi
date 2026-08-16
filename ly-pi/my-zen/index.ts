@@ -23,6 +23,7 @@ import {
   createLsTool,
   createReadTool,
   createWriteTool,
+  ToolExecutionComponent,
   UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
 import { Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
@@ -143,13 +144,15 @@ function restoreUserMessageRebuild(): void {
   }
 }
 
-// ── Global tool interceptor ─────────────────────────────────────────────────
-// pi-tool-display force-decorates MCP tools (overrideExistingRenderers: true)
-// with a persistent "MCP xxx" call line that survives settling — zen mode
-// wants zero lines. Extensions cannot enumerate real tool definitions
-// (getAllTools returns copies), so we intercept pi.registerTool and zenify
-// each non-built-in tool after all synchronous decorations settle —
-// queueMicrotask wins regardless of interceptor nesting order.
+// ── Global tool rendering patch ──────────────────────────────────────────────
+// Each extension gets its own ExtensionAPI object, so wrapping pi.registerTool
+// only intercepts ly-pi's own registrations — foreign tools (todo, web_search,
+// chrome-devtools, ...) register through their own api instances and are
+// unreachable that way. ToolExecutionComponent, however, is the single shared
+// component that renders EVERY tool call/result, and it re-reads its renderers
+// on every state change (updateDisplay → getRenderShell/getCallRenderer/
+// getResultRenderer). Patching its prototype getters zenifies all tools
+// regardless of origin.
 
 const ZEN_OWNED_TOOLS = new Set([
   "read",
@@ -161,39 +164,42 @@ const ZEN_OWNED_TOOLS = new Set([
   "ls",
 ]);
 
-interface ForeignToolDefinition {
-  name?: string;
-  renderShell?: string;
-  renderCall?: (
-    args: Record<string, unknown>,
-    theme: Theme,
-    context?: { isPartial?: boolean; expanded?: boolean },
-  ) => unknown;
-  renderResult?: (
-    result: ToolResultLike,
-    options: { expanded?: boolean; isPartial?: boolean },
-    theme: Theme,
-    context?: { isError?: boolean },
-  ) => unknown;
+interface ToolExecutionProto {
+  toolName: string;
+  getRenderShell(): string;
+  getCallRenderer(): unknown;
+  getResultRenderer(): unknown;
 }
 
-const zenifiedTools = new WeakSet<object>();
+type CallRenderer = (
+  args: Record<string, unknown>,
+  theme: Theme,
+  context?: { isPartial?: boolean; expanded?: boolean },
+) => unknown;
 
-function zenifyForeignTool(tool: ForeignToolDefinition): void {
-  if (zenifiedTools.has(tool)) return;
-  zenifiedTools.add(tool);
+type ResultRenderer = (
+  result: ToolResultLike,
+  options: { expanded?: boolean; isPartial?: boolean },
+  theme: Theme,
+  context?: { isError?: boolean },
+) => unknown;
 
-  const name = tool.name ?? "tool";
-  const originalCall = tool.renderCall;
-  const originalResult = tool.renderResult;
+let savedGetRenderShell: ToolExecutionProto["getRenderShell"] | undefined;
+let savedGetCallRenderer: ToolExecutionProto["getCallRenderer"] | undefined;
+let savedGetResultRenderer:
+  | ToolExecutionProto["getResultRenderer"]
+  | undefined;
+const zenCallCache = new WeakMap<object, CallRenderer>();
+const zenResultCache = new WeakMap<object, ResultRenderer>();
 
-  tool.renderShell = "self";
-  tool.renderCall = (args, theme, context) => {
+function makeZenCallRenderer(
+  name: string,
+  original?: CallRenderer,
+): CallRenderer {
+  return (args, theme, context) => {
     const expanded = context?.expanded ?? false;
     const isPartial = context?.isPartial ?? true;
-    if (expanded && originalCall) {
-      return originalCall(args, theme, context);
-    }
+    if (expanded && original) return original(args, theme, context);
     if (!expanded && !isPartial) return EMPTY_COMPONENT;
     return new Text(
       theme.fg("dim", formatGenericCallText(name, args ?? {})),
@@ -201,14 +207,20 @@ function zenifyForeignTool(tool: ForeignToolDefinition): void {
       0,
     );
   };
-  tool.renderResult = (result, options, theme, context) => {
+}
+
+function makeZenResultRenderer(
+  name: string,
+  original?: ResultRenderer,
+): ResultRenderer {
+  return (result, options, theme, context) => {
     if (options?.isPartial) return EMPTY_COMPONENT;
     if (context?.isError) {
       const text = extractText(result);
       return new Text(theme.fg("error", firstLine(text ?? name)), 0, 0);
     }
     if (!(options?.expanded ?? false)) return EMPTY_COMPONENT;
-    if (originalResult) return originalResult(result, options, theme, context);
+    if (original) return original(result, options, theme, context);
     const text = extractText(result);
     return text
       ? new Text(theme.fg("toolOutput", text.trimEnd()), 0, 0)
@@ -216,29 +228,56 @@ function zenifyForeignTool(tool: ForeignToolDefinition): void {
   };
 }
 
-let savedRegisterTool: ExtensionAPI["registerTool"] | undefined;
-let wrappedRegisterTool: ExtensionAPI["registerTool"] | undefined;
-
-function installRegisterToolInterceptor(pi: ExtensionAPI): void {
-  const previous = pi.registerTool;
-  const wrapped = ((tool: Parameters<ExtensionAPI["registerTool"]>[0]) => {
-    previous.call(pi, tool);
-    if (!ZEN_OWNED_TOOLS.has(tool.name)) {
-      queueMicrotask(() =>
-        zenifyForeignTool(tool as unknown as ForeignToolDefinition),
-      );
-    }
-  }) as ExtensionAPI["registerTool"];
-  savedRegisterTool = previous;
-  wrappedRegisterTool = wrapped;
-  pi.registerTool = wrapped;
+function zenGetRenderShell(): string {
+  return "self";
 }
 
-function restoreRegisterToolInterceptor(pi: ExtensionAPI): void {
-  if (wrappedRegisterTool && pi.registerTool === wrappedRegisterTool) {
-    pi.registerTool = savedRegisterTool as ExtensionAPI["registerTool"];
+function zenGetCallRenderer(this: ToolExecutionProto): unknown {
+  const original = savedGetCallRenderer?.call(this) as
+    | CallRenderer
+    | undefined;
+  if (ZEN_OWNED_TOOLS.has(this.toolName)) return original;
+  let wrapped = zenCallCache.get(this);
+  if (!wrapped) {
+    wrapped = makeZenCallRenderer(this.toolName, original);
+    zenCallCache.set(this, wrapped);
   }
-  wrappedRegisterTool = undefined;
+  return wrapped;
+}
+
+function zenGetResultRenderer(this: ToolExecutionProto): unknown {
+  const original = savedGetResultRenderer?.call(this) as
+    | ResultRenderer
+    | undefined;
+  if (ZEN_OWNED_TOOLS.has(this.toolName)) return original;
+  let wrapped = zenResultCache.get(this);
+  if (!wrapped) {
+    wrapped = makeZenResultRenderer(this.toolName, original);
+    zenResultCache.set(this, wrapped);
+  }
+  return wrapped;
+}
+
+function patchToolExecutionComponent(): void {
+  const proto =
+    ToolExecutionComponent.prototype as unknown as ToolExecutionProto;
+  if (proto.getRenderShell === zenGetRenderShell) return;
+  savedGetRenderShell = proto.getRenderShell;
+  savedGetCallRenderer = proto.getCallRenderer;
+  savedGetResultRenderer = proto.getResultRenderer;
+  proto.getRenderShell = zenGetRenderShell;
+  proto.getCallRenderer = zenGetCallRenderer;
+  proto.getResultRenderer = zenGetResultRenderer;
+}
+
+function restoreToolExecutionComponent(): void {
+  const proto =
+    ToolExecutionComponent.prototype as unknown as ToolExecutionProto;
+  if (proto.getRenderShell !== zenGetRenderShell) return;
+  if (savedGetRenderShell) proto.getRenderShell = savedGetRenderShell;
+  if (savedGetCallRenderer) proto.getCallRenderer = savedGetCallRenderer;
+  if (savedGetResultRenderer)
+    proto.getResultRenderer = savedGetResultRenderer;
 }
 
 function colorizeDiff(diff: string, theme: Theme): string {
@@ -308,15 +347,15 @@ export default function myZen(pi: ExtensionAPI): void {
   if (currentMode !== "off") {
     // User messages: zero vertical padding, accent bar at the left edge.
     patchUserMessageRebuild();
-    // Foreign tools: zen renderers applied after every synchronous decoration.
-    installRegisterToolInterceptor(pi);
+    // Tool rendering: zen renderers for every tool via the shared component.
+    patchToolExecutionComponent();
     pi.on("session_start", async (_event, ctx) => {
       activeTheme = ctx.ui.theme;
     });
     pi.on("session_shutdown", async (event) => {
       if ((event as { reason?: string }).reason === "reload") {
         restoreUserMessageRebuild();
-        restoreRegisterToolInterceptor(pi);
+        restoreToolExecutionComponent();
       }
     });
 
