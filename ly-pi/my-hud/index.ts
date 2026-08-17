@@ -15,7 +15,6 @@ import type {
   ExtensionAPI,
   ExtensionContext,
   Theme,
-  ThemeColor,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { Bar } from "./bar";
@@ -30,34 +29,6 @@ import { getLastUserMessage } from "./session";
 import { pickRandomMessage } from "./working";
 
 const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
-
-// Color git --short status prefix (XY) as a single unit.
-// Keep plain spaces outside theme.fg() — TUI strips trailing spaces in styled text.
-function colorLine(theme: Theme, line: string): string {
-  const rawStatus = line.slice(0, 2);
-  const rest = line.slice(2);
-  const color = statusColor(rawStatus);
-  const ch = rawStatus.trim() || rawStatus;
-  const lead = rawStatus[0] === " " ? " " : "";
-  const trail = rawStatus[1] === " " ? " " : "";
-  const prefix = lead + (color ? theme.fg(color, ch) : ch) + trail;
-  return prefix + theme.fg("dim", rest);
-}
-
-function statusColor(status: string): ThemeColor | undefined {
-  const ch = status.replace(/[ .]/g, "")[0];
-  if (!ch) return undefined;
-  const map: Record<string, ThemeColor> = {
-    A: "success",
-    M: "warning",
-    D: "error",
-    R: "accent",
-    U: "error",
-    "?": "dim",
-    "!": "dim",
-  };
-  return map[ch];
-}
 
 export { Bar } from "./bar";
 export {
@@ -81,7 +52,6 @@ export type { StatusLineData, TokenUsage } from "./types";
 export { pickRandomMessage, WORKING_MESSAGES } from "./working";
 
 const MEMORY_WIDGET_KEY = "my-hud-memory-warning";
-const GST_LINE_LIMIT = 10;
 
 // ── Extension ──
 
@@ -171,36 +141,6 @@ export default function myHud(pi: ExtensionAPI): void {
       } catch {
         ctx.ui.notify(pr.url, "info");
       }
-    },
-  });
-
-  // ── /gst command ──
-  pi.registerCommand("gst", {
-    description: "Show git status (--short)",
-    handler: async (_args, ctx) => {
-      const result = await pi.exec("git", ["status", "--short"], {
-        cwd: ctx.cwd,
-        timeout: 3000,
-      });
-      const output = result.stdout.trim();
-      if (!output) {
-        ctx.ui.notify("working tree clean", "info");
-        return;
-      }
-      const theme = ctx.ui.theme;
-      const allLines = output.split("\n");
-      const truncated =
-        allLines.length > GST_LINE_LIMIT
-          ? allLines.slice(0, GST_LINE_LIMIT)
-          : allLines;
-      const colored = truncated
-        .map((line) => colorLine(theme, line))
-        .join("\n");
-      const suffix =
-        allLines.length > GST_LINE_LIMIT
-          ? `\n...and ${allLines.length - GST_LINE_LIMIT} more`
-          : "";
-      ctx.ui.notify(` ${colored}${suffix}`, "info");
     },
   });
 
