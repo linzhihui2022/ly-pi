@@ -1,6 +1,6 @@
 # configure
 
-[![verify](https://github.com/Lychee-rb2/ly-pi/actions/workflows/verify.yml/badge.svg)](https://github.com/Lychee-rb2/ly-pi/actions/workflows/verify.yml)
+[![verify](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml/badge.svg)](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：11 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
@@ -115,7 +115,7 @@ configure/
 REPO="$HOME/Documents/configure"
 
 # 克隆
-git clone https://github.com/Lychee-rb2/ly-pi "$REPO"
+git clone https://github.com/linzhihui2022/ly-pi "$REPO"
 
 # 安装依赖
 cd "$REPO" && bun install

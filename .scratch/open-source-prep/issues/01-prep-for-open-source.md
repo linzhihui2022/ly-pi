@@ -25,7 +25,7 @@
 ### P2 可选
 
 - [x] **CI**：`.github/workflows/verify.yml` 跑 `bun run verify`（push/PR 触发），首个 run 已通过
-- [x] **新远程**：已建公开仓库 [Lychee-rb2/ly-pi](https://github.com/Lychee-rb2/ly-pi) 并从 HEAD 推送 main（remote 名 `github`；`origin` 仍指向私有 jan24th）。旧 key 已轮换，历史风险已控，未做 filter-repo 清洗
+- [x] **新远程**：开源仓库归 linzhihui2022 所有——[Lychee-rb2/ly-pi 已删除](用户操作)，改为 `git@jan24th:linzhihui2022/ly-pi.git` 作为主仓库（jan24th 凭证即 linzhihui2022 账号）。旧 key 已轮换，历史风险已控，未做 filter-repo 清洗
 
 ## Comments
 

@@ -5,7 +5,7 @@
   "author": "lychee",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Lychee-rb2/ly-pi"
+    "url": "https://github.com/linzhihui2022/ly-pi"
   },
   "module": "index.ts",
   "type": "module",
