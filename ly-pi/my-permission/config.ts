@@ -79,7 +79,7 @@ export const config = {
     ctx_execute: "allow",
     external_directory: {
       "*": "ask",
-      "/Users/lychee/.pi/agent": "allow",
+      "~/.pi/agent": "allow",
       "~/.cargo/registry/*": "allow",
       "~/.npm/_cacache/*": "allow",
       "~/Library/Caches/*": "allow",
