@@ -4,12 +4,12 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Remove `build:overlay` script and `scripts/build-overlay.ts`
-- [ ] Remove `scripts/mac-overlay.ts`
-- [ ] Remove `build:overlay` from `package.json` build script (keep only `bun build ...`)
-- [ ] Remove overlay-related code from `player.ts` (`playOverlay` function and its call sites)
-- [ ] Remove overlay-related code from `index.ts` (overlay calls in event handlers and command handler)
-- [ ] All existing tests pass
-- [ ] Build succeeds (single `bun build` step, no overlay artifact)
+- [x] Remove `build:overlay` script and `scripts/build-overlay.ts`
+- [x] Remove `scripts/mac-overlay.ts`
+- [x] Remove `build:overlay` from `package.json` build script (keep only `bun build ...`)
+- [x] Remove overlay-related code from `player.ts` (`playOverlay` function and its call sites)
+- [x] Remove overlay-related code from `index.ts` (overlay calls in event handlers and command handler)
+- [x] All existing tests pass
+- [x] Build succeeds (single `bun build` step, no overlay artifact)

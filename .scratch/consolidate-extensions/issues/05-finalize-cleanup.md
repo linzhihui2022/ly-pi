@@ -4,15 +4,15 @@
 
 **Blocked by:** 04 — Move remaining extensions
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Delete `pi-extensions/` directory (all original extension packages are now in `ly-pi/`)
-- [ ] Remove `turbo` from root `devDependencies`
-- [ ] Remove `pi-extensions/*` from root `workspaces` array; add `ly-pi`
-- [ ] Update root `deploy` script from `turbo run deploy` to `bun run scripts/deploy-all.ts`
-- [ ] Create `scripts/deploy-all.ts`: orchestrates `ly-pi` build → test → deploy, then settings deploy, then skills deploy, then themes deploy
-- [ ] Update `settings/settings.json`: remove the `extensions` array (keep only `subagents`)
-- [ ] Update `settings/scripts/deploy.ts`: the `extensions` array merge logic should handle the case where the key is absent
-- [ ] `bun run deploy` completes successfully end-to-end
-- [ ] Verify `~/.pi/agent/settings.json` no longer contains the `extensions` array
-- [ ] Verify `~/.pi/agent/extensions/ly-pi/index.js` exists and is the only custom extension deployed
+- [x] Delete `pi-extensions/` directory (all original extension packages are now in `ly-pi/`)
+- [x] Remove `turbo` from root `devDependencies`
+- [x] Remove `pi-extensions/*` from root `workspaces` array; add `ly-pi`
+- [x] Update root `deploy` script from `turbo run deploy` to `bun run scripts/deploy-all.ts`
+- [x] Create `scripts/deploy-all.ts`: orchestrates `ly-pi` build → test → deploy, then settings deploy, then skills deploy, then themes deploy
+- [x] Update `settings/settings.json`: remove the `extensions` array (keep only `subagents`)
+- [x] Update `settings/scripts/deploy.ts`: the `extensions` array merge logic should handle the case where the key is absent
+- [x] `bun run deploy` completes successfully end-to-end
+- [x] Verify `~/.pi/agent/settings.json` no longer contains the `extensions` array
+- [x] Verify `~/.pi/agent/extensions/ly-pi/index.js` exists and is the only custom extension deployed
