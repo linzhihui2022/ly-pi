@@ -18,7 +18,7 @@
 |------|------|
 | `enabled` | 总开关 |
 | `activePack` | 当前语音包名（对应 `packs` 中的键） |
-| `packs` | 语音包字典。每个包包含 `soundDir`（音频目录，相对于扩展根目录）与 `categories` |
+| `packs` | 语音包字典。每个包包含 `soundDir`（音频目录，相对于 `~/.ly-pi/sound/`）与 `categories` |
 | `categories`（pack 内） | 该包的分类定义，每个分类包含 `description` 与 `files` |
 | `eventMap` | pi 生命周期事件 → 分类名 |
 | `permissionEventMap` | 权限事件 → 分类名 |
@@ -26,8 +26,8 @@
 
 ### 新增语音包
 
-1. 音频文件放入 `ly-pi/assets/sounds/<pack-name>/`
-2. 在 `packs` 中注册：`"<pack-name>": { "soundDir": "sounds/<pack-name>", "categories": { ... } }`
+1. 音频文件放入 `~/.ly-pi/sound/<pack-name>/`（音效由用户自备，不随仓库分发）
+2. 在 `packs` 中注册：`"<pack-name>": { "soundDir": "<pack-name>", "categories": { ... } }`
 3. `bun run deploy` 后用 `/sound pack <pack-name>` 切换
 
 分类的 `files` 留空时该分类静默跳过，可以先搭骨架再逐步补音频。

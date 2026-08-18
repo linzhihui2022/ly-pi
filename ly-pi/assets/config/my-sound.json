@@ -3,7 +3,7 @@
   "activePack": "bt-7274",
   "packs": {
     "bt-7274": {
-      "soundDir": "sounds/bt-7274",
+      "soundDir": "bt-7274",
       "categories": {
         "affirmative": {
           "description": "确认 / 执行命令",
@@ -50,7 +50,7 @@
       }
     },
     "new-pack": {
-      "soundDir": "sounds/new-pack",
+      "soundDir": "new-pack",
       "categories": {
         "affirmative": {
           "description": "确认 / 执行命令",

@@ -1,4 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -608,5 +610,22 @@ describe("my-sound extension", () => {
       expect.stringContaining("ghost-pack"),
       "error",
     );
+  });
+});
+
+describe("resolveSoundDir", () => {
+  it("resolves pack soundDir against ~/.ly-pi/sound", async () => {
+    const mod = await loadModule();
+    const dir = mod.resolveSoundDir({
+      activePack: "test-pack",
+      packs: { "test-pack": { soundDir: "bt-7274", categories: {} } },
+    });
+    expect(dir).toBe(join(homedir(), ".ly-pi", "sound", "bt-7274"));
+  });
+
+  it("falls back to the sound root when activePack is missing", async () => {
+    const mod = await loadModule();
+    const dir = mod.resolveSoundDir({ activePack: "ghost", packs: {} });
+    expect(dir).toBe(join(homedir(), ".ly-pi", "sound"));
   });
 });

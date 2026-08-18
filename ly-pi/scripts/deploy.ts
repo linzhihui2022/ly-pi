@@ -209,13 +209,7 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
 
 // ── Static assets ───────────────────────────────────────────────────────────
 
-// Sounds
-if (existsSync("assets/sounds")) {
-  cpSync("assets/sounds", join(agentDir, "extensions", "ly-pi", "sounds"), {
-    recursive: true,
-  });
-  console.log("Sounds: deployed");
-}
+// Sounds are user-provided under ~/.ly-pi/sound — never deployed or tracked.
 
 // Skills
 if (existsSync("assets/skills")) {

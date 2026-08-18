@@ -12,10 +12,15 @@ const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
 
 const CONFIG_PATH = join(EXT_DIR, "my-sound.json");
 
-function resolveSoundDir(config: SoundConfig): string {
+// Sound packs live outside the repo/extension dir — users provide their own.
+const SOUND_ROOT = join(homedir(), ".ly-pi", "sound");
+
+export function resolveSoundDir(
+  config: Pick<SoundConfig, "activePack" | "packs">,
+): string {
   const pack = config.packs[config.activePack];
-  if (!pack) return resolve(EXT_DIR, "sounds");
-  return resolve(EXT_DIR, pack.soundDir);
+  if (!pack) return SOUND_ROOT;
+  return resolve(SOUND_ROOT, pack.soundDir);
 }
 
 function loadConfig(): SoundConfig {
