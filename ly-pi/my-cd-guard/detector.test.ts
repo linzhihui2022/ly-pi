@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { stripRedundantCd } from "./detector";
 
-const CWD = "/Users/lychee/Documents/configure";
+const CWD = "/Users/alice/Documents/configure";
 
 describe("stripRedundantCd", () => {
   it("strips a leading cd to the session cwd joined by &&", () => {

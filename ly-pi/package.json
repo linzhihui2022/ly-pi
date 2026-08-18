@@ -1,5 +1,8 @@
 {
   "name": "ly-pi",
+  "description": "Unified pi coding agent extension: guards, permissions, HUD, sounds, diff viewer and more",
+  "license": "MIT",
+  "author": "lychee",
   "module": "index.ts",
   "type": "module",
   "scripts": {

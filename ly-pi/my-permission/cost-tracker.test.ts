@@ -29,14 +29,14 @@ function opts() {
 
 describe("encodeProjectDir", () => {
   it("encodes absolute path to project directory name", () => {
-    expect(encodeProjectDir("/Users/lychee/Documents/configure")).toBe(
-      "--Users-lychee-Documents-configure--",
+    expect(encodeProjectDir("/Users/alice/Documents/configure")).toBe(
+      "--Users-alice-Documents-configure--",
     );
   });
 
   it("handles trailing slash", () => {
-    expect(encodeProjectDir("/Users/lychee/Documents/configure/")).toBe(
-      "--Users-lychee-Documents-configure--",
+    expect(encodeProjectDir("/Users/alice/Documents/configure/")).toBe(
+      "--Users-alice-Documents-configure--",
     );
   });
 
