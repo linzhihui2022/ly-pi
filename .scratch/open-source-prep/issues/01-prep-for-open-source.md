@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-human
+**Status:** resolved
 
 ## 工作项
 
@@ -24,11 +24,13 @@
 
 ### P2 可选
 
-- [ ] **CI**：GitHub Actions 跑 `bun run verify`（lint + typecheck + test + check-docs）（agent）
-- [ ] **历史清洗或新远程**：当前 remote 为私有服务器 `git@jan24th:...`；若公开到 GitHub，建议新开仓库 push；需先处理 P0 的 key 历史（可用 `git filter-repo` 清洗，会重写全部 commit hash）（human）
+- [x] **CI**：`.github/workflows/verify.yml` 跑 `bun run verify`（push/PR 触发），首个 run 已通过
+- [x] **新远程**：已建公开仓库 [Lychee-rb2/ly-pi](https://github.com/Lychee-rb2/ly-pi) 并从 HEAD 推送 main（remote 名 `github`；`origin` 仍指向私有 jan24th）。旧 key 已轮换，历史风险已控，未做 filter-repo 清洗
 
 ## Comments
 
 2026-08-17 调查结论（agent）：README 与测试已较完善，`.env` / coverage / dist 均被 gitignore 且未入库；git 历史中未发现 `.env` / 私钥类文件，但两个真实 API key 自 `a2c5857` 起存在于历史且当前 HEAD 仍在。README 模块数量表述不一致：摘要与 AGENTS.md 写"10 个扩展"，实际 `ly-pi` 下为 11 个子模块（目录树与表格均列 11），需在改写 README 时统一。
 
-2026-08-17 进展（agent）：P0/P1 的 agent 可完成项全部完成（见勾选）。剩余 human 项：1) 到 Context7/Tavily 后台轮换两个 key；2) 本地设置 `CONTEXT7_API_KEY`/`TAVILY_API_KEY` 环境变量（否则下次 deploy 后对应功能失效；当前 `~/.pi/agent/` 部署副本仍是旧 key，重新部署后会被占位符覆盖）；3) P2 公开方式（新仓库 push / filter-repo）暂不决定。另：`~/.pi/agent/extensions/ly-pi/sounds/` 旧部署副本已失效，可手动删除。
+2026-08-17 进展（agent）：P0/P1 的 agent 可完成项全部完成（见勾选）。
+
+2026-08-17 收尾（human + agent）：两个 key 已轮换并配置环境变量；旧音效部署副本已删；deploy 验证通过。P2 完成：CI 首个 run 通过；公开仓库 Lychee-rb2/ly-pi 已建并推送。本票全部工作项关闭。
