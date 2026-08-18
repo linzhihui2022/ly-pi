@@ -10,7 +10,7 @@
 
 ### P0 安全与法律
 
-- [ ] **移除并轮换 API key**：~~占位符替换~~（agent 已完成：`mcp.json` 改为 `${CONTEXT7_API_KEY}` 插值，`web-search.json` 移除内嵌 key 改走 `TAVILY_API_KEY` 环境变量，README 已加说明）。**剩余 human 项：到 Context7 / Tavily 后台轮换这两个已进入 git 历史的 key**（human）
+- [x] **移除并轮换 API key**：agent 已完成占位符替换（`mcp.json` 改 `${CONTEXT7_API_KEY}` 插值，`web-search.json` 改走 `TAVILY_API_KEY` 环境变量）；human 已完成两个 key 的轮换与环境变量配置（2026-08-17 确认）
 - [x] **音效版权处置**：决策：改为用户自备——读取位置迁移到 `~/.ly-pi/sound/<pack>/`，文件移出仓库（已 git rm 并拷贝到家目录），README 与 my-sound README 已更新
 - [x] **添加 LICENSE**：MIT（已添加 `LICENSE`，Copyright (c) 2026 lychee）
 

@@ -3,6 +3,10 @@
   "description": "Unified pi coding agent extension: guards, permissions, HUD, sounds, diff viewer and more",
   "license": "MIT",
   "author": "lychee",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lychee-rb2/ly-pi"
+  },
   "module": "index.ts",
   "type": "module",
   "scripts": {
