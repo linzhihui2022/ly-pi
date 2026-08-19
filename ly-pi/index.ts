@@ -11,6 +11,7 @@ import { scriptGuard } from "./my-script-guard/index";
 import mySessionName from "./my-session-name/index";
 import mySound from "./my-sound/index";
 import myVision from "./my-vision/index";
+import myWorktree from "./my-worktree/index";
 import { createGuardHarness } from "./shared/guard-harness";
 
 export default async function (pi: ExtensionAPI): Promise<void> {
@@ -24,5 +25,6 @@ export default async function (pi: ExtensionAPI): Promise<void> {
   mySound(pi);
   mySessionName(pi);
   myHud(pi);
+  myWorktree(pi);
   myVision(pi);
 }

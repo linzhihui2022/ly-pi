@@ -71,3 +71,19 @@ _Avoid_: 项目规则、local rule
 **Intent Chain Analysis（意图链分析）**:
 安全判定的方法论：不按工具名称分类（只读=安全、破坏性=不安全），而是追踪工具调用的完整语义链——数据最终落点、侧效果是否超出项目边界、是否通过间接方式执行代码。用于对抗管道注入、heredoc 写入、外部依赖等攻击模式。
 _Avoid_: 语义分析、上下文判断
+
+**Multi-worktree Repository（多 worktree 仓库）**:
+拥有两个或更多已注册 Git worktree 的仓库；主 worktree 也是该集合的成员。
+_Avoid_: 多分支仓库、多个 clone
+
+**Current Worktree（当前 worktree）**:
+包含 Pi 会话当前工作目录的 Git worktree；它是 worktree 集合中唯一需要在界面上标记的成员。
+_Avoid_: 主 worktree、活跃分支
+
+**Visible Worktree（可见 worktree）**:
+可由 Pi 访问且可在 worktree 组件中呈现的 worktree；失效或路径缺失的 prunable worktree 不属于此集合，detached HEAD 以短 commit SHA 作为标识。
+_Avoid_: 已注册 worktree、有效分支
+
+**Worktree Widget（worktree 组件）**:
+作为 `ly-pi` 子模块的独立 `my-worktree` Pi widget，用于在编辑器上方以 Todo 风格的无边框树呈现多 worktree 仓库的可见 worktree 集合；仅在至少两个成员可见时显示，以 `Worktrees (N)` 标题和 `├─`/`└─` 行连接符建立层级。每个成员显示分支与路径；主 worktree 根路径为 `<REPO>`，其子路径也以 `<REPO>/` 缩写，其他目录的 worktree 保持绝对路径；当前 worktree 使用实心符号和 accent，其余条目使用空心符号和弱化色；成员保持 Git 返回顺序；窄屏截断保留路径末尾。
+_Avoid_: my-hud worktree 字段、Git 状态栏
