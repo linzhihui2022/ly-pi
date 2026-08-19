@@ -14,7 +14,6 @@ import { join } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionContext,
-  Theme,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { Bar } from "./bar";
