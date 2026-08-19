@@ -3,11 +3,11 @@
 [![verify](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml/badge.svg)](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：11 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
+围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：12 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
 
 ## 特性
 
-- **统一扩展入口 `ly-pi`**：单一 `index.ts` 按序注册 11 个子模块，部署到 `~/.pi/agent/extensions/ly-pi/` 由 Pi 自动发现加载
+- **统一扩展入口 `ly-pi`**：单一 `index.ts` 按序注册 12 个子模块，部署到 `~/.pi/agent/extensions/ly-pi/` 由 Pi 自动发现加载
 - **权限拦截器**：确定性规则 + 模型法官二审工具调用，可逐项目定制
 - **开发体验**：自定义 HUD 状态栏、`/diff` 查看器、`/html` 渲染、事件音效、`/back` 撤销消息、热重载自动恢复
 - **行为护栏**：冗余 `cd` 前缀自动纠正、内联长脚本硬拦截
@@ -19,7 +19,7 @@
 
 ```
 configure/
-├── ly-pi/                    # 统一扩展入口（单包，含全部 11 个子模块）
+├── ly-pi/                    # 统一扩展入口（单包，含全部 12 个子模块）
 │   ├── index.ts              # 入口：按序注册所有子模块
 │   ├── my-cd-guard/          # 冗余 cd 前缀自动纠正
 │   ├── my-script-guard/      # 内联脚本硬拦截 + 急迫升级
@@ -31,6 +31,7 @@ configure/
 │   ├── my-html/              # /html 渲染
 │   ├── my-sound/             # 音效反馈 + 语音包管理
 │   ├── my-hud/               # 自定义 HUD 状态栏
+│   ├── my-worktree/          # 多 Git worktree 状态组件
 │   ├── my-vision/            # 按模型视觉能力注入图片处理规则
 │   ├── web-preview/          # 内部工具库：HTML 预览 server + 文档骨架
 │   ├── shared/               # 跨模块共享（guard-harness 等）
@@ -72,6 +73,7 @@ configure/
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-hud** | 自定义单行状态栏：项目名、模型（含思考级别）、Git 分支与状态、PR 链接、上下文百分比（颜色阈值）、Token 与成本、权限统计、Hide thinking 状态 |
+| **my-worktree** | 多 Git worktree 时在编辑器上方显示可访问工作树的分支和绝对路径，并标记当前项 |
 | **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |
 
 ---

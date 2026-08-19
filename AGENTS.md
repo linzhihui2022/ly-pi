@@ -7,7 +7,7 @@
 | 文件/目录 | 说明 |
 |-----------|------|
 | `MY-AGENTS.md` | 全局偏好（软链接到 `~/.pi/agent/AGENTS.md`、`~/.claude/CLAUDE.md` 和 `~/.dsh/AGENTS.md`） |
-| `ly-pi/` | 统一扩展入口（单包，含全部 10 个子模块） |
+| `ly-pi/` | 统一扩展入口（单包，含全部 12 个子模块） |
 | `ly-pi/assets/skills/` | 仓库自有技能（review-pr） |
 | `ly-pi/assets/themes/` | 自定义主题（Catppuccin Mocha） |
 | `scripts/deploy-all.ts` | 统一部署流水线（build → test → deploy all） |
