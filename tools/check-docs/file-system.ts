@@ -8,6 +8,7 @@ const IGNORED_DIRS = new Set([
   "dist",
   "coverage",
   ".turbo",
+  ".worktree",
   ".worktrees",
   ".pi-subagents",
 ]);
