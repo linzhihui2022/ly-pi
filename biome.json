@@ -1,7 +1,15 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
   "files": {
-    "includes": ["**", "!**/.cursor", "!**/dist", "!**/coverage", "!.turbo"]
+    "includes": [
+      "**",
+      "!**/.cursor",
+      "!**/dist",
+      "!**/coverage",
+      "!.turbo",
+      "!**/.worktree",
+      "!**/.worktrees"
+    ]
   },
   "formatter": {
     "enabled": true,
