@@ -30,6 +30,7 @@ configure/
 │   ├── my-diff/              # /diff 命令：git status 选择器 + diff 查看器
 │   ├── my-html/              # /html 渲染
 │   ├── my-sound/             # 音效反馈 + 语音包管理
+│   ├── my-session-name/      # 自动生成 Session Display Name
 │   ├── my-hud/               # 自定义 HUD 状态栏
 │   ├── my-worktree/          # 多 Git worktree 状态组件
 │   ├── my-vision/            # 按模型视觉能力注入图片处理规则
@@ -72,6 +73,7 @@ configure/
 | **my-diff** | `/diff` 命令：git status 选择器 + 主题配色 diff 查看器（纯 TUI，不经过 agent） |
 | **my-html** | `/html` 命令：将助手回复渲染为 Markdown HTML，浏览器中预览 |
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
+| **my-session-name** | 自动生成 Session Display Name：首条 prompt 后异步摘要，支持旧 session 补命名与 fork 短 hash |
 | **my-hud** | 自定义单行状态栏：项目名、模型（含思考级别）、Git 分支与状态、PR 链接、上下文百分比（颜色阈值）、Token 与成本、权限统计、Hide thinking 状态 |
 | **my-worktree** | 多 Git worktree 时在编辑器上方显示可访问工作树的分支和绝对路径，并标记当前项 |
 | **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |

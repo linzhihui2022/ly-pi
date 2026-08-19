@@ -9,12 +9,14 @@ vi.mock("./my-log/index", () => ({ default: vi.fn() }));
 vi.mock("./my-permission/index", () => ({ default: vi.fn() }));
 vi.mock("./my-reload/index", () => ({ default: vi.fn() }));
 vi.mock("./my-script-guard/index", () => ({ scriptGuard: vi.fn() }));
+vi.mock("./my-session-name/index", () => ({ default: vi.fn() }));
 vi.mock("./my-sound/index", () => ({ default: vi.fn() }));
 vi.mock("./my-vision/index", () => ({ default: vi.fn() }));
 vi.mock("./my-worktree/index", () => ({ default: vi.fn() }));
 vi.mock("./shared/guard-harness", () => ({ createGuardHarness: vi.fn() }));
 
 import extension from "./index";
+import mySessionName from "./my-session-name/index";
 import myWorktree from "./my-worktree/index";
 
 describe("ly-pi entry point", () => {
@@ -23,6 +25,7 @@ describe("ly-pi entry point", () => {
 
     await extension(pi as never);
 
+    expect(mySessionName).toHaveBeenCalledWith(pi);
     expect(myWorktree).toHaveBeenCalledWith(pi);
   });
 });
