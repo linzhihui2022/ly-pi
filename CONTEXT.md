@@ -4,6 +4,18 @@
 
 ## Language
 
+**Session Display Name（会话显示名）**:
+给人识别 pi 会话的可读标签，与技术身份标识 `sessionId` 不同。
+_Avoid_: session name、session title（在没有明确指向显示名时）
+
+**Automatic Session Naming（自动会话命名）**:
+为尚未被用户命名的主交互会话生成 Session Display Name 的行为；它不改变会话的技术身份。
+_Avoid_: 自动修改 sessionId、持续改名
+
+**Fork Session Display Name（分支会话显示名）**:
+从父会话的 Session Display Name 派生、并带有子会话短标识的名称；用于区分同一任务的用户可见分支。
+_Avoid_: 分支 sessionId、自动覆盖人工名称
+
 **Inline Script（内联脚本）**:
 通过 bash 工具以 `-c`/`-e` 参数或 heredoc 形式直接传给解释器（python/node/ruby/perl/php 等）执行的脚本代码。与之相对的正常形态是解释器执行磁盘上的脚本文件（`python3 script.py`）。
 _Avoid_: inline code、one-liner、脚本字符串

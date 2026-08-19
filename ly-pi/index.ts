@@ -8,6 +8,7 @@ import myLog from "./my-log/index";
 import myPermission from "./my-permission/index";
 import myReload from "./my-reload/index";
 import { scriptGuard } from "./my-script-guard/index";
+import mySessionName from "./my-session-name/index";
 import mySound from "./my-sound/index";
 import myVision from "./my-vision/index";
 import { createGuardHarness } from "./shared/guard-harness";
@@ -21,6 +22,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
   myDiff(pi);
   myHtml(pi);
   mySound(pi);
+  mySessionName(pi);
   myHud(pi);
   myVision(pi);
 }
