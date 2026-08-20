@@ -6,6 +6,7 @@ export default defineConfig({
     fileParallelism: false,
     maxWorkers: 1,
     execArgv: ["--max-old-space-size=4096"],
+    silent: "passed-only",
     coverage: {
       exclude: ["**/types.ts", "**/index.ts", "scripts/**"],
       thresholds: {
