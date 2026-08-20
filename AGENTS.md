@@ -78,6 +78,10 @@ bun run --cwd ly-pi test -- my-hud
 - 文档修正类变更（README、AGENTS.md 等耐久文档的内容更新）直接修改，不需要走 spec
 - 一致性防线：`bun run verify` 硬性验收（biome lint + tsgo typecheck + vitest 测试 + check-docs 文档一致性）
 
+### Agent 交付护栏
+
+开始实现前以及范围或风险变化时，读取 `docs/agentic-delivery-guardrails.md`，完成风险分级、审批确认和停止条件检查。
+
 ## 一致性约束
 
 **硬性规则：完成任何工作后，必须运行 `bun run verify` 验收——biome lint + tsgo typecheck + vitest 全量测试 + check-docs 四件套，任一环节未通过不得视为工作完成。** deploy 流水线（build → test → deploy）刻意不含 typecheck/lint：验收是硬性，部署不强制。
