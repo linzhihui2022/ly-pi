@@ -52,6 +52,7 @@ config.webgpu_power_preference = 'HighPerformance'
 config.hide_tab_bar_if_only_one_tab = true
 config.use_fancy_tab_bar = true
 config.enable_tab_bar = true
+config.tab_max_width = 32
 config.macos_window_background_blur = 50
 config.switch_to_last_active_tab_when_closing_tab = true
 config.inactive_pane_hsb = {
