@@ -10,9 +10,9 @@
       "keepRecentTokens": 20000,
       "reserveTokens": 16384
     },
-    "defaultModel": "k3-256k",
+    "defaultModel": "gpt-5.6-terra",
     "defaultProjectTrust": "always",
-    "defaultProvider": "kimi-coding",
+    "defaultProvider": "openai-codex",
     "defaultThinkingLevel": "max",
     "doubleEscapeAction": "none",
     "editorPaddingX": 1,

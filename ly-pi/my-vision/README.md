@@ -8,7 +8,7 @@ capability, evaluated per turn on `before_agent_start` via
 
 | Active model | Injected system-prompt suffix |
 | --- | --- |
-| `input` includes `"image"` (e.g. `kimi-coding/k3-256k`) | **Direct read**: analyze images with the `read` tool, do not delegate |
+| `input` includes `"image"` (e.g. `openai-codex/gpt-5.6-terra`) | **Direct read**: analyze images with the `read` tool, do not delegate |
 | `input` is `["text"]` or model unknown (e.g. `deepseek-v4-pro`) | **Delegate**: all image analysis goes to the `image-reader` subagent (incl. temp-dir copy/cleanup rules) |
 
 Replaces the static `## Vision Delegation` block that used to live in

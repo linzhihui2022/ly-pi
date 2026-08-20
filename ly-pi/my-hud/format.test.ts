@@ -44,8 +44,8 @@ describe("shortModelName", () => {
   });
 
   it("returns user-configured short name", () => {
-    setModelShortNames({ "kimi-coding/k3": "k3" });
-    expect(shortModelName("kimi-coding/k3")).toBe("k3");
+    setModelShortNames({ "example/model": "short" });
+    expect(shortModelName("example/model")).toBe("short");
   });
 
   it("user mapping overrides builtin", () => {
@@ -54,7 +54,7 @@ describe("shortModelName", () => {
   });
 
   it("keeps builtin mapping for models not in user config", () => {
-    setModelShortNames({ "kimi-coding/k3": "k3" });
+    setModelShortNames({ "example/model": "short" });
     expect(shortModelName("deepseek-v4-pro")).toBe("ds-pro");
   });
 });

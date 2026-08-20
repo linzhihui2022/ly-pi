@@ -38,7 +38,7 @@ Optional `my-hud.json` inside the extension directory (reloaded via `/reload`):
 
 ```json
 {
-  "modelShortNames": { "kimi-coding/k3": "k3" },
+  "modelShortNames": { "openai-codex/gpt-5.6-terra": "terra" },
   "hiddenFields": ["cost", "cacheRate"]
 }
 ```

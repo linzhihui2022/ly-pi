@@ -18,10 +18,10 @@ describe("loadHudConfig", () => {
   it("returns modelShortNames from my-hud.json", () => {
     writeFileSync(
       join(dir, "my-hud.json"),
-      JSON.stringify({ modelShortNames: { "kimi-coding/k3": "k3" } }),
+      JSON.stringify({ modelShortNames: { "example/model": "short" } }),
     );
     expect(loadHudConfig(dir)).toEqual({
-      modelShortNames: { "kimi-coding/k3": "k3" },
+      modelShortNames: { "example/model": "short" },
       hiddenFields: [],
     });
   });
@@ -60,7 +60,7 @@ describe("loadHudConfig", () => {
   it("returns empty mapping when modelShortNames is not an object", () => {
     writeFileSync(
       join(dir, "my-hud.json"),
-      JSON.stringify({ modelShortNames: "k3" }),
+      JSON.stringify({ modelShortNames: "not-a-map" }),
     );
     expect(loadHudConfig(dir)).toEqual({
       modelShortNames: {},
@@ -71,7 +71,7 @@ describe("loadHudConfig", () => {
   it("returns empty mapping when modelShortNames is an array", () => {
     writeFileSync(
       join(dir, "my-hud.json"),
-      JSON.stringify({ modelShortNames: ["k3"] }),
+      JSON.stringify({ modelShortNames: ["not-a-map"] }),
     );
     expect(loadHudConfig(dir)).toEqual({
       modelShortNames: {},
@@ -82,7 +82,7 @@ describe("loadHudConfig", () => {
   it("returns empty mapping when modelShortNames has non-string values", () => {
     writeFileSync(
       join(dir, "my-hud.json"),
-      JSON.stringify({ modelShortNames: { "kimi-coding/k3": 3 } }),
+      JSON.stringify({ modelShortNames: { "example/model": 3 } }),
     );
     expect(loadHudConfig(dir)).toEqual({
       modelShortNames: {},
