@@ -1,10 +1,9 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AnalyzerConfig } from "./pipeline";
 import {
   createRoleAnalyzer,
   createMerger as createSharedMerger,
 } from "./pipeline";
-import type { Config } from "./types";
+import type { Config, ModelClient } from "./types";
 
 // ---- types ----
 
@@ -39,23 +38,11 @@ export type ChiefFn = (
   judgePrompt: string,
   cwd: string,
   instruction: string | undefined,
-  resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (
-    model: Model<Api>,
-  ) => Promise<
-    { apiKey?: string; headers?: Record<string, string> } | undefined
-  >,
 ) => Promise<ChiefResult>;
 
 export type ChiefMergerFn = (
   currentJudgeMd: string,
   selectedSuggestions: ChiefSuggestionItem[],
-  resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (
-    model: Model<Api>,
-  ) => Promise<
-    { apiKey?: string; headers?: Record<string, string> } | undefined
-  >,
 ) => Promise<ChiefMergeResult>;
 
 // ---- Role config (used by pipeline.ts) ----
@@ -117,20 +104,14 @@ export const chiefAnalyzerConfig: AnalyzerConfig<
 
 // ---- createChief (thin wrapper) ----
 
-export function createChief(config: Config): ChiefFn {
-  const analyzer = createRoleAnalyzer(config, chiefAnalyzerConfig);
+export function createChief(config: Config, modelClient: ModelClient): ChiefFn {
+  const analyzer = createRoleAnalyzer(config, chiefAnalyzerConfig, modelClient);
 
   return async function analyze(
     currentJudgeMd: string,
     judgePrompt: string,
     cwd: string,
     instruction: string | undefined,
-    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (
-      model: Model<Api>,
-    ) => Promise<
-      { apiKey?: string; headers?: Record<string, string> } | undefined
-    >,
   ): Promise<ChiefResult> {
     if (!currentJudgeMd.trim()) {
       return { error: "项目尚未创建 JUDGE.md，无需审计" };
@@ -141,8 +122,6 @@ export function createChief(config: Config): ChiefFn {
       cwd,
       currentJudgeMd,
       judgePrompt,
-      resolveModel,
-      getAuth,
     );
 
     return {
@@ -155,24 +134,20 @@ export function createChief(config: Config): ChiefFn {
 
 // ---- createChiefMerger (thin wrapper) ----
 
-export function createChiefMerger(config: Config): ChiefMergerFn {
-  const sharedMerger = createSharedMerger(config);
+export function createChiefMerger(
+  config: Config,
+  modelClient: ModelClient,
+): ChiefMergerFn {
+  const sharedMerger = createSharedMerger(config, modelClient);
 
   return async function merge(
     currentJudgeMd: string,
     selectedSuggestions: ChiefSuggestionItem[],
-    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (
-      model: Model<Api>,
-    ) => Promise<
-      { apiKey?: string; headers?: Record<string, string> } | undefined
-    >,
   ): Promise<ChiefMergeResult> {
-    const result = await sharedMerger(
-      { current: currentJudgeMd, operations: selectedSuggestions },
-      resolveModel,
-      getAuth,
-    );
+    const result = await sharedMerger({
+      current: currentJudgeMd,
+      operations: selectedSuggestions,
+    });
     return {
       mergedText: result.mergedText,
       error: result.error,

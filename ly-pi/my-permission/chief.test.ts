@@ -1,11 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createChief, createChiefMerger } from "./chief";
-import type { Config } from "./types";
-
-vi.mock("@earendil-works/pi-ai", () => ({
-  complete: vi.fn(),
-}));
+import type { Config, ModelClient } from "./types";
 
 function makeModel(
   overrides: Partial<{ id: string; provider: string }> = {},
@@ -37,11 +33,20 @@ const config: Config = {
 
 const resolveModelOk = vi.fn(() => makeModel());
 const resolveModelNotFound = vi.fn(() => undefined);
-const getAuthOk = vi.fn(async () => ({ apiKey: "test-key" }));
+const completeModel = vi.fn<ModelClient["complete"]>();
+const modelClient: ModelClient = {
+  find: resolveModelOk,
+  complete: completeModel,
+};
+
+beforeEach(() => {
+  completeModel.mockReset();
+  resolveModelOk.mockClear();
+  resolveModelNotFound.mockClear();
+});
 
 async function mockComplete(value: unknown): Promise<void> {
-  const { complete } = await import("@earendil-works/pi-ai");
-  (complete as ReturnType<typeof vi.fn>).mockResolvedValue(value);
+  completeModel.mockResolvedValue(value as never);
 }
 
 function jsonResponse(obj: unknown) {
@@ -52,73 +57,46 @@ function jsonResponse(obj: unknown) {
 
 describe("createChief", () => {
   it("returns error when JUDGE.md is empty", async () => {
-    const chief = createChief(config);
-    const result = await chief(
-      "",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    const result = await chief("", "", "/repo", undefined);
     expect(result.error).toBe("项目尚未创建 JUDGE.md，无需审计");
   });
 
   it("returns error when JUDGE.md is whitespace only", async () => {
-    const chief = createChief(config);
-    const result = await chief(
-      "   \n  \n",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    const result = await chief("   \n  \n", "", "/repo", undefined);
     expect(result.error).toBe("项目尚未创建 JUDGE.md，无需审计");
   });
 
   it("returns error when professorModel format is invalid", async () => {
     const badConfig: Config = { ...config, professorModel: "invalid" };
-    const chief = createChief(badConfig);
-    const result = await chief(
-      "允许执行部署命令",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(badConfig, modelClient);
+    const result = await chief("允许执行部署命令", "", "/repo", undefined);
     expect(result.error).toContain("professorModel 格式无效");
   });
 
   it("returns error when model not found", async () => {
-    const chief = createChief(config);
-    const result = await chief(
-      "允许执行部署命令",
-      "",
-      "/repo",
-      undefined,
-      resolveModelNotFound,
-      getAuthOk,
-    );
+    const chief = createChief(config, {
+      ...modelClient,
+      find: resolveModelNotFound,
+    });
+    const result = await chief("允许执行部署命令", "", "/repo", undefined);
     expect(result.error).toContain("未找到 chief 模型");
   });
 
   it("returns empty suggestions when JUDGE.md has no issues", async () => {
-    await mockComplete(
+    completeModel.mockResolvedValue(
       jsonResponse({
         suggestions: [],
         summary: "审计 3 条规则，未发现问题",
-      }),
+      }) as never,
     );
-    const chief = createChief(config);
+    const chief = createChief(config, modelClient);
     const result = await chief(
       "允许执行部署命令\n允许读取配置文件",
       JUDGE_PROMPT,
       "/repo",
       undefined,
-      resolveModelOk,
-      getAuthOk,
     );
     expect(result.error).toBeUndefined();
     expect(result.suggestion).toBeDefined();
@@ -156,14 +134,12 @@ describe("createChief", () => {
         summary: "审计 10 条规则，发现 4 处问题",
       }),
     );
-    const chief = createChief(config);
+    const chief = createChief(config, modelClient);
     const result = await chief(
       "允许执行 bun run build\n允许 git add\n允许 git commit",
       JUDGE_PROMPT,
       "/repo",
       undefined,
-      resolveModelOk,
-      getAuthOk,
     );
     expect(result.error).toBeUndefined();
     expect(result.suggestion).toBeDefined();
@@ -179,46 +155,22 @@ describe("createChief", () => {
     await mockComplete({
       content: [{ type: "text", text: "not json" }],
     });
-    const chief = createChief(config);
-    const result = await chief(
-      "允许执行部署命令",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    const result = await chief("允许执行部署命令", "", "/repo", undefined);
     expect(result.error).toContain("无法解析");
   });
 
   it("returns error when model call throws", async () => {
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("network error"),
-    );
-    const chief = createChief(config);
-    const result = await chief(
-      "允许执行部署命令",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    completeModel.mockRejectedValue(new Error("network error"));
+    const chief = createChief(config, modelClient);
+    const result = await chief("允许执行部署命令", "", "/repo", undefined);
     expect(result.error).toContain("调用失败");
   });
 
   it("returns error when model returns empty content", async () => {
     await mockComplete({ content: [] });
-    const chief = createChief(config);
-    const result = await chief(
-      "允许执行部署命令",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    const result = await chief("允许执行部署命令", "", "/repo", undefined);
     expect(result.error).toContain("空内容");
   });
 
@@ -236,15 +188,8 @@ describe("createChief", () => {
         },
       ],
     });
-    const chief = createChief(config);
-    const result = await chief(
-      "允许执行部署命令",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    const result = await chief("允许执行部署命令", "", "/repo", undefined);
     expect(result.suggestion).toBeDefined();
     expect(result.suggestion?.suggestions).toHaveLength(1);
   });
@@ -255,15 +200,8 @@ describe("createChief", () => {
         suggestions: [{ type: "add", rule: "test", reason: "reason" }],
       }),
     );
-    const chief = createChief(config);
-    const result = await chief(
-      "允许执行部署命令",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    const result = await chief("允许执行部署命令", "", "/repo", undefined);
     expect(result.error).toContain("无法解析");
   });
 
@@ -280,41 +218,24 @@ describe("createChief", () => {
         summary: "found issues",
       }),
     );
-    const chief = createChief(config);
-    const result = await chief(
-      "允许执行部署命令",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    const result = await chief("允许执行部署命令", "", "/repo", undefined);
     // modify with empty reason is still valid, remove without rule is invalid, non-object is invalid
     expect(result.suggestion?.suggestions).toHaveLength(2); // add + modify
   });
 
   it("passes current JUDGE.md and judge prompt to model", async () => {
     let capturedContext: unknown;
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, context: unknown) => {
-        capturedContext = context;
-        return Promise.resolve(
-          jsonResponse({ suggestions: [], summary: "no issues" }),
-        );
-      },
-    );
+    completeModel.mockImplementation((_model, context) => {
+      capturedContext = context;
+      return Promise.resolve(
+        jsonResponse({ suggestions: [], summary: "no issues" }) as never,
+      );
+    });
 
     const currentJudgeMd = "允许执行部署命令\n允许读取配置文件";
-    const chief = createChief(config);
-    await chief(
-      currentJudgeMd,
-      JUDGE_PROMPT,
-      "/my-project",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    await chief(currentJudgeMd, JUDGE_PROMPT, "/my-project", undefined);
 
     const ctx = capturedContext as { messages: Array<{ content: string }> };
     const msg = ctx.messages[0].content as string;
@@ -330,40 +251,23 @@ describe("createChief", () => {
       stopReason: "error",
       errorMessage: "rate limit exceeded",
     });
-    const chief = createChief(config);
-    const result = await chief(
-      "允许执行部署命令",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    const result = await chief("允许执行部署命令", "", "/repo", undefined);
     expect(result.error).toContain("rate limit exceeded");
   });
 
   it("includes judge prompt in analysis context", async () => {
     let capturedContext: unknown;
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, context: unknown) => {
-        capturedContext = context;
-        return Promise.resolve(
-          jsonResponse({ suggestions: [], summary: "ok" }),
-        );
-      },
-    );
+    completeModel.mockImplementation((_model, context) => {
+      capturedContext = context;
+      return Promise.resolve(
+        jsonResponse({ suggestions: [], summary: "ok" }) as never,
+      );
+    });
 
     const chiefPrompt = "自定义法官提示词";
-    const chief = createChief(config);
-    await chief(
-      "允许部署",
-      chiefPrompt,
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    await chief("允许部署", chiefPrompt, "/repo", undefined);
 
     const ctx = capturedContext as { messages: Array<{ content: string }> };
     const msg = ctx.messages[0].content as string;
@@ -372,24 +276,19 @@ describe("createChief", () => {
 
   it("handles undefined judge prompt", async () => {
     let capturedContext: unknown;
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, context: unknown) => {
-        capturedContext = context;
-        return Promise.resolve(
-          jsonResponse({ suggestions: [], summary: "ok" }),
-        );
-      },
-    );
+    completeModel.mockImplementation((_model, context) => {
+      capturedContext = context;
+      return Promise.resolve(
+        jsonResponse({ suggestions: [], summary: "ok" }) as never,
+      );
+    });
 
-    const chief = createChief(config);
+    const chief = createChief(config, modelClient);
     await chief(
       "允许部署",
       "", // empty judge prompt
       "/repo",
       undefined,
-      resolveModelOk,
-      getAuthOk,
     );
 
     const ctx = capturedContext as { messages: Array<{ content: string }> };
@@ -398,8 +297,7 @@ describe("createChief", () => {
   });
 
   it("captures cost from response usage", async () => {
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockResolvedValue({
+    completeModel.mockResolvedValue({
       content: [
         {
           type: "text",
@@ -407,40 +305,25 @@ describe("createChief", () => {
         },
       ],
       usage: { cost: { total: 0.004 } },
-    });
+    } as never);
 
-    const chief = createChief(config);
-    const result = await chief(
-      "允许部署",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    const result = await chief("允许部署", "", "/repo", undefined);
     expect(result.cost).toBe(0.004);
   });
 
   it("handles missing usage gracefully", async () => {
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockResolvedValue({
+    completeModel.mockResolvedValue({
       content: [
         {
           type: "text",
           text: JSON.stringify({ suggestions: [], summary: "ok" }),
         },
       ],
-    });
+    } as never);
 
-    const chief = createChief(config);
-    const result = await chief(
-      "允许部署",
-      "",
-      "/repo",
-      undefined,
-      resolveModelOk,
-      getAuthOk,
-    );
+    const chief = createChief(config, modelClient);
+    const result = await chief("允许部署", "", "/repo", undefined);
     expect(result.cost).toBeUndefined();
   });
 });
@@ -450,24 +333,21 @@ describe("createChief", () => {
 describe("createChiefMerger", () => {
   it("returns error when professorModel format is invalid", async () => {
     const badConfig: Config = { ...config, professorModel: "invalid" };
-    const merger = createChiefMerger(badConfig);
-    const result = await merger(
-      "现有规则",
-      [{ type: "add", rule: "新规则", reason: "test" }],
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createChiefMerger(badConfig, modelClient);
+    const result = await merger("现有规则", [
+      { type: "add", rule: "新规则", reason: "test" },
+    ]);
     expect(result.error).toContain("professorModel 格式无效");
   });
 
   it("returns error when model not found", async () => {
-    const merger = createChiefMerger(config);
-    const result = await merger(
-      "现有规则",
-      [{ type: "add", rule: "新规则", reason: "test" }],
-      resolveModelNotFound,
-      getAuthOk,
-    );
+    const merger = createChiefMerger(config, {
+      ...modelClient,
+      find: resolveModelNotFound,
+    });
+    const result = await merger("现有规则", [
+      { type: "add", rule: "新规则", reason: "test" },
+    ]);
     expect(result.error).toContain("未找到合并模型");
   });
 
@@ -480,13 +360,10 @@ describe("createChiefMerger", () => {
         },
       ],
     });
-    const merger = createChiefMerger(config);
-    const result = await merger(
-      "现有规则",
-      [{ type: "add", rule: "新增规则", reason: "遗漏" }],
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createChiefMerger(config, modelClient);
+    const result = await merger("现有规则", [
+      { type: "add", rule: "新增规则", reason: "遗漏" },
+    ]);
     expect(result.error).toBeUndefined();
     expect(result.mergedText).toContain("现有规则");
     expect(result.mergedText).toContain("新增规则");
@@ -494,38 +371,30 @@ describe("createChiefMerger", () => {
 
   it("formats all four operation types in prompt", async () => {
     let capturedContext: unknown;
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, context: unknown) => {
-        capturedContext = context;
-        return Promise.resolve({
-          content: [{ type: "text" as const, text: "merged content" }],
-        });
-      },
-    );
+    completeModel.mockImplementation((_model, context) => {
+      capturedContext = context;
+      return Promise.resolve({
+        content: [{ type: "text" as const, text: "merged content" }],
+      } as never);
+    });
 
-    const merger = createChiefMerger(config);
-    await merger(
-      "规则A\n规则B\n规则C",
-      [
-        { type: "add", rule: "新规则X", reason: "遗漏" },
-        { type: "remove", rule: "规则B", reason: "冗余" },
-        {
-          type: "modify",
-          oldRule: "规则A",
-          newRule: "规则A改",
-          reason: "过窄",
-        },
-        {
-          type: "merge",
-          oldRules: ["规则C", "规则D"],
-          newRule: "规则CD合并",
-          reason: "可合并",
-        },
-      ],
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createChiefMerger(config, modelClient);
+    await merger("规则A\n规则B\n规则C", [
+      { type: "add", rule: "新规则X", reason: "遗漏" },
+      { type: "remove", rule: "规则B", reason: "冗余" },
+      {
+        type: "modify",
+        oldRule: "规则A",
+        newRule: "规则A改",
+        reason: "过窄",
+      },
+      {
+        type: "merge",
+        oldRules: ["规则C", "规则D"],
+        newRule: "规则CD合并",
+        reason: "可合并",
+      },
+    ]);
 
     const ctx = capturedContext as { messages: Array<{ content: string }> };
     const msg = ctx.messages[0].content as string;
@@ -537,44 +406,31 @@ describe("createChiefMerger", () => {
 
   it("returns error on empty response content", async () => {
     await mockComplete({ content: [] });
-    const merger = createChiefMerger(config);
-    const result = await merger(
-      "现有规则",
-      [{ type: "add", rule: "新规则", reason: "test" }],
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createChiefMerger(config, modelClient);
+    const result = await merger("现有规则", [
+      { type: "add", rule: "新规则", reason: "test" },
+    ]);
     expect(result.error).toContain("空内容");
   });
 
   it("returns error when LLM call throws", async () => {
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("timeout"),
-    );
-    const merger = createChiefMerger(config);
-    const result = await merger(
-      "现有规则",
-      [{ type: "add", rule: "新规则", reason: "test" }],
-      resolveModelOk,
-      getAuthOk,
-    );
+    completeModel.mockRejectedValue(new Error("timeout"));
+    const merger = createChiefMerger(config, modelClient);
+    const result = await merger("现有规则", [
+      { type: "add", rule: "新规则", reason: "test" },
+    ]);
     expect(result.error).toContain("调用失败");
   });
 
   it("captures cost from merge response", async () => {
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockResolvedValue({
+    completeModel.mockResolvedValue({
       content: [{ type: "text", text: "merged" }],
       usage: { cost: { total: 0.002 } },
-    });
-    const merger = createChiefMerger(config);
-    const result = await merger(
-      "现有规则",
-      [{ type: "add", rule: "新规则", reason: "test" }],
-      resolveModelOk,
-      getAuthOk,
-    );
+    } as never);
+    const merger = createChiefMerger(config, modelClient);
+    const result = await merger("现有规则", [
+      { type: "add", rule: "新规则", reason: "test" },
+    ]);
     expect(result.cost).toBe(0.002);
     expect(result.mergedText).toBe("merged");
   });

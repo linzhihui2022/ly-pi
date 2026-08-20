@@ -1,3 +1,21 @@
+import type {
+  Api,
+  AssistantMessage,
+  Context,
+  Model,
+  ModelsApiStreamOptions,
+  ModelThinkingLevel,
+} from "@earendil-works/pi-ai";
+
+export interface ModelClient {
+  find(provider: string, id: string): Model<Api> | undefined;
+  complete(
+    model: Model<Api>,
+    context: Context,
+    options?: ModelsApiStreamOptions<Api>,
+  ): Promise<AssistantMessage>;
+}
+
 export type Action = "allow" | "ask" | "deny";
 
 export interface DenyWithReason {
@@ -19,7 +37,7 @@ export interface Config {
   defaultPolicy: Action;
   judgeModel: string;
   professorModel: string;
-  professorThinking: string;
+  professorThinking: ModelThinkingLevel;
   judgeTimeoutMs: number;
   childPolicy: "deny-on-unsafe" | "allow-on-safe";
   permission: PermissionConfig;

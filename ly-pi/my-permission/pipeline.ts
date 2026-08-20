@@ -1,8 +1,11 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
-import { complete } from "@earendil-works/pi-ai";
+import type {
+  Api,
+  ModelsApiStreamOptions,
+  ModelThinkingLevel,
+} from "@earendil-works/pi-ai";
 import { createDevLogger } from "../my-log/index";
 import type { ChiefSuggestionItem } from "./chief";
-import type { Config } from "./types";
+import type { Config, ModelClient } from "./types";
 
 const log = createDevLogger("my-permission:pipeline");
 
@@ -19,7 +22,7 @@ export interface AnalyzerConfig<TInput, TResult> {
   parseResult: (text: string) => TResult | undefined;
   emptyInputError: string;
   modelLabel: string;
-  thinking?: string;
+  thinking?: ModelThinkingLevel;
 }
 
 export interface AnalyzerResult<TResult> {
@@ -33,15 +36,6 @@ export type AnalyzerFn<TInput, TResult> = (
   cwd: string,
   currentJudgeMd: string,
   judgePrompt: string,
-  resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (model: Model<Api>) => Promise<
-    | {
-        apiKey?: string;
-        headers?: Record<string, string>;
-        env?: Record<string, string>;
-      }
-    | undefined
-  >,
 ) => Promise<AnalyzerResult<TResult>>;
 
 export interface MergerInput {
@@ -55,39 +49,20 @@ export interface MergerResult {
   cost?: number;
 }
 
-export type MergerFn = (
-  input: MergerInput,
-  resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (model: Model<Api>) => Promise<
-    | {
-        apiKey?: string;
-        headers?: Record<string, string>;
-        env?: Record<string, string>;
-      }
-    | undefined
-  >,
-) => Promise<MergerResult>;
+export type MergerFn = (input: MergerInput) => Promise<MergerResult>;
 
 // ---- createRoleAnalyzer ----
 
 export function createRoleAnalyzer<TInput, TResult>(
   config: Config,
   roleConfig: AnalyzerConfig<TInput, TResult>,
+  modelClient: ModelClient,
 ): AnalyzerFn<TInput, TResult> {
   return async function analyze(
     input: TInput,
     cwd: string,
     currentJudgeMd: string,
     judgePrompt: string,
-    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (model: Model<Api>) => Promise<
-      | {
-          apiKey?: string;
-          headers?: Record<string, string>;
-          env?: Record<string, string>;
-        }
-      | undefined
-    >,
   ): Promise<AnalyzerResult<TResult>> {
     // Validate input
     if (Array.isArray(input) && input.length === 0) {
@@ -102,7 +77,7 @@ export function createRoleAnalyzer<TInput, TResult>(
       };
     }
 
-    const model = resolveModel(parts[0], parts[1]);
+    const model = modelClient.find(parts[0], parts[1]);
     if (!model) {
       log.error(`${roleConfig.modelLabel} model not found`, {
         configured: config.professorModel,
@@ -117,7 +92,6 @@ export function createRoleAnalyzer<TInput, TResult>(
       configured: config.professorModel,
     });
 
-    const auth = await getAuth(model);
     const userPrompt = roleConfig.buildUserPrompt(
       input,
       cwd,
@@ -134,15 +108,10 @@ export function createRoleAnalyzer<TInput, TResult>(
       };
 
       const thinking = roleConfig.thinking ?? config.professorThinking;
-      const completeOpts: Record<string, unknown> = {};
-      if (thinking) {
-        completeOpts.thinking = thinking;
-      }
-      if (auth?.apiKey) completeOpts.apiKey = auth.apiKey;
-      if (auth?.headers) completeOpts.headers = auth.headers;
-      if (auth?.env) completeOpts.env = auth.env;
+      const completeOpts: ModelsApiStreamOptions<Api> =
+        thinking === "off" ? {} : { reasoningEffort: thinking };
 
-      const response = await complete(model, context, completeOpts);
+      const response = await modelClient.complete(model, context, completeOpts);
 
       const cost = response.usage?.cost?.total;
 
@@ -186,25 +155,17 @@ export function createRoleAnalyzer<TInput, TResult>(
 
 // ---- createMerger ----
 
-export function createMerger(config: Config): MergerFn {
-  return async function merge(
-    input: MergerInput,
-    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (model: Model<Api>) => Promise<
-      | {
-          apiKey?: string;
-          headers?: Record<string, string>;
-          env?: Record<string, string>;
-        }
-      | undefined
-    >,
-  ): Promise<MergerResult> {
+export function createMerger(
+  config: Config,
+  modelClient: ModelClient,
+): MergerFn {
+  return async function merge(input: MergerInput): Promise<MergerResult> {
     const parts = config.professorModel.split("/");
     if (parts.length !== 2) {
       return { error: "professorModel 格式无效" };
     }
 
-    const model = resolveModel(parts[0], parts[1]);
+    const model = modelClient.find(parts[0], parts[1]);
     if (!model) {
       log.error("merger model not found", {
         configured: config.professorModel,
@@ -212,7 +173,6 @@ export function createMerger(config: Config): MergerFn {
       return { error: "未找到合并模型" };
     }
 
-    const auth = await getAuth(model);
     const isChief = input.operations.some((op) => typeof op !== "string");
 
     const { systemPrompt, userContent } = buildMergerPrompts(input, isChief);
@@ -229,12 +189,7 @@ export function createMerger(config: Config): MergerFn {
         ],
       };
 
-      const completeOpts: Record<string, unknown> = {};
-      if (auth?.apiKey) completeOpts.apiKey = auth.apiKey;
-      if (auth?.headers) completeOpts.headers = auth.headers;
-      if (auth?.env) completeOpts.env = auth.env;
-
-      const response = await complete(model, context, completeOpts);
+      const response = await modelClient.complete(model, context);
 
       const cost = response.usage?.cost?.total;
 

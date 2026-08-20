@@ -33,7 +33,7 @@ Pi 的 session selector 在没有显式名称时回退展示首条消息。长�
 
 - 新建 `ly-pi/my-session-name/`，在统一 `ly-pi/index.ts` 注册。
 - 使用 `before_agent_start` 获取展开后 prompt，并结合 `input` 的 source 过滤 extension 注入；使用 `session_start` 处理旧 session、fork 和生命周期状态。
-- 使用 Pi 0.78 兼容的 `ctx.modelRegistry.find()`、`getApiKeyAndHeaders()` 与 `pi-ai` `completeSimple()` 调用标题模型；不升级既有 Pi 依赖版本。
+- 使用 Pi 0.84.2 的 `ctx.modelRegistry.find()` 与 `ctx.modelRegistry.complete()` 调用标题模型，由 ModelRegistry 统一处理鉴权，不直接依赖 `pi-ai` 兼容层。
 - 使用 session generation token 与当前名称双重竞态保护：标题返回时只有请求仍属于当前 session 且名称仍为空才写入。
 - 用带当前 `sessionId` 的 `my-session-name-attempt` custom entry 持久化“已尝试”状态，避免 `/reload` 对同一 session 重试。fork 只接受匹配子 sessionId 的 marker。
 
@@ -43,7 +43,7 @@ Pi 的 session selector 在没有显式名称时回退展示首条消息。长�
 
 1. **标题纯函数 seam**：首条用户消息提取、标题严格校验、子 `sessionId` 的 6 位小写 hash、fork 名称组合。
 2. **扩展生命周期 seam**：模拟 `ExtensionAPI` 注册的 `input`、`before_agent_start`、`session_start` handlers，观察命名触发、source 过滤、人工名称优先、fork 后缀和旧 session 补命名。
-3. **标题模型 seam**：mock `ctx.modelRegistry` 和 `completeSimple`，验证成功、空/非法输出、异常和后台不阻塞行为。
+3. **标题模型 seam**：mock `ctx.modelRegistry.find()` 与 `ctx.modelRegistry.complete()`，验证成功、空/非法输出、异常和后台不阻塞行为。
 
 ## Out of Scope
 

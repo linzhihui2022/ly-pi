@@ -1,8 +1,7 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AnalyzerConfig } from "./pipeline";
 import { createRoleAnalyzer } from "./pipeline";
 import type { JudgeLogEntry } from "./stats";
-import type { Config } from "./types";
+import type { Config, ModelClient } from "./types";
 
 export interface ProsecutorSuggestion {
   add: Array<{ rule: string; reason: string }>;
@@ -18,12 +17,6 @@ export interface ProsecutorResult {
 export type ProsecutorFn = (
   allowedEntries: JudgeLogEntry[],
   cwd: string,
-  resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (
-    model: Model<Api>,
-  ) => Promise<
-    { apiKey?: string; headers?: Record<string, string> } | undefined
-  >,
   currentJudgeMd: string,
   judgePrompt: string,
 ) => Promise<ProsecutorResult>;
@@ -83,18 +76,19 @@ export const prosecutorAnalyzerConfig: AnalyzerConfig<
 
 // ---- createProsecutor (thin wrapper) ----
 
-export function createProsecutor(config: Config): ProsecutorFn {
-  const analyzer = createRoleAnalyzer(config, prosecutorAnalyzerConfig);
+export function createProsecutor(
+  config: Config,
+  modelClient: ModelClient,
+): ProsecutorFn {
+  const analyzer = createRoleAnalyzer(
+    config,
+    prosecutorAnalyzerConfig,
+    modelClient,
+  );
 
   return async function analyze(
     allowedEntries: JudgeLogEntry[],
     cwd: string,
-    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (
-      model: Model<Api>,
-    ) => Promise<
-      { apiKey?: string; headers?: Record<string, string> } | undefined
-    >,
     currentJudgeMd: string,
     judgePrompt: string,
   ): Promise<ProsecutorResult> {
@@ -107,8 +101,6 @@ export function createProsecutor(config: Config): ProsecutorFn {
       cwd,
       currentJudgeMd,
       judgePrompt,
-      resolveModel,
-      getAuth,
     );
 
     return {

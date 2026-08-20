@@ -1,18 +1,13 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
-import { complete } from "@earendil-works/pi-ai";
+import type { Api, Model, ModelsApiStreamOptions } from "@earendil-works/pi-ai";
 import { createDevLogger } from "../my-log/index";
-import type { Config, JudgeResult, ToolInput } from "./types";
+import type { Config, JudgeResult, ModelClient, ToolInput } from "./types";
 
 const log = createDevLogger("my-permission:judge");
 
 export function createJudge(
   config: Config,
-  deps?: {
-    getAuth?: (
-      model: Model<Api>,
-    ) => Promise<
-      { apiKey?: string; headers?: Record<string, string> } | undefined
-    >;
+  deps: {
+    modelClient: ModelClient;
     judgePrompt?: string;
     localJudge?: string;
   },
@@ -21,9 +16,8 @@ export function createJudge(
     input: ToolInput,
     cwd: string,
     model: Model<Api> | undefined,
-    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
   ): Promise<JudgeResult> {
-    const resolved = resolveJudgeModel(config, resolveModel, model);
+    const resolved = resolveJudgeModel(config, deps.modelClient.find, model);
     if (!resolved) {
       log.warn("judge model not found", {
         configured: config.judgeModel,
@@ -41,11 +35,6 @@ export function createJudge(
       return failureResult("法官提示词未加载，请手动确认", input);
     }
 
-    let auth = deps?.getAuth ? await deps.getAuth(resolved) : undefined;
-    // Fallback to session model auth if judge model auth fails
-    if (!auth?.apiKey && model && deps?.getAuth) {
-      auth = await deps.getAuth(model);
-    }
     const prompt = buildJudgePrompt(
       input,
       cwd,
@@ -63,13 +52,14 @@ export function createJudge(
     const timeout = setTimeout(() => controller.abort(), config.judgeTimeoutMs);
 
     try {
-      const completeOpts: Record<string, unknown> = {
+      const completeOpts: ModelsApiStreamOptions<Api> = {
         signal: controller.signal,
-        thinking: "off",
       };
-      if (auth?.apiKey) completeOpts.apiKey = auth.apiKey;
-      if (auth?.headers) completeOpts.headers = auth.headers;
-      const response = await complete(resolved, context, completeOpts);
+      const response = await deps.modelClient.complete(
+        resolved,
+        context,
+        completeOpts,
+      );
       clearTimeout(timeout);
 
       if (response.stopReason === "error" || response.errorMessage) {

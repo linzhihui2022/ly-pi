@@ -1,11 +1,10 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AnalyzerConfig } from "./pipeline";
 import {
   createRoleAnalyzer,
   createMerger as createSharedMerger,
 } from "./pipeline";
 import type { DeniedThenApproved } from "./stats";
-import type { Config } from "./types";
+import type { Config, ModelClient } from "./types";
 
 export interface AdvocateSuggestion {
   add: Array<{ rule: string; reason: string }>;
@@ -22,12 +21,6 @@ export interface AdvocateResult {
 export type AdvocateFn = (
   cases: DeniedThenApproved[],
   cwd: string,
-  resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (
-    model: Model<Api>,
-  ) => Promise<
-    { apiKey?: string; headers?: Record<string, string> } | undefined
-  >,
   currentJudgeMd: string,
   judgePrompt: string,
 ) => Promise<AdvocateResult>;
@@ -35,12 +28,6 @@ export type AdvocateFn = (
 export type MergerFn = (
   currentJudgeMd: string,
   selectedRules: string[],
-  resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-  getAuth: (
-    model: Model<Api>,
-  ) => Promise<
-    { apiKey?: string; headers?: Record<string, string> } | undefined
-  >,
 ) => Promise<AdvocateResult>;
 
 // ---- Role config (used by pipeline.ts) ----
@@ -101,18 +88,19 @@ export const advocateAnalyzerConfig: AnalyzerConfig<
 
 // ---- createAdvocate (thin wrapper) ----
 
-export function createAdvocate(config: Config): AdvocateFn {
-  const analyzer = createRoleAnalyzer(config, advocateAnalyzerConfig);
+export function createAdvocate(
+  config: Config,
+  modelClient: ModelClient,
+): AdvocateFn {
+  const analyzer = createRoleAnalyzer(
+    config,
+    advocateAnalyzerConfig,
+    modelClient,
+  );
 
   return async function analyze(
     cases: DeniedThenApproved[],
     cwd: string,
-    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (
-      model: Model<Api>,
-    ) => Promise<
-      { apiKey?: string; headers?: Record<string, string> } | undefined
-    >,
     currentJudgeMd: string,
     judgePrompt: string,
   ): Promise<AdvocateResult> {
@@ -120,14 +108,7 @@ export function createAdvocate(config: Config): AdvocateFn {
       return { error: "当前会话没有法官误判案例" };
     }
 
-    const result = await analyzer(
-      cases,
-      cwd,
-      currentJudgeMd,
-      judgePrompt,
-      resolveModel,
-      getAuth,
-    );
+    const result = await analyzer(cases, cwd, currentJudgeMd, judgePrompt);
 
     return {
       suggestion: result.result,
@@ -139,24 +120,20 @@ export function createAdvocate(config: Config): AdvocateFn {
 
 // ---- createMerger (thin wrapper) ----
 
-export function createMerger(config: Config): MergerFn {
-  const sharedMerger = createSharedMerger(config);
+export function createMerger(
+  config: Config,
+  modelClient: ModelClient,
+): MergerFn {
+  const sharedMerger = createSharedMerger(config, modelClient);
 
   return async function merge(
     currentJudgeMd: string,
     selectedRules: string[],
-    resolveModel: (provider: string, id: string) => Model<Api> | undefined,
-    getAuth: (
-      model: Model<Api>,
-    ) => Promise<
-      { apiKey?: string; headers?: Record<string, string> } | undefined
-    >,
   ): Promise<AdvocateResult> {
-    const result = await sharedMerger(
-      { current: currentJudgeMd, operations: selectedRules },
-      resolveModel,
-      getAuth,
-    );
+    const result = await sharedMerger({
+      current: currentJudgeMd,
+      operations: selectedRules,
+    });
     return {
       mergedText: result.mergedText,
       error: result.error,

@@ -1,12 +1,8 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildAdvocatePrompt, createAdvocate } from "./professor";
 import type { DeniedThenApproved } from "./stats";
-import type { Config } from "./types";
-
-vi.mock("@earendil-works/pi-ai", () => ({
-  complete: vi.fn(),
-}));
+import type { Config, ModelClient } from "./types";
 
 function makeModel(
   overrides: Partial<{ id: string; provider: string }> = {},
@@ -50,11 +46,20 @@ const config: Config = {
 
 const resolveModelOk = vi.fn(() => makeModel());
 const resolveModelNotFound = vi.fn(() => undefined);
-const getAuthOk = vi.fn(async () => ({ apiKey: "test-key" }));
+const completeModel = vi.fn<ModelClient["complete"]>();
+const modelClient: ModelClient = {
+  find: resolveModelOk,
+  complete: completeModel,
+};
+
+beforeEach(() => {
+  completeModel.mockReset();
+  resolveModelOk.mockClear();
+  resolveModelNotFound.mockClear();
+});
 
 async function mockComplete(value: unknown): Promise<void> {
-  const { complete } = await import("@earendil-works/pi-ai");
-  (complete as ReturnType<typeof vi.fn>).mockResolvedValue(value);
+  completeModel.mockResolvedValue(value as never);
 }
 
 describe("buildAdvocatePrompt", () => {
@@ -132,15 +137,8 @@ describe("buildAdvocatePrompt", () => {
 
 describe("createAdvocate", () => {
   it("returns error when no cases", async () => {
-    const advocate = createAdvocate(config);
-    const result = await advocate(
-      [],
-      "/repo",
-      resolveModelOk,
-      getAuthOk,
-      "",
-      JUDGE_PROMPT,
-    );
+    const advocate = createAdvocate(config, modelClient);
+    const result = await advocate([], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toBe("当前会话没有法官误判案例");
   });
@@ -158,16 +156,8 @@ describe("createAdvocate", () => {
       ],
     });
 
-    const cases = [makeCase()];
-    const advocate = createAdvocate(config);
-    const result = await advocate(
-      cases,
-      "/repo",
-      resolveModelOk,
-      getAuthOk,
-      "",
-      JUDGE_PROMPT,
-    );
+    const advocate = createAdvocate(config, modelClient);
+    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
 
     expect(result.error).toBeUndefined();
     expect(result.suggestion).toEqual({
@@ -178,16 +168,8 @@ describe("createAdvocate", () => {
 
   it("returns error on invalid JSON response", async () => {
     await mockComplete({ content: [{ type: "text", text: "not json" }] });
-    const cases = [makeCase()];
-    const advocate = createAdvocate(config);
-    const result = await advocate(
-      cases,
-      "/repo",
-      resolveModelOk,
-      getAuthOk,
-      "",
-      JUDGE_PROMPT,
-    );
+    const advocate = createAdvocate(config, modelClient);
+    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("无法解析");
   });
@@ -196,87 +178,47 @@ describe("createAdvocate", () => {
     await mockComplete({
       content: [{ type: "text", text: JSON.stringify({ add: [] }) }],
     });
-    const cases = [makeCase()];
-    const advocate = createAdvocate(config);
-    const result = await advocate(
-      cases,
-      "/repo",
-      resolveModelOk,
-      getAuthOk,
-      "",
-      JUDGE_PROMPT,
-    );
+    const advocate = createAdvocate(config, modelClient);
+    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("无法解析");
   });
 
   it("returns error when professorModel has no provider separator", async () => {
     const badConfig: Config = { ...config, professorModel: "some-model" };
-    const cases = [makeCase()];
-    const advocate = createAdvocate(badConfig);
-    const result = await advocate(
-      cases,
-      "/repo",
-      resolveModelOk,
-      getAuthOk,
-      "",
-      JUDGE_PROMPT,
-    );
+    const advocate = createAdvocate(badConfig, modelClient);
+    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("professorModel 格式无效");
   });
 
-  it("returns error when advocate model not found", async () => {
-    const cases = [makeCase()];
-    const advocate = createAdvocate(config);
-    const result = await advocate(
-      cases,
-      "/repo",
-      resolveModelNotFound,
-      getAuthOk,
-      "",
-      JUDGE_PROMPT,
-    );
+  it("returns error when advocate model is unavailable", async () => {
+    const advocate = createAdvocate(config, {
+      ...modelClient,
+      find: resolveModelNotFound,
+    });
+    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("未找到 advocate 模型");
   });
 
-  it("returns error when LLM call fails", async () => {
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("network error"),
-    );
-    const cases = [makeCase()];
-    const advocate = createAdvocate(config);
-    const result = await advocate(
-      cases,
-      "/repo",
-      resolveModelOk,
-      getAuthOk,
-      "",
-      JUDGE_PROMPT,
-    );
+  it("returns error when the model call fails", async () => {
+    completeModel.mockRejectedValue(new Error("network error"));
+    const advocate = createAdvocate(config, modelClient);
+    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("advocate 模型调用失败");
   });
 
-  it("returns error when LLM response has no text content", async () => {
+  it("returns error when the model response has no text", async () => {
     await mockComplete({ content: [] });
-    const cases = [makeCase()];
-    const advocate = createAdvocate(config);
-    const result = await advocate(
-      cases,
-      "/repo",
-      resolveModelOk,
-      getAuthOk,
-      "",
-      JUDGE_PROMPT,
-    );
+    const advocate = createAdvocate(config, modelClient);
+    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("空内容");
   });
 
-  it("parses JSON wrapped in markdown code fence", async () => {
+  it("parses JSON wrapped in a markdown code fence", async () => {
     await mockComplete({
       content: [
         {
@@ -291,16 +233,8 @@ describe("createAdvocate", () => {
         },
       ],
     });
-    const cases = [makeCase()];
-    const advocate = createAdvocate(config);
-    const result = await advocate(
-      cases,
-      "/repo",
-      resolveModelOk,
-      getAuthOk,
-      "",
-      JUDGE_PROMPT,
-    );
+    const advocate = createAdvocate(config, modelClient);
+    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toEqual({
       add: [{ rule: "规则", reason: "原因" }],
       remove: [],

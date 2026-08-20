@@ -1,13 +1,9 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChiefSuggestionItem } from "./chief";
 import type { AnalyzerConfig } from "./pipeline";
 import { createMerger, createRoleAnalyzer } from "./pipeline";
-import type { Config } from "./types";
-
-vi.mock("@earendil-works/pi-ai", () => ({
-  complete: vi.fn(),
-}));
+import type { Config, ModelClient } from "./types";
 
 function makeModel(
   overrides: Partial<{ id: string; provider: string }> = {},
@@ -37,14 +33,21 @@ const config: Config = {
 
 const resolveModelOk = vi.fn(() => makeModel());
 const resolveModelNotFound = vi.fn(() => undefined);
-const getAuthOk = vi.fn(async () => ({ apiKey: "test-key" }));
+const completeModel = vi.fn<ModelClient["complete"]>();
+const modelClient: ModelClient = {
+  find: resolveModelOk,
+  complete: completeModel,
+};
+
+beforeEach(() => {
+  completeModel.mockReset();
+  resolveModelOk.mockClear();
+  resolveModelNotFound.mockClear();
+});
 
 async function mockComplete(value: unknown): Promise<void> {
-  const { complete } = await import("@earendil-works/pi-ai");
-  (complete as ReturnType<typeof vi.fn>).mockResolvedValue(value);
+  completeModel.mockResolvedValue(value as never);
 }
-
-// ---- createRoleAnalyzer ----
 
 interface TestResult {
   suggestions: Array<{ rule: string; reason: string }>;
@@ -60,9 +63,8 @@ function makeAnalyzerConfig(
       `input: ${JSON.stringify(input)}`,
     parseResult: (text: string) => {
       try {
-        const p = JSON.parse(text) as TestResult;
-        if (p.suggestions && p.summary) return p;
-        return undefined;
+        const parsed = JSON.parse(text) as TestResult;
+        return parsed.suggestions && parsed.summary ? parsed : undefined;
       } catch {
         return undefined;
       }
@@ -75,47 +77,37 @@ function makeAnalyzerConfig(
 
 describe("createRoleAnalyzer", () => {
   it("returns error when input is empty", async () => {
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
-    const result = await analyzer(
-      [],
-      "/repo",
-      "",
-      "",
-      resolveModelOk,
-      getAuthOk,
+    const analyzer = createRoleAnalyzer(
+      config,
+      makeAnalyzerConfig(),
+      modelClient,
     );
+    const result = await analyzer([], "/repo", "", "");
     expect(result.error).toBe("没有输入数据");
     expect(result.result).toBeUndefined();
   });
 
   it("returns error when model format is invalid", async () => {
     const badConfig = { ...config, professorModel: "invalid" };
-    const analyzer = createRoleAnalyzer(badConfig, makeAnalyzerConfig());
-    const result = await analyzer(
-      ["item"],
-      "/repo",
-      "",
-      "",
-      resolveModelOk,
-      getAuthOk,
+    const analyzer = createRoleAnalyzer(
+      badConfig,
+      makeAnalyzerConfig(),
+      modelClient,
     );
+    const result = await analyzer(["item"], "/repo", "", "");
     expect(result.error).toContain("professorModel 格式无效");
   });
 
-  it("returns error when model not found", async () => {
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
-    const result = await analyzer(
-      ["item"],
-      "/repo",
-      "",
-      "",
-      resolveModelNotFound,
-      getAuthOk,
-    );
+  it("returns error when model is unavailable", async () => {
+    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig(), {
+      ...modelClient,
+      find: resolveModelNotFound,
+    });
+    const result = await analyzer(["item"], "/repo", "", "");
     expect(result.error).toContain("未找到 test-analyzer 模型");
   });
 
-  it("returns parsed result on successful LLM call", async () => {
+  it("returns parsed result on successful model call", async () => {
     await mockComplete({
       content: [
         {
@@ -128,14 +120,16 @@ describe("createRoleAnalyzer", () => {
       ],
     });
 
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
+    const analyzer = createRoleAnalyzer(
+      config,
+      makeAnalyzerConfig(),
+      modelClient,
+    );
     const result = await analyzer(
       ["item1"],
       "/repo",
       "current md",
       "judge prompt",
-      resolveModelOk,
-      getAuthOk,
     );
 
     expect(result.error).toBeUndefined();
@@ -146,22 +140,19 @@ describe("createRoleAnalyzer", () => {
     expect(result.cost).toBeUndefined();
   });
 
-  it("passes buildUserPrompt output to LLM", async () => {
+  it("passes buildUserPrompt output to the model", async () => {
     let capturedContext: unknown;
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, context: unknown) => {
-        capturedContext = context;
-        return Promise.resolve({
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({ suggestions: [], summary: "ok" }),
-            },
-          ],
-        });
-      },
-    );
+    completeModel.mockImplementation((_model, context) => {
+      capturedContext = context;
+      return Promise.resolve({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ suggestions: [], summary: "ok" }),
+          },
+        ],
+      } as never);
+    });
 
     const analyzer = createRoleAnalyzer(
       config,
@@ -169,93 +160,76 @@ describe("createRoleAnalyzer", () => {
         buildUserPrompt: (input, cwd, judgeMd, judgePrompt) =>
           `cases:${input.length} cwd:${cwd} md:${judgeMd} jp:${judgePrompt}`,
       }),
+      modelClient,
     );
     await analyzer(
       ["a", "b"],
       "/my-project",
       "line1\nline2",
       "JUDGE_PROMPT_TEXT",
-      resolveModelOk,
-      getAuthOk,
     );
 
-    const ctx = capturedContext as {
+    const context = capturedContext as {
       systemPrompt: string;
       messages: Array<{ content: string }>;
     };
-    expect(ctx.systemPrompt).toBe("test system prompt");
-    expect(ctx.messages[0].content).toContain("cases:2");
-    expect(ctx.messages[0].content).toContain("cwd:/my-project");
-    expect(ctx.messages[0].content).toContain("md:line1");
-    expect(ctx.messages[0].content).toContain("jp:JUDGE_PROMPT_TEXT");
+    expect(context.systemPrompt).toBe("test system prompt");
+    expect(context.messages[0].content).toContain("cases:2");
+    expect(context.messages[0].content).toContain("cwd:/my-project");
+    expect(context.messages[0].content).toContain("md:line1");
+    expect(context.messages[0].content).toContain("jp:JUDGE_PROMPT_TEXT");
   });
 
   it("returns error on invalid JSON response", async () => {
     await mockComplete({ content: [{ type: "text", text: "not json" }] });
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
-    const result = await analyzer(
-      ["item"],
-      "/repo",
-      "",
-      "",
-      resolveModelOk,
-      getAuthOk,
+    const analyzer = createRoleAnalyzer(
+      config,
+      makeAnalyzerConfig(),
+      modelClient,
     );
+    const result = await analyzer(["item"], "/repo", "", "");
     expect(result.error).toContain("无法解析");
   });
 
   it("returns error on empty response content", async () => {
     await mockComplete({ content: [] });
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
-    const result = await analyzer(
-      ["item"],
-      "/repo",
-      "",
-      "",
-      resolveModelOk,
-      getAuthOk,
+    const analyzer = createRoleAnalyzer(
+      config,
+      makeAnalyzerConfig(),
+      modelClient,
     );
+    const result = await analyzer(["item"], "/repo", "", "");
     expect(result.error).toContain("空内容");
   });
 
-  it("returns error when LLM call throws", async () => {
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("network error"),
+  it("returns error when the model call throws", async () => {
+    completeModel.mockRejectedValue(new Error("network error"));
+    const analyzer = createRoleAnalyzer(
+      config,
+      makeAnalyzerConfig(),
+      modelClient,
     );
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
-    const result = await analyzer(
-      ["item"],
-      "/repo",
-      "",
-      "",
-      resolveModelOk,
-      getAuthOk,
-    );
+    const result = await analyzer(["item"], "/repo", "", "");
     expect(result.error).toContain("调用失败");
   });
 
-  it("handles API error responses", async () => {
+  it("handles model error responses", async () => {
     await mockComplete({
       content: [],
       stopReason: "error",
       errorMessage: "rate limit exceeded",
     });
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
-    const result = await analyzer(
-      ["item"],
-      "/repo",
-      "",
-      "",
-      resolveModelOk,
-      getAuthOk,
+    const analyzer = createRoleAnalyzer(
+      config,
+      makeAnalyzerConfig(),
+      modelClient,
     );
+    const result = await analyzer(["item"], "/repo", "", "");
     expect(result.error).toContain("rate limit exceeded");
   });
 
   it("captures cost from response usage", async () => {
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockResolvedValue({
+    await mockComplete({
       content: [
         {
           type: "text",
@@ -264,15 +238,12 @@ describe("createRoleAnalyzer", () => {
       ],
       usage: { cost: { total: 0.005 } },
     });
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
-    const result = await analyzer(
-      ["item"],
-      "/repo",
-      "",
-      "",
-      resolveModelOk,
-      getAuthOk,
+    const analyzer = createRoleAnalyzer(
+      config,
+      makeAnalyzerConfig(),
+      modelClient,
     );
+    const result = await analyzer(["item"], "/repo", "", "");
     expect(result.cost).toBe(0.005);
   });
 
@@ -288,20 +259,16 @@ describe("createRoleAnalyzer", () => {
         },
       ],
     });
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
-    const result = await analyzer(
-      ["item"],
-      "/repo",
-      "",
-      "",
-      resolveModelOk,
-      getAuthOk,
+    const analyzer = createRoleAnalyzer(
+      config,
+      makeAnalyzerConfig(),
+      modelClient,
     );
-    expect(result.result).toBeDefined();
+    const result = await analyzer(["item"], "/repo", "", "");
     expect(result.result?.suggestions).toHaveLength(1);
   });
 
-  it("calls getAuth for the resolved model", async () => {
+  it("maps config.professorThinking to reasoningEffort", async () => {
     await mockComplete({
       content: [
         {
@@ -310,168 +277,100 @@ describe("createRoleAnalyzer", () => {
         },
       ],
     });
-
-    const getAuth = vi.fn(async (_model: Model<Api>) => ({ apiKey: "my-key" }));
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
-    await analyzer(["item"], "/repo", "", "", resolveModelOk, getAuth);
-
-    expect(getAuth).toHaveBeenCalledTimes(1);
-    const calledModel = getAuth.mock.calls[0][0];
-    expect(calledModel.id).toBe("deepseek-v4-pro");
-  });
-
-  it("passes thinking and auth options to complete()", async () => {
-    let capturedOpts: Record<string, unknown> = {};
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, _context: unknown, opts: Record<string, unknown>) => {
-        capturedOpts = opts;
-        return Promise.resolve({
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({ suggestions: [], summary: "ok" }),
-            },
-          ],
-        });
-      },
-    );
-
-    const thinkingConfig = { ...config, professorThinking: "low" };
     const analyzer = createRoleAnalyzer(
-      thinkingConfig,
-      makeAnalyzerConfig({ thinking: "low" }),
+      config,
+      makeAnalyzerConfig(),
+      modelClient,
     );
-    const getAuth = vi.fn(async () => ({
-      apiKey: "key",
-      headers: { "X-Custom": "val" },
-      env: { FOO: "bar" },
-    }));
-    await analyzer(["item"], "/repo", "", "", resolveModelOk, getAuth);
+    await analyzer(["item"], "/repo", "", "");
 
-    expect(capturedOpts.thinking).toBe("low");
-    expect(capturedOpts.apiKey).toBe("key");
-    expect(capturedOpts.headers).toEqual({ "X-Custom": "val" });
-    expect(capturedOpts.env).toEqual({ FOO: "bar" });
+    const options = completeModel.mock.calls.at(-1)?.[2] as {
+      reasoningEffort?: string;
+    };
+    expect(options.reasoningEffort).toBe("max");
   });
 
-  it("uses config.professorThinking as default when roleConfig has no thinking", async () => {
-    let capturedOpts: Record<string, unknown> = {};
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, _context: unknown, opts: Record<string, unknown>) => {
-        capturedOpts = opts;
-        return Promise.resolve({
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({ suggestions: [], summary: "ok" }),
-            },
-          ],
-        });
-      },
-    );
-
-    // config.professorThinking is "max", roleConfig has no thinking override
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig());
-    await analyzer(["item"], "/repo", "", "", resolveModelOk, getAuthOk);
-
-    expect(capturedOpts.thinking).toBe("max");
-  });
-
-  it("roleConfig.thinking overrides config.professorThinking", async () => {
-    let capturedOpts: Record<string, unknown> = {};
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, _context: unknown, opts: Record<string, unknown>) => {
-        capturedOpts = opts;
-        return Promise.resolve({
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({ suggestions: [], summary: "ok" }),
-            },
-          ],
-        });
-      },
-    );
-
+  it("omits reasoningEffort when roleConfig disables thinking", async () => {
+    await mockComplete({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ suggestions: [], summary: "ok" }),
+        },
+      ],
+    });
     const analyzer = createRoleAnalyzer(
       config,
       makeAnalyzerConfig({ thinking: "off" }),
+      modelClient,
     );
-    await analyzer(["item"], "/repo", "", "", resolveModelOk, getAuthOk);
+    await analyzer(["item"], "/repo", "", "");
 
-    expect(capturedOpts.thinking).toBe("off");
+    const options = completeModel.mock.calls.at(-1)?.[2] as {
+      reasoningEffort?: string;
+    };
+    expect(options.reasoningEffort).toBeUndefined();
   });
 });
-
-// ---- createMerger ----
 
 describe("createMerger", () => {
   it("returns error when model format is invalid", async () => {
     const badConfig = { ...config, professorModel: "invalid" };
-    const merger = createMerger(badConfig);
-    const result = await merger(
-      { current: "规则1", operations: ["新规则"] },
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createMerger(badConfig, modelClient);
+    const result = await merger({
+      current: "规则1",
+      operations: ["新规则"],
+    });
     expect(result.error).toContain("professorModel 格式无效");
   });
 
-  it("returns error when model not found", async () => {
-    const merger = createMerger(config);
-    const result = await merger(
-      { current: "规则1", operations: ["新规则"] },
-      resolveModelNotFound,
-      getAuthOk,
-    );
+  it("returns error when model is unavailable", async () => {
+    const merger = createMerger(config, {
+      ...modelClient,
+      find: resolveModelNotFound,
+    });
+    const result = await merger({
+      current: "规则1",
+      operations: ["新规则"],
+    });
     expect(result.error).toContain("未找到合并模型");
   });
 
-  it("merges string[] operations (advocate/prosecutor path)", async () => {
+  it("merges string operations", async () => {
     let capturedContext: unknown;
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, context: unknown) => {
-        capturedContext = context;
-        return Promise.resolve({
-          content: [{ type: "text", text: "规则1\n规则2\n新增规则" }],
-        });
-      },
-    );
+    completeModel.mockImplementation((_model, context) => {
+      capturedContext = context;
+      return Promise.resolve({
+        content: [{ type: "text", text: "规则1\n规则2\n新增规则" }],
+      } as never);
+    });
 
-    const merger = createMerger(config);
-    const result = await merger(
-      { current: "规则1\n规则2", operations: ["新增规则"] },
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createMerger(config, modelClient);
+    const result = await merger({
+      current: "规则1\n规则2",
+      operations: ["新增规则"],
+    });
 
     expect(result.error).toBeUndefined();
     expect(result.mergedText).toBe("规则1\n规则2\n新增规则");
 
-    const ctx = capturedContext as {
+    const context = capturedContext as {
       systemPrompt: string;
       messages: Array<{ content: string }>;
     };
-    expect(ctx.systemPrompt).toContain("将用户选中的新规则融合");
-    expect(ctx.messages[0].content).toContain("规则1");
-    expect(ctx.messages[0].content).toContain("新增规则");
+    expect(context.systemPrompt).toContain("将用户选中的新规则融合");
+    expect(context.messages[0].content).toContain("规则1");
+    expect(context.messages[0].content).toContain("新增规则");
   });
 
-  it("merges ChiefSuggestionItem[] operations (chief path)", async () => {
+  it("merges chief suggestion operations", async () => {
     let capturedContext: unknown;
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, context: unknown) => {
-        capturedContext = context;
-        return Promise.resolve({
-          content: [{ type: "text", text: "规则A改\n规则B" }],
-        });
-      },
-    );
+    completeModel.mockImplementation((_model, context) => {
+      capturedContext = context;
+      return Promise.resolve({
+        content: [{ type: "text", text: "规则A改\n规则B" }],
+      } as never);
+    });
 
     const suggestions: ChiefSuggestionItem[] = [
       { type: "add", rule: "新规则X", reason: "遗漏" },
@@ -484,121 +383,101 @@ describe("createMerger", () => {
       },
     ];
 
-    const merger = createMerger(config);
-    const result = await merger(
-      { current: "规则A\n规则B\n规则C", operations: suggestions },
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createMerger(config, modelClient);
+    const result = await merger({
+      current: "规则A\n规则B\n规则C",
+      operations: suggestions,
+    });
 
     expect(result.error).toBeUndefined();
     expect(result.mergedText).toBe("规则A改\n规则B");
 
-    const ctx = capturedContext as {
+    const context = capturedContext as {
       systemPrompt: string;
       messages: Array<{ content: string }>;
     };
-    expect(ctx.systemPrompt).toContain("将审判长的建议应用");
-    expect(ctx.messages[0].content).toContain("[新增] 新规则X");
-    expect(ctx.messages[0].content).toContain('[改写] "规则A" → "规则A改"');
-    expect(ctx.messages[0].content).toContain(
+    expect(context.systemPrompt).toContain("将审判长的建议应用");
+    expect(context.messages[0].content).toContain("[新增] 新规则X");
+    expect(context.messages[0].content).toContain('[改写] "规则A" → "规则A改"');
+    expect(context.messages[0].content).toContain(
       '[合并] "规则B" + "规则C" → "规则BC"',
     );
   });
 
-  it("auto-detects chief path when any ChiefSuggestionItem is present", async () => {
+  it("auto-detects the chief path", async () => {
     let capturedContext: unknown;
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, context: unknown) => {
-        capturedContext = context;
-        return Promise.resolve({
-          content: [{ type: "text", text: "merged" }],
-        });
-      },
-    );
+    completeModel.mockImplementation((_model, context) => {
+      capturedContext = context;
+      return Promise.resolve({
+        content: [{ type: "text", text: "merged" }],
+      } as never);
+    });
 
-    const merger = createMerger(config);
-    await merger(
-      {
-        current: "rule",
-        operations: [{ type: "add", rule: "x", reason: "r" }],
-      },
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createMerger(config, modelClient);
+    await merger({
+      current: "rule",
+      operations: [{ type: "add", rule: "x", reason: "r" }],
+    });
 
-    const ctx = capturedContext as { systemPrompt: string };
-    expect(ctx.systemPrompt).toContain("审判长");
+    const context = capturedContext as { systemPrompt: string };
+    expect(context.systemPrompt).toContain("审判长");
   });
 
   it("returns error on empty response", async () => {
     await mockComplete({ content: [] });
-    const merger = createMerger(config);
-    const result = await merger(
-      { current: "规则1", operations: ["新规则"] },
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createMerger(config, modelClient);
+    const result = await merger({
+      current: "规则1",
+      operations: ["新规则"],
+    });
     expect(result.error).toContain("空内容");
   });
 
-  it("returns error when LLM call throws", async () => {
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("timeout"),
-    );
-    const merger = createMerger(config);
-    const result = await merger(
-      { current: "规则1", operations: ["新规则"] },
-      resolveModelOk,
-      getAuthOk,
-    );
+  it("returns error when the model call throws", async () => {
+    completeModel.mockRejectedValue(new Error("timeout"));
+    const merger = createMerger(config, modelClient);
+    const result = await merger({
+      current: "规则1",
+      operations: ["新规则"],
+    });
     expect(result.error).toContain("调用失败");
   });
 
-  it("formats remove and unknown operation types in chief path", async () => {
+  it("formats remove and unknown chief operation types", async () => {
     let capturedContext: unknown;
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockImplementation(
-      (_model: unknown, context: unknown) => {
-        capturedContext = context;
-        return Promise.resolve({
-          content: [{ type: "text", text: "merged" }],
-        });
-      },
-    );
+    completeModel.mockImplementation((_model, context) => {
+      capturedContext = context;
+      return Promise.resolve({
+        content: [{ type: "text", text: "merged" }],
+      } as never);
+    });
 
     const suggestions: ChiefSuggestionItem[] = [
       { type: "remove", rule: "要删除的规则", reason: "过时" },
       { type: "unknown_type" } as unknown as ChiefSuggestionItem,
     ];
 
-    const merger = createMerger(config);
-    await merger(
-      { current: "规则1", operations: suggestions },
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createMerger(config, modelClient);
+    await merger({ current: "规则1", operations: suggestions });
 
-    const ctx = capturedContext as { messages: Array<{ content: string }> };
-    const msg = ctx.messages[0].content as string;
-    expect(msg).toContain("[删除] 要删除的规则");
-    expect(msg).toContain("[未知]");
+    const context = capturedContext as {
+      messages: Array<{ content: string }>;
+    };
+    const message = context.messages[0].content;
+    expect(message).toContain("[删除] 要删除的规则");
+    expect(message).toContain("[未知]");
   });
 
   it("captures cost from merge response", async () => {
-    const { complete } = await import("@earendil-works/pi-ai");
-    (complete as ReturnType<typeof vi.fn>).mockResolvedValue({
+    await mockComplete({
       content: [{ type: "text", text: "merged" }],
       usage: { cost: { total: 0.003 } },
     });
-    const merger = createMerger(config);
-    const result = await merger(
-      { current: "规则1", operations: ["新规则"] },
-      resolveModelOk,
-      getAuthOk,
-    );
+    const merger = createMerger(config, modelClient);
+    const result = await merger({
+      current: "规则1",
+      operations: ["新规则"],
+    });
     expect(result.cost).toBe(0.003);
     expect(result.mergedText).toBe("merged");
   });
