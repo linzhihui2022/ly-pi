@@ -175,20 +175,9 @@ export default function mySound(pi: ExtensionAPI): void {
 
   let lastPlayedCategory: string | undefined;
 
-  const VALID_EVENTS = new Set([
-    "session_start",
-    "session_shutdown",
-    "agent_start",
-    "agent_end",
-    "turn_start",
-    "turn_end",
-    "tool_result",
-  ]);
-
-  for (const [eventName, category] of Object.entries(config.eventMap)) {
-    if (!VALID_EVENTS.has(eventName)) continue;
-    // biome-ignore lint/suspicious/noExplicitAny: dynamic event name validated against VALID_EVENTS above
-    pi.on(eventName as any, (_event, ctx) => {
+  const createEventHandler =
+    (eventName: string, category: string) =>
+    (_event: unknown, ctx: ExtensionContext) => {
       if (!config.enabled) return;
       if (eventName === "agent_end" && lastPlayedCategory === "question") {
         lastPlayedCategory = undefined;
@@ -196,7 +185,33 @@ export default function mySound(pi: ExtensionAPI): void {
       }
       lastPlayedCategory = category;
       playCategory(pack, soundDir, category, ctx.ui.notify);
-    });
+    };
+
+  for (const [eventName, category] of Object.entries(config.eventMap)) {
+    const handler = createEventHandler(eventName, category);
+    switch (eventName) {
+      case "session_start":
+        pi.on("session_start", handler);
+        break;
+      case "session_shutdown":
+        pi.on("session_shutdown", handler);
+        break;
+      case "agent_start":
+        pi.on("agent_start", handler);
+        break;
+      case "agent_end":
+        pi.on("agent_end", handler);
+        break;
+      case "turn_start":
+        pi.on("turn_start", handler);
+        break;
+      case "turn_end":
+        pi.on("turn_end", handler);
+        break;
+      case "tool_result":
+        pi.on("tool_result", handler);
+        break;
+    }
   }
 
   if (config.toolEventMap) {

@@ -1,4 +1,3 @@
-import { completeSimple } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { normalizeSessionTitle } from "./session-name";
 
@@ -28,10 +27,7 @@ export async function requestSessionTitle(
     const model = ctx.modelRegistry.find(TITLE_PROVIDER, TITLE_MODEL);
     if (!model) return null;
 
-    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-    if (!auth.ok) return null;
-
-    const response = await completeSimple(
+    const response = await ctx.modelRegistry.complete(
       model,
       {
         systemPrompt: TITLE_SYSTEM_PROMPT,
@@ -44,8 +40,6 @@ export async function requestSessionTitle(
         ],
       },
       {
-        apiKey: auth.apiKey,
-        headers: auth.headers,
         maxRetries: 0,
         maxTokens: 32,
         timeoutMs: 10_000,

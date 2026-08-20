@@ -1,16 +1,11 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { ANSI as C } from "../src/shared/ansi";
-import {
-  createAuthResolver,
-  createAuthResolverWithFallback,
-} from "../src/shared/auth";
 import { loadFile } from "../src/shared/file";
 import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
 import type { ChiefSuggestionItem } from "./chief";
@@ -32,6 +27,7 @@ import {
   recordJudgeStats,
   recordUserOverride,
 } from "./stats";
+import type { ModelClient } from "./types";
 import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
 import {
   collectPaths,
@@ -162,6 +158,14 @@ function suggestionTypeDetail(item: {
   return parts.join("\n");
 }
 
+function createModelClient(ctx: ExtensionContext): ModelClient {
+  return {
+    find: (provider, id) => ctx.modelRegistry.find(provider, id),
+    complete: (model, context, options) =>
+      ctx.modelRegistry.complete(model, context, options),
+  };
+}
+
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const judgePrompt = JUDGE_PROMPT;
   const localJudge = loadFile(join(process.cwd(), "JUDGE.md"));
@@ -174,7 +178,6 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     opts: {
       currentJudgeMd: string;
       operations: Array<string | ChiefSuggestionItem>;
-      resolveModel: (provider: string, id: string) => Model<Api> | undefined;
       analysisCost?: number;
       label: string;
       emoji: string;
@@ -183,15 +186,11 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       countLabel: string;
     },
   ) {
-    const merger = createPipelineMerger(config);
-    const mergeResult = await merger(
-      { current: opts.currentJudgeMd, operations: opts.operations },
-      opts.resolveModel,
-      createAuthResolverWithFallback(
-        ctx.modelRegistry.getApiKeyAndHeaders,
-        (p) => ctx.modelRegistry.getApiKeyForProvider(p),
-      ),
-    );
+    const merger = createPipelineMerger(config, createModelClient(ctx));
+    const mergeResult = await merger({
+      current: opts.currentJudgeMd,
+      operations: opts.operations,
+    });
 
     if (mergeResult.error || !mergeResult.mergedText) {
       return {
@@ -322,19 +321,12 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      const resolveModel = (provider: string, id: string) =>
-        ctx.modelRegistry.find(provider, id);
-      const advocate = createAdvocate(config);
+      const advocate = createAdvocate(config, createModelClient(ctx));
       const currentJudgeMd = loadFile(join(process.cwd(), "JUDGE.md"));
 
       const result = await advocate(
         cases,
         ctx.cwd,
-        resolveModel,
-        createAuthResolverWithFallback(
-          ctx.modelRegistry.getApiKeyAndHeaders,
-          (p) => ctx.modelRegistry.getApiKeyForProvider(p),
-        ),
         currentJudgeMd,
         judgePrompt,
       );
@@ -406,7 +398,6 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       return await mergeAndWrite(ctx, {
         currentJudgeMd,
         operations: selectedRules,
-        resolveModel,
         analysisCost: result.cost,
         label: "辩护人",
         emoji: "🎓",
@@ -441,19 +432,12 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      const resolveModel = (provider: string, id: string) =>
-        ctx.modelRegistry.find(provider, id);
-      const prosecutor = createProsecutor(config);
+      const prosecutor = createProsecutor(config, createModelClient(ctx));
       const currentJudgeMd = loadFile(join(process.cwd(), "JUDGE.md"));
 
       const result = await prosecutor(
         allowed,
         ctx.cwd,
-        resolveModel,
-        createAuthResolverWithFallback(
-          ctx.modelRegistry.getApiKeyAndHeaders,
-          (p) => ctx.modelRegistry.getApiKeyForProvider(p),
-        ),
         currentJudgeMd,
         judgePrompt,
       );
@@ -519,7 +503,6 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       return await mergeAndWrite(ctx, {
         currentJudgeMd,
         operations: selectedRules,
-        resolveModel,
         analysisCost: result.cost,
         label: "检察官",
         emoji: "⚖️",
@@ -555,20 +538,13 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      const resolveModel = (provider: string, id: string) =>
-        ctx.modelRegistry.find(provider, id);
-      const chief = createChief(config);
+      const chief = createChief(config, createModelClient(ctx));
 
       const result = await chief(
         currentJudgeMd,
         judgePrompt,
         ctx.cwd,
         instruction,
-        resolveModel,
-        createAuthResolverWithFallback(
-          ctx.modelRegistry.getApiKeyAndHeaders,
-          (p) => ctx.modelRegistry.getApiKeyForProvider(p),
-        ),
       );
 
       if (result.error) {
@@ -634,7 +610,6 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       return await mergeAndWrite(ctx, {
         currentJudgeMd,
         operations: selectedSuggestions,
-        resolveModel,
         analysisCost: result.cost,
         label: "审判长",
         emoji: "👨‍⚖️",
@@ -653,19 +628,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     const judge = createJudge(config, {
       judgePrompt,
       localJudge,
-      getAuth: async (model) => {
-        const standard = createAuthResolver(
-          ctx.modelRegistry.getApiKeyAndHeaders,
-        );
-        const result = await standard(model);
-        if (result?.apiKey) return result;
-        // Fallback: get API key directly from provider credential store
-        const apiKey = await ctx.modelRegistry.getApiKeyForProvider(
-          model.provider,
-        );
-        if (apiKey) return { apiKey };
-        return result;
-      },
+      modelClient: createModelClient(ctx),
     });
     const toolName = event.toolName;
     const value = stringifyToolInput(event);
@@ -684,13 +647,10 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     const cacheKey = `${toolName}:${value}`;
     if (cache.isApproved(cacheKey)) return undefined;
 
-    const resolveModel = (provider: string, id: string) =>
-      ctx.modelRegistry.find(provider, id);
     const judgeResult = await judge(
       { toolName, value, paths },
       ctx.cwd,
       ctx.model,
-      resolveModel,
     );
     recordJudgeStats(pi, { toolName, value }, judgeResult);
     if (judgeResult.cost !== undefined && judgeResult.modelUsed) {
