@@ -55,6 +55,38 @@ describe("parseWorktreeList", () => {
     ]);
   });
 
+  it("retains a worktree lock from porcelain output", () => {
+    expect(
+      parseWorktreeList(
+        [
+          "worktree /repo/main",
+          "HEAD 1111111111111111111111111111111111111111",
+          "branch refs/heads/main",
+          "",
+          "worktree /repo/feature",
+          "HEAD 2222222222222222222222222222222222222222",
+          "branch refs/heads/feature",
+          "locked keep this worktree",
+          "",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      {
+        path: "/repo/main",
+        branch: "main",
+        head: "1111111111111111111111111111111111111111",
+        prunable: false,
+      },
+      {
+        path: "/repo/feature",
+        branch: "feature",
+        head: "2222222222222222222222222222222222222222",
+        prunable: false,
+        locked: true,
+      },
+    ]);
+  });
+
   it("ignores lines that appear before the first worktree record", () => {
     expect(
       parseWorktreeList(

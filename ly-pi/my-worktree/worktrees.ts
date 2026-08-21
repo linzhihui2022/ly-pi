@@ -8,6 +8,7 @@ export interface ParsedWorktree {
   branch: string | null;
   head: string | null;
   prunable: boolean;
+  locked?: boolean;
 }
 
 const BRANCH_PREFIX = "refs/heads/";
@@ -136,6 +137,8 @@ export function parseWorktreeList(output: string): ParsedWorktree[] {
         : branch;
     } else if (line.startsWith("prunable")) {
       current.prunable = true;
+    } else if (line.startsWith("locked")) {
+      current.locked = true;
     }
   }
 
