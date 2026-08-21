@@ -101,6 +101,18 @@ describe("renderWorktreeLines", () => {
     );
   });
 
+  it("renders when one path character fits after the ellipsis", () => {
+    const theme = createTheme();
+    const worktrees = [
+      { path: "/repo", label: "main", isCurrent: false },
+      { path: "/repo/feature", label: "feature-x", isCurrent: true },
+    ];
+
+    expect(renderWorktreeLines(theme as never, worktrees, 17, "/repo")).toEqual(
+      ["● Worktrees (2)", "└─ • feature-x …e"],
+    );
+  });
+
   it("hides when fewer than two worktrees are visible", () => {
     const theme = createTheme();
 

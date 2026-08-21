@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { realpathSync, statSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
 export interface ParsedWorktree {
@@ -26,10 +26,18 @@ export interface WorktreeSnapshot {
 }
 
 function canonicalPath(path: string): string {
+  const resolvedPath = resolve(path);
+
   try {
-    return realpathSync(path);
+    return realpathSync(resolvedPath);
   } catch {
-    return resolve(path);
+    const existingDirectory = findExistingDirectory(resolvedPath);
+    if (!existingDirectory) return resolvedPath;
+
+    return resolve(
+      realpathSync(existingDirectory),
+      relative(existingDirectory, resolvedPath),
+    );
   }
 }
 
@@ -44,6 +52,20 @@ function containsPath(parent: string, child: string): boolean {
       pathFromWorktree !== ".." &&
       !pathFromWorktree.startsWith(`..${sep}`))
   );
+}
+
+function findExistingDirectory(path: string): string | undefined {
+  let current = resolve(path);
+
+  while (true) {
+    try {
+      if (statSync(current).isDirectory()) return current;
+    } catch {}
+
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
 }
 
 export function findCurrentWorktree(
@@ -103,7 +125,7 @@ export async function getVisibleWorktrees(
     const { stdout } = await execFileAsync(
       "git",
       ["worktree", "list", "--porcelain"],
-      { cwd, timeout: 3000 },
+      { cwd: findExistingDirectory(cwd) ?? cwd, timeout: 3000 },
     );
     const entries = parseWorktreeList(stdout);
     const repositoryRoot = entries[0]?.path;

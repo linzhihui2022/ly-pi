@@ -331,6 +331,72 @@ describe("parseWorktreeList", () => {
     }
   });
 
+  it("rediscovers from an existing ancestor after nested Current Worktree removal", async () => {
+    const repository = mkdtempSync(join(tmpdir(), "my-worktree-"));
+    const featureWorktree = join(repository, ".worktree", "feature-x");
+    const peerWorktree = join(repository, ".worktree", "peer-x");
+
+    try {
+      execFileSync("git", ["init", "-b", "main", repository]);
+      writeFileSync(join(repository, "README.md"), "fixture\n");
+      execFileSync("git", ["-C", repository, "add", "README.md"]);
+      execFileSync("git", [
+        "-C",
+        repository,
+        "-c",
+        "user.name=Test User",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "initial",
+      ]);
+      mkdirSync(join(repository, ".worktree"));
+      execFileSync("git", [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "feature-x",
+        featureWorktree,
+      ]);
+      execFileSync("git", [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "peer-x",
+        peerWorktree,
+      ]);
+      const nestedDirectory = join(featureWorktree, "nested");
+      mkdirSync(nestedDirectory);
+      execFileSync("git", [
+        "-C",
+        repository,
+        "worktree",
+        "remove",
+        "--force",
+        featureWorktree,
+      ]);
+
+      await expect(getVisibleWorktrees(nestedDirectory)).resolves.toEqual({
+        repositoryRoot: realpathSync(repository),
+        worktrees: [
+          { path: realpathSync(repository), label: "main", isCurrent: true },
+          {
+            path: realpathSync(peerWorktree),
+            label: "peer-x",
+            isCurrent: false,
+          },
+        ],
+      });
+    } finally {
+      rmSync(repository, { recursive: true, force: true });
+    }
+  });
+
   it("returns null when Git worktree discovery cannot run", async () => {
     await expect(
       getVisibleWorktrees("/tmp/my-worktree-not-a-repository-99999"),
