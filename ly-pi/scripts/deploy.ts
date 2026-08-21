@@ -126,6 +126,7 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
     join(extDir, "close-worktree-worker.js"),
     Bun.file("dist/my-worktree/close-worker-main.js"),
   );
+  await write(join(extDir, "package.json"), '{\n  "type": "module"\n}\n');
   console.log("Extension: deployed");
 }
 
