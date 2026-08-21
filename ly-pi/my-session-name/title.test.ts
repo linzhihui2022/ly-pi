@@ -1,6 +1,11 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { loadModelPolicyRegistry } from "../model-policy/config";
 import { requestSessionTitle } from "./title";
+
+vi.mock("../model-policy/config", () => ({
+  loadModelPolicyRegistry: vi.fn(),
+}));
 
 const completeModel = vi.fn();
 
@@ -50,6 +55,7 @@ function createRegistry(model: unknown, available = true) {
 
 beforeEach(() => {
   completeModel.mockReset();
+  vi.mocked(loadModelPolicyRegistry).mockReset();
 });
 
 describe("requestSessionTitle", () => {
@@ -83,6 +89,16 @@ describe("requestSessionTitle", () => {
         maxTokens: 32,
         timeoutMs: 10_000,
       }),
+    );
+  });
+
+  it("surfaces an invalid model policy configuration", async () => {
+    vi.mocked(loadModelPolicyRegistry).mockImplementation(() => {
+      throw new Error("invalid manifest");
+    });
+
+    await expect(requestSessionTitle("任务", createContext())).rejects.toThrow(
+      "invalid manifest",
     );
   });
 

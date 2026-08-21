@@ -2,7 +2,7 @@ import type { Api, ModelsApiStreamOptions } from "@earendil-works/pi-ai";
 import type { loadModelPolicyRegistry } from "../model-policy/config";
 import { createDevLogger } from "../my-log/index";
 import type { ChiefSuggestionItem } from "./chief";
-import type { Config, ModelClient } from "./types";
+import type { ModelClient } from "./types";
 
 const log = createDevLogger("my-permission:pipeline");
 
@@ -57,7 +57,6 @@ export type MergerFn = (input: MergerInput) => Promise<MergerResult>;
 // ---- createRoleAnalyzer ----
 
 export function createRoleAnalyzer<TInput, TResult>(
-  _config: Config,
   roleConfig: AnalyzerConfig<TInput, TResult>,
   modelClient: ModelClient,
   modelRunner: SecurityAuditModelRunner,
@@ -139,7 +138,6 @@ export function createRoleAnalyzer<TInput, TResult>(
 // ---- createMerger ----
 
 export function createMerger(
-  _config: Config,
   modelClient: ModelClient,
   modelRunner: SecurityAuditModelRunner,
 ): MergerFn {

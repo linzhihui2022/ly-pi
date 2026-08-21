@@ -19,9 +19,6 @@ vi.mock("@earendil-works/pi-ai", async (importOriginal) => {
 vi.mock("./config", () => ({
   config: {
     defaultPolicy: "ask",
-    judgeModel: "deepseek/deepseek-v4-flash",
-    professorModel: "deepseek/deepseek-v4-pro",
-    professorThinking: "max",
     judgeTimeoutMs: 5000,
     childPolicy: "deny-on-unsafe",
     permission: {
@@ -142,7 +139,7 @@ function createMockCtx(overrides: Record<string, unknown> = {}) {
   return {
     cwd: "/repo",
     hasUI: true,
-    model: { id: "deepseek-v4-flash", provider: "deepseek" } as Model<Api>,
+    model: { id: "test-model", provider: "test" } as Model<Api>,
     modelRegistry: { find: vi.fn() },
     ui: { confirm: vi.fn().mockResolvedValue(true), notify: vi.fn() },
     ...overrides,
@@ -446,11 +443,7 @@ describe("security audit tools", () => {
       .getTool("permission_advocate")
       .execute("call-1", {}, undefined, undefined, createSecurityAuditCtx());
 
-    expect(createAdvocate).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      modelRunner,
-    );
+    expect(createAdvocate).toHaveBeenCalledWith(expect.anything(), modelRunner);
     expect(result).toMatchObject({
       content: [{ type: "text", text: "辩护人分析失败: rate limit exceeded" }],
     });
@@ -488,7 +481,6 @@ describe("security audit tools", () => {
       .execute("call-1", {}, undefined, undefined, ctx);
 
     expect(createPipelineMerger).toHaveBeenCalledWith(
-      expect.anything(),
       expect.anything(),
       modelRunner,
     );

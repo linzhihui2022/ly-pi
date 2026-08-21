@@ -80,25 +80,25 @@ describe("appendCost", () => {
   });
 
   it("appends a single JSONL line with all fields", () => {
-    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "test/model-a", opts());
 
     const content = readFileSync(TEST_FILE, "utf-8").trim();
     const parsed = JSON.parse(content);
     expect(parsed.type).toBe("judge");
     expect(parsed.cost).toBe(0.001);
-    expect(parsed.model).toBe("openai/gpt-4o");
+    expect(parsed.model).toBe("test/model-a");
     expect(parsed.ts).toBeDefined();
     expect(new Date(parsed.ts).getTime()).toBeGreaterThan(0);
   });
 
   it("appends multiple lines to the same file", () => {
-    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "test/model-a", opts());
     appendCost(
       TEST_SESSION,
       TEST_CWD,
       "advocate-analysis",
       0.005,
-      "anthropic/claude-sonnet-4",
+      "test/model-b",
       opts(),
     );
 
@@ -113,7 +113,7 @@ describe("appendCost", () => {
       rmSync(TEST_COSTS_DIR, { recursive: true, force: true });
     }
 
-    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "test/model-a", opts());
     expect(existsSync(TEST_FILE)).toBe(true);
   });
 
@@ -127,7 +127,7 @@ describe("appendCost", () => {
     ] as const;
 
     for (const type of types) {
-      appendCost(TEST_SESSION, TEST_CWD, type, 0.001, "openai/gpt-4o", opts());
+      appendCost(TEST_SESSION, TEST_CWD, type, 0.001, "test/model-a", opts());
     }
 
     const lines = readFileSync(TEST_FILE, "utf-8").trim().split("\n");
@@ -141,7 +141,7 @@ describe("appendCost", () => {
     // Use the default path (writes to real ~/.pi/costs)
     // Test that no error is thrown
     expect(() => {
-      appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o");
+      appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "test/model-a");
     }).not.toThrow();
     // Clean up
     const defaultFile = getCostsFilePath(TEST_SESSION, TEST_CWD);
@@ -198,8 +198,8 @@ describe("aggregateCosts", () => {
 
   it("aggregates costs across sessions for a project", () => {
     // Session 1
-    appendCost("session-1", TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
-    appendCost("session-1", TEST_CWD, "judge", 0.002, "openai/gpt-4o", opts());
+    appendCost("session-1", TEST_CWD, "judge", 0.001, "test/model-a", opts());
+    appendCost("session-1", TEST_CWD, "judge", 0.002, "test/model-a", opts());
 
     // Session 2: simulate by writing directly to a different session file
     writeFileSync(
@@ -208,13 +208,13 @@ describe("aggregateCosts", () => {
         JSON.stringify({
           type: "judge",
           cost: 0.003,
-          model: "openai/gpt-4o",
+          model: "test/model-a",
           ts: new Date().toISOString(),
         }),
         JSON.stringify({
           type: "advocate-analysis",
           cost: 0.005,
-          model: "anthropic/claude-sonnet-4",
+          model: "test/model-b",
           ts: new Date().toISOString(),
         }),
         "",
@@ -227,30 +227,28 @@ describe("aggregateCosts", () => {
     // judge: 0.001 + 0.002 + 0.003 = 0.006, 3 calls
     expect(result.judge.totalCost).toBeCloseTo(0.006, 6);
     expect(result.judge.calls).toBe(3);
-    expect(result.judge.byModel["openai/gpt-4o"].totalCost).toBeCloseTo(
+    expect(result.judge.byModel["test/model-a"].totalCost).toBeCloseTo(
       0.006,
       6,
     );
-    expect(result.judge.byModel["openai/gpt-4o"].calls).toBe(3);
+    expect(result.judge.byModel["test/model-a"].calls).toBe(3);
 
     // advocate-analysis: 0.005, 1 call
     const advAnalysis = result.advocate.analysis;
     expect(advAnalysis.totalCost).toBeCloseTo(0.005, 6);
     expect(advAnalysis.calls).toBe(1);
-    expect(
-      advAnalysis.byModel["anthropic/claude-sonnet-4"].totalCost,
-    ).toBeCloseTo(0.005, 6);
+    expect(advAnalysis.byModel["test/model-b"].totalCost).toBeCloseTo(0.005, 6);
   });
 
   it("aggregates by daily buckets", () => {
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "test/model-a", opts());
     appendCost(
       TEST_SESSION,
       TEST_CWD,
       "prosecutor-analysis",
       0.008,
-      "anthropic/claude-sonnet-4",
+      "test/model-b",
       opts(),
     );
 
@@ -273,7 +271,7 @@ describe("aggregateCosts", () => {
         JSON.stringify({
           type: "judge",
           cost: 0.001,
-          model: "openai/gpt-4o",
+          model: "test/model-a",
           ts: new Date().toISOString(),
         }),
         "this is not valid json",
@@ -294,7 +292,7 @@ describe("aggregateCosts", () => {
         JSON.stringify({
           type: "judge",
           cost: 0.001,
-          model: "openai/gpt-4o",
+          model: "test/model-a",
           ts: new Date().toISOString(),
         }),
         JSON.stringify({ type: "judge" }),
@@ -328,7 +326,7 @@ describe("aggregateCosts", () => {
   });
 
   it("aggregates all projects when cwd is omitted", () => {
-    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "test/model-a", opts());
 
     const result = aggregateCosts(undefined, opts());
     expect(result.judge.totalCost).toBeCloseTo(0.001, 6);
@@ -336,7 +334,7 @@ describe("aggregateCosts", () => {
   });
 
   it("skips non-jsonl files in project directory", () => {
-    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "test/model-a", opts());
     writeFileSync(join(TEST_COSTS_DIR, "readme.txt"), "hello", "utf-8");
 
     const result = aggregateCosts(TEST_CWD, opts());
@@ -351,7 +349,7 @@ describe("aggregateCosts", () => {
         JSON.stringify({
           type: "judge",
           cost: 0.001,
-          model: "openai/gpt-4o",
+          model: "test/model-a",
           ts: new Date().toISOString(),
         }),
         JSON.stringify({
@@ -376,7 +374,7 @@ describe("aggregateCosts", () => {
       TEST_CWD,
       "advocate-merge",
       0.002,
-      "anthropic/claude-sonnet-4",
+      "test/model-b",
       opts(),
     );
     appendCost(
@@ -384,7 +382,7 @@ describe("aggregateCosts", () => {
       TEST_CWD,
       "prosecutor-merge",
       0.003,
-      "anthropic/claude-sonnet-4",
+      "test/model-b",
       opts(),
     );
 
@@ -399,7 +397,7 @@ describe("aggregateCosts", () => {
     const strayFile = join(TEST_DIR, "stray-file.txt");
     writeFileSync(strayFile, "ignore me", "utf-8");
 
-    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "test/model-a", opts());
     const result = aggregateCosts(undefined, opts());
     expect(result.judge.totalCost).toBeCloseTo(0.001, 6);
   });
@@ -411,7 +409,7 @@ describe("aggregateCosts", () => {
         JSON.stringify({
           type: "judge",
           cost: 0.001,
-          model: "openai/gpt-4o",
+          model: "test/model-a",
           ts: new Date().toISOString(),
         }),
         "42",
@@ -434,7 +432,7 @@ describe("aggregateCosts", () => {
         JSON.stringify({
           type: "judge",
           cost: 0.001,
-          model: "openai/gpt-4o",
+          model: "test/model-a",
           ts: new Date().toISOString(),
         }),
         JSON.stringify({
@@ -454,30 +452,23 @@ describe("aggregateCosts", () => {
   });
 
   it("populates models sorted by cost descending", () => {
-    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
-    appendCost(
-      TEST_SESSION,
-      TEST_CWD,
-      "judge",
-      0.005,
-      "anthropic/claude",
-      opts(),
-    );
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "test/model-a", opts());
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.005, "test/model-c", opts());
     appendCost(
       TEST_SESSION,
       TEST_CWD,
       "advocate-analysis",
       0.002,
-      "openai/gpt-4o",
+      "test/model-a",
       opts(),
     );
 
     const result = aggregateCosts(TEST_CWD, opts());
     expect(result.models).toHaveLength(2);
-    // anthropic: 0.005, openai: 0.001 + 0.002 = 0.003
-    expect(result.models[0].model).toBe("anthropic/claude");
+    // model-c: 0.005, model-a: 0.001 + 0.002 = 0.003
+    expect(result.models[0].model).toBe("test/model-c");
     expect(result.models[0].totalCost).toBeCloseTo(0.005, 6);
-    expect(result.models[1].model).toBe("openai/gpt-4o");
+    expect(result.models[1].model).toBe("test/model-a");
     expect(result.models[1].totalCost).toBeCloseTo(0.003, 6);
   });
 
@@ -555,7 +546,7 @@ describe("aggregateCosts", () => {
     // Create a subdirectory inside the project dir (simulates a non-file entry)
     const subDir = join(TEST_COSTS_DIR, "subdir");
     mkdirSync(subDir, { recursive: true });
-    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o", opts());
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "test/model-a", opts());
 
     const result = aggregateCosts(undefined, opts());
     expect(result.judge.totalCost).toBeCloseTo(0.001, 6);

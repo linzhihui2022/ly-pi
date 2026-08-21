@@ -4,9 +4,9 @@ import { config } from "./config";
 describe("config", () => {
   it("has sensible defaults", () => {
     expect(config.defaultPolicy).toBe("allow");
-    expect(config.judgeModel).toBe("deepseek/deepseek-v4-flash");
-    expect(config.professorModel).toBe("deepseek/deepseek-v4-pro");
-    expect(config.professorThinking).toBe("max");
+    expect(config).not.toHaveProperty("judgeModel");
+    expect(config).not.toHaveProperty("professorModel");
+    expect(config).not.toHaveProperty("professorThinking");
     expect(config.judgeTimeoutMs).toBe(8000);
     expect(config.childPolicy).toBe("deny-on-unsafe");
   });

@@ -12,8 +12,8 @@ function makeModel(
   overrides: Partial<{ id: string; provider: string }> = {},
 ): Model<Api> {
   return {
-    id: overrides.id ?? "deepseek-v4-flash",
-    provider: overrides.provider ?? "deepseek",
+    id: overrides.id ?? "test-model",
+    provider: overrides.provider ?? "test",
     name: "Test Model",
     api: "openai-completions",
     input: ["text"],
@@ -28,9 +28,6 @@ const resolvedModel = makeModel();
 
 const config: Config = {
   defaultPolicy: "ask",
-  judgeModel: "deepseek/deepseek-v4-flash",
-  professorModel: "deepseek/deepseek-v4-flash",
-  professorThinking: "low",
   judgeTimeoutMs: 5000,
   childPolicy: "deny-on-unsafe",
   permission: {},
@@ -139,7 +136,7 @@ describe("createJudge", () => {
       score: 8,
       reason: "read only",
       toolFor: "read file",
-      modelUsed: "deepseek/deepseek-v4-flash",
+      modelUsed: "test/test-model",
     });
   });
 
@@ -297,7 +294,7 @@ describe("createJudge", () => {
       score: 3,
       reason: "destructive",
       toolFor: "delete files",
-      modelUsed: "deepseek/deepseek-v4-flash",
+      modelUsed: "test/test-model",
     });
   });
 
@@ -323,15 +320,12 @@ describe("createJudge", () => {
     await mockComplete({
       content: [],
       stopReason: "error",
-      errorMessage: "No API key for provider: deepseek",
+      errorMessage: "No API key for provider: test",
     });
     const judge = createJudge(config, judgeDeps);
     const result = await judge(input, "/repo");
     expect(result).toEqual(
-      failureReason(
-        input,
-        "法官模型调用失败: No API key for provider: deepseek",
-      ),
+      failureReason(input, "法官模型调用失败: No API key for provider: test"),
     );
   });
 
@@ -455,7 +449,7 @@ describe("createJudge", () => {
       score: 7,
       reason: "ok",
       toolFor: "do stuff",
-      modelUsed: "deepseek/deepseek-v4-flash",
+      modelUsed: "test/test-model",
     });
   });
 

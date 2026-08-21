@@ -4,7 +4,6 @@ import type {
   Context,
   Model,
   ModelsApiStreamOptions,
-  ModelThinkingLevel,
 } from "@earendil-works/pi-ai";
 
 export interface ModelClient {
@@ -35,9 +34,6 @@ export interface PermissionConfig {
 
 export interface Config {
   defaultPolicy: Action;
-  judgeModel: string;
-  professorModel: string;
-  professorThinking: ModelThinkingLevel;
   judgeTimeoutMs: number;
   childPolicy: "deny-on-unsafe" | "allow-on-safe";
   permission: PermissionConfig;

@@ -87,6 +87,25 @@ describe("session naming lifecycle", () => {
     expect(mockPi.setSessionName).toHaveBeenCalledWith("修复登录");
   });
 
+  it("reports a model policy loading error without naming the session", async () => {
+    requestSessionTitleMock.mockRejectedValue(new Error("invalid manifest"));
+    const notify = vi.fn();
+    const ctx = {
+      ...createContext(),
+      ui: { notify },
+    } as unknown as ExtensionContext;
+
+    await handlers.get("input")!(inputEvent("interactive"), ctx);
+    await handlers.get("before_agent_start")!(beforeEvent("任务"), ctx);
+    await flushPromises();
+
+    expect(notify).toHaveBeenCalledWith(
+      "会话标题模型策略加载失败: invalid manifest",
+      "error",
+    );
+    expect(mockPi.setSessionName).not.toHaveBeenCalled();
+  });
+
   it("accepts rpc input and skips extension-injected input", async () => {
     requestSessionTitleMock.mockResolvedValue("RPC 任务");
     const ctx = createContext();

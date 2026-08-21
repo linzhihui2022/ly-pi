@@ -4,7 +4,7 @@ import {
   createMerger as createSharedMerger,
 } from "./pipeline";
 import type { DeniedThenApproved } from "./stats";
-import type { Config, ModelClient } from "./types";
+import type { ModelClient } from "./types";
 
 export interface AdvocateSuggestion {
   add: Array<{ rule: string; reason: string }>;
@@ -90,12 +90,10 @@ export const advocateAnalyzerConfig: AnalyzerConfig<
 // ---- createAdvocate (thin wrapper) ----
 
 export function createAdvocate(
-  config: Config,
   modelClient: ModelClient,
   modelRunner: SecurityAuditModelRunner,
 ): AdvocateFn {
   const analyzer = createRoleAnalyzer(
-    config,
     advocateAnalyzerConfig,
     modelClient,
     modelRunner,
@@ -125,11 +123,10 @@ export function createAdvocate(
 // ---- createMerger (thin wrapper) ----
 
 export function createMerger(
-  config: Config,
   modelClient: ModelClient,
   modelRunner: SecurityAuditModelRunner,
 ): MergerFn {
-  const sharedMerger = createSharedMerger(config, modelClient, modelRunner);
+  const sharedMerger = createSharedMerger(modelClient, modelRunner);
 
   return async function merge(
     currentJudgeMd: string,

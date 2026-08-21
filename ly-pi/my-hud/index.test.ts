@@ -121,6 +121,7 @@ const mockCtx = {
     setWidget: vi.fn(),
     setWorkingMessage: vi.fn(),
     getTheme: vi.fn(() => mockTheme),
+    notify: vi.fn(),
   },
 };
 
@@ -1324,6 +1325,22 @@ describe("my-hud extension", () => {
     const mod = await loadModule();
     mod.default(mockPi as any);
     expect(registeredEvents.has("session_start")).toBe(true);
+  });
+
+  it("reports a model policy loading error when the session starts", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any, () => {
+      throw new Error("invalid manifest");
+    });
+
+    const notify = vi.fn();
+    const ctx = { ...mockCtx, ui: { ...mockCtx.ui, notify } };
+    registeredEvents.get("session_start")!({}, ctx);
+
+    expect(notify).toHaveBeenCalledWith(
+      "模型策略加载失败: invalid manifest",
+      "error",
+    );
   });
 
   it("session_start skips widget and footer when hasUI is false", async () => {

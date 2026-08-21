@@ -3,7 +3,6 @@ name: pr-test-analyzer
 description: 专注于审查 PR diff 中测试覆盖质量和完整性的 agent。
 tools: read, bash, grep, find, ls
 systemPromptMode: replace
-thinking: max
 acceptanceRole: read-only
 completionGuard: false
 ---

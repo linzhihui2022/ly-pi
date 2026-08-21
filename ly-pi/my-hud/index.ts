@@ -61,10 +61,11 @@ export default function myHud(
   let currentTui: { requestRender(): void } | null = null;
   let bar: Bar | undefined;
   let getModelLabel: ModelLabelResolver = () => undefined;
+  let modelPolicyError: string | undefined;
   try {
     getModelLabel = loadRegistry().getModelLabel;
-  } catch {
-    // Fall back to the active model's provider-qualified identifier.
+  } catch (error) {
+    modelPolicyError = error instanceof Error ? error.message : String(error);
   }
 
   const hudConfig = loadHudConfig(EXT_DIR);
@@ -164,6 +165,9 @@ export default function myHud(
   pi.on("session_start", (_event, ctx: ExtensionContext) => {
     if (!ctx.hasUI) {
       return;
+    }
+    if (modelPolicyError) {
+      ctx.ui.notify(`模型策略加载失败: ${modelPolicyError}`, "error");
     }
     bar ??= new Bar(undefined, getModelLabel);
     bar.setUICtx(ctx.ui);

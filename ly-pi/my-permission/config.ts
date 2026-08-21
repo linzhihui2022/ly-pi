@@ -2,9 +2,6 @@ import type { Config } from "./types";
 
 export const config = {
   defaultPolicy: "allow",
-  judgeModel: "deepseek/deepseek-v4-flash",
-  professorModel: "deepseek/deepseek-v4-pro",
-  professorThinking: "max",
   judgeTimeoutMs: 8000,
   childPolicy: "deny-on-unsafe",
   permission: {

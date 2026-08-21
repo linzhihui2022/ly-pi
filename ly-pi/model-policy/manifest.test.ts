@@ -50,7 +50,11 @@ describe("checked-in model policy manifest", () => {
 
     expect(manifest.deployment.agents).toMatchObject({
       "image-reader": "vision",
+      "pr-code-reviewer": "standard",
       "pr-comment-analyzer": "standard",
+      "pr-silent-failure-hunter": "standard",
+      "pr-test-analyzer": "standard",
+      "pr-type-design-analyzer": "standard",
     });
     expect(compiled).toEqual(
       expect.objectContaining({
@@ -66,7 +70,15 @@ describe("checked-in model policy manifest", () => {
         }),
       }),
     );
-    expect(compiled["pr-comment-analyzer"]).toEqual(compiled.delegate);
+    for (const agent of [
+      "pr-code-reviewer",
+      "pr-comment-analyzer",
+      "pr-silent-failure-hunter",
+      "pr-test-analyzer",
+      "pr-type-design-analyzer",
+    ]) {
+      expect(compiled[agent]).toEqual(compiled.delegate);
+    }
     expect(report.roles.standard.failurePolicy).toBe("error");
     expect(report.roles.vision.candidates[0]).toMatchObject({
       status: "incompatible",

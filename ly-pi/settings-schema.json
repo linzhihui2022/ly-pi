@@ -353,7 +353,7 @@
       "properties": {
         "model": {
           "type": "string",
-          "description": "Model identifier (e.g. 'deepseek/deepseek-v4-flash')"
+          "description": "Model identifier (e.g. 'provider/model-id')"
         },
         "thinking": {
           "type": "string",

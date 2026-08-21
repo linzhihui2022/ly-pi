@@ -30,8 +30,10 @@ export async function requestSessionTitle(
   ctx: ExtensionContext,
   registry?: TitleModelPolicyRegistry,
 ): Promise<string | null> {
+  const policyRegistry = registry ?? loadModelPolicyRegistry(EXT_DIR);
+
   try {
-    const result = await (registry ?? loadModelPolicyRegistry(EXT_DIR)).run(
+    const result = await policyRegistry.run(
       "fast",
       ctx.modelRegistry,
       async (model) =>

@@ -51,7 +51,7 @@ describe("renderCostPage", () => {
     const agg = emptyAgg();
     agg.judge.totalCost = 0.001;
     agg.judge.calls = 10;
-    agg.judge.byModel["deepseek/deepseek-v4-flash"] = {
+    agg.judge.byModel["test/model"] = {
       totalCost: 0.001,
       calls: 10,
     };
@@ -80,14 +80,14 @@ describe("renderCostPage", () => {
   it("renders model table when models exist", () => {
     const agg = emptyAgg();
     agg.models = [
-      { model: "openai/gpt-4o", totalCost: 0.005, calls: 3 },
-      { model: "anthropic/claude", totalCost: 0.002, calls: 1 },
+      { model: "test/model-a", totalCost: 0.005, calls: 3 },
+      { model: "test/model-c", totalCost: 0.002, calls: 1 },
     ];
 
     const html = renderCostPage(agg);
     expect(html).toContain("模型分布");
-    expect(html).toContain("openai/gpt-4o");
-    expect(html).toContain("anthropic/claude");
+    expect(html).toContain("test/model-a");
+    expect(html).toContain("test/model-c");
   });
 
   it("hides model table when no models", () => {

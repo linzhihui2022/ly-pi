@@ -211,7 +211,6 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       };
     }
     const merger = createPipelineMerger(
-      config,
       createModelClient(ctx),
       securityAudit.modelRunner,
     );
@@ -387,7 +386,6 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
       const advocate = createAdvocate(
-        config,
         createModelClient(ctx),
         securityAudit.modelRunner,
       );
@@ -514,7 +512,6 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
       const prosecutor = createProsecutor(
-        config,
         createModelClient(ctx),
         securityAudit.modelRunner,
       );
@@ -636,7 +633,6 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
       const chief = createChief(
-        config,
         createModelClient(ctx),
         securityAudit.modelRunner,
       );

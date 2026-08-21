@@ -227,7 +227,11 @@ describe("deploy model policy settings", () => {
     };
     expect(settings.subagents.agentOverrides).toMatchObject({
       "image-reader": expectedOverride("vision"),
+      "pr-code-reviewer": expectedOverride("standard"),
       "pr-comment-analyzer": expectedOverride("standard"),
+      "pr-silent-failure-hunter": expectedOverride("standard"),
+      "pr-test-analyzer": expectedOverride("standard"),
+      "pr-type-design-analyzer": expectedOverride("standard"),
     });
 
     const requiredFrontmatter = {
@@ -253,6 +257,19 @@ describe("deploy model policy settings", () => {
         expect(frontmatter).toContain(field);
       }
     }
+    for (const agent of [
+      "pr-code-reviewer",
+      "pr-silent-failure-hunter",
+      "pr-test-analyzer",
+      "pr-type-design-analyzer",
+    ]) {
+      const frontmatter = readFileSync(
+        join(staging, "agent", "agents", `${agent}.md`),
+        "utf-8",
+      );
+      expect(frontmatter).not.toMatch(/^model:/m);
+      expect(frontmatter).not.toMatch(/^thinking:/m);
+    }
   });
 
   it("does not duplicate managed model choices in source settings", () => {
@@ -274,7 +291,19 @@ describe("deploy model policy settings", () => {
       "image-reader",
     );
     expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
+      "pr-code-reviewer",
+    );
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
       "pr-comment-analyzer",
+    );
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
+      "pr-silent-failure-hunter",
+    );
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
+      "pr-test-analyzer",
+    );
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
+      "pr-type-design-analyzer",
     );
   });
 });

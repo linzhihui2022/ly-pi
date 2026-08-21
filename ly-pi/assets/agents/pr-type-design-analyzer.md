@@ -3,7 +3,6 @@ name: pr-type-design-analyzer
 description: 专注于分析 PR diff 中类型设计、封装和 invariant 表达的 agent。
 tools: read, bash, grep, find, ls
 systemPromptMode: replace
-thinking: max
 acceptanceRole: read-only
 completionGuard: false
 ---

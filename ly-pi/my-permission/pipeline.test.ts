@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChiefSuggestionItem } from "./chief";
 import type { AnalyzerConfig } from "./pipeline";
 import { createMerger, createRoleAnalyzer } from "./pipeline";
-import type { Config, ModelClient } from "./types";
+import type { ModelClient } from "./types";
 
 function makeModel(
   overrides: Partial<{ id: string; provider: string }> = {},
 ): Model<Api> {
   return {
-    id: overrides.id ?? "deepseek-v4-pro",
-    provider: overrides.provider ?? "deepseek",
+    id: overrides.id ?? "audit-model",
+    provider: overrides.provider ?? "test",
     name: "Test Model",
     api: "openai-completions",
     input: ["text"],
@@ -20,16 +20,6 @@ function makeModel(
     reasoning: false,
   } as Model<Api>;
 }
-
-const config: Config = {
-  defaultPolicy: "ask",
-  judgeModel: "deepseek/deepseek-v4-flash",
-  professorModel: "deepseek/deepseek-v4-pro",
-  professorThinking: "max",
-  judgeTimeoutMs: 5000,
-  childPolicy: "deny-on-unsafe",
-  permission: {},
-};
 
 const resolveModelOk = vi.fn(() => makeModel());
 const completeModel = vi.fn<ModelClient["complete"]>();
@@ -97,19 +87,14 @@ function createTestAnalyzer(
   modelClientOverride = modelClient,
   modelRunner = defaultSecurityAuditRunner.modelRunner,
 ) {
-  return createRoleAnalyzer(
-    config,
-    roleConfig,
-    modelClientOverride,
-    modelRunner,
-  );
+  return createRoleAnalyzer(roleConfig, modelClientOverride, modelRunner);
 }
 
 function createTestMerger(
   modelClientOverride = modelClient,
   modelRunner = defaultSecurityAuditRunner.modelRunner,
 ) {
-  return createMerger(config, modelClientOverride, modelRunner);
+  return createMerger(modelClientOverride, modelRunner);
 }
 
 function makeAnalyzerConfig(
@@ -173,7 +158,6 @@ describe("createRoleAnalyzer", () => {
     });
     const { modelRunner, run } = createSuccessfulSecurityAuditRunner("off");
     const analyzer = createRoleAnalyzer(
-      config,
       makeAnalyzerConfig(),
       modelClient,
       modelRunner,

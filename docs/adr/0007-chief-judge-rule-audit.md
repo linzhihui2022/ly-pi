@@ -17,7 +17,7 @@
 
 - **独立文件** `chief.ts`：`createChief` + `createChiefMerger`，与 `prosecutor.ts` / `professor.ts` 平级
 - **独立合并器** `createChiefMerger`：专属 prompt 处理 modify/merge 操作，不复用 `professor.ts` 的 `createMerger`
-- **模型**：复用 `professorModel`，不新增配置项
+- **模型**：通过 Model Policy Registry 请求 `security-audit` Role，不维护角色专用模型配置
 - **工具注册**：`permission_chief`，触发词：审判长、规则审计、规则审查、矛盾、冲突、过宽
 - **UI 流程**：Phase 1 逐条确认 → Phase 2 diff 预览 + 写入，复用现有 `mergeAndWriteJudgeMd` 的确认/写入模式，但合并调用改为 `createChiefMerger`
 

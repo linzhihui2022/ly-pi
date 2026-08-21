@@ -1,7 +1,7 @@
 import type { AnalyzerConfig, SecurityAuditModelRunner } from "./pipeline";
 import { createRoleAnalyzer } from "./pipeline";
 import type { JudgeLogEntry } from "./stats";
-import type { Config, ModelClient } from "./types";
+import type { ModelClient } from "./types";
 
 export interface ProsecutorSuggestion {
   add: Array<{ rule: string; reason: string }>;
@@ -78,12 +78,10 @@ export const prosecutorAnalyzerConfig: AnalyzerConfig<
 // ---- createProsecutor (thin wrapper) ----
 
 export function createProsecutor(
-  config: Config,
   modelClient: ModelClient,
   modelRunner: SecurityAuditModelRunner,
 ): ProsecutorFn {
   const analyzer = createRoleAnalyzer(
-    config,
     prosecutorAnalyzerConfig,
     modelClient,
     modelRunner,

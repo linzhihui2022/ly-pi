@@ -1,14 +1,14 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createChief, createChiefMerger } from "./chief";
-import type { Config, ModelClient } from "./types";
+import type { ModelClient } from "./types";
 
 function makeModel(
   overrides: Partial<{ id: string; provider: string }> = {},
 ): Model<Api> {
   return {
-    id: overrides.id ?? "deepseek-v4-pro",
-    provider: overrides.provider ?? "deepseek",
+    id: overrides.id ?? "audit-model",
+    provider: overrides.provider ?? "test",
     name: "Test Model",
     api: "openai-completions",
     input: ["text"],
@@ -20,16 +20,6 @@ function makeModel(
 }
 
 const JUDGE_PROMPT = "你是一名编码助手的安全门禁。评估以下工具调用。";
-
-const config: Config = {
-  defaultPolicy: "ask",
-  judgeModel: "deepseek/deepseek-v4-flash",
-  professorModel: "deepseek/deepseek-v4-pro",
-  professorThinking: "max",
-  judgeTimeoutMs: 5000,
-  childPolicy: "deny-on-unsafe",
-  permission: {},
-};
 
 const completeModel = vi.fn<ModelClient["complete"]>();
 const modelClient: ModelClient = {
@@ -88,7 +78,6 @@ function jsonResponse(obj: unknown) {
 describe("createChief", () => {
   it("returns error when JUDGE.md is empty", async () => {
     const chief = createChief(
-      config,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     );
@@ -97,13 +86,11 @@ describe("createChief", () => {
     expect(defaultSecurityAuditRunner.run).not.toHaveBeenCalled();
   });
 
-  it("requests security-audit and does not read professorModel", async () => {
+  it("requests security-audit", async () => {
     completeModel.mockResolvedValue(
       jsonResponse({ suggestions: [], summary: "未发现问题" }) as never,
     );
-    const legacyConfig: Config = { ...config, professorModel: "invalid" };
     const result = await createChief(
-      legacyConfig,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     )("允许执行部署命令", JUDGE_PROMPT, "/repo", undefined);
@@ -144,7 +131,6 @@ describe("createChief", () => {
       }) as never,
     );
     const result = await createChief(
-      config,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     )(
@@ -167,7 +153,6 @@ describe("createChief", () => {
       content: [{ type: "text", text: "not json" }],
     } as never);
     const chief = createChief(
-      config,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     );
@@ -198,7 +183,6 @@ describe("createChief", () => {
       }) as never,
     );
     const result = await createChief(
-      config,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     )("允许部署", "", "/repo", undefined);
@@ -208,7 +192,6 @@ describe("createChief", () => {
 
   it("returns a clear error when security-audit is unavailable", async () => {
     const result = await createChief(
-      config,
       modelClient,
       createFailedSecurityAuditRunner("no usable candidate"),
     )("允许部署", "", "/repo", undefined);
@@ -219,7 +202,6 @@ describe("createChief", () => {
 
   it("returns errors for model failure and empty content", async () => {
     const chief = createChief(
-      config,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     );
@@ -246,11 +228,12 @@ describe("createChief", () => {
         jsonResponse({ suggestions: [], summary: "ok" }) as never,
       );
     });
-    await createChief(
-      config,
-      modelClient,
-      defaultSecurityAuditRunner.modelRunner,
-    )("允许部署", "自定义法官提示词", "/my-project", "检查过宽规则");
+    await createChief(modelClient, defaultSecurityAuditRunner.modelRunner)(
+      "允许部署",
+      "自定义法官提示词",
+      "/my-project",
+      "检查过宽规则",
+    );
 
     const context = capturedContext as { messages: Array<{ content: string }> };
     expect(context.messages[0].content).toContain("允许部署");
@@ -270,7 +253,6 @@ describe("createChief", () => {
       usage: { cost: { total: 0.004 } },
     } as never);
     const result = await createChief(
-      config,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     )("允许部署", "", "/repo", undefined);
@@ -286,7 +268,6 @@ describe("createChiefMerger", () => {
       content: [{ type: "text", text: "现有规则\n新增规则" }],
     } as never);
     const result = await createChiefMerger(
-      config,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     )("现有规则", [{ type: "add", rule: "新增规则", reason: "遗漏" }]);
@@ -300,13 +281,11 @@ describe("createChiefMerger", () => {
     expect(result.modelUsed).toBe("security/audit");
   });
 
-  it("does not read professorModel when merging", async () => {
+  it("returns merged content from security-audit", async () => {
     completeModel.mockResolvedValue({
       content: [{ type: "text", text: "merged" }],
     } as never);
-    const legacyConfig: Config = { ...config, professorModel: "invalid" };
     const result = await createChiefMerger(
-      legacyConfig,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     )("现有规则", [{ type: "add", rule: "新增规则", reason: "遗漏" }]);
@@ -323,7 +302,6 @@ describe("createChiefMerger", () => {
       } as never);
     });
     await createChiefMerger(
-      config,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     )("规则A\n规则B\n规则C", [
@@ -353,7 +331,6 @@ describe("createChiefMerger", () => {
 
   it("returns a clear error without a merge when security-audit fails", async () => {
     const result = await createChiefMerger(
-      config,
       modelClient,
       createFailedSecurityAuditRunner("no usable candidate"),
     )("现有规则", [{ type: "add", rule: "新增规则", reason: "遗漏" }]);
@@ -364,7 +341,6 @@ describe("createChiefMerger", () => {
 
   it("returns errors for empty content and call failure", async () => {
     const merger = createChiefMerger(
-      config,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     );
@@ -385,7 +361,6 @@ describe("createChiefMerger", () => {
       usage: { cost: { total: 0.002 } },
     } as never);
     const result = await createChiefMerger(
-      config,
       modelClient,
       defaultSecurityAuditRunner.modelRunner,
     )("现有规则", [{ type: "add", rule: "新增规则", reason: "遗漏" }]);

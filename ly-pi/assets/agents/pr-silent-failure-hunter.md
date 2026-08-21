@@ -3,7 +3,6 @@ name: pr-silent-failure-hunter
 description: 专注于发现 PR diff 中静默失败、不充分的错误处理和不恰当的 fallback 行为的 agent。
 tools: read, bash, grep, find, ls
 systemPromptMode: replace
-thinking: max
 acceptanceRole: read-only
 completionGuard: false
 ---

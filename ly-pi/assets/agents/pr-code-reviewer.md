@@ -3,7 +3,6 @@ name: pr-code-reviewer
 description: 专注于根据项目规范进行通用代码审查、bug 检测和代码质量评估的 agent。在 PR review 中用于检查整体正确性和项目约定。
 tools: read, bash, grep, find, ls
 systemPromptMode: replace
-thinking: max
 acceptanceRole: read-only
 completionGuard: false
 ---

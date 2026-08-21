@@ -134,7 +134,11 @@
       "scout": "fast",
       "delegate": "standard",
       "image-reader": "vision",
-      "pr-comment-analyzer": "standard"
+      "pr-code-reviewer": "standard",
+      "pr-comment-analyzer": "standard",
+      "pr-silent-failure-hunter": "standard",
+      "pr-test-analyzer": "standard",
+      "pr-type-design-analyzer": "standard"
     }
   }
 }

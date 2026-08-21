@@ -3,7 +3,7 @@ import {
   createRoleAnalyzer,
   createMerger as createSharedMerger,
 } from "./pipeline";
-import type { Config, ModelClient } from "./types";
+import type { ModelClient } from "./types";
 
 // ---- types ----
 
@@ -107,12 +107,10 @@ export const chiefAnalyzerConfig: AnalyzerConfig<
 // ---- createChief (thin wrapper) ----
 
 export function createChief(
-  config: Config,
   modelClient: ModelClient,
   modelRunner: SecurityAuditModelRunner,
 ): ChiefFn {
   const analyzer = createRoleAnalyzer(
-    config,
     chiefAnalyzerConfig,
     modelClient,
     modelRunner,
@@ -147,11 +145,10 @@ export function createChief(
 // ---- createChiefMerger (thin wrapper) ----
 
 export function createChiefMerger(
-  config: Config,
   modelClient: ModelClient,
   modelRunner: SecurityAuditModelRunner,
 ): ChiefMergerFn {
-  const sharedMerger = createSharedMerger(config, modelClient, modelRunner);
+  const sharedMerger = createSharedMerger(modelClient, modelRunner);
 
   return async function merge(
     currentJudgeMd: string,

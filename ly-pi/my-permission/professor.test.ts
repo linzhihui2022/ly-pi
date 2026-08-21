@@ -2,14 +2,14 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildAdvocatePrompt, createAdvocate } from "./professor";
 import type { DeniedThenApproved } from "./stats";
-import type { Config, ModelClient } from "./types";
+import type { ModelClient } from "./types";
 
 function makeModel(
   overrides: Partial<{ id: string; provider: string }> = {},
 ): Model<Api> {
   return {
-    id: overrides.id ?? "deepseek-v4-pro",
-    provider: overrides.provider ?? "deepseek",
+    id: overrides.id ?? "audit-model",
+    provider: overrides.provider ?? "test",
     name: "Test Model",
     api: "openai-completions",
     input: ["text"],
@@ -33,16 +33,6 @@ function makeCase(
 }
 
 const JUDGE_PROMPT = "你是一名编码助手的安全门禁。评估以下工具调用。";
-
-const config: Config = {
-  defaultPolicy: "ask",
-  judgeModel: "deepseek/deepseek-v4-flash",
-  professorModel: "deepseek/deepseek-v4-pro",
-  professorThinking: "max",
-  judgeTimeoutMs: 5000,
-  childPolicy: "deny-on-unsafe",
-  permission: {},
-};
 
 const resolveModelOk = vi.fn(() => makeModel());
 const completeModel = vi.fn<ModelClient["complete"]>();
@@ -168,7 +158,7 @@ describe("buildAdvocatePrompt", () => {
 
 describe("createAdvocate", () => {
   it("returns error when no cases", async () => {
-    const advocate = createAdvocate(config, modelClient, modelRunner);
+    const advocate = createAdvocate(modelClient, modelRunner);
     const result = await advocate([], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toBe("当前会话没有法官误判案例");
@@ -188,7 +178,7 @@ describe("createAdvocate", () => {
       ],
     });
 
-    const advocate = createAdvocate(config, modelClient, modelRunner);
+    const advocate = createAdvocate(modelClient, modelRunner);
     const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
 
     expect(run).toHaveBeenCalledWith(
@@ -204,26 +194,9 @@ describe("createAdvocate", () => {
     expect(result.modelUsed).toBe("security/audit");
   });
 
-  it("does not read professorModel", async () => {
-    await mockComplete({
-      content: [
-        { type: "text", text: JSON.stringify({ add: [], remove: [] }) },
-      ],
-    });
-    const legacyConfig: Config = { ...config, professorModel: "invalid" };
-    const result = await createAdvocate(legacyConfig, modelClient, modelRunner)(
-      [makeCase()],
-      "/repo",
-      "",
-      JUDGE_PROMPT,
-    );
-
-    expect(result.error).toBeUndefined();
-  });
-
   it("returns error on invalid JSON response", async () => {
     await mockComplete({ content: [{ type: "text", text: "not json" }] });
-    const result = await createAdvocate(config, modelClient, modelRunner)(
+    const result = await createAdvocate(modelClient, modelRunner)(
       [makeCase()],
       "/repo",
       "",
@@ -237,7 +210,7 @@ describe("createAdvocate", () => {
     await mockComplete({
       content: [{ type: "text", text: JSON.stringify({ add: [] }) }],
     });
-    const result = await createAdvocate(config, modelClient, modelRunner)(
+    const result = await createAdvocate(modelClient, modelRunner)(
       [makeCase()],
       "/repo",
       "",
@@ -249,7 +222,6 @@ describe("createAdvocate", () => {
 
   it("returns a clear error when security-audit is unavailable", async () => {
     const result = await createAdvocate(
-      config,
       modelClient,
       createFailedSecurityAuditRunner("no usable candidate"),
     )([makeCase()], "/repo", "", JUDGE_PROMPT);
@@ -261,7 +233,7 @@ describe("createAdvocate", () => {
 
   it("returns error when the model call fails", async () => {
     completeModel.mockRejectedValue(new Error("network error"));
-    const result = await createAdvocate(config, modelClient, modelRunner)(
+    const result = await createAdvocate(modelClient, modelRunner)(
       [makeCase()],
       "/repo",
       "",
@@ -273,7 +245,7 @@ describe("createAdvocate", () => {
 
   it("returns error when the model response has no text", async () => {
     await mockComplete({ content: [] });
-    const result = await createAdvocate(config, modelClient, modelRunner)(
+    const result = await createAdvocate(modelClient, modelRunner)(
       [makeCase()],
       "/repo",
       "",
@@ -298,7 +270,7 @@ describe("createAdvocate", () => {
         },
       ],
     });
-    const result = await createAdvocate(config, modelClient, modelRunner)(
+    const result = await createAdvocate(modelClient, modelRunner)(
       [makeCase()],
       "/repo",
       "",
