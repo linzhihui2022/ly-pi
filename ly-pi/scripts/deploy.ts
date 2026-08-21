@@ -122,6 +122,11 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
   const extDir = join(agentDir, "extensions", "ly-pi");
   await mkdir(extDir, { recursive: true });
   await write(join(extDir, "index.js"), Bun.file("dist/index.js"));
+  await write(
+    join(extDir, "close-worktree-worker.js"),
+    Bun.file("dist/my-worktree/close-worker-main.js"),
+  );
+  await write(join(extDir, "package.json"), '{\n  "type": "module"\n}\n');
   console.log("Extension: deployed");
 }
 

@@ -8,6 +8,7 @@ export interface ParsedWorktree {
   branch: string | null;
   head: string | null;
   prunable: boolean;
+  locked?: boolean;
 }
 
 const BRANCH_PREFIX = "refs/heads/";
@@ -45,18 +46,27 @@ function containsPath(parent: string, child: string): boolean {
   );
 }
 
+export function findCurrentWorktree(
+  entries: ParsedWorktree[],
+  cwd: string,
+): ParsedWorktree | undefined {
+  return entries.reduce<ParsedWorktree | undefined>((current, entry) => {
+    if (entry.prunable || !containsPath(entry.path, cwd)) return current;
+
+    return !current ||
+      canonicalPath(entry.path).length > canonicalPath(current.path).length
+      ? entry
+      : current;
+  }, undefined);
+}
+
 /** Select worktrees that can be shown in Pi from parsed Git output. */
 export function selectVisibleWorktrees(
   entries: ParsedWorktree[],
   cwd: string,
   isAccessible: (path: string) => boolean,
 ): VisibleWorktree[] {
-  const currentPath = entries.reduce<string | undefined>((current, entry) => {
-    if (entry.prunable || !containsPath(entry.path, cwd)) return current;
-
-    const candidate = canonicalPath(entry.path);
-    return !current || candidate.length > current.length ? candidate : current;
-  }, undefined);
+  const currentPath = findCurrentWorktree(entries, cwd)?.path;
 
   return entries.flatMap((entry) => {
     const label = entry.branch ?? entry.head?.slice(0, 7);
@@ -136,6 +146,8 @@ export function parseWorktreeList(output: string): ParsedWorktree[] {
         : branch;
     } else if (line.startsWith("prunable")) {
       current.prunable = true;
+    } else if (line.startsWith("locked")) {
+      current.locked = true;
     }
   }
 
