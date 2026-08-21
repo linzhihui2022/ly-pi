@@ -451,6 +451,31 @@ export function createModelPolicyRegistry(
   assertLocalOverrideAllowed(manifest, localOverride);
 
   return {
+    getModelLabel(
+      model: Pick<RegisteredModel, "provider" | "id"> | undefined,
+    ): string | undefined {
+      if (!model) return undefined;
+
+      const modelRef = `${model.provider}/${model.id}`;
+      const seenPolicies = new Set<string>();
+      for (const policyName of Object.values(manifest.roles)) {
+        if (seenPolicies.has(policyName)) continue;
+        seenPolicies.add(policyName);
+        const policy = manifest.policies[policyName];
+        if (!policy) continue;
+
+        for (const candidate of policy.candidates) {
+          const effective = effectiveCandidate(
+            policyName,
+            candidate,
+            localOverride,
+          ).candidate;
+          if (effective.model === modelRef) return effective.label;
+        }
+      }
+      return undefined;
+    },
+
     describe(
       models: ModelLookup,
       actualPrimary?: Pick<RegisteredModel, "provider" | "id">,

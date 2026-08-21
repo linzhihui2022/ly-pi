@@ -64,6 +64,7 @@ const mockPi = {
   registerCommand: vi.fn((name: string, config: any) => {
     registeredCommands.set(name, config);
   }),
+  getThinkingLevel: vi.fn(() => "off"),
 };
 
 const mockTui = { requestRender: vi.fn() };
@@ -158,23 +159,6 @@ describe("formatTokens", () => {
     const { formatTokens } = await loadModule();
     expect(formatTokens(10000000)).toBe("10M");
     expect(formatTokens(25000000)).toBe("25M");
-  });
-});
-
-describe("shortModelName", () => {
-  it("returns short name for known models", async () => {
-    const { shortModelName } = await loadModule();
-    expect(shortModelName("kimi-k2-thinking")).toBe("k-thinking");
-    expect(shortModelName("kimi-for-coding")).toBe("k-coding");
-    expect(shortModelName("kimi-for-coding-highspeed")).toBe("k-coding-h");
-    expect(shortModelName("deepseek-v4-flash")).toBe("ds-fls");
-    expect(shortModelName("deepseek-v4-pro")).toBe("ds-pro");
-  });
-
-  it("returns original name for unknown models", async () => {
-    const { shortModelName } = await loadModule();
-    expect(shortModelName("gpt-4")).toBe("gpt-4");
-    expect(shortModelName("claude-3")).toBe("claude-3");
   });
 });
 
@@ -1384,6 +1368,28 @@ describe("my-hud extension", () => {
     sessionStartHandler({}, { ...mockCtx, hasUI: true });
 
     expect(mockCtx.ui.setFooter).toHaveBeenCalled();
+  });
+
+  it("uses the Model Policy label resolver for the HUD bar", async () => {
+    const getModelLabel = vi.fn(() => "Policy label");
+    const mod = await loadModule();
+    mod.default(mockPi as any, () => ({ getModelLabel }) as any);
+    const setWidget = vi.fn();
+    const ctx = {
+      ...mockCtx,
+      model: { provider: "test", id: "active" },
+      ui: { ...mockCtx.ui, setWidget },
+    };
+
+    const sessionStartHandler = registeredEvents.get("session_start")!;
+    sessionStartHandler({}, ctx);
+
+    const component = setWidget.mock.calls[0][1](mockTui, mockTheme);
+    expect(component.render(200)[0]).toContain("Policy label");
+    expect(getModelLabel).toHaveBeenCalledWith({
+      provider: "test",
+      id: "active",
+    });
   });
 
   it("footer render shows last user message", async () => {

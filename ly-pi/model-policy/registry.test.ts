@@ -133,6 +133,29 @@ describe("createModelPolicyRegistry", () => {
     });
   });
 
+  it("returns the effective Model Label for a known candidate", () => {
+    const registry = createModelPolicyRegistry(manifest, {
+      version: 1,
+      policies: {
+        "fast-policy": {
+          slots: {
+            primary: {
+              model: "local/fast",
+              label: "Local fast label",
+            },
+          },
+        },
+      },
+    });
+
+    expect(registry.getModelLabel({ provider: "local", id: "fast" })).toBe(
+      "Local fast label",
+    );
+    expect(
+      registry.getModelLabel({ provider: "unknown", id: "model" }),
+    ).toBeUndefined();
+  });
+
   it("rejects a local override for a security policy", () => {
     const securityManifest = {
       ...manifest,
