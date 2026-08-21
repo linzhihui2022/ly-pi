@@ -1,16 +1,45 @@
 import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readSync,
+  realpathSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
   createBashToolDefinition,
   createEditToolDefinition,
   createFindToolDefinition,
   createGrepToolDefinition,
   createLsToolDefinition,
   createReadToolDefinition,
+  createWriteToolDefinition,
   type ExtensionAPI,
+  generateDiffString,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { loadToolDisplayConfig } from "./config";
 
 const registeredApis = new WeakSet<ExtensionAPI>();
+const MAX_WRITE_DIFF_BYTES = 1_000_000;
+
+type WritePreview =
+  | { safe: true; previousContent: string }
+  | { safe: false; reason: string };
+
+type WriteDiffDetails = {
+  diff?: string;
+  summary?: string;
+};
+
+type WriteDisplayDetails = {
+  writeDiff: WriteDiffDetails;
+  [key: string]: unknown;
+};
 
 function getBuiltinToolNames(pi: ExtensionAPI): Set<string> {
   try {
@@ -32,6 +61,231 @@ function textOutput(result: {
     .filter((content) => content.type === "text")
     .map((content) => content.text ?? "")
     .join("\n");
+}
+
+function isWithinWorkspace(workspacePath: string, targetPath: string): boolean {
+  const relativePath = relative(workspacePath, targetPath);
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !isAbsolute(relativePath))
+  );
+}
+
+type SafeWritePath =
+  | { path: string; existed: true }
+  | { path: string; existed: false }
+  | { reason: string };
+
+function realpathOrUndefined(path: string): string | undefined {
+  try {
+    return realpathSync(path);
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveWritePath(
+  cwd: string,
+  rawPath: string,
+): { path?: string; reason?: string } {
+  let normalized = rawPath.replace(
+    /[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g,
+    " ",
+  );
+  if (normalized.startsWith("@")) {
+    normalized = normalized.slice(1);
+  }
+  try {
+    if (normalized === "~") {
+      normalized = homedir();
+    } else if (normalized.startsWith("~/") || normalized.startsWith("~\\")) {
+      normalized = `${homedir()}${normalized.slice(1)}`;
+    } else if (normalized.startsWith("file://")) {
+      normalized = fileURLToPath(normalized);
+    }
+    return {
+      path: isAbsolute(normalized)
+        ? resolve(normalized)
+        : resolve(cwd, normalized),
+    };
+  } catch {
+    return {
+      reason:
+        "Write diff unavailable because the target path cannot be resolved safely.",
+    };
+  }
+}
+
+function resolveSafeWritePath(cwd: string, rawPath: string): SafeWritePath {
+  if (!rawPath.trim()) {
+    return {
+      reason: "Write diff unavailable because the target path is empty.",
+    };
+  }
+
+  const workspacePath = realpathOrUndefined(cwd);
+  if (!workspacePath) {
+    return {
+      reason:
+        "Write diff unavailable because the current workspace cannot be resolved safely.",
+    };
+  }
+
+  const resolved = resolveWritePath(cwd, rawPath);
+  if (resolved.reason || !resolved.path) {
+    return { reason: resolved.reason ?? "Write diff unavailable." };
+  }
+  const resolvedPath = resolved.path;
+
+  try {
+    const targetStat = lstatSync(resolvedPath);
+    const targetPath = realpathOrUndefined(resolvedPath);
+    if (!targetPath) {
+      return {
+        reason:
+          "Write diff unavailable because the target path cannot be resolved safely.",
+      };
+    }
+    if (!isWithinWorkspace(workspacePath, targetPath)) {
+      return {
+        reason:
+          "Write diff unavailable because the target path resolves outside the current workspace.",
+      };
+    }
+    if (targetStat.isSymbolicLink()) {
+      const resolvedTargetStat = lstatSync(targetPath);
+      if (!resolvedTargetStat.isFile()) {
+        return {
+          reason:
+            "Write diff unavailable because the target path is not a regular file.",
+        };
+      }
+    } else if (!targetStat.isFile()) {
+      return {
+        reason:
+          "Write diff unavailable because the target path is not a regular file.",
+      };
+    }
+    return { path: targetPath, existed: true };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      return {
+        reason:
+          "Write diff unavailable because the target path could not be resolved safely.",
+      };
+    }
+
+    let parentPath = dirname(resolvedPath);
+    while (parentPath !== dirname(parentPath) && !existsSync(parentPath)) {
+      parentPath = dirname(parentPath);
+    }
+    const parentRealpath = realpathOrUndefined(parentPath);
+    if (!parentRealpath) {
+      return {
+        reason:
+          "Write diff unavailable because the target directory cannot be resolved safely.",
+      };
+    }
+    if (!isWithinWorkspace(workspacePath, parentRealpath)) {
+      return {
+        reason:
+          "Write diff unavailable because the target directory resolves outside the current workspace.",
+      };
+    }
+
+    return { path: resolvedPath, existed: false };
+  }
+}
+
+function readWritePreview(
+  cwd: string,
+  rawPath: string,
+  nextContent: string,
+): WritePreview {
+  const safePath = resolveSafeWritePath(cwd, rawPath);
+  if ("reason" in safePath) {
+    return { safe: false, reason: safePath.reason };
+  }
+
+  if (Buffer.byteLength(nextContent, "utf8") > MAX_WRITE_DIFF_BYTES) {
+    return {
+      safe: false,
+      reason: `Write diff unavailable because the new content exceeds the ${MAX_WRITE_DIFF_BYTES} byte preview limit.`,
+    };
+  }
+  if (nextContent.includes("\0")) {
+    return {
+      safe: false,
+      reason:
+        "Write diff unavailable because the new content appears to be binary.",
+    };
+  }
+  if (!safePath.existed) {
+    return { safe: true, previousContent: "" };
+  }
+
+  let fileDescriptor: number | undefined;
+  try {
+    fileDescriptor = openSync(safePath.path, "r");
+    const initialStats = fstatSync(fileDescriptor);
+    if (initialStats.size > MAX_WRITE_DIFF_BYTES) {
+      return {
+        safe: false,
+        reason: `Write diff unavailable because the existing file exceeds the ${MAX_WRITE_DIFF_BYTES} byte preview limit.`,
+      };
+    }
+
+    const bytes = Buffer.alloc(MAX_WRITE_DIFF_BYTES + 1);
+    let bytesRead = 0;
+    while (bytesRead < bytes.length) {
+      const read = readSync(
+        fileDescriptor,
+        bytes,
+        bytesRead,
+        bytes.length - bytesRead,
+        bytesRead,
+      );
+      if (read === 0) {
+        break;
+      }
+      bytesRead += read;
+    }
+    if (
+      bytesRead > MAX_WRITE_DIFF_BYTES ||
+      fstatSync(fileDescriptor).size > MAX_WRITE_DIFF_BYTES
+    ) {
+      return {
+        safe: false,
+        reason: `Write diff unavailable because the existing file exceeds the ${MAX_WRITE_DIFF_BYTES} byte preview limit.`,
+      };
+    }
+
+    const content = bytes.subarray(0, bytesRead);
+    if (content.includes(0)) {
+      return {
+        safe: false,
+        reason:
+          "Write diff unavailable because the existing file appears to be binary.",
+      };
+    }
+
+    return {
+      safe: true,
+      previousContent: new TextDecoder("utf-8", { fatal: true }).decode(
+        content,
+      ),
+    };
+  } catch {
+    return {
+      safe: false,
+      reason:
+        "Write diff unavailable because the existing file could not be read safely.",
+    };
+  } finally {
+    if (fileDescriptor !== undefined) {
+      closeSync(fileDescriptor);
+    }
+  }
 }
 
 function renderCompactTextResult(
@@ -176,6 +430,48 @@ function renderEditResult(
   );
 }
 
+function renderWriteResult(
+  result: {
+    content: Array<{ type: string; text?: string }>;
+    details?: WriteDisplayDetails;
+  },
+  options: { expanded: boolean; isPartial: boolean },
+  theme: { fg(color: string, text: string): string },
+  context: { isError: boolean },
+  collapsedLines: number,
+): Text {
+  const output = textOutput(result);
+  if (context.isError) {
+    return new Text(theme.fg("error", output || "Write failed."), 0, 0);
+  }
+  if (options.isPartial) {
+    return new Text(theme.fg("warning", "Writing..."), 0, 0);
+  }
+  const writeDiff = result.details?.writeDiff;
+  if (typeof writeDiff?.diff === "string" && writeDiff.diff) {
+    return renderEditDiff(writeDiff.diff, options, theme, collapsedLines);
+  }
+  return new Text(
+    theme.fg(
+      "warning",
+      writeDiff?.summary || output || "Write completed (diff unavailable).",
+    ),
+    0,
+    0,
+  );
+}
+
+function formatWriteCall(
+  args: { path?: string; file_path?: string },
+  theme: {
+    fg(color: string, text: string): string;
+    bold(text: string): string;
+  },
+): string {
+  const path = args.file_path ?? args.path ?? "...";
+  return `${theme.fg("toolTitle", theme.bold("write"))} ${theme.fg("accent", path)}`;
+}
+
 function formatReadCall(
   args: {
     path?: string;
@@ -212,6 +508,77 @@ export default function myToolDisplay(pi: ExtensionAPI): void {
   const builtinToolNames = getBuiltinToolNames(pi);
   if (builtinToolNames.size === 0) {
     return;
+  }
+
+  if (builtinToolNames.has("write")) {
+    const nativeWrite = createWriteToolDefinition(process.cwd());
+    const writeOverride: typeof nativeWrite = {
+      ...nativeWrite,
+      renderShell: "default",
+      async execute(toolCallId, params, signal, onUpdate, ctx) {
+        const preview = readWritePreview(ctx.cwd, params.path, params.content);
+        const result = await createWriteToolDefinition(ctx.cwd).execute(
+          toolCallId,
+          params,
+          signal,
+          onUpdate,
+          ctx,
+        );
+
+        let details: WriteDiffDetails;
+        if (!preview.safe) {
+          details = { summary: preview.reason };
+        } else {
+          try {
+            const generated = generateDiffString(
+              preview.previousContent,
+              params.content,
+            );
+            if (
+              Buffer.byteLength(generated.diff, "utf8") > MAX_WRITE_DIFF_BYTES
+            ) {
+              details = {
+                summary: `Write diff unavailable because the generated diff exceeds the ${MAX_WRITE_DIFF_BYTES} byte preview limit.`,
+              };
+            } else {
+              details = generated.diff
+                ? { diff: generated.diff }
+                : { summary: "Write completed; no text changes to display." };
+            }
+          } catch {
+            details = {
+              summary:
+                "Write diff unavailable because it could not be computed safely.",
+            };
+          }
+        }
+
+        const nativeDetails =
+          result.details &&
+          typeof result.details === "object" &&
+          !Array.isArray(result.details)
+            ? (result.details as Record<string, unknown>)
+            : {};
+        return {
+          ...result,
+          details: { ...nativeDetails, writeDiff: details },
+        } as unknown as typeof result;
+      },
+      renderCall(args, theme) {
+        return new Text(formatWriteCall(args, theme), 0, 0);
+      },
+      renderResult(result, options, theme, context) {
+        return renderWriteResult(
+          result as typeof result & { details?: WriteDisplayDetails },
+          options,
+          theme,
+          context,
+          config.diffCollapsedLines,
+        );
+      },
+    };
+
+    pi.registerTool(writeOverride);
   }
 
   if (builtinToolNames.has("edit")) {

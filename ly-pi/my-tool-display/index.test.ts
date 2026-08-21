@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -8,6 +14,8 @@ import {
   createGrepToolDefinition,
   createLsToolDefinition,
   createReadToolDefinition,
+  createWriteToolDefinition,
+  generateDiffString,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,6 +27,8 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
   createGrepToolDefinition: vi.fn(),
   createLsToolDefinition: vi.fn(),
   createReadToolDefinition: vi.fn(),
+  createWriteToolDefinition: vi.fn(),
+  generateDiffString: vi.fn(),
   getAgentDir: vi.fn(),
 }));
 
@@ -26,12 +36,19 @@ import { loadToolDisplayConfig } from "./config";
 import myToolDisplay from "./index";
 
 let agentDir: string;
+let workspaceDirs: string[];
+let nextNativeWriteResult: unknown;
 const nativeBashExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeEditExecutions = new Map<string, ReturnType<typeof vi.fn>>();
+const nativeWriteExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeSearchExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeBashResult = {
   content: [{ type: "text", text: "native bash result" }],
+  details: undefined,
+};
+const nativeWriteResult = {
+  content: [{ type: "text", text: "Successfully wrote 12 bytes to file.ts" }],
   details: undefined,
 };
 const nativeEditResult = {
@@ -112,6 +129,27 @@ function createNativeEditDefinition(cwd: string) {
   };
 }
 
+function createNativeWriteDefinition(cwd: string) {
+  const execute = vi.fn().mockResolvedValue(nextNativeWriteResult);
+  nativeWriteExecutions.set(cwd, execute);
+  return {
+    name: "write",
+    label: "write",
+    description: `Write from ${cwd}`,
+    promptSnippet: "Create or overwrite files",
+    promptGuidelines: ["Use write for complete files."],
+    parameters: { type: "object" },
+    constrainedSampling: false,
+    renderShell: "self" as const,
+    prepareArguments: vi.fn(),
+    execute,
+    renderCall: () => ({
+      render: () => ["native write preview"],
+      invalidate: () => {},
+    }),
+  };
+}
+
 function createNativeReadDefinition(cwd: string) {
   const execute = vi.fn().mockResolvedValue(nativeResult);
   nativeExecutions.set(cwd, execute);
@@ -152,6 +190,12 @@ function writeConfig(contents: string): void {
   writeFileSync(join(configDir, "my-tool-display.json"), contents);
 }
 
+function createWorkspace(): string {
+  const workspaceDir = mkdtempSync(join(tmpdir(), "my-tool-display-write-"));
+  workspaceDirs.push(workspaceDir);
+  return workspaceDir;
+}
+
 function setup(source = "builtin", toolNames = ["read"]) {
   const tools = toolNames.map((name) => ({
     name,
@@ -182,15 +226,21 @@ function setup(source = "builtin", toolNames = ["read"]) {
 beforeEach(() => {
   nativeBashExecutions.clear();
   nativeEditExecutions.clear();
+  nativeWriteExecutions.clear();
   nativeExecutions.clear();
   nativeSearchExecutions.clear();
   agentDir = mkdtempSync(join(tmpdir(), "my-tool-display-"));
+  workspaceDirs = [];
+  nextNativeWriteResult = nativeWriteResult;
   vi.mocked(getAgentDir).mockReturnValue(agentDir);
   vi.mocked(createBashToolDefinition).mockImplementation(
     (cwd) => createNativeBashDefinition(cwd) as never,
   );
   vi.mocked(createEditToolDefinition).mockImplementation(
     (cwd) => createNativeEditDefinition(cwd) as never,
+  );
+  vi.mocked(createWriteToolDefinition).mockImplementation(
+    (cwd) => createNativeWriteDefinition(cwd) as never,
   );
   vi.mocked(createFindToolDefinition).mockImplementation(
     (cwd) => createNativeSearchDefinition("find", cwd) as never,
@@ -208,10 +258,390 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(agentDir, { recursive: true, force: true });
+  for (const workspaceDir of workspaceDirs) {
+    rmSync(workspaceDir, { recursive: true, force: true });
+  }
   vi.clearAllMocks();
 });
 
 describe("my-tool-display", () => {
+  it("renders a completed write overwrite diff after native execution", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "file.ts"), "const oldValue = true;\n");
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "- 1|const oldValue = true;\n+ 1|const newValue = false;",
+      firstChangedLine: 1,
+    });
+
+    nextNativeWriteResult = {
+      content: nativeWriteResult.content,
+      details: { native: "metadata" },
+    };
+    const { registered } = setup("builtin", ["write"]);
+    expect(registered).toHaveLength(1);
+    const write = registered[0]!;
+    const onUpdate = vi.fn();
+
+    expect(write).toMatchObject({
+      name: "write",
+      label: "write",
+      description: `Write from ${process.cwd()}`,
+      promptSnippet: "Create or overwrite files",
+      promptGuidelines: ["Use write for complete files."],
+      parameters: { type: "object" },
+      constrainedSampling: false,
+    });
+    expect(write.renderShell).toBe("default");
+    expect(
+      render(
+        write.renderCall({ path: "file.ts", content: "new" }, theme, {
+          argsComplete: true,
+          isPartial: true,
+          state: {},
+        }),
+      ),
+    ).toBe("write file.ts");
+
+    const result = await write.execute(
+      "call-1",
+      { path: "file.ts", content: "const newValue = false;\n" },
+      undefined,
+      onUpdate,
+      { cwd: workspaceDir },
+    );
+
+    expect(nativeWriteExecutions.get(workspaceDir)).toHaveBeenCalledWith(
+      "call-1",
+      { path: "file.ts", content: "const newValue = false;\n" },
+      undefined,
+      onUpdate,
+      { cwd: workspaceDir },
+    );
+    expect(result).toMatchObject({
+      details: {
+        native: "metadata",
+        writeDiff: { diff: expect.any(String) },
+      },
+    });
+    expect(generateDiffString).toHaveBeenCalledWith(
+      "const oldValue = true;\n",
+      "const newValue = false;\n",
+    );
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toContain("+ 1|const newValue = false;");
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: true },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("Writing...");
+  });
+
+  it("renders a completed write diff for a new file", async () => {
+    const workspaceDir = createWorkspace();
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "+ 1|new file",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-new",
+      { path: "new.txt", content: "new file\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(generateDiffString).toHaveBeenCalledWith("", "new file\n");
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "new.txt" }, state: {} },
+        ),
+      ),
+    ).toBe("+ 1|new file");
+  });
+
+  it("renders an explicit summary for an empty write", async () => {
+    const workspaceDir = createWorkspace();
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "",
+      firstChangedLine: undefined,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-empty",
+      { path: "empty.txt", content: "" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "empty.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("no text changes to display");
+  });
+
+  it("collapses completed write diffs using diffCollapsedLines", async () => {
+    writeConfig(JSON.stringify({ enabled: true, diffCollapsedLines: 1 }));
+    const workspaceDir = createWorkspace();
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "  1|context\n- 2|old\n+ 2|new",
+      firstChangedLine: 2,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-collapse",
+      { path: "file.ts", content: "new\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toContain("... (2 more lines, expand to view)");
+  });
+
+  it.each([
+    "binary",
+    "oversized",
+    "directory",
+    "outside the current workspace",
+  ])("shows a safe summary for a %s write diff", async (kind) => {
+    const workspaceDir = createWorkspace();
+    let path = "file.bin";
+    if (kind === "binary") {
+      writeFileSync(join(workspaceDir, path), Buffer.from([0, 1, 2]));
+    } else if (kind === "oversized") {
+      writeFileSync(join(workspaceDir, path), Buffer.alloc(1_000_001, "a"));
+    } else if (kind === "directory") {
+      path = "directory";
+      mkdirSync(join(workspaceDir, path));
+    } else {
+      const outsideDir = createWorkspace();
+      path = join(outsideDir, "outside.txt");
+    }
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      `call-${kind}`,
+      { path, content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    const rendered = render(
+      write.renderResult(result, { expanded: false, isPartial: false }, theme, {
+        isError: false,
+        args: { path },
+        state: {},
+      }),
+    );
+    expect(rendered).toContain("Write diff unavailable");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("shows a safe summary for invalid UTF-8 existing content", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "invalid.txt"), Buffer.from([0xff, 0xfe]));
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-invalid-utf8",
+      { path: "invalid.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "invalid.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("could not be read safely");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("does not read through a symlink outside the workspace", async () => {
+    const workspaceDir = createWorkspace();
+    const outsideDir = createWorkspace();
+    writeFileSync(join(outsideDir, "outside.txt"), "outside\n");
+    symlinkSync(
+      join(outsideDir, "outside.txt"),
+      join(workspaceDir, "link.txt"),
+    );
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-symlink",
+      { path: "link.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "link.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("resolves outside the current workspace");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("shows a safe summary for binary new content", async () => {
+    const workspaceDir = createWorkspace();
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-binary-content",
+      { path: "file.txt", content: "binary\0content" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("appears to be binary");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("shows a safe summary when the generated diff exceeds the budget", async () => {
+    const workspaceDir = createWorkspace();
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "x".repeat(1_000_001),
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-large-diff",
+      { path: "file.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("generated diff exceeds");
+  });
+
+  it("shows a safe summary when diff generation has no result", async () => {
+    const workspaceDir = createWorkspace();
+    writeConfig(JSON.stringify({ enabled: true }));
+    vi.mocked(generateDiffString).mockReturnValueOnce(undefined as never);
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-missing-diff",
+      { path: "file.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("could not be computed safely");
+  });
+
+  it("keeps write failures diagnostic and does not render a success diff", () => {
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+
+    const rendered = render(
+      write.renderResult(
+        { content: [{ type: "text", text: "permission denied" }] },
+        { expanded: false, isPartial: false },
+        theme,
+        { isError: true, args: { path: "file.txt" }, state: {} },
+      ),
+    );
+
+    expect(rendered).toBe("permission denied");
+    expect(rendered).not.toContain("Write completed");
+  });
+
+  it("does not take over a write tool owned by another extension", () => {
+    const { pi, registered } = setup("extension", ["write"]);
+
+    expect(registered).toEqual([]);
+    expect(pi.registerTool).not.toHaveBeenCalled();
+  });
+
   it("renders a completed edit with the native diff colors and no pending preview", () => {
     const { registered } = setup("builtin", ["edit"]);
     expect(registered).toHaveLength(1);

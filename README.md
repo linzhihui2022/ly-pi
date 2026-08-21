@@ -76,7 +76,7 @@ configure/
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-session-name** | 自动生成 Session Display Name：首条 prompt 后异步摘要，支持旧 session 补命名与 fork 短 hash |
 | **my-hud** | 自定义单行状态栏：项目名、模型（含思考级别）、Git 分支与状态、PR 链接、上下文百分比（颜色阈值）、Token 与成本、权限统计、Hide thinking 状态 |
-| **my-tool-display** | Pi 原生工具的紧凑呈现；当前覆盖 `read`、`grep`、`find`、`ls`、`bash`、`edit`：读/搜索成功正文默认隐藏，bash 成功输出默认显示最多 10 行，edit 完成后显示主题化统一 diff，展开显示完整结果，失败始终显示诊断 |
+| **my-tool-display** | Pi 原生工具的紧凑呈现；当前覆盖 `read`、`grep`、`find`、`ls`、`bash`、`edit`、`write`：读/搜索成功正文默认隐藏，bash 成功输出默认显示最多 10 行，edit/write 完成后显示主题化统一 diff；write 对二进制、过大、不可读或工作区外路径安全降级，失败始终显示诊断 |
 | **my-worktree** | 多 Git worktree 时在编辑器上方显示可访问工作树的分支和绝对路径，并标记当前项 |
 | **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |
 
