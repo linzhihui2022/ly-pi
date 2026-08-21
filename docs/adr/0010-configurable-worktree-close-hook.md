@@ -1,0 +1,3 @@
+# Make worktree terminal closure configurable
+
+`/close-worktree` will remain macOS-only but will not hard-code WezTerm: `PI_W_CLOSE` supplies a whitespace-split command prefix and `PI_W_CLOSE_TARGET` supplies its final argument, mirroring `PI_W_SPAWN`'s user-owned launcher convention. Pi invokes this hook only after a detached watcher observes graceful Pi exit, revalidates the target, and successfully removes the worktree; absent or failing hooks preserve the terminal and report recovery guidance. This trades a turnkey terminal-specific default for a stable, explicit integration contract that can target WezTerm, tmux, or another user-managed terminal controller.

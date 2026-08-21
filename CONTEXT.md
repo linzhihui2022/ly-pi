@@ -80,10 +80,26 @@ _Avoid_: 多分支仓库、多个 clone
 包含 Pi 会话当前工作目录的 Git worktree；它是 worktree 集合中唯一需要在界面上标记的成员。
 _Avoid_: 主 worktree、活跃分支
 
+**Closable Worktree（可关闭 worktree）**:
+当前 Pi 会话所在、未锁定、没有 Git 进行中操作、没有已跟踪或未忽略的未跟踪变更，且不含已初始化 submodule 的附属 Git worktree；它可被移除，但其本地分支保留。被 Git 忽略的文件不影响资格，且会随移除消失；主 worktree 与非当前 worktree 不属于此概念。
+_Avoid_: 可删分支、空工作树
+
+**Worktree Closure（worktree 关闭）**:
+针对 Closable Worktree 的确认式终结操作；Pi 优雅退出后再次验证并移除 worktree，且仅在移除成功时调用 Worktree Close Hook。移除失败时保留终端并显示诊断。
+_Avoid_: 强制删除、关闭分支、直接 kill Pi
+
+**Worktree Close Hook（worktree 关闭 Hook）**:
+由 `PI_W_CLOSE` 和 `PI_W_CLOSE_TARGET` 组成的用户环境契约；前者指定终端关闭命令前缀，后者指定其目标标识。它仅在 Worktree Closure 成功移除 worktree 后调用。
+_Avoid_: 硬编码 WezTerm、默认终端命令
+
 **Visible Worktree（可见 worktree）**:
 可由 Pi 访问且可在 worktree 组件中呈现的 worktree；失效或路径缺失的 prunable worktree 不属于此集合，detached HEAD 以短 commit SHA 作为标识。
 _Avoid_: 已注册 worktree、有效分支
 
+**Worktree Manager（worktree 管理模块）**:
+`my-worktree` 对 Current Worktree 的发现与已明确管理操作的归属；当前唯一的写操作是 Worktree Closure，Worktree Widget 仍保持只读。
+_Avoid_: 通用 Git 客户端、Worktree Widget 本身
+
 **Worktree Widget（worktree 组件）**:
-作为 `ly-pi` 子模块的独立 `my-worktree` Pi widget，用于在编辑器上方以 Todo 风格的无边框树呈现多 worktree 仓库的可见 worktree 集合；仅在至少两个成员可见时显示，以 `Worktrees (N)` 标题和 `├─`/`└─` 行连接符建立层级。每个成员显示分支与路径；主 worktree 根路径为 `<REPO>`，其子路径也以 `<REPO>/` 缩写，其他目录的 worktree 保持绝对路径；当前 worktree 使用实心符号和 accent，其余条目使用空心符号和弱化色；成员保持 Git 返回顺序；窄屏截断保留路径末尾。
+`my-worktree` 模块中的只读 Pi widget，用于在编辑器上方以 Todo 风格的无边框树呈现多 worktree 仓库的可见 worktree 集合；仅在至少两个成员可见时显示，以 `Worktrees (N)` 标题和 `├─`/`└─` 行连接符建立层级。每个成员显示分支与路径；主 worktree 根路径为 `<REPO>`，其子路径也以 `<REPO>/` 缩写，其他目录的 worktree 保持绝对路径；当前 worktree 使用实心符号和 accent，其余条目使用空心符号和弱化色；成员保持 Git 返回顺序；窄屏截断保留路径末尾。
 _Avoid_: my-hud worktree 字段、Git 状态栏
