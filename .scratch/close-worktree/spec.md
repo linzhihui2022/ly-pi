@@ -1,8 +1,8 @@
 # Close Current Worktree
 
-**Status:** draft
+**Status:** ready-for-agent
 **Risk:** High
-**Implementation approval:** not yet granted
+**Approval:** The user approved the scope, design, specification, and ticket breakdown on 2026-08-21; implementation remains limited to the published tickets and their acceptance criteria.
 
 ## Problem Statement
 
@@ -118,4 +118,4 @@ The accepted validation level is fake-only integration. No test opens or closes 
 
 ## Further Notes
 
-The `PI_W_CLOSE` / `PI_W_CLOSE_TARGET` ABI is intentionally user-owned and is documented by `docs/adr/0010-configurable-worktree-close-hook.md`. This specification is ready for review; implementation requires an explicit subsequent approval and ticket breakdown.
+The `PI_W_CLOSE` / `PI_W_CLOSE_TARGET` ABI is intentionally user-owned and is documented by `docs/adr/0010-configurable-worktree-close-hook.md`. The approved dependency-ordered implementation tickets are recorded in `issues/`; each ticket must be claimed and delivered within its stated acceptance criteria.
