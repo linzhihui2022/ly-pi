@@ -171,11 +171,6 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
       label: "append-system.md",
     },
     {
-      src: "pi-tool-display.json",
-      dest: "extensions/pi-tool-display/config.json",
-      label: "pi-tool-display",
-    },
-    {
       src: "web-search.json",
       dest: "web-search.json",
       base: STAGING,
