@@ -4,18 +4,20 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** claimed
+**Status:** resolved
 
-- [ ] 当仓库至少有两个可见 worktree 且能唯一确定 Current Worktree 时，在编辑器上方显示两行 Current Worktree 组件；单 worktree、不可查询或无法确定当前项时不显示组件。
-- [ ] 标题使用 accent 的 `● Worktrees (N)`，N 统计全部可见项；唯一行使用中性的 `└─ •`，显示当前分支或 detached-HEAD 的短 commit SHA 与 worktree 根路径，不渲染其他项。
-- [ ] 主 worktree 根及其子路径缩写为 `<REPO>`，外部 worktree 保持绝对路径；窄屏从路径开头截断保留末尾，若没有路径宽度则隐藏组件。
+- [x] 当仓库至少有两个可见 worktree 且能唯一确定 Current Worktree 时，在编辑器上方显示两行 Current Worktree 组件；单 worktree、不可查询或无法确定当前项时不显示组件。
+- [x] 标题使用 accent 的 `● Worktrees (N)`，N 统计全部可见项；唯一行使用中性的 `└─ •`，显示当前分支或 detached-HEAD 的短 commit SHA 与 worktree 根路径，不渲染其他项。
+- [x] 主 worktree 根及其子路径缩写为 `<REPO>`，外部 worktree 保持绝对路径；窄屏从路径开头截断保留末尾，若没有路径宽度则隐藏组件。
 - [x] 数据层排除失效、不可访问或 prunable worktree，保留 detached-HEAD 标识，并将最深层包含 session cwd 的 worktree 识别为当前项。
 - [x] 会话启动、每轮开始和结束时重新检测；不新增命令、选择器、切换、轮询或配置。
-- [ ] 数据与 widget seam 覆盖新的单当前项、聚合计数、静默隐藏和宽度行为，且完整 `bun run verify` 通过。
+- [x] 数据与 widget seam 覆盖新的单当前项、聚合计数、静默隐藏和宽度行为，且完整 `bun run verify` 通过。
 
 ## Answer
 
 Initial implementation was deployed and verified, then reopened after visual validation found that an outer worktree was incorrectly marked current when the actual worktree is nested beneath it.
+
+The resolved implementation renders only the uniquely determined Current Worktree, recomputes it from currently accessible entries, and silently hides malformed or width-ineligible output. `bun run verify` passes.
 
 ## Comments
 

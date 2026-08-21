@@ -91,7 +91,7 @@ afterEach(() => {
 });
 
 describe("my-worktree extension", () => {
-  it("registers an above-editor widget and renders visible worktrees", async () => {
+  it("registers an above-editor widget and renders Current Worktree", async () => {
     vi.mocked(getVisibleWorktrees).mockResolvedValue({
       repositoryRoot: "/repo",
       worktrees: [
@@ -120,9 +120,27 @@ describe("my-worktree extension", () => {
     const component = factory({ requestRender: vi.fn() }, createTheme());
     expect(component.render(120)).toEqual([
       "● Worktrees (2)",
-      "├─ ○ main <REPO>",
-      "└─ ● feature-x <REPO>/feature",
+      "└─ • feature-x <REPO>/feature",
     ]);
+  });
+
+  it("renders nothing when Current Worktree cannot be uniquely resolved", async () => {
+    vi.mocked(getVisibleWorktrees).mockResolvedValue({
+      repositoryRoot: "/repo",
+      worktrees: [
+        { path: "/repo", label: "main", isCurrent: false },
+        { path: "/repo/feature", label: "feature-x", isCurrent: false },
+      ],
+    });
+    const { handlers } = setup();
+    const ctx = createContext();
+
+    handlers.get("session_start")!({}, ctx);
+    await flush();
+
+    const factory = ctx.ui.setWidget.mock.calls[0][1];
+    const component = factory({ requestRender: vi.fn() }, createTheme());
+    expect(component.render(120)).toEqual([]);
   });
 
   it("renders nothing when fewer than two worktrees are visible", async () => {

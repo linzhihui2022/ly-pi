@@ -179,6 +179,109 @@ describe("parseWorktreeList", () => {
     ]);
   });
 
+  it("reselects an enclosing worktree after the nested current worktree becomes inaccessible", () => {
+    const entries = [
+      {
+        path: "/repo/main",
+        branch: "main",
+        head: "1111111111111111111111111111111111111111",
+        prunable: false,
+      },
+      {
+        path: "/repo/main/.worktree/feature",
+        branch: "feature",
+        head: "2222222222222222222222222222222222222222",
+        prunable: false,
+      },
+      {
+        path: "/repo/peer",
+        branch: "peer",
+        head: "3333333333333333333333333333333333333333",
+        prunable: false,
+      },
+    ];
+
+    expect(
+      selectVisibleWorktrees(
+        entries,
+        "/repo/main/.worktree/feature/src",
+        (path) => path !== "/repo/main/.worktree/feature",
+      ),
+    ).toEqual([
+      { path: "/repo/main", label: "main", isCurrent: true },
+      { path: "/repo/peer", label: "peer", isCurrent: false },
+    ]);
+  });
+
+  it("leaves Current Worktree unresolved when its accessible record has no label", () => {
+    const entries = [
+      {
+        path: "/repo/main",
+        branch: "main",
+        head: "1111111111111111111111111111111111111111",
+        prunable: false,
+      },
+      {
+        path: "/repo/main/.worktree/feature",
+        branch: null,
+        head: null,
+        prunable: false,
+      },
+      {
+        path: "/repo/peer",
+        branch: "peer",
+        head: "3333333333333333333333333333333333333333",
+        prunable: false,
+      },
+    ];
+
+    expect(
+      selectVisibleWorktrees(
+        entries,
+        "/repo/main/.worktree/feature/src",
+        () => true,
+      ),
+    ).toEqual([
+      { path: "/repo/main", label: "main", isCurrent: false },
+      { path: "/repo/peer", label: "peer", isCurrent: false },
+    ]);
+  });
+
+  it("leaves Current Worktree unresolved when deepest entries are ambiguous", () => {
+    const entries = [
+      {
+        path: "/repo/main",
+        branch: "main",
+        head: "1111111111111111111111111111111111111111",
+        prunable: false,
+      },
+      {
+        path: "/repo/main",
+        branch: "duplicate-main",
+        head: "2222222222222222222222222222222222222222",
+        prunable: false,
+      },
+      {
+        path: "/repo/peer",
+        branch: "peer",
+        head: "3333333333333333333333333333333333333333",
+        prunable: false,
+      },
+    ];
+
+    expect(
+      selectVisibleWorktrees(entries, "/repo/main/src", () => true),
+    ).toEqual([
+      { path: "/repo/main", label: "main", isCurrent: false },
+      {
+        path: "/repo/main",
+        label: "duplicate-main",
+        isCurrent: false,
+      },
+      { path: "/repo/peer", label: "peer", isCurrent: false },
+    ]);
+  });
+
   it("discovers a nested worktree as the only current worktree", async () => {
     const repository = mkdtempSync(join(tmpdir(), "my-worktree-"));
     const featureWorktree = join(repository, ".worktree", "feature-x");
