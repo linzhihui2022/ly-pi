@@ -1,5 +1,6 @@
 import {
   createBashToolDefinition,
+  createEditToolDefinition,
   createFindToolDefinition,
   createGrepToolDefinition,
   createLsToolDefinition,
@@ -107,6 +108,74 @@ function renderBashResult(
   return new Text(theme.fg("toolOutput", text), 0, 0);
 }
 
+function formatEditCall(
+  args: { path?: string; file_path?: string },
+  theme: {
+    fg(color: string, text: string): string;
+    bold(text: string): string;
+  },
+): string {
+  const path = args.file_path ?? args.path ?? "...";
+  return `${theme.fg("toolTitle", theme.bold("edit"))} ${theme.fg("accent", path)}`;
+}
+
+function renderEditDiff(
+  diff: string,
+  options: { expanded: boolean },
+  theme: { fg(color: string, text: string): string },
+  collapsedLines: number,
+): Text {
+  const lines = diff.split(/\r?\n/);
+  if (lines.at(-1) === "") {
+    lines.pop();
+  }
+
+  const visible = options.expanded ? lines : lines.slice(0, collapsedLines);
+  const remaining = lines.length - visible.length;
+  const rendered: string[] = visible.map((line) => {
+    const color = line.startsWith("+")
+      ? "toolDiffAdded"
+      : line.startsWith("-")
+        ? "toolDiffRemoved"
+        : "toolDiffContext";
+    return theme.fg(color, line);
+  });
+  if (remaining > 0) {
+    rendered.push(
+      theme.fg("muted", `... (${remaining} more lines, expand to view)`),
+    );
+  }
+
+  return new Text(rendered.join("\n"), 0, 0);
+}
+
+function renderEditResult(
+  result: {
+    content: Array<{ type: string; text?: string }>;
+    details?: { diff?: unknown };
+  },
+  options: { expanded: boolean; isPartial: boolean },
+  theme: { fg(color: string, text: string): string },
+  context: { isError: boolean },
+  collapsedLines: number,
+): Text {
+  const output = textOutput(result);
+  if (context.isError) {
+    return new Text(theme.fg("error", output || "Edit failed."), 0, 0);
+  }
+  if (options.isPartial) {
+    return new Text(theme.fg("warning", "Editing..."), 0, 0);
+  }
+  if (typeof result.details?.diff === "string" && result.details.diff) {
+    return renderEditDiff(result.details.diff, options, theme, collapsedLines);
+  }
+  return new Text(
+    theme.fg("muted", output || "Edit completed (diff unavailable)."),
+    0,
+    0,
+  );
+}
+
 function formatReadCall(
   args: {
     path?: string;
@@ -143,6 +212,37 @@ export default function myToolDisplay(pi: ExtensionAPI): void {
   const builtinToolNames = getBuiltinToolNames(pi);
   if (builtinToolNames.size === 0) {
     return;
+  }
+
+  if (builtinToolNames.has("edit")) {
+    const nativeEdit = createEditToolDefinition(process.cwd());
+    const editOverride: typeof nativeEdit = {
+      ...nativeEdit,
+      renderShell: "default",
+      async execute(toolCallId, params, signal, onUpdate, ctx) {
+        return createEditToolDefinition(ctx.cwd).execute(
+          toolCallId,
+          params,
+          signal,
+          onUpdate,
+          ctx,
+        );
+      },
+      renderCall(args, theme) {
+        return new Text(formatEditCall(args, theme), 0, 0);
+      },
+      renderResult(result, options, theme, context) {
+        return renderEditResult(
+          result,
+          options,
+          theme,
+          context,
+          config.diffCollapsedLines,
+        );
+      },
+    };
+
+    pi.registerTool(editOverride);
   }
 
   if (builtinToolNames.has("bash")) {

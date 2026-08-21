@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createBashToolDefinition,
+  createEditToolDefinition,
   createFindToolDefinition,
   createGrepToolDefinition,
   createLsToolDefinition,
@@ -13,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
   createBashToolDefinition: vi.fn(),
+  createEditToolDefinition: vi.fn(),
   createFindToolDefinition: vi.fn(),
   createGrepToolDefinition: vi.fn(),
   createLsToolDefinition: vi.fn(),
@@ -25,11 +27,22 @@ import myToolDisplay from "./index";
 
 let agentDir: string;
 const nativeBashExecutions = new Map<string, ReturnType<typeof vi.fn>>();
+const nativeEditExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeSearchExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeBashResult = {
   content: [{ type: "text", text: "native bash result" }],
   details: undefined,
+};
+const nativeEditResult = {
+  content: [
+    { type: "text", text: "Successfully replaced 1 block(s) in file.ts." },
+  ],
+  details: {
+    diff: "  1|const value = 1;\n- 2|const oldValue = true;\n+ 2|const newValue = false;",
+    patch: "@@ -1,2 +1,2 @@",
+    firstChangedLine: 2,
+  },
 };
 const nativeResult = {
   content: [{ type: "text", text: "native result" }],
@@ -49,9 +62,12 @@ const theme = {
   bold: (text: string) => text,
 };
 
-function render(component: { render(width: number): string[] }): string {
+function render(
+  component: { render(width: number): string[] },
+  width = 120,
+): string {
   return component
-    .render(120)
+    .render(width)
     .map((line) => line.trimEnd())
     .join("\n");
 }
@@ -70,6 +86,27 @@ function createNativeBashDefinition(cwd: string) {
     execute,
     renderCall: (args: { command?: string }) => ({
       render: () => [`$ ${args.command ?? "..."}`],
+      invalidate: () => {},
+    }),
+  };
+}
+
+function createNativeEditDefinition(cwd: string) {
+  const execute = vi.fn().mockResolvedValue(nativeEditResult);
+  nativeEditExecutions.set(cwd, execute);
+  return {
+    name: "edit",
+    label: "edit",
+    description: `Edit from ${cwd}`,
+    promptSnippet: "Make precise edits",
+    promptGuidelines: ["Use edit for precise changes."],
+    parameters: { type: "object" },
+    constrainedSampling: false,
+    renderShell: "self" as const,
+    prepareArguments: vi.fn(),
+    execute,
+    renderCall: () => ({
+      render: () => ["native edit preview"],
       invalidate: () => {},
     }),
   };
@@ -144,12 +181,16 @@ function setup(source = "builtin", toolNames = ["read"]) {
 
 beforeEach(() => {
   nativeBashExecutions.clear();
+  nativeEditExecutions.clear();
   nativeExecutions.clear();
   nativeSearchExecutions.clear();
   agentDir = mkdtempSync(join(tmpdir(), "my-tool-display-"));
   vi.mocked(getAgentDir).mockReturnValue(agentDir);
   vi.mocked(createBashToolDefinition).mockImplementation(
     (cwd) => createNativeBashDefinition(cwd) as never,
+  );
+  vi.mocked(createEditToolDefinition).mockImplementation(
+    (cwd) => createNativeEditDefinition(cwd) as never,
   );
   vi.mocked(createFindToolDefinition).mockImplementation(
     (cwd) => createNativeSearchDefinition("find", cwd) as never,
@@ -171,6 +212,203 @@ afterEach(() => {
 });
 
 describe("my-tool-display", () => {
+  it("renders a completed edit with the native diff colors and no pending preview", () => {
+    const { registered } = setup("builtin", ["edit"]);
+    expect(registered).toHaveLength(1);
+    const edit = registered[0]!;
+    const colors: string[] = [];
+    const diffTheme = {
+      ...theme,
+      fg: (color: string, text: string) => {
+        colors.push(color);
+        return text;
+      },
+    };
+
+    expect(edit.renderShell).toBe("default");
+    expect(
+      render(
+        edit.renderCall({ path: "file.ts", edits: [] }, diffTheme, {
+          argsComplete: true,
+          isPartial: true,
+          state: {},
+        }),
+      ),
+    ).toBe("edit file.ts");
+    expect(
+      render(
+        edit.renderResult(
+          nativeEditResult,
+          { expanded: false, isPartial: false },
+          diffTheme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toContain("const oldValue = true;");
+    expect(colors).toEqual(
+      expect.arrayContaining([
+        "toolDiffContext",
+        "toolDiffRemoved",
+        "toolDiffAdded",
+      ]),
+    );
+    expect(
+      render(
+        edit.renderCall({ path: "file.ts", edits: [] }, diffTheme, {
+          argsComplete: true,
+          isPartial: true,
+          state: {},
+        }),
+      ),
+    ).not.toContain("native edit preview");
+    expect(
+      render(
+        edit.renderResult(
+          nativeEditResult,
+          { expanded: false, isPartial: true },
+          diffTheme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("Editing...");
+  });
+
+  it("collapses long edit diffs and expands to the complete returned diff", () => {
+    writeConfig(JSON.stringify({ enabled: true, diffCollapsedLines: 2 }));
+    const { registered } = setup("builtin", ["edit"]);
+    const edit = registered[0]!;
+    const diff = "  1|one\n- 2|old\n+ 2|new\n  3|three";
+    const result = { content: [], details: { diff } };
+
+    expect(
+      render(
+        edit.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toContain("... (2 more lines, expand to view)");
+    expect(
+      render(
+        edit.renderResult(result, { expanded: true, isPartial: false }, theme, {
+          isError: false,
+          args: { path: "file.ts" },
+          state: {},
+        }),
+      ),
+    ).toBe(diff);
+  });
+
+  it.each([
+    { label: "missing", config: { enabled: true } },
+    {
+      label: "non-numeric",
+      config: { enabled: true, diffCollapsedLines: "2" },
+    },
+    { label: "negative", config: { enabled: true, diffCollapsedLines: -1 } },
+  ])("falls back to 24 for a $label diffCollapsedLines setting", ({
+    config,
+  }) => {
+    writeConfig(JSON.stringify(config));
+
+    expect(loadToolDisplayConfig()).toEqual({
+      enabled: true,
+      bashCollapsedLines: 10,
+      diffCollapsedLines: 24,
+    });
+  });
+
+  it("keeps edit failures diagnostic and does not render a success diff", () => {
+    const { registered } = setup("builtin", ["edit"]);
+    const edit = registered[0]!;
+    const output = "Could not edit file: file.ts. Permission denied.";
+    const colors: string[] = [];
+    const failureTheme = {
+      ...theme,
+      fg: (color: string, text: string) => {
+        colors.push(color);
+        return text;
+      },
+    };
+
+    expect(
+      render(
+        edit.renderResult(
+          {
+            content: [{ type: "text", text: output }],
+            details: nativeEditResult.details,
+          },
+          { expanded: false, isPartial: false },
+          failureTheme,
+          { isError: true, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe(output);
+    expect(colors).toContain("error");
+    expect(colors).not.toContain("toolDiffAdded");
+    expect(colors).not.toContain("toolDiffRemoved");
+  });
+
+  it("delegates edit execution and preserves native metadata for the execution cwd", async () => {
+    const { registered } = setup("builtin", ["edit"]);
+    const edit = registered[0]!;
+    const context = { cwd: "/other-project" };
+    const onUpdate = vi.fn();
+
+    expect(edit).toMatchObject({
+      name: "edit",
+      label: "edit",
+      description: `Edit from ${process.cwd()}`,
+      promptSnippet: "Make precise edits",
+      promptGuidelines: ["Use edit for precise changes."],
+      parameters: { type: "object" },
+      constrainedSampling: false,
+    });
+    await expect(
+      edit.execute(
+        "call-1",
+        { path: "file.ts", edits: [] },
+        undefined,
+        onUpdate,
+        context,
+      ),
+    ).resolves.toBe(nativeEditResult);
+    expect(nativeEditExecutions.get("/other-project")).toHaveBeenCalledWith(
+      "call-1",
+      { path: "file.ts", edits: [] },
+      undefined,
+      onUpdate,
+      context,
+    );
+  });
+
+  it("keeps the edit diff within a narrow render width", () => {
+    const { registered } = setup("builtin", ["edit"]);
+    const edit = registered[0]!;
+    const diff = `+ 1|${"x".repeat(80)}`;
+
+    const lines = edit
+      .renderResult(
+        { content: [], details: { diff } },
+        { expanded: true, isPartial: false },
+        theme,
+        { isError: false, args: { path: "file.ts" }, state: {} },
+      )
+      .render(20);
+
+    expect(lines).not.toEqual([]);
+    expect(lines.every((line: string) => line.length <= 20)).toBe(true);
+  });
+
+  it("does not take over an edit tool owned by another extension", () => {
+    const { pi, registered } = setup("extension", ["edit"]);
+
+    expect(registered).toEqual([]);
+    expect(pi.registerTool).not.toHaveBeenCalled();
+  });
+
   it("uses the default bash collapsed-line budget and keeps the command header", () => {
     const { registered } = setup("builtin", ["bash"]);
     expect(registered).toHaveLength(1);
@@ -183,6 +421,7 @@ describe("my-tool-display", () => {
     expect(loadToolDisplayConfig()).toEqual({
       enabled: true,
       bashCollapsedLines: 10,
+      diffCollapsedLines: 24,
     });
     expect(
       render(bash.renderCall({ command: "printf output" }, theme, {})),
@@ -211,6 +450,7 @@ describe("my-tool-display", () => {
     expect(loadToolDisplayConfig()).toEqual({
       enabled: true,
       bashCollapsedLines: 2,
+      diffCollapsedLines: 24,
     });
     expect(
       render(
