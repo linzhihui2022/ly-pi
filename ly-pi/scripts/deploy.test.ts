@@ -34,7 +34,7 @@ function deploy(staging: string) {
   });
 }
 
-describe("deploy model policy config", () => {
+describe("deploy model policy settings", () => {
   beforeAll(() => {
     const build = runBun([
       "build",
@@ -77,7 +77,50 @@ describe("deploy model policy config", () => {
     );
   });
 
-  it("fails deployment before writing when the local override is invalid", () => {
+  it("compiles managed defaults and agent chains without replacing other settings", () => {
+    const staging = stagingDir();
+    const agentDir = join(staging, "agent");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(
+      join(agentDir, "settings.json"),
+      JSON.stringify({
+        customSetting: true,
+        subagents: {
+          agentOverrides: { reviewer: { model: "other/reviewer" } },
+        },
+      }),
+    );
+
+    const result = deploy(staging);
+
+    expect(result.status).toBe(0);
+    const settings = JSON.parse(
+      readFileSync(join(agentDir, "settings.json"), "utf-8"),
+    );
+    expect(settings).toMatchObject({
+      customSetting: true,
+      defaultProvider: "openai-codex",
+      defaultModel: "gpt-5.6-terra",
+      defaultThinkingLevel: "max",
+      subagents: {
+        agentOverrides: {
+          reviewer: { model: "other/reviewer" },
+          scout: {
+            model: "deepseek/deepseek-v4-flash",
+            thinking: "off",
+            fallbackModels: [],
+          },
+          delegate: {
+            model: "deepseek/deepseek-v4-flash",
+            thinking: "max",
+            fallbackModels: [],
+          },
+        },
+      },
+    });
+  });
+
+  it("compiles legal local overrides into the affected roles", () => {
     const staging = stagingDir();
     const extensionDir = join(staging, "agent", "extensions", "ly-pi");
     mkdirSync(extensionDir, { recursive: true });
@@ -86,8 +129,59 @@ describe("deploy model policy config", () => {
       JSON.stringify({
         version: 1,
         policies: {
+          "primary-default": {
+            slots: { primary: { model: "local/primary", thinking: "high" } },
+          },
           "fast-default": {
-            slots: { primary: { failurePolicy: "error" } },
+            slots: { primary: { model: "local/scout", thinking: "low" } },
+          },
+          "standard-default": {
+            slots: {
+              primary: { model: "local/delegate", thinking: "medium" },
+            },
+          },
+        },
+      }),
+    );
+
+    const result = deploy(staging);
+
+    expect(result.status).toBe(0);
+    const settings = JSON.parse(
+      readFileSync(join(staging, "agent", "settings.json"), "utf-8"),
+    );
+    expect(settings).toMatchObject({
+      defaultProvider: "local",
+      defaultModel: "primary",
+      defaultThinkingLevel: "high",
+      subagents: {
+        agentOverrides: {
+          scout: {
+            model: "local/scout",
+            thinking: "low",
+            fallbackModels: [],
+          },
+          delegate: {
+            model: "local/delegate",
+            thinking: "medium",
+            fallbackModels: [],
+          },
+        },
+      },
+    });
+  });
+
+  it("fails deployment before writing when a security policy is overridden", () => {
+    const staging = stagingDir();
+    const extensionDir = join(staging, "agent", "extensions", "ly-pi");
+    mkdirSync(extensionDir, { recursive: true });
+    writeFileSync(
+      join(extensionDir, "models.local.json"),
+      JSON.stringify({
+        version: 1,
+        policies: {
+          "security-judge-default": {
+            slots: { primary: { model: "local/security" } },
           },
         },
       }),
@@ -96,6 +190,25 @@ describe("deploy model policy config", () => {
     const result = deploy(staging);
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("invalid local model override");
+    expect(result.stderr).toContain(
+      "cannot override security policy 'security-judge-default'",
+    );
+  });
+
+  it("does not duplicate managed model choices in source settings", () => {
+    const source = JSON.parse(
+      readFileSync(
+        join(LY_PI_DIR, "assets", "config", "settings.json"),
+        "utf-8",
+      ),
+    );
+
+    expect(source.settings).not.toHaveProperty("defaultProvider");
+    expect(source.settings).not.toHaveProperty("defaultModel");
+    expect(source.settings).not.toHaveProperty("defaultThinkingLevel");
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty("scout");
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
+      "delegate",
+    );
   });
 });

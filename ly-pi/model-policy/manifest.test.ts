@@ -29,14 +29,6 @@ describe("checked-in model policy manifest", () => {
             model: "deepseek/deepseek-v4-flash",
             thinking: "max",
           },
-          "image-reader": {
-            model: "openai-codex/gpt-5.6-terra",
-            thinking: "max",
-          },
-          "pr-comment-analyzer": {
-            model: "deepseek/deepseek-v4-flash",
-            thinking: "max",
-          },
         },
       },
     });

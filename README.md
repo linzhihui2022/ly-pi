@@ -96,7 +96,7 @@ configure/
 
 ## 🤖 子代理
 
-运行时使用 [`pi-subagents`](https://pi.dev/packages/pi-subagents)。通用角色（scout、delegate、researcher、context-builder、planner、oracle、reviewer、worker）由 `pi-subagents` 官方包提供；`ly-pi/assets/agents/*.md` 只保留 PR 审查角色（另有 `image-reader` 供 my-vision 委托非视觉模型读图），部署到 `~/.pi/agent/agents/`。通用角色的模型与 fallback 由 `ly-pi/assets/config/settings.json` 统一覆盖。
+运行时使用 [`pi-subagents`](https://pi.dev/packages/pi-subagents)。通用角色（scout、delegate、researcher、context-builder、planner、oracle、reviewer、worker）由 `pi-subagents` 官方包提供；`ly-pi/assets/agents/*.md` 只保留 PR 审查角色（另有 `image-reader` 供 my-vision 委托非视觉模型读图），部署到 `~/.pi/agent/agents/`。scout、delegate 的模型、thinking 与 fallback 由 `ly-pi/assets/config/model-policies.json` 编译后统一覆盖。
 
 | 子代理 | 用途 |
 |--------|------|
@@ -161,7 +161,7 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 |------|------|
 | `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
 | `assets/config/pi-tool-display.json` | pi-tool-display 配置 |
-| `assets/config/settings.json` | 子代理模型绑定与 fallback（部署时按 `settings-schema.json` 校验） |
+| `assets/config/settings.json` | Pi 非模型设置与 subagent runtime 配置（部署时按 `settings-schema.json` 校验） |
 | `assets/config/model-policies.json` | 版本化 Model Manifest：Model Role、候选槽位、能力契约与失败策略；部署时校验并复制到扩展目录 |
 | `assets/config/mcp.json` | MCP 服务器配置 |
 | `assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
@@ -173,7 +173,7 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 
 本仓库是作者的个人配置开源，以下内容带有强烈的个人偏好，**作示例用途，按需修改**：
 
-- **`assets/config/settings.json`** 中的模型绑定（如 `kimi-coding`、`deepseek-v4-flash`）是作者自建的 provider/model 别名，你需要替换为自己的模型配置
+- **`assets/config/model-policies.json`** 中的 provider/model 引用（如 `openai-codex/gpt-5.6-terra`、`deepseek/deepseek-v4-flash`）是作者的个人配置，你需要替换为自己的 provider 与模型
 - **`assets/config/append-system.md`** 中的语言偏好（中文回复等）为作者个人设定
 - **`JUDGE.md`、`CONTEXT.md`** 是作者个人项目的权限法官规则与领域术语表
 - **`docs/agents/`** 是作者按 Matt Pocock skills 工作流配置的本地 issue tracker 约定
@@ -214,8 +214,8 @@ pi -e ly-pi/index.ts
 **Q: Context7 / Tavily 不工作？**
 确认对应环境变量已设置（见「API key」一节），或直接在部署后的 `~/.pi/agent/mcp.json` / `web-search.json` 中填入 key。
 
-**Q: 可以直接用作者的 settings.json 模型配置吗？**
-不能直接照搬——`kimi-coding`、`deepseek-v4-flash` 等是作者本地配置的别名。请替换成你自己的 provider 与模型。
+**Q: 可以直接用作者的 Model Manifest 吗？**
+不能直接照搬——其中的 provider/model 引用是作者的个人配置。请替换成你自己的 provider 与模型。
 
 **Q: 不想用某个子模块？**
 在 `ly-pi/index.ts` 中注释掉对应注册行即可，各子模块相互独立（web-preview / shared 为内部依赖除外）。

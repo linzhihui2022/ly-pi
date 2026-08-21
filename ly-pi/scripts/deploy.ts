@@ -9,6 +9,12 @@ import {
   type ModelPolicyManifest,
 } from "../model-policy/registry";
 
+type CompiledModelPolicySettings = ReturnType<
+  ReturnType<typeof createModelPolicyRegistry>["compilePiSettings"]
+>;
+
+let compiledModelPolicySettings: CompiledModelPolicySettings;
+
 // ── Staging ────────────────────────────────────────────────────────────────
 const STAGING = process.env.PI_STAGING_DIR ?? join(homedir(), ".pi");
 const agentDir = join(STAGING, "agent");
@@ -105,7 +111,10 @@ const extensionDir = join(agentDir, "extensions", "ly-pi");
   const localOverride = existsSync(localOverridePath)
     ? ((await Bun.file(localOverridePath).json()) as LocalModelOverride)
     : undefined;
-  createModelPolicyRegistry(modelManifest, localOverride);
+  compiledModelPolicySettings = createModelPolicyRegistry(
+    modelManifest,
+    localOverride,
+  ).compilePiSettings();
   console.log("Model policy schema validation: OK");
 }
 
@@ -151,9 +160,14 @@ console.log("Extension: deployed");
     /* first deploy */
   }
   target = deepMerge(target, merged.settings);
+  target = deepMerge(target, compiledModelPolicySettings.settings);
   target.subagents = deepMerge(
     (target.subagents as Record<string, unknown>) ?? {},
     merged.subagents,
+  );
+  target.subagents = deepMerge(
+    target.subagents as Record<string, unknown>,
+    compiledModelPolicySettings.subagents,
   );
   await write(settingsPath, `${JSON.stringify(target, null, 2)}\n`);
   console.log("Settings: deployed");

@@ -132,9 +132,7 @@
     "primary": "primary",
     "agents": {
       "scout": "fast",
-      "delegate": "standard",
-      "image-reader": "vision",
-      "pr-comment-analyzer": "standard"
+      "delegate": "standard"
     }
   }
 }

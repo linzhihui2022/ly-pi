@@ -10,10 +10,7 @@
       "keepRecentTokens": 20000,
       "reserveTokens": 16384
     },
-    "defaultModel": "gpt-5.6-terra",
     "defaultProjectTrust": "always",
-    "defaultProvider": "openai-codex",
-    "defaultThinkingLevel": "max",
     "doubleEscapeAction": "none",
     "editorPaddingX": 1,
     "enableInstallTelemetry": false,
@@ -27,15 +24,7 @@
     "treeFilterMode": "no-tools"
   },
   "subagents": {
-    "disableThinking": false,
-    "agentOverrides": {
-      "scout": {
-        "model": "deepseek/deepseek-v4-flash"
-      },
-      "delegate": {
-        "model": "deepseek/deepseek-v4-flash"
-      }
-    }
+    "disableThinking": false
   },
   "subagentRuntime": {
     "toolDescriptionMode": "compact",
