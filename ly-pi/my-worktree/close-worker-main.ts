@@ -7,6 +7,7 @@ import {
   type PostExitWorktreeClosureRequest,
   runPostExitWorktreeClosure,
 } from "./close-worker";
+import { CLOSE_WORKTREE_WORKER_READY } from "./close-worker-protocol";
 import { createSystemPostExitWorktreeClosureDeps } from "./close-worker-runtime";
 import type { WorktreeClosePlan } from "./closure";
 
@@ -106,6 +107,7 @@ function parseCloseRequest(
 export async function runCloseWorktreeWorker(
   args: string[],
   deps: CloseWorkerCliDeps,
+  onReady?: () => void,
 ): Promise<number> {
   if (args.length !== 1) {
     deps.report("close-worktree worker: invalid close plan input.");
@@ -136,7 +138,11 @@ export async function runCloseWorktreeWorker(
     return 1;
   }
 
-  const outcome = await runPostExitWorktreeClosure(request, deps.createDeps());
+  const outcome = await runPostExitWorktreeClosure(
+    request,
+    deps.createDeps(),
+    onReady,
+  );
   return outcome === "completed" ? 0 : 1;
 }
 
@@ -144,9 +150,15 @@ if (
   process.argv[1] &&
   fileURLToPath(import.meta.url) === resolve(process.argv[1])
 ) {
-  process.exitCode = await runCloseWorktreeWorker(process.argv.slice(2), {
-    chdir: process.chdir,
-    report: console.error,
-    createDeps: createSystemPostExitWorktreeClosureDeps,
-  });
+  process.exitCode = await runCloseWorktreeWorker(
+    process.argv.slice(2),
+    {
+      chdir: process.chdir,
+      report: console.error,
+      createDeps: createSystemPostExitWorktreeClosureDeps,
+    },
+    () => {
+      process.send?.(CLOSE_WORKTREE_WORKER_READY);
+    },
+  );
 }

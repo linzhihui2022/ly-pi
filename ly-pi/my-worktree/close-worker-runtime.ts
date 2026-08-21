@@ -6,7 +6,11 @@ import type {
   WorkerCommandResult,
 } from "./close-worker";
 import type { WorktreeClosePlan, WorktreeClosureFacts } from "./closure";
-import { parseWorktreeList } from "./worktrees";
+import {
+  findCurrentWorktree,
+  type ParsedWorktree,
+  parseWorktreeList,
+} from "./worktrees";
 
 export type WorkerExec = (
   argv: readonly string[],
@@ -19,8 +23,20 @@ export interface ClosureInspectionDeps {
   isExecutable(command: string): boolean;
 }
 
+export interface CurrentWorktreeClosureInspectionOptions
+  extends ClosureInspectionDeps {
+  closeHook: {
+    command: string | undefined;
+    target: string | undefined;
+  };
+}
+
 export interface CloseWorkerRuntimeOptions extends ClosureInspectionDeps {
-  waitForPidExit(pid: number, timeoutMs: number): Promise<boolean>;
+  waitForPidExit(
+    pid: number,
+    timeoutMs: number,
+    onWaiting?: () => void,
+  ): Promise<boolean>;
   report?(message: string): void;
 }
 
@@ -48,12 +64,19 @@ export async function waitForProcessExit(
   pid: number,
   timeoutMs: number,
   deps: ProcessExitWaitDeps,
+  onWaiting?: () => void,
 ): Promise<boolean> {
   const deadline = deps.now() + timeoutMs;
+  let signalWaiting = onWaiting;
+
   while (deps.isPidAlive(pid)) {
     const remaining = deadline - deps.now();
     if (remaining <= 0) return false;
-    await deps.sleep(Math.min(PID_POLL_INTERVAL_MS, remaining));
+
+    const wait = deps.sleep(Math.min(PID_POLL_INTERVAL_MS, remaining));
+    signalWaiting?.();
+    signalWaiting = undefined;
+    await wait;
   }
   return true;
 }
@@ -171,12 +194,17 @@ function sleep(milliseconds: number): Promise<void> {
 export function createSystemPostExitWorktreeClosureDeps(): PostExitWorktreeClosureDeps {
   return createPostExitWorktreeClosureDeps({
     exec: executeWorkerCommand,
-    waitForPidExit: (pid, timeoutMs) =>
-      waitForProcessExit(pid, timeoutMs, {
-        isPidAlive,
-        now: Date.now,
-        sleep,
-      }),
+    waitForPidExit: (pid, timeoutMs, onWaiting) =>
+      waitForProcessExit(
+        pid,
+        timeoutMs,
+        {
+          isPidAlive,
+          now: Date.now,
+          sleep,
+        },
+        onWaiting,
+      ),
     exists: existsSync,
     platform: process.platform,
     isExecutable: isWorkerExecutable,
@@ -203,33 +231,44 @@ export function createPostExitWorktreeClosureDeps(
   };
 }
 
-export async function inspectWorktreeClosure(
-  plan: WorktreeClosePlan,
+function closeHookFromArgv(
+  hookArgv: readonly string[],
+  deps: Pick<ClosureInspectionDeps, "isExecutable">,
+): WorktreeClosureFacts["closeHook"] {
+  return {
+    command: hookArgv.slice(0, -1).join(" "),
+    target: hookArgv.at(-1),
+    executableAvailable: deps.isExecutable(hookArgv[0] ?? ""),
+  };
+}
+
+function closeHookFromEnvironment(
+  closeHook: CurrentWorktreeClosureInspectionOptions["closeHook"],
+  deps: Pick<ClosureInspectionDeps, "isExecutable">,
+): WorktreeClosureFacts["closeHook"] {
+  const executable = closeHook.command?.trim().split(/\s+/)[0] ?? "";
+
+  return {
+    command: closeHook.command,
+    target: closeHook.target,
+    executableAvailable: deps.isExecutable(executable),
+  };
+}
+
+async function inspectListedWorktree(
+  target: ParsedWorktree | undefined,
+  primary: ParsedWorktree | undefined,
+  fallbackPath: string,
+  fallbackRepositoryRoot: string,
+  closeHook: WorktreeClosureFacts["closeHook"],
   deps: ClosureInspectionDeps,
 ): Promise<WorktreeClosureFacts> {
-  const listed = await commandOrThrow(deps.exec, [
-    "git",
-    "-C",
-    plan.repositoryRoot,
-    "worktree",
-    "list",
-    "--porcelain",
-  ]);
-  const worktrees = parseWorktreeList(listed.output);
-  const primary = worktrees[0];
-  const target = worktrees.find((worktree) =>
-    pathsMatch(worktree.path, plan.worktreePath),
-  );
-  const hookArgv = plan.hookArgv;
-  const hookTarget = hookArgv.at(-1);
-  const hookCommand = hookArgv.slice(0, -1).join(" ");
-
   if (!target) {
     return {
       platform: deps.platform,
       worktree: {
-        path: plan.worktreePath,
-        repositoryRoot: primary?.path ?? plan.repositoryRoot,
+        path: fallbackPath,
+        repositoryRoot: primary?.path ?? fallbackRepositoryRoot,
         branch: null,
         isCurrent: false,
         isLinked: false,
@@ -241,11 +280,7 @@ export async function inspectWorktreeClosure(
       hasTrackedChanges: false,
       untrackedFiles: "none",
       hasInitializedSubmodules: false,
-      closeHook: {
-        command: hookCommand,
-        target: hookTarget,
-        executableAvailable: deps.isExecutable(hookArgv[0] ?? ""),
-      },
+      closeHook,
     };
   }
 
@@ -271,7 +306,7 @@ export async function inspectWorktreeClosure(
     platform: deps.platform,
     worktree: {
       path: target.path,
-      repositoryRoot: primary?.path ?? plan.repositoryRoot,
+      repositoryRoot: primary?.path ?? fallbackRepositoryRoot,
       branch: target.branch,
       isCurrent: true,
       isLinked: true,
@@ -287,10 +322,60 @@ export async function inspectWorktreeClosure(
     hasInitializedSubmodules: submodules.output
       .split("\n")
       .some((line) => line !== "" && !line.startsWith("-")),
-    closeHook: {
-      command: hookCommand,
-      target: hookTarget,
-      executableAvailable: deps.isExecutable(hookArgv[0] ?? ""),
-    },
+    closeHook,
   };
+}
+
+export async function inspectCurrentWorktreeClosure(
+  cwd: string,
+  options: CurrentWorktreeClosureInspectionOptions,
+): Promise<WorktreeClosureFacts> {
+  const listed = await commandOrThrow(options.exec, [
+    "git",
+    "-C",
+    cwd,
+    "worktree",
+    "list",
+    "--porcelain",
+  ]);
+  const worktrees = parseWorktreeList(listed.output);
+  const primary = worktrees[0];
+  const target = findCurrentWorktree(worktrees, cwd);
+
+  return inspectListedWorktree(
+    target,
+    primary,
+    cwd,
+    primary?.path ?? cwd,
+    closeHookFromEnvironment(options.closeHook, options),
+    options,
+  );
+}
+
+export async function inspectWorktreeClosure(
+  plan: WorktreeClosePlan,
+  deps: ClosureInspectionDeps,
+): Promise<WorktreeClosureFacts> {
+  const listed = await commandOrThrow(deps.exec, [
+    "git",
+    "-C",
+    plan.repositoryRoot,
+    "worktree",
+    "list",
+    "--porcelain",
+  ]);
+  const worktrees = parseWorktreeList(listed.output);
+  const primary = worktrees[0];
+  const target = worktrees.find((worktree) =>
+    pathsMatch(worktree.path, plan.worktreePath),
+  );
+
+  return inspectListedWorktree(
+    target,
+    primary,
+    plan.worktreePath,
+    plan.repositoryRoot,
+    closeHookFromArgv(plan.hookArgv, deps),
+    deps,
+  );
 }

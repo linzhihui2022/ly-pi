@@ -4,6 +4,7 @@ import {
   createPostExitWorktreeClosureDeps,
   createSystemPostExitWorktreeClosureDeps,
   executeWorkerCommand,
+  inspectCurrentWorktreeClosure,
   inspectWorktreeClosure,
   isWorkerExecutable,
   waitForProcessExit,
@@ -126,6 +127,34 @@ describe("inspectWorktreeClosure", () => {
 
     expect(now).toBe(30_000);
     expect(sleeps).toHaveLength(30);
+  });
+
+  it("signals readiness only after scheduling the first PID wait", async () => {
+    let now = 0;
+    const calls: string[] = [];
+
+    await expect(
+      waitForProcessExit(
+        123,
+        10,
+        {
+          isPidAlive: () => {
+            calls.push("alive");
+            return true;
+          },
+          now: () => now,
+          sleep: async (milliseconds) => {
+            calls.push("sleep");
+            now += milliseconds;
+          },
+        },
+        () => {
+          calls.push("ready");
+        },
+      ),
+    ).resolves.toBe(false);
+
+    expect(calls).toEqual(["alive", "sleep", "ready", "alive"]);
   });
 
   it("returns command output and actionable startup failures without a shell", async () => {
@@ -293,5 +322,102 @@ describe("inspectWorktreeClosure", () => {
       code: 127,
       output: "missing command",
     });
+  });
+
+  it("preflights the deepest current linked worktree with the raw hook configuration", async () => {
+    const exec = vi.fn(async (argv: readonly string[]) => {
+      if (argv.includes("worktree")) {
+        return ok(
+          [
+            "worktree /repo",
+            "HEAD 1111111111111111111111111111111111111111",
+            "branch refs/heads/main",
+            "",
+            "worktree /repo/.worktree/feature",
+            "HEAD 2222222222222222222222222222222222222222",
+            "branch refs/heads/feature",
+            "",
+          ].join("\n"),
+        );
+      }
+      if (argv.includes("status")) return ok();
+      if (argv.includes("submodule")) return ok();
+      if (argv.includes("rev-parse")) return ok(`/git/${argv.at(-1)}\n`);
+      throw new Error(`unexpected command: ${argv.join(" ")}`);
+    });
+
+    await expect(
+      inspectCurrentWorktreeClosure("/repo/.worktree/feature/src", {
+        exec,
+        exists: () => false,
+        platform: "darwin",
+        isExecutable: (command) => command === "wezterm",
+        closeHook: {
+          command: "wezterm cli kill-pane --pane-id",
+          target: "pane-150",
+        },
+      }),
+    ).resolves.toEqual({
+      platform: "darwin",
+      worktree: {
+        path: "/repo/.worktree/feature",
+        repositoryRoot: "/repo",
+        branch: "feature",
+        isCurrent: true,
+        isLinked: true,
+        isPrimary: false,
+        isLocked: false,
+        isPrunable: false,
+      },
+      gitOperation: null,
+      hasTrackedChanges: false,
+      untrackedFiles: "none",
+      hasInitializedSubmodules: false,
+      closeHook: {
+        command: "wezterm cli kill-pane --pane-id",
+        target: "pane-150",
+        executableAvailable: true,
+      },
+    });
+    expect(exec).toHaveBeenCalledWith([
+      "git",
+      "-C",
+      "/repo/.worktree/feature/src",
+      "worktree",
+      "list",
+      "--porcelain",
+    ]);
+  });
+
+  it("returns non-current facts without inspecting a directory outside every worktree", async () => {
+    const exec = vi.fn(async () =>
+      ok(
+        [
+          "worktree /repo",
+          "HEAD 1111111111111111111111111111111111111111",
+          "branch refs/heads/main",
+          "",
+        ].join("\n"),
+      ),
+    );
+
+    await expect(
+      inspectCurrentWorktreeClosure("/outside", {
+        exec,
+        exists: () => false,
+        platform: "darwin",
+        isExecutable: () => false,
+        closeHook: { command: undefined, target: undefined },
+      }),
+    ).resolves.toMatchObject({
+      worktree: {
+        path: "/outside",
+        repositoryRoot: "/repo",
+        isCurrent: false,
+        isLinked: false,
+      },
+      closeHook: { executableAvailable: false },
+    });
+    expect(exec).toHaveBeenCalledOnce();
   });
 });

@@ -99,6 +99,7 @@ function createRuntime(waitForPidExit: (pid: number) => Promise<boolean>) {
   });
 }
 
+// Temporary Git fixture setup can exceed Vitest's 5-second default under coverage.
 describe("post-exit worktree closure integration", () => {
   it("removes a linked worktree with ignored files without force, retains its branch, then runs the hook", async () => {
     const { repositoryRoot, worktreePath } = createFixture();
@@ -264,4 +265,4 @@ describe("post-exit worktree closure integration", () => {
       rmSync(repositoryRoot, { recursive: true, force: true });
     }
   });
-});
+}, 15_000);

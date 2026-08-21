@@ -3,7 +3,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("./worktrees", () => ({
   getVisibleWorktrees: vi.fn(),
 }));
+vi.mock("./close-worker-runtime", () => ({
+  executeWorkerCommand: vi.fn(),
+  inspectCurrentWorktreeClosure: vi.fn(),
+  isWorkerExecutable: vi.fn(),
+}));
+vi.mock("./close-worker-launcher", () => ({
+  startCloseWorktreeWorker: vi.fn(),
+}));
 
+import { startCloseWorktreeWorker } from "./close-worker-launcher";
+import { inspectCurrentWorktreeClosure } from "./close-worker-runtime";
+import type { WorktreeClosureFacts } from "./closure";
 import myWorktree from "./index";
 import { getVisibleWorktrees } from "./worktrees";
 
@@ -17,21 +28,57 @@ function createTheme() {
 
 function setup() {
   const handlers = new Map<string, Handler>();
+  const commands = new Map<string, { handler: Handler }>();
   const pi = {
     on: vi.fn((event: string, handler: Handler) => {
       handlers.set(event, handler);
     }),
+    registerCommand: vi.fn((name: string, command: { handler: Handler }) => {
+      commands.set(name, command);
+    }),
   };
 
   myWorktree(pi as never);
-  return { handlers, pi };
+  return { handlers, commands, pi };
 }
 
 function createContext(cwd = "/repo/feature/src") {
   return {
     hasUI: true,
+    mode: "tui",
     cwd,
-    ui: { setWidget: vi.fn() },
+    isIdle: vi.fn(() => true),
+    shutdown: vi.fn(),
+    ui: {
+      confirm: vi.fn(),
+      notify: vi.fn(),
+      setWidget: vi.fn(),
+    },
+  };
+}
+
+function readyFacts(): WorktreeClosureFacts {
+  return {
+    platform: "darwin",
+    worktree: {
+      path: "/repo/.worktree/feature",
+      repositoryRoot: "/repo",
+      branch: "feature",
+      isCurrent: true,
+      isLinked: true,
+      isPrimary: false,
+      isLocked: false,
+      isPrunable: false,
+    },
+    gitOperation: null,
+    hasTrackedChanges: false,
+    untrackedFiles: "none",
+    hasInitializedSubmodules: false,
+    closeHook: {
+      command: "wezterm cli kill-pane --pane-id",
+      target: "pane-150",
+      executableAvailable: true,
+    },
   };
 }
 
@@ -138,5 +185,121 @@ describe("my-worktree extension", () => {
 
     expect(ctx.ui.setWidget).not.toHaveBeenCalled();
     expect(getVisibleWorktrees).not.toHaveBeenCalled();
+  });
+
+  it("rejects close-worktree arguments, non-TUI calls, and busy Pi before preflight", async () => {
+    const { commands } = setup();
+    const handler = commands.get("close-worktree")!.handler;
+    const argumentContext = createContext();
+    const nonTuiContext = { ...createContext(), mode: "rpc" };
+    const busyContext = { ...createContext(), isIdle: vi.fn(() => false) };
+
+    await handler("unexpected", argumentContext);
+    await handler("", nonTuiContext);
+    await handler("", busyContext);
+
+    expect(inspectCurrentWorktreeClosure).not.toHaveBeenCalled();
+    expect(startCloseWorktreeWorker).not.toHaveBeenCalled();
+    expect(argumentContext.shutdown).not.toHaveBeenCalled();
+    expect(nonTuiContext.shutdown).not.toHaveBeenCalled();
+    expect(busyContext.shutdown).not.toHaveBeenCalled();
+    expect(argumentContext.ui.notify).toHaveBeenCalledWith(
+      "/close-worktree does not accept arguments.",
+      "error",
+    );
+    expect(nonTuiContext.ui.notify).toHaveBeenCalledWith(
+      "/close-worktree is available only in an interactive Pi TUI session.",
+      "error",
+    );
+    expect(busyContext.ui.notify).toHaveBeenCalledWith(
+      "/close-worktree is available only while Pi is idle.",
+      "error",
+    );
+  });
+
+  it("refuses an ineligible worktree without confirmation or shutdown", async () => {
+    vi.mocked(inspectCurrentWorktreeClosure).mockResolvedValue({
+      ...readyFacts(),
+      platform: "linux",
+    });
+    const { commands } = setup();
+    const ctx = createContext();
+
+    await commands.get("close-worktree")!.handler("", ctx);
+
+    expect(ctx.ui.confirm).not.toHaveBeenCalled();
+    expect(startCloseWorktreeWorker).not.toHaveBeenCalled();
+    expect(ctx.shutdown).not.toHaveBeenCalled();
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "/close-worktree is available only on macOS.",
+      "error",
+    );
+  });
+
+  it("shows the closure summary and leaves everything untouched on cancellation", async () => {
+    vi.mocked(inspectCurrentWorktreeClosure).mockResolvedValue(readyFacts());
+    vi.mocked(startCloseWorktreeWorker).mockResolvedValue(undefined);
+    const { commands } = setup();
+    const ctx = createContext();
+    ctx.ui.confirm.mockResolvedValue(false);
+
+    await commands.get("close-worktree")!.handler("", ctx);
+
+    expect(ctx.ui.confirm).toHaveBeenCalledWith(
+      "Close current worktree?",
+      expect.stringContaining("/repo/.worktree/feature"),
+    );
+    const summary = ctx.ui.confirm.mock.calls[0][1] as string;
+    expect(summary).toContain("Local branch retained: feature");
+    expect(summary).toContain("Ignored files in this worktree may be deleted.");
+    expect(summary).toContain("No external-process scan was performed.");
+    expect(summary).toContain("only after successful removal");
+    expect(startCloseWorktreeWorker).not.toHaveBeenCalled();
+    expect(ctx.shutdown).not.toHaveBeenCalled();
+  });
+
+  it("keeps Pi running when the detached worker cannot start", async () => {
+    vi.mocked(inspectCurrentWorktreeClosure).mockResolvedValue(readyFacts());
+    vi.mocked(startCloseWorktreeWorker).mockRejectedValue(
+      new Error("worker unavailable"),
+    );
+    const { commands } = setup();
+    const ctx = createContext();
+    ctx.ui.confirm.mockResolvedValue(true);
+
+    await commands.get("close-worktree")!.handler("", ctx);
+
+    expect(startCloseWorktreeWorker).toHaveBeenCalledOnce();
+    expect(ctx.shutdown).not.toHaveBeenCalled();
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "Could not start close-worktree worker: worker unavailable. Pi remains running.",
+      "error",
+    );
+  });
+
+  it("starts the worker before requesting graceful shutdown", async () => {
+    vi.mocked(inspectCurrentWorktreeClosure).mockResolvedValue(readyFacts());
+    const calls: string[] = [];
+    vi.mocked(startCloseWorktreeWorker).mockImplementation(async () => {
+      calls.push("worker");
+    });
+    const { commands } = setup();
+    const ctx = createContext();
+    ctx.ui.confirm.mockResolvedValue(true);
+    ctx.shutdown.mockImplementation(() => {
+      calls.push("shutdown");
+    });
+
+    await commands.get("close-worktree")!.handler("", ctx);
+
+    expect(startCloseWorktreeWorker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repositoryRoot: "/repo",
+        worktreePath: "/repo/.worktree/feature",
+        branch: "feature",
+        hookArgv: ["wezterm", "cli", "kill-pane", "--pane-id", "pane-150"],
+      }),
+    );
+    expect(calls).toEqual(["worker", "shutdown"]);
   });
 });

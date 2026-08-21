@@ -17,7 +17,11 @@ export interface WorkerCommandResult {
 }
 
 export interface PostExitWorktreeClosureDeps {
-  waitForPidExit(pid: number, timeoutMs: number): Promise<boolean>;
+  waitForPidExit(
+    pid: number,
+    timeoutMs: number,
+    onWaiting?: () => void,
+  ): Promise<boolean>;
   inspectWorktree(plan: WorktreeClosePlan): Promise<WorktreeClosureFacts>;
   removeWorktree(
     repositoryRoot: string,
@@ -42,6 +46,7 @@ function retainedWorktree(plan: WorktreeClosePlan): string {
 export async function runPostExitWorktreeClosure(
   request: PostExitWorktreeClosureRequest,
   deps: PostExitWorktreeClosureDeps,
+  onReady?: () => void,
 ): Promise<
   | "timed-out"
   | "revalidation-failed"
@@ -49,7 +54,10 @@ export async function runPostExitWorktreeClosure(
   | "hook-failed"
   | "completed"
 > {
-  if (!(await deps.waitForPidExit(request.piPid, PID_EXIT_TIMEOUT_MS))) {
+  const exited = onReady
+    ? await deps.waitForPidExit(request.piPid, PID_EXIT_TIMEOUT_MS, onReady)
+    : await deps.waitForPidExit(request.piPid, PID_EXIT_TIMEOUT_MS);
+  if (!exited) {
     deps.report(
       `close-worktree: Pi did not exit within 30 seconds. ${retainedWorktree(request.plan)}`,
     );

@@ -8,7 +8,7 @@ When a Pi session runs inside a Git repository with multiple worktrees, the user
 
 ## Solution
 
-Add an independent `my-worktree` widget to the unified ly-pi extension. In a multi-worktree repository, it displays every accessible worktree above the editor in Git's order as a Todo-style tree. A heading reports the visible count; each row shows the branch and path, with the current worktree distinguished by a symbol and theme color. The primary worktree root and its descendants abbreviate to `<REPO>`; worktrees elsewhere retain their absolute paths. The widget remains silent outside this eligible state.
+Add an independent `my-worktree` widget to the unified ly-pi extension. In a multi-worktree repository, it displays every accessible worktree above the editor in Git's order as a Todo-style tree. A heading reports the visible count; each row shows the branch and path, with the current worktree distinguished by a symbol and theme color. The primary worktree root and its descendants abbreviate to `<REPO>`; worktrees elsewhere retain their absolute paths. The widget remains silent outside this eligible state. The later, separately invoked `/close-worktree` command belongs to the Worktree Manager; it does not make the widget mutating.
 
 ## User Stories
 
@@ -47,7 +47,7 @@ The widget is placed above the editor as a Todo-style tree: an accent `Worktrees
 
 ### Refresh contract
 
-The worktree snapshot refreshes at session startup and at the beginning and end of each Pi turn. The feature does not create an idle timer, filesystem watcher, command, selector, or worktree-switching behavior.
+The worktree snapshot refreshes at session startup and at the beginning and end of each Pi turn. The widget itself does not create an idle timer, filesystem watcher, selector, or worktree-switching behavior. The separately documented `/close-worktree` command is the sole approved manager operation and does not alter the widget's read-only behavior.
 
 ### Configuration and special state scope
 
@@ -84,7 +84,7 @@ Implementation proceeds in small red-green slices: first a failing behavior test
 - Git dirty-state, stash, lock, PR, or other status details
 - User configuration for placement, formatting, or refresh timing
 - Showing inaccessible or prunable worktree records
-- Changes to Git repositories or worktree management commands
+- Widget-initiated changes to Git repositories or worktree management commands; the separately documented `/close-worktree` manager operation is the sole approved exception
 
 ## Further Notes
 

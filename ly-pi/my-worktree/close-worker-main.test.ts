@@ -193,4 +193,37 @@ describe("runCloseWorktreeWorker", () => {
       "close-worktree worker: cannot enter repository root: directory is gone",
     );
   });
+
+  it("signals readiness only after changing to the repository root and starting PID wait", async () => {
+    const calls: string[] = [];
+    const report = vi.fn();
+
+    await expect(
+      runCloseWorktreeWorker(
+        [JSON.stringify(request)],
+        {
+          chdir: () => {
+            calls.push("chdir");
+          },
+          report,
+          createDeps: () => ({
+            waitForPidExit: async (_pid, _timeout, onWaiting) => {
+              calls.push("wait");
+              onWaiting?.();
+              return false;
+            },
+            inspectWorktree: vi.fn(),
+            removeWorktree: vi.fn(),
+            runHook: vi.fn(),
+            report,
+          }),
+        },
+        () => {
+          calls.push("ready");
+        },
+      ),
+    ).resolves.toBe(1);
+
+    expect(calls).toEqual(["chdir", "wait", "ready"]);
+  });
 });
