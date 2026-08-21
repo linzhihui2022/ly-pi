@@ -174,6 +174,35 @@ describe("runCloseWorktreeWorker", () => {
     expect(Object.isFrozen(inspectedPlan?.hookArgv)).toBe(true);
   });
 
+  it("preserves literal quotes in the final terminal target", async () => {
+    const hookArgv = [...request.plan.hookArgv.slice(0, -1), 'pane "150"'];
+    const runHook = vi.fn(async () => ({ code: 0, output: "" }));
+
+    await expect(
+      runCloseWorktreeWorker(
+        [
+          JSON.stringify({
+            ...request,
+            plan: { ...request.plan, hookArgv },
+          }),
+        ],
+        {
+          chdir: vi.fn(),
+          report: vi.fn(),
+          createDeps: () => ({
+            waitForPidExit: async () => true,
+            inspectWorktree: async () => readyFacts(),
+            removeWorktree: async () => ({ code: 0, output: "" }),
+            runHook,
+            report: vi.fn(),
+          }),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(runHook).toHaveBeenCalledWith(hookArgv);
+  });
+
   it("reports a repository-root change-directory failure without running the worker", async () => {
     const report = vi.fn();
     const createDeps = vi.fn();

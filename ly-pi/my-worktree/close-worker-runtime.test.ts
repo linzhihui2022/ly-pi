@@ -1,3 +1,6 @@
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { WorkerCommandResult } from "./close-worker";
 import {
@@ -59,7 +62,8 @@ describe("inspectWorktreeClosure", () => {
         exec,
         exists: () => false,
         platform: "darwin",
-        isExecutable: (command) => command === "wezterm",
+        isExecutable: (command, cwd) =>
+          command === "wezterm" && cwd === "/repo",
       }),
     ).resolves.toEqual({
       platform: "darwin",
@@ -101,13 +105,28 @@ describe("inspectWorktreeClosure", () => {
     );
   });
 
-  it("recognizes executable paths without invoking them", () => {
+  it("requires hook commands to be executable regular files", () => {
     expect(isWorkerExecutable(process.execPath)).toBe(true);
     expect(isWorkerExecutable("git")).toBe(true);
     expect(isWorkerExecutable("")).toBe(false);
     expect(
       isWorkerExecutable("/definitely-not-a-real-close-worktree-command"),
     ).toBe(false);
+    expect(isWorkerExecutable(tmpdir())).toBe(false);
+  });
+
+  it("resolves relative hook paths from the worker cwd", () => {
+    const repositoryRoot = mkdtempSync(join(tmpdir(), "close-worktree-hook-"));
+    const hookPath = join(repositoryRoot, "close-hook");
+    writeFileSync(hookPath, "#!/bin/sh\nexit 0\n");
+    chmodSync(hookPath, 0o755);
+
+    try {
+      expect(isWorkerExecutable("./close-hook", repositoryRoot)).toBe(true);
+      expect(isWorkerExecutable("./close-hook", "/")).toBe(false);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
   });
 
   it("waits no longer than the configured timeout for Pi to exit", async () => {
@@ -351,7 +370,8 @@ describe("inspectWorktreeClosure", () => {
         exec,
         exists: () => false,
         platform: "darwin",
-        isExecutable: (command) => command === "wezterm",
+        isExecutable: (command, cwd) =>
+          command === "wezterm" && cwd === "/repo",
         closeHook: {
           command: "wezterm cli kill-pane --pane-id",
           target: "pane-150",

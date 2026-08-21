@@ -74,7 +74,40 @@ describe("runPostExitWorktreeClosure", () => {
 
     expect(timeouts).toEqual([30_000]);
     expect(reports).toEqual([
-      "close-worktree: Pi did not exit within 30 seconds. Worktree left at /repo/.worktree/feature. Recover with: cd /repo",
+      "close-worktree: Pi did not exit within 30 seconds. Worktree left at /repo/.worktree/feature. Recover with: cd '/repo'",
+    ]);
+  });
+
+  it("quotes repository paths in timeout recovery guidance", async () => {
+    const repositoryRoot = "/repo with spaces/it's";
+    const quotedPlan: WorktreeClosePlan = {
+      ...plan,
+      repositoryRoot,
+      worktreePath: `${repositoryRoot}/.worktree/feature`,
+    };
+    const reports: string[] = [];
+
+    await expect(
+      runPostExitWorktreeClosure(
+        { piPid: 123, plan: quotedPlan },
+        {
+          waitForPidExit: async () => false,
+          inspectWorktree: async () => {
+            throw new Error("should not inspect before Pi exits");
+          },
+          removeWorktree: async () => {
+            throw new Error("should not remove before Pi exits");
+          },
+          runHook: async () => {
+            throw new Error("should not run the hook before Pi exits");
+          },
+          report: (message) => reports.push(message),
+        },
+      ),
+    ).resolves.toBe("timed-out");
+
+    expect(reports).toEqual([
+      `close-worktree: Pi did not exit within 30 seconds. Worktree left at ${quotedPlan.worktreePath}. Recover with: cd '/repo with spaces/it'\\''s'`,
     ]);
   });
 
@@ -105,7 +138,7 @@ describe("runPostExitWorktreeClosure", () => {
     ).resolves.toBe("revalidation-failed");
 
     expect(reports).toEqual([
-      "close-worktree: revalidation failed: The current worktree has tracked changes. Worktree left at /repo/.worktree/feature. Recover with: cd /repo",
+      "close-worktree: revalidation failed: The current worktree has tracked changes. Worktree left at /repo/.worktree/feature. Recover with: cd '/repo'",
     ]);
   });
 
@@ -133,7 +166,7 @@ describe("runPostExitWorktreeClosure", () => {
     ).resolves.toBe("revalidation-failed");
 
     expect(reports).toEqual([
-      "close-worktree: revalidation failed: The worktree no longer matches the approved close plan. Worktree left at /repo/.worktree/feature. Recover with: cd /repo",
+      "close-worktree: revalidation failed: The worktree no longer matches the approved close plan. Worktree left at /repo/.worktree/feature. Recover with: cd '/repo'",
     ]);
   });
 
@@ -160,7 +193,7 @@ describe("runPostExitWorktreeClosure", () => {
     ).resolves.toBe("revalidation-failed");
 
     expect(reports).toEqual([
-      "close-worktree: revalidation could not be completed: git worktree list failed. Worktree left at /repo/.worktree/feature. Recover with: cd /repo",
+      "close-worktree: revalidation could not be completed: git worktree list failed. Worktree left at /repo/.worktree/feature. Recover with: cd '/repo'",
     ]);
   });
 
@@ -195,7 +228,7 @@ describe("runPostExitWorktreeClosure", () => {
 
     expect(calls).toEqual(["wait", "inspect", "remove"]);
     expect(reports).toEqual([
-      "close-worktree: worktree removal failed (exit 23): Git refused removal. Worktree left at /repo/.worktree/feature. Recover with: cd /repo",
+      "close-worktree: worktree removal failed (exit 23): Git refused removal. Worktree left at /repo/.worktree/feature. Recover with: cd '/repo'",
     ]);
   });
 
@@ -220,7 +253,7 @@ describe("runPostExitWorktreeClosure", () => {
     ).resolves.toBe("removal-failed");
 
     expect(reports).toEqual([
-      "close-worktree: worktree removal could not be completed: spawn failed. Worktree left at /repo/.worktree/feature. Recover with: cd /repo",
+      "close-worktree: worktree removal could not be completed: spawn failed. Worktree left at /repo/.worktree/feature. Recover with: cd '/repo'",
     ]);
   });
 
@@ -241,7 +274,7 @@ describe("runPostExitWorktreeClosure", () => {
     ).resolves.toBe("hook-failed");
 
     expect(reports).toEqual([
-      'close-worktree: worktree was removed, but terminal hook failed (exit 7): ["wezterm","cli","kill-pane","--pane-id","150"]. Recover with: cd /repo',
+      `close-worktree: worktree was removed, but terminal hook failed (exit 7): ["wezterm","cli","kill-pane","--pane-id","150"]. Recover with: cd '/repo'`,
     ]);
   });
 
@@ -264,7 +297,7 @@ describe("runPostExitWorktreeClosure", () => {
     ).resolves.toBe("hook-failed");
 
     expect(reports).toEqual([
-      'close-worktree: worktree was removed, but terminal hook could not be run: hook executable disappeared. argv: ["wezterm","cli","kill-pane","--pane-id","150"]. Recover with: cd /repo',
+      `close-worktree: worktree was removed, but terminal hook could not be run: hook executable disappeared. argv: ["wezterm","cli","kill-pane","--pane-id","150"]. Recover with: cd '/repo'`,
     ]);
   });
 

@@ -35,8 +35,12 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 function recoveryCommand(plan: WorktreeClosePlan): string {
-  return `Recover with: cd ${plan.repositoryRoot}`;
+  return `Recover with: cd ${shellQuote(plan.repositoryRoot)}`;
 }
 
 function retainedWorktree(plan: WorktreeClosePlan): string {

@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { accessSync, constants, existsSync } from "node:fs";
-import { delimiter, join, resolve } from "node:path";
+import { accessSync, constants, existsSync, statSync } from "node:fs";
+import { delimiter, resolve } from "node:path";
 import type {
   PostExitWorktreeClosureDeps,
   WorkerCommandResult,
@@ -20,7 +20,7 @@ export interface ClosureInspectionDeps {
   exec: WorkerExec;
   exists(path: string): boolean;
   platform: string;
-  isExecutable(command: string): boolean;
+  isExecutable(command: string, cwd?: string): boolean;
 }
 
 export interface CurrentWorktreeClosureInspectionOptions
@@ -83,6 +83,7 @@ export async function waitForProcessExit(
 
 function canExecute(path: string): boolean {
   try {
+    if (!statSync(path).isFile()) return false;
     accessSync(path, constants.X_OK);
     return true;
   } catch {
@@ -90,15 +91,16 @@ function canExecute(path: string): boolean {
   }
 }
 
-export function isWorkerExecutable(command: string): boolean {
+export function isWorkerExecutable(
+  command: string,
+  cwd = process.cwd(),
+): boolean {
   if (!command) return false;
-  if (command.includes("/")) return canExecute(command);
+  if (command.includes("/")) return canExecute(resolve(cwd, command));
 
   return (process.env.PATH ?? "")
     .split(delimiter)
-    .some(
-      (directory) => directory !== "" && canExecute(join(directory, command)),
-    );
+    .some((directory) => canExecute(resolve(cwd, directory, command)));
 }
 
 export async function executeWorkerCommand(
@@ -233,17 +235,19 @@ export function createPostExitWorktreeClosureDeps(
 
 function closeHookFromArgv(
   hookArgv: readonly string[],
+  cwd: string,
   deps: Pick<ClosureInspectionDeps, "isExecutable">,
 ): WorktreeClosureFacts["closeHook"] {
   return {
     command: hookArgv.slice(0, -1).join(" "),
     target: hookArgv.at(-1),
-    executableAvailable: deps.isExecutable(hookArgv[0] ?? ""),
+    executableAvailable: deps.isExecutable(hookArgv[0] ?? "", cwd),
   };
 }
 
 function closeHookFromEnvironment(
   closeHook: CurrentWorktreeClosureInspectionOptions["closeHook"],
+  cwd: string,
   deps: Pick<ClosureInspectionDeps, "isExecutable">,
 ): WorktreeClosureFacts["closeHook"] {
   const executable = closeHook.command?.trim().split(/\s+/)[0] ?? "";
@@ -251,7 +255,7 @@ function closeHookFromEnvironment(
   return {
     command: closeHook.command,
     target: closeHook.target,
-    executableAvailable: deps.isExecutable(executable),
+    executableAvailable: deps.isExecutable(executable, cwd),
   };
 }
 
@@ -347,7 +351,7 @@ export async function inspectCurrentWorktreeClosure(
     primary,
     cwd,
     primary?.path ?? cwd,
-    closeHookFromEnvironment(options.closeHook, options),
+    closeHookFromEnvironment(options.closeHook, primary?.path ?? cwd, options),
     options,
   );
 }
@@ -375,7 +379,7 @@ export async function inspectWorktreeClosure(
     primary,
     plan.worktreePath,
     plan.repositoryRoot,
-    closeHookFromArgv(plan.hookArgv, deps),
+    closeHookFromArgv(plan.hookArgv, plan.repositoryRoot, deps),
     deps,
   );
 }

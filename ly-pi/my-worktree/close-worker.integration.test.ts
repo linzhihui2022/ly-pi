@@ -164,7 +164,7 @@ describe("post-exit worktree closure integration", () => {
       expect(existsSync(worktreePath)).toBe(true);
       expect(hook).not.toHaveBeenCalled();
       expect(reports).toEqual([
-        `close-worktree: Pi did not exit within 30 seconds. Worktree left at ${worktreePath}. Recover with: cd ${repositoryRoot}`,
+        `close-worktree: Pi did not exit within 30 seconds. Worktree left at ${worktreePath}. Recover with: cd '${repositoryRoot}'`,
       ]);
     } finally {
       rmSync(repositoryRoot, { recursive: true, force: true });
@@ -196,7 +196,7 @@ describe("post-exit worktree closure integration", () => {
       expect(existsSync(worktreePath)).toBe(true);
       expect(hook).not.toHaveBeenCalled();
       expect(reports).toEqual([
-        `close-worktree: worktree removal failed (exit 23): fake Git removal failure. Worktree left at ${worktreePath}. Recover with: cd ${repositoryRoot}`,
+        `close-worktree: worktree removal failed (exit 23): fake Git removal failure. Worktree left at ${worktreePath}. Recover with: cd '${repositoryRoot}'`,
       ]);
     } finally {
       rmSync(repositoryRoot, { recursive: true, force: true });
@@ -230,7 +230,7 @@ describe("post-exit worktree closure integration", () => {
         ]),
       ).toBe("");
       expect(reports).toEqual([
-        `close-worktree: worktree was removed, but terminal hook failed (exit 7): ["/bin/true","pane-150"]. Recover with: cd ${repositoryRoot}`,
+        `close-worktree: worktree was removed, but terminal hook failed (exit 7): ["/bin/true","pane-150"]. Recover with: cd '${repositoryRoot}'`,
       ]);
     } finally {
       rmSync(repositoryRoot, { recursive: true, force: true });
@@ -259,7 +259,7 @@ describe("post-exit worktree closure integration", () => {
       expect(existsSync(worktreePath)).toBe(true);
       expect(hook).not.toHaveBeenCalled();
       expect(reports).toEqual([
-        `close-worktree: revalidation failed: The current worktree has tracked changes. Worktree left at ${worktreePath}. Recover with: cd ${repositoryRoot}`,
+        `close-worktree: revalidation failed: The current worktree has tracked changes. Worktree left at ${worktreePath}. Recover with: cd '${repositoryRoot}'`,
       ]);
     } finally {
       rmSync(repositoryRoot, { recursive: true, force: true });

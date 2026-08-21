@@ -50,10 +50,12 @@ export PI_W_CLOSE_TARGET="$WEZTERM_PANE"
 ```
 
 Pi trims `PI_W_CLOSE`, splits it on whitespace, and appends
-`PI_W_CLOSE_TARGET` as exactly one final argument. Quoting, shell
-interpolation, a default terminal command, and cwd-based target discovery are
-not supported. The hook may target WezTerm, tmux, or another terminal
-controller; `my-worktree` does not hard-code one.
+`PI_W_CLOSE_TARGET` verbatim as exactly one final argument. `PI_W_CLOSE` does
+not support quoting or shell interpolation, so arguments embedded in that
+value cannot contain whitespace. Executable lookup runs from the primary
+repository root, which is also the detached worker's cwd. There is no default
+terminal command or cwd-based target discovery. The hook may target WezTerm,
+tmux, or another terminal controller; `my-worktree` does not hard-code one.
 
 ## Visibility and refresh
 

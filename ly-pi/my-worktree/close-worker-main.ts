@@ -59,13 +59,16 @@ export interface CloseWorkerCliDeps {
 function parseClosePlan(
   value: SerializedCloseRequest["plan"],
 ): WorktreeClosePlan | null {
+  const commandArgv = value.hookArgv.slice(0, -1);
+  const target = value.hookArgv.at(-1);
   if (
     !isAbsolute(value.repositoryRoot) ||
     !isAbsolute(value.worktreePath) ||
     resolve(value.repositoryRoot) === resolve(value.worktreePath) ||
-    value.hookArgv.some(
+    commandArgv.some(
       (argument) => argument.trim() === "" || /['"]/.test(argument),
-    )
+    ) ||
+    !target?.trim()
   ) {
     return null;
   }
