@@ -21,13 +21,13 @@ function closeWorktreeSummary(plan: WorktreeClosePlan): string {
   const branch = plan.branch ?? "(none; detached HEAD)";
 
   return [
-    `Worktree to remove: ${plan.worktreePath}`,
-    `Local branch retained: ${branch}`,
+    `将要移除的工作树：${plan.worktreePath}`,
+    `保留的本地分支：${branch}`,
     "",
-    "Ignored files in this worktree may be deleted.",
-    "No external-process scan was performed.",
+    "此工作树中的已忽略文件可能会被删除。",
+    "未执行外部进程扫描。",
     "",
-    "Pi will exit gracefully. The worktree will be removed only if post-exit revalidation passes. The configured terminal hook will run only after successful removal.",
+    "Pi 将优雅退出。只有在退出后重新验证通过时，才会移除工作树。仅在成功移除后才会运行已配置的终端关闭 hook。",
   ].join("\n");
 }
 
@@ -88,7 +88,7 @@ export default function myWorktree(pi: ExtensionAPI): void {
       }
 
       const confirmed = await ctx.ui.confirm(
-        "Close current worktree?",
+        "关闭当前工作树？",
         closeWorktreeSummary(assessment.plan),
       );
       if (!confirmed) return;

@@ -246,14 +246,14 @@ describe("my-worktree extension", () => {
     await commands.get("close-worktree")!.handler("", ctx);
 
     expect(ctx.ui.confirm).toHaveBeenCalledWith(
-      "Close current worktree?",
+      "关闭当前工作树？",
       expect.stringContaining("/repo/.worktree/feature"),
     );
     const summary = ctx.ui.confirm.mock.calls[0][1] as string;
-    expect(summary).toContain("Local branch retained: feature");
-    expect(summary).toContain("Ignored files in this worktree may be deleted.");
-    expect(summary).toContain("No external-process scan was performed.");
-    expect(summary).toContain("only after successful removal");
+    expect(summary).toContain("保留的本地分支：feature");
+    expect(summary).toContain("此工作树中的已忽略文件可能会被删除。");
+    expect(summary).toContain("未执行外部进程扫描。");
+    expect(summary).toContain("仅在成功移除后才会运行已配置的终端关闭 hook。");
     expect(startCloseWorktreeWorker).not.toHaveBeenCalled();
     expect(ctx.shutdown).not.toHaveBeenCalled();
   });
