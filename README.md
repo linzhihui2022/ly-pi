@@ -39,7 +39,7 @@ configure/
 │   ├── shared/               # 跨模块共享（guard-harness 等）
 │   ├── assets/               # 部署资产（随 bun run deploy 分发到 ~/.pi/agent/）
 │   │   ├── config/           # 纯配置源文件：settings、mcp、tool-display、sound 等
-│   │   ├── skills/           # 仓库自有技能（review-pr）
+│   │   ├── skills/           # 仓库自有技能（review-pr、gh-build-weekly-timesheet）
 │   │   ├── themes/           # Catppuccin Mocha 主题
 │   │   └── agents/           # 子代理定义（PR 审查角色 + image-reader）
 │   └── settings-schema.json  # settings.json 的运行时校验 schema（部署时校验）
@@ -84,7 +84,9 @@ configure/
 
 ## 🎯 技能
 
-- **仓库自有**（`ly-pi/assets/skills/`，随 deploy 快照式部署）：`review-pr` — 并行调度专职 reviewer 子代理做多维度 PR 审查
+- **仓库自有**（`ly-pi/assets/skills/`，随 deploy 快照式部署）：
+  - `review-pr` — 并行调度专职 reviewer 子代理做多维度 PR 审查
+  - `gh-build-weekly-timesheet` — 手动根据 GitHub PR 提交证据生成可审计的工时表（需要已认证的 `gh` CLI）
 - **由 [mattpocock/skills](https://github.com/mattpocock/skills) 工作流提供**（外部安装，不镜像到本仓库），驱动「需求与规格」流程
 
 ---
