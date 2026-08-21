@@ -76,7 +76,7 @@ configure/
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-session-name** | 自动生成 Session Display Name：首条 prompt 后异步摘要，支持旧 session 补命名与 fork 短 hash |
 | **my-hud** | 自定义单行状态栏：项目名、模型（含思考级别）、Git 分支与状态、PR 链接、上下文百分比（颜色阈值）、Token 与成本、权限统计、Hide thinking 状态 |
-| **my-tool-display** | Pi 原生工具的紧凑呈现；当前覆盖 `read`：成功输出默认隐藏，展开显示完整结果，失败始终显示诊断 |
+| **my-tool-display** | Pi 原生工具的紧凑呈现；当前覆盖 `read`、`grep`、`find`、`ls`、`bash`：读/搜索成功正文默认隐藏，bash 成功输出默认显示最多 10 行，展开显示完整结果，失败始终显示诊断 |
 | **my-worktree** | 多 Git worktree 时在编辑器上方显示可访问工作树的分支和绝对路径，并标记当前项 |
 | **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |
 
@@ -161,14 +161,14 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 | 配置 | 说明 |
 |------|------|
 | `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
-| `assets/config/pi-tool-display.json` | pi-tool-display 配置 |
-| `assets/config/my-tool-display.json` | `my-tool-display` 启用开关 |
-| `assets/config/settings.json` | 子代理模型绑定与 fallback（部署时按 `settings-schema.json` 校验） |
-| `assets/config/mcp.json` | MCP 服务器配置 |
-| `assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
-| `assets/config/my-back.json` | `/back` 命令配置 |
-| `assets/config/append-system.md` | 追加到系统提示的全局指令 |
-| `assets/config/web-search.json` / `rpiv-todo.json` | 第三方扩展配置 |
+| `ly-pi/assets/config/pi-tool-display.json` | pi-tool-display 配置 |
+| `ly-pi/assets/config/my-tool-display.json` | `my-tool-display` 启用开关与 Bash 折叠行数（`bashCollapsedLines`，默认 10） |
+| `ly-pi/assets/config/settings.json` | 子代理模型绑定与 fallback（部署时按 `settings-schema.json` 校验） |
+| `ly-pi/assets/config/mcp.json` | MCP 服务器配置 |
+| `ly-pi/assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
+| `ly-pi/assets/config/my-back.json` | `/back` 命令配置 |
+| `ly-pi/assets/config/append-system.md` | 追加到系统提示的全局指令 |
+| `ly-pi/assets/config/web-search.json` / `rpiv-todo.json` | 第三方扩展配置 |
 
 ### 作者个人化内容（使用前请自行调整）
 

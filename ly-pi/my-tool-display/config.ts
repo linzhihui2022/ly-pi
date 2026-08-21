@@ -7,14 +7,22 @@ import { Value } from "typebox/value";
 const ToolDisplayConfigSchema = Type.Object(
   {
     enabled: Type.Boolean(),
+    bashCollapsedLines: Type.Optional(Type.Integer({ minimum: 0 })),
   },
   { additionalProperties: false },
 );
 
-export type ToolDisplayConfig = Static<typeof ToolDisplayConfigSchema>;
+type ToolDisplayConfigFile = Static<typeof ToolDisplayConfigSchema>;
+export type ToolDisplayConfig = Omit<
+  ToolDisplayConfigFile,
+  "bashCollapsedLines"
+> & {
+  bashCollapsedLines: number;
+};
 
 export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
   enabled: true,
+  bashCollapsedLines: 10,
 };
 
 export function loadToolDisplayConfig(): ToolDisplayConfig {
@@ -26,9 +34,16 @@ export function loadToolDisplayConfig(): ToolDisplayConfig {
       "my-tool-display.json",
     );
     const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
-    return Value.Check(ToolDisplayConfigSchema, parsed)
-      ? parsed
-      : { ...DEFAULT_TOOL_DISPLAY_CONFIG };
+    if (!Value.Check(ToolDisplayConfigSchema, parsed)) {
+      return { ...DEFAULT_TOOL_DISPLAY_CONFIG };
+    }
+
+    return {
+      enabled: parsed.enabled,
+      bashCollapsedLines:
+        parsed.bashCollapsedLines ??
+        DEFAULT_TOOL_DISPLAY_CONFIG.bashCollapsedLines,
+    };
   } catch {
     return { ...DEFAULT_TOOL_DISPLAY_CONFIG };
   }
