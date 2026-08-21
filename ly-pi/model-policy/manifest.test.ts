@@ -34,6 +34,46 @@ describe("checked-in model policy manifest", () => {
     });
   });
 
+  it("binds specialized agents to their capability roles", () => {
+    const registry = createModelPolicyRegistry(manifest);
+    const compiled = registry.compilePiSettings().subagents.agentOverrides;
+    const report = registry.describe({
+      find: () => ({
+        provider: "test",
+        id: "text-only",
+        input: ["text"],
+        reasoning: true,
+        contextWindow: 128000,
+        thinkingLevelMap: { max: "max" },
+      }),
+    });
+
+    expect(manifest.deployment.agents).toMatchObject({
+      "image-reader": "vision",
+      "pr-comment-analyzer": "standard",
+    });
+    expect(compiled).toEqual(
+      expect.objectContaining({
+        "image-reader": expect.objectContaining({
+          model: expect.any(String),
+          thinking: expect.any(String),
+          fallbackModels: expect.any(Array),
+        }),
+        "pr-comment-analyzer": expect.objectContaining({
+          model: expect.any(String),
+          thinking: expect.any(String),
+          fallbackModels: expect.any(Array),
+        }),
+      }),
+    );
+    expect(compiled["pr-comment-analyzer"]).toEqual(compiled.delegate);
+    expect(report.roles.standard.failurePolicy).toBe("error");
+    expect(report.roles.vision.candidates[0]).toMatchObject({
+      status: "incompatible",
+      diagnostics: ["missing input: image"],
+    });
+  });
+
   it("does not allow a local override for either security role", () => {
     expect(() =>
       createModelPolicyRegistry(manifest, {

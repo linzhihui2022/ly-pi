@@ -20,18 +20,18 @@ describe("my-model-policy", () => {
         deviates: true,
       },
       roles: {
-        fast: {
-          policy: "fast-policy",
-          failurePolicy: "skip",
+        vision: {
+          policy: "vision-policy",
+          failurePolicy: "error",
           candidates: [
             {
               slot: "primary",
-              model: "test/fast",
-              label: "Fast test model",
-              thinking: "off",
+              model: "test/vision",
+              label: "Vision test model",
+              thinking: "max",
               source: "manifest",
-              status: "ready",
-              diagnostics: ["context window is too small"],
+              status: "incompatible",
+              diagnostics: ["missing input: image"],
             },
           ],
         },
@@ -58,6 +58,7 @@ describe("my-model-policy", () => {
       expect.stringContaining("other/recovered"),
       "warning",
     );
-    expect(notify.mock.calls[0][0]).toContain("context window is too small");
+    expect(notify.mock.calls[0][0]).toContain("vision → vision-policy");
+    expect(notify.mock.calls[0][0]).toContain("missing input: image");
   });
 });

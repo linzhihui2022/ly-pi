@@ -1,8 +1,6 @@
 ---
 name: image-reader
 description: 具有视觉能力的 agent，用于分析图片、截图、UI 原型、图表、流程图和错误信息。当父模型需要理解图片但不具备视觉能力时使用。
-model: openai-codex/gpt-5.6-terra
-thinking: max
 tools: read, grep, find
 systemPromptMode: replace
 acceptanceRole: read-only

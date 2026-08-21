@@ -195,6 +195,66 @@ describe("deploy model policy settings", () => {
     );
   });
 
+  it("deploys policy-generated specialist overrides without frontmatter model pins", () => {
+    const staging = stagingDir();
+
+    const result = deploy(staging);
+
+    expect(result.status).toBe(0);
+    const settings = JSON.parse(
+      readFileSync(join(staging, "agent", "settings.json"), "utf-8"),
+    );
+    const manifest = JSON.parse(
+      readFileSync(
+        join(LY_PI_DIR, "assets", "config", "model-policies.json"),
+        "utf-8",
+      ),
+    ) as {
+      roles: Record<string, string>;
+      policies: Record<
+        string,
+        { candidates: Array<{ model: string; thinking: string }> }
+      >;
+    };
+    const expectedOverride = (role: string) => {
+      const [primary, ...fallbacks] =
+        manifest.policies[manifest.roles[role]].candidates;
+      return {
+        model: primary.model,
+        thinking: primary.thinking,
+        fallbackModels: fallbacks.map((candidate) => candidate.model),
+      };
+    };
+    expect(settings.subagents.agentOverrides).toMatchObject({
+      "image-reader": expectedOverride("vision"),
+      "pr-comment-analyzer": expectedOverride("standard"),
+    });
+
+    const requiredFrontmatter = {
+      "image-reader": [
+        "tools: read, grep, find",
+        "acceptanceRole: read-only",
+        "你是一名视觉分析专家",
+      ],
+      "pr-comment-analyzer": [
+        "tools: read, bash, grep, find, ls",
+        "acceptanceRole: read-only",
+        "你是一名严谨的代码注释分析师",
+      ],
+    };
+    for (const [agent, requiredFields] of Object.entries(requiredFrontmatter)) {
+      const frontmatter = readFileSync(
+        join(staging, "agent", "agents", `${agent}.md`),
+        "utf-8",
+      );
+      expect(frontmatter).not.toMatch(/^model:/m);
+      expect(frontmatter).not.toMatch(/^thinking:/m);
+      for (const field of requiredFields) {
+        expect(frontmatter).toContain(field);
+      }
+    }
+  });
+
   it("does not duplicate managed model choices in source settings", () => {
     const source = JSON.parse(
       readFileSync(
@@ -209,6 +269,12 @@ describe("deploy model policy settings", () => {
     expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty("scout");
     expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
       "delegate",
+    );
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
+      "image-reader",
+    );
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
+      "pr-comment-analyzer",
     );
   });
 });
