@@ -3,11 +3,11 @@
 [![verify](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml/badge.svg)](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：12 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
+围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：13 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
 
 ## 特性
 
-- **统一扩展入口 `ly-pi`**：单一 `index.ts` 按序注册 12 个子模块，部署到 `~/.pi/agent/extensions/ly-pi/` 由 Pi 自动发现加载
+- **统一扩展入口 `ly-pi`**：单一 `index.ts` 按序注册 13 个子模块，部署到 `~/.pi/agent/extensions/ly-pi/` 由 Pi 自动发现加载
 - **权限拦截器**：确定性规则 + 模型法官二审工具调用，可逐项目定制
 - **开发体验**：自定义 HUD 状态栏、`/diff` 查看器、`/html` 渲染、事件音效、`/back` 撤销消息、热重载自动恢复
 - **行为护栏**：冗余 `cd` 前缀自动纠正、内联长脚本硬拦截
@@ -19,7 +19,7 @@
 
 ```
 configure/
-├── ly-pi/                    # 统一扩展入口（单包，含全部 12 个子模块）
+├── ly-pi/                    # 统一扩展入口（单包，含全部 13 个子模块）
 │   ├── index.ts              # 入口：按序注册所有子模块
 │   ├── my-cd-guard/          # 冗余 cd 前缀自动纠正
 │   ├── my-script-guard/      # 内联脚本硬拦截 + 急迫升级
@@ -32,6 +32,7 @@ configure/
 │   ├── my-sound/             # 音效反馈 + 语音包管理
 │   ├── my-session-name/      # 自动生成 Session Display Name
 │   ├── my-hud/               # 自定义 HUD 状态栏
+│   ├── my-tool-display/      # 原生工具紧凑呈现
 │   ├── my-worktree/          # 只读 worktree 组件 + /close-worktree 安全关闭命令
 │   ├── my-vision/            # 按模型视觉能力注入图片处理规则
 │   ├── web-preview/          # 内部工具库：HTML 预览 server + 文档骨架
@@ -75,6 +76,7 @@ configure/
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-session-name** | 自动生成 Session Display Name：首条 prompt 后异步摘要，支持旧 session 补命名与 fork 短 hash |
 | **my-hud** | 自定义单行状态栏：项目名、模型（含思考级别）、Git 分支与状态、PR 链接、上下文百分比（颜色阈值）、Token 与成本、权限统计、Hide thinking 状态 |
+| **my-tool-display** | Pi 原生工具的紧凑呈现；当前覆盖 `read`：成功输出默认隐藏，展开显示完整结果，失败始终显示诊断 |
 | **my-worktree** | 只读 Worktree Widget 在多 Git worktree 时显示可访问工作树；`/close-worktree` 经确认后安全关闭 Current Worktree，保留本地分支，并通过用户配置的终端 hook 收尾 |
 | **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |
 
@@ -160,6 +162,7 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 |------|------|
 | `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
 | `assets/config/pi-tool-display.json` | pi-tool-display 配置 |
+| `assets/config/my-tool-display.json` | `my-tool-display` 启用开关 |
 | `assets/config/settings.json` | 子代理模型绑定与 fallback（部署时按 `settings-schema.json` 校验） |
 | `assets/config/mcp.json` | MCP 服务器配置 |
 | `assets/config/my-sound.json` | 音效开关、语音包与分类配置 |

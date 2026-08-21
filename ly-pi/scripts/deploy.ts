@@ -198,6 +198,12 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
       label: "my-sound.json",
     },
     {
+      src: "my-tool-display.json",
+      dest: "my-tool-display.json",
+      base: extDir,
+      label: "my-tool-display.json",
+    },
+    {
       src: "my-back.json",
       dest: "my-back.json",
       base: extDir,
