@@ -205,6 +205,74 @@ describe("my-permission extension entry", () => {
     });
   });
 
+  it("does not pass the parent session model to judge", async () => {
+    vi.mocked(decide).mockReturnValue({
+      action: "ask",
+      source: "defaultPolicy",
+    });
+    const mockJudge = vi.fn().mockResolvedValue({
+      safe: true,
+      reason: "safe operation",
+      toolFor: "read file",
+    });
+    vi.mocked(createJudge).mockReturnValue(mockJudge);
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    await api.getHandler("tool_call")(
+      createBashEvent("cat README.md"),
+      createMockCtx({
+        model: { id: "parent-model", provider: "local" } as Model<Api>,
+      }),
+    );
+
+    expect(vi.mocked(createJudge).mock.calls[0]?.[1]).not.toHaveProperty(
+      "model",
+    );
+    expect(mockJudge.mock.calls[0]).toHaveLength(2);
+    expect(mockJudge.mock.calls[0]?.[1]).toBe("/repo");
+  });
+
+  it("allows a failed judge call after user confirmation and records override", async () => {
+    vi.mocked(decide).mockReturnValue({
+      action: "ask",
+      source: "defaultPolicy",
+    });
+    vi.mocked(createJudge).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        safe: false,
+        score: 2,
+        reason: "no usable candidate",
+        toolFor: "read file",
+      }),
+    );
+    vi.mocked(confirmToolCall).mockResolvedValue(true);
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const handler = api.getHandler("tool_call");
+    const ctx = createMockCtx();
+    await expect(
+      handler(createBashEvent("cat README.md"), ctx),
+    ).resolves.toBeUndefined();
+
+    expect(confirmToolCall).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        toolName: "bash",
+        reason: "no usable candidate",
+      }),
+    );
+    expect(api.appendEntry).toHaveBeenCalledWith("my-permission-override", {
+      toolName: "bash",
+      value: "cat README.md",
+    });
+  });
+
   it("blocks when rules return ask, judge says unsafe, and user denies", async () => {
     vi.mocked(decide).mockReturnValue({
       action: "ask",
