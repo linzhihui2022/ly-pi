@@ -1,10 +1,12 @@
 import { writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { loadModelPolicyRegistry } from "../model-policy/config";
 import { ANSI as C } from "../src/shared/ansi";
 import { loadFile } from "../src/shared/file";
 import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
@@ -20,6 +22,7 @@ import { createMerger as createPipelineMerger } from "./pipeline";
 import { createAdvocate } from "./professor";
 import { createProsecutor } from "./prosecutor";
 import { decide } from "./rules";
+import { runPermissionSelfTest } from "./self-test";
 import {
   collectAllowed,
   collectDeniedThenApproved,
@@ -38,6 +41,7 @@ import {
 // ---- diff helpers ----
 
 const GREY = "\x1b[90m";
+const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
 
 interface DiffLine {
   type: "keep" | "add" | "remove";
@@ -166,6 +170,17 @@ function createModelClient(ctx: ExtensionContext): ModelClient {
   };
 }
 
+function loadSecurityModelRunner(role: "security-audit" | "security-judge") {
+  try {
+    return { ok: true as const, modelRunner: loadModelPolicyRegistry(EXT_DIR) };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: `${role} 模型策略不可用: ${(error as Error).message}`,
+    };
+  }
+}
+
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const judgePrompt = JUDGE_PROMPT;
   const localJudge = loadFile(join(process.cwd(), "JUDGE.md"));
@@ -186,7 +201,20 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       countLabel: string;
     },
   ) {
-    const merger = createPipelineMerger(config, createModelClient(ctx));
+    const securityAudit = loadSecurityModelRunner("security-audit");
+    if (!securityAudit.ok) {
+      return {
+        content: [
+          { type: "text" as const, text: `融合失败: ${securityAudit.error}` },
+        ],
+        details: {},
+      };
+    }
+    const merger = createPipelineMerger(
+      config,
+      createModelClient(ctx),
+      securityAudit.modelRunner,
+    );
     const mergeResult = await merger({
       current: opts.currentJudgeMd,
       operations: opts.operations,
@@ -204,13 +232,13 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
       };
     }
 
-    if (mergeResult.cost !== undefined) {
+    if (mergeResult.cost !== undefined && mergeResult.modelUsed) {
       appendCost(
         ctx.sessionManager.getSessionId(),
         ctx.cwd,
         opts.costType,
         mergeResult.cost,
-        config.professorModel,
+        mergeResult.modelUsed,
       );
     }
 
@@ -298,6 +326,31 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     },
   });
 
+  pi.registerCommand("permission-self-test", {
+    description: "使用 security-judge 运行权限对抗自测",
+    handler: async (_args, ctx: ExtensionContext) => {
+      const securityJudge = loadSecurityModelRunner("security-judge");
+      if (!securityJudge.ok) {
+        ctx.ui.notify(`权限自测失败: ${securityJudge.error}`, "error");
+        return;
+      }
+
+      const result = await runPermissionSelfTest({
+        config,
+        judgePrompt,
+        localJudge,
+        modelClient: createModelClient(ctx),
+        modelRunner: securityJudge.modelRunner,
+      });
+      if (result.error) {
+        ctx.ui.notify(`权限自测失败: ${result.error}`, "error");
+        return;
+      }
+
+      ctx.ui.notify(result.report ?? "权限自测完成", "info");
+    },
+  });
+
   pi.registerTool({
     name: "permission_advocate",
     label: "辩护人",
@@ -321,7 +374,23 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      const advocate = createAdvocate(config, createModelClient(ctx));
+      const securityAudit = loadSecurityModelRunner("security-audit");
+      if (!securityAudit.ok) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `辩护人分析失败: ${securityAudit.error}`,
+            },
+          ],
+          details: {},
+        };
+      }
+      const advocate = createAdvocate(
+        config,
+        createModelClient(ctx),
+        securityAudit.modelRunner,
+      );
       const currentJudgeMd = loadFile(join(process.cwd(), "JUDGE.md"));
 
       const result = await advocate(
@@ -340,13 +409,13 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      if (result.cost !== undefined) {
+      if (result.cost !== undefined && result.modelUsed) {
         appendCost(
           ctx.sessionManager.getSessionId(),
           ctx.cwd,
           "advocate-analysis",
           result.cost,
-          config.professorModel,
+          result.modelUsed,
         );
       }
 
@@ -432,7 +501,23 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      const prosecutor = createProsecutor(config, createModelClient(ctx));
+      const securityAudit = loadSecurityModelRunner("security-audit");
+      if (!securityAudit.ok) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `检察官分析失败: ${securityAudit.error}`,
+            },
+          ],
+          details: {},
+        };
+      }
+      const prosecutor = createProsecutor(
+        config,
+        createModelClient(ctx),
+        securityAudit.modelRunner,
+      );
       const currentJudgeMd = loadFile(join(process.cwd(), "JUDGE.md"));
 
       const result = await prosecutor(
@@ -451,13 +536,13 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      if (result.cost !== undefined) {
+      if (result.cost !== undefined && result.modelUsed) {
         appendCost(
           ctx.sessionManager.getSessionId(),
           ctx.cwd,
           "prosecutor-analysis",
           result.cost,
-          config.professorModel,
+          result.modelUsed,
         );
       }
 
@@ -538,7 +623,23 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      const chief = createChief(config, createModelClient(ctx));
+      const securityAudit = loadSecurityModelRunner("security-audit");
+      if (!securityAudit.ok) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `审判长分析失败: ${securityAudit.error}`,
+            },
+          ],
+          details: {},
+        };
+      }
+      const chief = createChief(
+        config,
+        createModelClient(ctx),
+        securityAudit.modelRunner,
+      );
 
       const result = await chief(
         currentJudgeMd,
@@ -556,13 +657,13 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         };
       }
 
-      if (result.cost !== undefined) {
+      if (result.cost !== undefined && result.modelUsed) {
         appendCost(
           ctx.sessionManager.getSessionId(),
           ctx.cwd,
           "chief-analysis",
           result.cost,
-          config.professorModel,
+          result.modelUsed,
         );
       }
 

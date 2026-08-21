@@ -1,4 +1,4 @@
-import type { AnalyzerConfig } from "./pipeline";
+import type { AnalyzerConfig, SecurityAuditModelRunner } from "./pipeline";
 import {
   createRoleAnalyzer,
   createMerger as createSharedMerger,
@@ -16,6 +16,7 @@ export interface AdvocateResult {
   mergedText?: string;
   error?: string;
   cost?: number;
+  modelUsed?: string;
 }
 
 export type AdvocateFn = (
@@ -91,11 +92,13 @@ export const advocateAnalyzerConfig: AnalyzerConfig<
 export function createAdvocate(
   config: Config,
   modelClient: ModelClient,
+  modelRunner: SecurityAuditModelRunner,
 ): AdvocateFn {
   const analyzer = createRoleAnalyzer(
     config,
     advocateAnalyzerConfig,
     modelClient,
+    modelRunner,
   );
 
   return async function analyze(
@@ -114,6 +117,7 @@ export function createAdvocate(
       suggestion: result.result,
       error: result.error,
       cost: result.cost,
+      modelUsed: result.modelUsed,
     };
   };
 }
@@ -123,8 +127,9 @@ export function createAdvocate(
 export function createMerger(
   config: Config,
   modelClient: ModelClient,
+  modelRunner: SecurityAuditModelRunner,
 ): MergerFn {
-  const sharedMerger = createSharedMerger(config, modelClient);
+  const sharedMerger = createSharedMerger(config, modelClient, modelRunner);
 
   return async function merge(
     currentJudgeMd: string,
@@ -138,6 +143,7 @@ export function createMerger(
       mergedText: result.mergedText,
       error: result.error,
       cost: result.cost,
+      modelUsed: result.modelUsed,
     };
   };
 }

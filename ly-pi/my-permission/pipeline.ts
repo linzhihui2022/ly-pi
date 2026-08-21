@@ -1,13 +1,15 @@
-import type {
-  Api,
-  ModelsApiStreamOptions,
-  ModelThinkingLevel,
-} from "@earendil-works/pi-ai";
+import type { Api, ModelsApiStreamOptions } from "@earendil-works/pi-ai";
+import type { loadModelPolicyRegistry } from "../model-policy/config";
 import { createDevLogger } from "../my-log/index";
 import type { ChiefSuggestionItem } from "./chief";
 import type { Config, ModelClient } from "./types";
 
 const log = createDevLogger("my-permission:pipeline");
+
+export type SecurityAuditModelRunner = Pick<
+  ReturnType<typeof loadModelPolicyRegistry>,
+  "run"
+>;
 
 // ---- types ----
 
@@ -22,13 +24,13 @@ export interface AnalyzerConfig<TInput, TResult> {
   parseResult: (text: string) => TResult | undefined;
   emptyInputError: string;
   modelLabel: string;
-  thinking?: ModelThinkingLevel;
 }
 
 export interface AnalyzerResult<TResult> {
   result?: TResult;
   error?: string;
   cost?: number;
+  modelUsed?: string;
 }
 
 export type AnalyzerFn<TInput, TResult> = (
@@ -47,6 +49,7 @@ export interface MergerResult {
   mergedText?: string;
   error?: string;
   cost?: number;
+  modelUsed?: string;
 }
 
 export type MergerFn = (input: MergerInput) => Promise<MergerResult>;
@@ -54,9 +57,10 @@ export type MergerFn = (input: MergerInput) => Promise<MergerResult>;
 // ---- createRoleAnalyzer ----
 
 export function createRoleAnalyzer<TInput, TResult>(
-  config: Config,
+  _config: Config,
   roleConfig: AnalyzerConfig<TInput, TResult>,
   modelClient: ModelClient,
+  modelRunner: SecurityAuditModelRunner,
 ): AnalyzerFn<TInput, TResult> {
   return async function analyze(
     input: TInput,
@@ -64,33 +68,9 @@ export function createRoleAnalyzer<TInput, TResult>(
     currentJudgeMd: string,
     judgePrompt: string,
   ): Promise<AnalyzerResult<TResult>> {
-    // Validate input
     if (Array.isArray(input) && input.length === 0) {
       return { error: roleConfig.emptyInputError };
     }
-
-    // Resolve model
-    const parts = config.professorModel.split("/");
-    if (parts.length !== 2) {
-      return {
-        error: `professorModel 格式无效: ${config.professorModel}，需要 provider/model 格式`,
-      };
-    }
-
-    const model = modelClient.find(parts[0], parts[1]);
-    if (!model) {
-      log.error(`${roleConfig.modelLabel} model not found`, {
-        configured: config.professorModel,
-      });
-      return {
-        error: `未找到 ${roleConfig.modelLabel} 模型: ${config.professorModel}`,
-      };
-    }
-    log.debug(`${roleConfig.modelLabel} model resolved`, {
-      provider: model.provider,
-      model: model.id,
-      configured: config.professorModel,
-    });
 
     const userPrompt = roleConfig.buildUserPrompt(
       input,
@@ -98,50 +78,53 @@ export function createRoleAnalyzer<TInput, TResult>(
       currentJudgeMd,
       judgePrompt,
     );
+    const context = {
+      systemPrompt: roleConfig.systemPrompt,
+      messages: [
+        { role: "user" as const, content: userPrompt, timestamp: Date.now() },
+      ],
+    };
 
     try {
-      const context = {
-        systemPrompt: roleConfig.systemPrompt,
-        messages: [
-          { role: "user" as const, content: userPrompt, timestamp: Date.now() },
-        ],
-      };
-
-      const thinking = roleConfig.thinking ?? config.professorThinking;
-      const completeOpts: ModelsApiStreamOptions<Api> =
-        thinking === "off" ? {} : { reasoningEffort: thinking };
-
-      const response = await modelClient.complete(model, context, completeOpts);
-
-      const cost = response.usage?.cost?.total;
-
-      // Surface API-level errors
-      const errResp = response as unknown as Record<string, unknown>;
-      if (errResp.stopReason === "error" || errResp.errorMessage) {
-        log.error(`${roleConfig.modelLabel} API error`, {
-          detail: errResp.errorMessage || errResp.stopReason,
+      const runResult = await modelRunner.run(
+        "security-audit",
+        modelClient,
+        async (model, candidate) => {
+          const completeOpts: ModelsApiStreamOptions<Api> =
+            candidate.thinking === "off"
+              ? {}
+              : { reasoningEffort: candidate.thinking };
+          return modelClient.complete(model, context, completeOpts);
+        },
+      );
+      if (runResult.status !== "success") {
+        log.error(`${roleConfig.modelLabel} model unavailable`, {
+          reason: runResult.reason,
         });
         return {
-          error: `${roleConfig.modelLabel} 模型调用失败: ${errResp.errorMessage || errResp.stopReason}`,
+          error: `${roleConfig.modelLabel} 模型调用失败: ${runResult.reason}`,
         };
       }
 
-      // Extract text
+      const response = runResult.value;
+      const cost = response.usage?.cost?.total;
       const text = extractResponseText(response);
       if (!text) {
         log.error(`${roleConfig.modelLabel} empty response`);
         return { error: `${roleConfig.modelLabel} 模型返回了空内容` };
       }
 
-      // Parse result
       const parsed = roleConfig.parseResult(text);
       if (!parsed) {
         log.error(`${roleConfig.modelLabel} parse failed`);
         return { error: `${roleConfig.modelLabel} 模型返回了无法解析的 JSON` };
       }
 
-      log.info(`${roleConfig.modelLabel} completed`, { cost });
-      return { result: parsed, cost };
+      log.info(`${roleConfig.modelLabel} completed`, {
+        cost,
+        model: runResult.candidate.model,
+      });
+      return { result: parsed, cost, modelUsed: runResult.candidate.model };
     } catch (err) {
       log.error(`${roleConfig.modelLabel} call failed`, {
         error: (err as Error).message,
@@ -156,43 +139,43 @@ export function createRoleAnalyzer<TInput, TResult>(
 // ---- createMerger ----
 
 export function createMerger(
-  config: Config,
+  _config: Config,
   modelClient: ModelClient,
+  modelRunner: SecurityAuditModelRunner,
 ): MergerFn {
   return async function merge(input: MergerInput): Promise<MergerResult> {
-    const parts = config.professorModel.split("/");
-    if (parts.length !== 2) {
-      return { error: "professorModel 格式无效" };
-    }
-
-    const model = modelClient.find(parts[0], parts[1]);
-    if (!model) {
-      log.error("merger model not found", {
-        configured: config.professorModel,
-      });
-      return { error: "未找到合并模型" };
-    }
-
     const isChief = input.operations.some((op) => typeof op !== "string");
-
     const { systemPrompt, userContent } = buildMergerPrompts(input, isChief);
+    const context = {
+      systemPrompt,
+      messages: [
+        {
+          role: "user" as const,
+          content: userContent,
+          timestamp: Date.now(),
+        },
+      ],
+    };
 
     try {
-      const context = {
-        systemPrompt,
-        messages: [
-          {
-            role: "user" as const,
-            content: userContent,
-            timestamp: Date.now(),
-          },
-        ],
-      };
+      const runResult = await modelRunner.run(
+        "security-audit",
+        modelClient,
+        async (model, candidate) => {
+          const completeOpts: ModelsApiStreamOptions<Api> =
+            candidate.thinking === "off"
+              ? {}
+              : { reasoningEffort: candidate.thinking };
+          return modelClient.complete(model, context, completeOpts);
+        },
+      );
+      if (runResult.status !== "success") {
+        log.error("merger model unavailable", { reason: runResult.reason });
+        return { error: `合并模型调用失败: ${runResult.reason}` };
+      }
 
-      const response = await modelClient.complete(model, context);
-
+      const response = runResult.value;
       const cost = response.usage?.cost?.total;
-
       const text = extractResponseText(response);
       if (!text) {
         log.error("merger empty response");
@@ -202,8 +185,13 @@ export function createMerger(
       log.info("merger completed", {
         operations: input.operations.length,
         cost,
+        model: runResult.candidate.model,
       });
-      return { mergedText: text.trim(), cost };
+      return {
+        mergedText: text.trim(),
+        cost,
+        modelUsed: runResult.candidate.model,
+      };
     } catch (err) {
       log.error("merger call failed", { error: (err as Error).message });
       return {

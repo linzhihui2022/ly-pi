@@ -45,17 +45,48 @@ const config: Config = {
 };
 
 const resolveModelOk = vi.fn(() => makeModel());
-const resolveModelNotFound = vi.fn(() => undefined);
 const completeModel = vi.fn<ModelClient["complete"]>();
 const modelClient: ModelClient = {
   find: resolveModelOk,
   complete: completeModel,
 };
+const securityAuditCandidate = {
+  slot: "primary",
+  model: "security/audit",
+  label: "Security audit",
+  thinking: "max" as const,
+  source: "manifest" as const,
+};
+const run = vi.fn(
+  async (
+    _role: string,
+    _models: ModelClient,
+    operation: (
+      model: Model<Api>,
+      candidate: typeof securityAuditCandidate,
+    ) => Promise<unknown>,
+  ) => ({
+    status: "success" as const,
+    value: await operation(makeModel(), securityAuditCandidate),
+    candidate: securityAuditCandidate,
+  }),
+);
+const modelRunner = { run } as never;
+
+function createFailedSecurityAuditRunner(reason: string) {
+  return {
+    run: vi.fn(async () => ({
+      status: "failure" as const,
+      failurePolicy: "error-no-write" as const,
+      reason,
+    })),
+  } as never;
+}
 
 beforeEach(() => {
   completeModel.mockReset();
   resolveModelOk.mockClear();
-  resolveModelNotFound.mockClear();
+  run.mockClear();
 });
 
 async function mockComplete(value: unknown): Promise<void> {
@@ -137,13 +168,14 @@ describe("buildAdvocatePrompt", () => {
 
 describe("createAdvocate", () => {
   it("returns error when no cases", async () => {
-    const advocate = createAdvocate(config, modelClient);
+    const advocate = createAdvocate(config, modelClient, modelRunner);
     const result = await advocate([], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toBe("当前会话没有法官误判案例");
+    expect(run).not.toHaveBeenCalled();
   });
 
-  it("returns parsed add/remove suggestion", async () => {
+  it("requests security-audit and returns parsed add/remove suggestion", async () => {
     await mockComplete({
       content: [
         {
@@ -156,20 +188,47 @@ describe("createAdvocate", () => {
       ],
     });
 
-    const advocate = createAdvocate(config, modelClient);
+    const advocate = createAdvocate(config, modelClient, modelRunner);
     const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
 
+    expect(run).toHaveBeenCalledWith(
+      "security-audit",
+      modelClient,
+      expect.any(Function),
+    );
     expect(result.error).toBeUndefined();
     expect(result.suggestion).toEqual({
       add: [{ rule: "git 操作应判定为安全", reason: "被误判 5 次" }],
       remove: ["过时规则"],
     });
+    expect(result.modelUsed).toBe("security/audit");
+  });
+
+  it("does not read professorModel", async () => {
+    await mockComplete({
+      content: [
+        { type: "text", text: JSON.stringify({ add: [], remove: [] }) },
+      ],
+    });
+    const legacyConfig: Config = { ...config, professorModel: "invalid" };
+    const result = await createAdvocate(legacyConfig, modelClient, modelRunner)(
+      [makeCase()],
+      "/repo",
+      "",
+      JUDGE_PROMPT,
+    );
+
+    expect(result.error).toBeUndefined();
   });
 
   it("returns error on invalid JSON response", async () => {
     await mockComplete({ content: [{ type: "text", text: "not json" }] });
-    const advocate = createAdvocate(config, modelClient);
-    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
+    const result = await createAdvocate(config, modelClient, modelRunner)(
+      [makeCase()],
+      "/repo",
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("无法解析");
   });
@@ -178,42 +237,48 @@ describe("createAdvocate", () => {
     await mockComplete({
       content: [{ type: "text", text: JSON.stringify({ add: [] }) }],
     });
-    const advocate = createAdvocate(config, modelClient);
-    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
+    const result = await createAdvocate(config, modelClient, modelRunner)(
+      [makeCase()],
+      "/repo",
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("无法解析");
   });
 
-  it("returns error when professorModel has no provider separator", async () => {
-    const badConfig: Config = { ...config, professorModel: "some-model" };
-    const advocate = createAdvocate(badConfig, modelClient);
-    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
-    expect(result.suggestion).toBeUndefined();
-    expect(result.error).toContain("professorModel 格式无效");
-  });
+  it("returns a clear error when security-audit is unavailable", async () => {
+    const result = await createAdvocate(
+      config,
+      modelClient,
+      createFailedSecurityAuditRunner("no usable candidate"),
+    )([makeCase()], "/repo", "", JUDGE_PROMPT);
 
-  it("returns error when advocate model is unavailable", async () => {
-    const advocate = createAdvocate(config, {
-      ...modelClient,
-      find: resolveModelNotFound,
-    });
-    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
     expect(result.suggestion).toBeUndefined();
-    expect(result.error).toContain("未找到 advocate 模型");
+    expect(result.error).toContain("no usable candidate");
+    expect(completeModel).not.toHaveBeenCalled();
   });
 
   it("returns error when the model call fails", async () => {
     completeModel.mockRejectedValue(new Error("network error"));
-    const advocate = createAdvocate(config, modelClient);
-    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
+    const result = await createAdvocate(config, modelClient, modelRunner)(
+      [makeCase()],
+      "/repo",
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("advocate 模型调用失败");
   });
 
   it("returns error when the model response has no text", async () => {
     await mockComplete({ content: [] });
-    const advocate = createAdvocate(config, modelClient);
-    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
+    const result = await createAdvocate(config, modelClient, modelRunner)(
+      [makeCase()],
+      "/repo",
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toBeUndefined();
     expect(result.error).toContain("空内容");
   });
@@ -233,8 +298,12 @@ describe("createAdvocate", () => {
         },
       ],
     });
-    const advocate = createAdvocate(config, modelClient);
-    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
+    const result = await createAdvocate(config, modelClient, modelRunner)(
+      [makeCase()],
+      "/repo",
+      "",
+      JUDGE_PROMPT,
+    );
     expect(result.suggestion).toEqual({
       add: [{ rule: "规则", reason: "原因" }],
       remove: [],

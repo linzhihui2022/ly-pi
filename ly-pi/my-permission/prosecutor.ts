@@ -1,4 +1,4 @@
-import type { AnalyzerConfig } from "./pipeline";
+import type { AnalyzerConfig, SecurityAuditModelRunner } from "./pipeline";
 import { createRoleAnalyzer } from "./pipeline";
 import type { JudgeLogEntry } from "./stats";
 import type { Config, ModelClient } from "./types";
@@ -12,6 +12,7 @@ export interface ProsecutorResult {
   suggestion?: ProsecutorSuggestion;
   error?: string;
   cost?: number;
+  modelUsed?: string;
 }
 
 export type ProsecutorFn = (
@@ -79,11 +80,13 @@ export const prosecutorAnalyzerConfig: AnalyzerConfig<
 export function createProsecutor(
   config: Config,
   modelClient: ModelClient,
+  modelRunner: SecurityAuditModelRunner,
 ): ProsecutorFn {
   const analyzer = createRoleAnalyzer(
     config,
     prosecutorAnalyzerConfig,
     modelClient,
+    modelRunner,
   );
 
   return async function analyze(
@@ -107,6 +110,7 @@ export function createProsecutor(
       suggestion: result.result,
       error: result.error,
       cost: result.cost,
+      modelUsed: result.modelUsed,
     };
   };
 }
