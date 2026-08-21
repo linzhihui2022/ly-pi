@@ -4,6 +4,66 @@
 
 ## Language
 
+**Model Role（模型角色）**:
+功能所需模型工作的稳定语义标识，例如安全判定、会话命名或视觉分析。功能只依赖该角色，不依赖具体 provider 或 model id。
+_Avoid_: 模型名、供应商、模型档位
+
+**Model Policy（模型策略）**:
+一个 Model Role 的版本化选择规则，定义有序的 Model Candidate、所需能力与该角色的失败行为。
+_Avoid_: 模型常量、模型配置散点
+
+**Model Candidate（模型候选）**:
+可被某个 Model Policy 选用的一项具体 provider/model 组合。候选按策略中的优先级依次尝试。
+_Avoid_: 默认模型、备用模型（未说明所属策略时）
+
+**Model Tier（模型档位）**:
+面向普通工作的可复用 Model Policy，按任务所需能力与资源目标划分。多个功能可请求同一个 Model Tier；安全工作使用专用 Model Role，而非普通档位。
+_Avoid_: 模型等级、供应商等级
+
+**Model Label（模型标签）**:
+随 Model Candidate 定义的用户可读名称，供 HUD 等界面显示，不另建模型短名映射。
+_Avoid_: HUD 别名、显示映射
+
+**Local Model Override（本地模型覆写）**:
+不纳入版本控制的用户级配置，用于替换仓库 Model Policy 的具体 Model Candidate 与 thinking 设置，不能改变能力要求或 Role Failure Policy。
+_Avoid_: 私有策略、环境差异
+
+**Role Failure Policy（角色失败策略）**:
+当某个 Model Role 没有可用候选时的确定行为。安全角色失败闭合并交由用户确认；非关键角色可跳过或报告失败。
+_Avoid_: 全局 fallback、静默降级
+
+**Model Manifest（模型清单）**:
+纳入版本控制的 Model Policy 声明集合，是仓库模型选择的唯一权威来源。
+_Avoid_: 模型散点、运行时常量
+
+**Candidate Slot（候选槽位）**:
+Model Policy 内一个具名且有固定优先级语义的位置。本地覆写可替换其具体 Model Candidate，不能改变槽位的顺序或策略含义。
+_Avoid_: 候选索引、模型顺序
+
+**Provider Registry（Provider 注册表）**:
+由 Pi 原生机制维护的 provider、认证状态与模型能力信息。Model Manifest 只引用其中的 provider/model，不保存凭据。
+_Avoid_: 模型清单、认证配置
+
+**Security Model Role（安全模型角色）**:
+用于安全判定或安全审计的 Model Role。其候选仅由仓库批准；所有候选不可用时必须按 Role Failure Policy 失败闭合。
+_Avoid_: deep 档、安全 fallback
+
+**Model Capability Contract（模型能力契约）**:
+Model Policy 对候选提出的可验证最低能力要求，包括输入类型、推理支持、thinking level 与最小上下文窗口。它不对模型质量作伪精确评分。
+_Avoid_: 模型评分、主观质量等级
+
+**Model Runner（模型运行器）**:
+解析一个 Model Role 并执行一次模型操作的统一模块。它负责能力校验、按 Candidate Slot 顺序尝试候选和交付 Role Failure Policy；调用方只提供角色与操作本身。
+_Avoid_: 模型查表、各功能重试器
+
+**Operation Parameters（操作参数）**:
+某项功能自身的 prompt、timeout、maxTokens 等调用参数。它们属于功能语义，不属于 Model Policy。
+_Avoid_: 模型配置、候选属性
+
+**Primary Model Selection（主模型初始选择）**:
+由 Model Manifest 的 primary 策略写入 Pi 默认模型的初始选择。Pi 原生恢复或故障回退可能使实际主模型偏离该选择；该偏离必须可被诊断，但不由扩展强制阻断。
+_Avoid_: 主模型保证、全局 fallback
+
 **Session Display Name（会话显示名）**:
 给人识别 pi 会话的可读标签，与技术身份标识 `sessionId` 不同。
 _Avoid_: session name、session title（在没有明确指向显示名时）

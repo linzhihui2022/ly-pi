@@ -3,11 +3,11 @@
 [![verify](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml/badge.svg)](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：12 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
+围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：14 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
 
 ## 特性
 
-- **统一扩展入口 `ly-pi`**：单一 `index.ts` 按序注册 12 个子模块，部署到 `~/.pi/agent/extensions/ly-pi/` 由 Pi 自动发现加载
+- **统一扩展入口 `ly-pi`**：单一 `index.ts` 按序注册 14 个子模块，部署到 `~/.pi/agent/extensions/ly-pi/` 由 Pi 自动发现加载
 - **权限拦截器**：确定性规则 + 模型法官二审工具调用，可逐项目定制
 - **开发体验**：自定义 HUD 状态栏、`/diff` 查看器、`/html` 渲染、事件音效、`/back` 撤销消息、热重载自动恢复
 - **行为护栏**：冗余 `cd` 前缀自动纠正、内联长脚本硬拦截
@@ -19,7 +19,7 @@
 
 ```
 configure/
-├── ly-pi/                    # 统一扩展入口（单包，含全部 12 个子模块）
+├── ly-pi/                    # 统一扩展入口（单包，含全部 14 个子模块）
 │   ├── index.ts              # 入口：按序注册所有子模块
 │   ├── my-cd-guard/          # 冗余 cd 前缀自动纠正
 │   ├── my-script-guard/      # 内联脚本硬拦截 + 急迫升级
@@ -67,6 +67,7 @@ configure/
 | **my-cd-guard** | 冗余 cd 前缀自动纠正：原地剥掉指向会话工作目录的 `cd <cwd> &&` 前缀并通知用户 |
 | **my-script-guard** | 内联脚本 + 写文件旁路硬拦截：拦截 bash 中的 `-c`/`-e`/heredoc 长脚本，被拦 3 次后升级为用户确认 |
 | **my-log** | 开发日志：`/ly-log on|off` 开关 + `/ly-log` 浏览器查看会话日志，供其他模块通过 `createDevLogger` 接入 |
+| **my-model-policy** | `/models-doctor`：展示 Model Role、候选来源、能力诊断和实际主模型相对初始选择的偏离，不发送模型请求 |
 | **my-permission** | 工具调用权限拦截器：确定性规则 + 模型法官 + 子代理差异化处理 |
 | **my-reload** | 扩展热重载自动恢复：`request_reload` 工具标记后，reload 完成自动发送继续指令 |
 | **my-back** | `/back` 命令：撤销最近一条用户消息并将文本放回编辑器 |
@@ -161,6 +162,7 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 | `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
 | `assets/config/pi-tool-display.json` | pi-tool-display 配置 |
 | `assets/config/settings.json` | 子代理模型绑定与 fallback（部署时按 `settings-schema.json` 校验） |
+| `assets/config/model-policies.json` | 版本化 Model Manifest：Model Role、候选槽位、能力契约与失败策略；部署时校验并复制到扩展目录 |
 | `assets/config/mcp.json` | MCP 服务器配置 |
 | `assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
 | `assets/config/my-back.json` | `/back` 命令配置 |

@@ -1,0 +1,3 @@
+# Centralize model selection behind a Model Policy Registry
+
+Concrete provider and model identifiers currently leak into extension logic, deployment settings, agent definitions, and tests. We will make a versioned Model Manifest the single source of truth and expose a Model Policy Registry that maps Model Roles to reusable policies and ordered Candidate Slots; Pi continues to own provider registration and credentials, while a constrained untracked local overlay may replace only ordinary candidate bindings. Security Model Roles keep repository-approved candidates and fail closed, and the primary policy controls only Pi's initial default because host recovery remains a visible platform constraint rather than an enforceable fallback chain.

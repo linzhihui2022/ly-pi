@@ -3,10 +3,16 @@ import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { BunFile } from "bun";
+import {
+  createModelPolicyRegistry,
+  type LocalModelOverride,
+  type ModelPolicyManifest,
+} from "../model-policy/registry";
 
 // ── Staging ────────────────────────────────────────────────────────────────
 const STAGING = process.env.PI_STAGING_DIR ?? join(homedir(), ".pi");
 const agentDir = join(STAGING, "agent");
+const extensionDir = join(agentDir, "extensions", "ly-pi");
 
 // ── Schema validation ──────────────────────────────────────────────────────
 {
@@ -91,6 +97,16 @@ const agentDir = join(STAGING, "agent");
     process.exit(1);
   }
   console.log("Schema validation: OK");
+
+  const modelManifest = (await Bun.file(
+    "assets/config/model-policies.json",
+  ).json()) as ModelPolicyManifest;
+  const localOverridePath = join(extensionDir, "models.local.json");
+  const localOverride = existsSync(localOverridePath)
+    ? ((await Bun.file(localOverridePath).json()) as LocalModelOverride)
+    : undefined;
+  createModelPolicyRegistry(modelManifest, localOverride);
+  console.log("Model policy schema validation: OK");
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -118,12 +134,9 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
 }
 
 // ── Extension bundle ────────────────────────────────────────────────────────
-{
-  const extDir = join(agentDir, "extensions", "ly-pi");
-  await mkdir(extDir, { recursive: true });
-  await write(join(extDir, "index.js"), Bun.file("dist/index.js"));
-  console.log("Extension: deployed");
-}
+await mkdir(extensionDir, { recursive: true });
+await write(join(extensionDir, "index.js"), Bun.file("dist/index.js"));
+console.log("Extension: deployed");
 
 // ── Settings ────────────────────────────────────────────────────────────────
 {
@@ -156,7 +169,6 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
 // ── Other configs ───────────────────────────────────────────────────────────
 {
   const configDir = "assets/config";
-  const extDir = join(agentDir, "extensions", "ly-pi");
 
   const configManifest: Array<{
     src: string;
@@ -190,14 +202,20 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
     {
       src: "my-sound.json",
       dest: "my-sound.json",
-      base: extDir,
+      base: extensionDir,
       label: "my-sound.json",
     },
     {
       src: "my-back.json",
       dest: "my-back.json",
-      base: extDir,
+      base: extensionDir,
       label: "my-back.json",
+    },
+    {
+      src: "model-policies.json",
+      dest: "model-policies.json",
+      base: extensionDir,
+      label: "model-policies.json",
     },
   ];
 
@@ -235,7 +253,9 @@ if (existsSync("assets/agents")) {
 }
 
 // ── rtk init ────────────────────────────────────────────────────────────────
-if (Bun.which("rtk")) {
+if (process.env.PI_SKIP_RTK === "1") {
+  console.log("rtk init: skipped");
+} else if (Bun.which("rtk")) {
   const proc = Bun.spawnSync(["rtk", "init", "-g", "--agent", "pi"]);
   if (proc.exitCode === 0) console.log("rtk init: OK");
   else console.log("rtk init: exited", proc.exitCode);
