@@ -35,6 +35,7 @@ export async function confirmToolCall(
   ctx: ExtensionContext,
   options: {
     toolName: string;
+    modelUsed?: string;
     toolFor: string;
     reason: string;
     score?: number;
@@ -50,6 +51,7 @@ export async function confirmToolCall(
 
 export function formatConfirmMessage(options: {
   toolName: string;
+  modelUsed?: string;
   toolFor: string;
   reason: string;
   score?: number;
@@ -59,6 +61,7 @@ export function formatConfirmMessage(options: {
 }): { title: string; body: string } {
   const lines = [
     `${label("工具：")}${value(options.toolName)}`,
+    `${label("法官模型：")}${value(options.modelUsed ?? "未知")}`,
     `${label("操作：")}${styled(options.toolFor, ANSI.yellow)}`,
     `${label("输入：")}${value(options.value)}`,
     `${label("工作目录：")}${value(options.cwd)}`,

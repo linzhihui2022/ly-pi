@@ -216,6 +216,7 @@ describe("my-permission extension entry", () => {
         score: 3,
         reason: "potentially destructive",
         toolFor: "delete files",
+        modelUsed: "deepseek/deepseek-v4-flash",
       }),
     );
     vi.mocked(confirmToolCall).mockResolvedValue(false);
@@ -231,6 +232,12 @@ describe("my-permission extension entry", () => {
       block: true,
       reason: "User denied: potentially destructive",
     });
+    expect(confirmToolCall).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        modelUsed: "deepseek/deepseek-v4-flash",
+      }),
+    );
     expect(api.appendEntry).toHaveBeenCalledWith("my-permission-judge", {
       decision: "denied",
       toolName: "bash",
