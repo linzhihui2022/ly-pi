@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { realpathSync, statSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
 export interface ParsedWorktree {
@@ -26,10 +26,18 @@ export interface WorktreeSnapshot {
 }
 
 function canonicalPath(path: string): string {
+  const resolvedPath = resolve(path);
+
   try {
-    return realpathSync(path);
+    return realpathSync(resolvedPath);
   } catch {
-    return resolve(path);
+    const existingDirectory = findExistingDirectory(resolvedPath);
+    if (!existingDirectory) return resolvedPath;
+
+    return resolve(
+      realpathSync(existingDirectory),
+      relative(existingDirectory, resolvedPath),
+    );
   }
 }
 
@@ -46,18 +54,42 @@ function containsPath(parent: string, child: string): boolean {
   );
 }
 
+function findExistingDirectory(path: string): string | undefined {
+  let current = resolve(path);
+
+  while (true) {
+    try {
+      if (statSync(current).isDirectory()) return current;
+    } catch {}
+
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
 export function findCurrentWorktree(
   entries: ParsedWorktree[],
   cwd: string,
 ): ParsedWorktree | undefined {
-  return entries.reduce<ParsedWorktree | undefined>((current, entry) => {
-    if (entry.prunable || !containsPath(entry.path, cwd)) return current;
+  let current: ParsedWorktree | undefined;
+  let currentDepth = -1;
+  let isAmbiguous = false;
 
-    return !current ||
-      canonicalPath(entry.path).length > canonicalPath(current.path).length
-      ? entry
-      : current;
-  }, undefined);
+  for (const entry of entries) {
+    if (entry.prunable || !containsPath(entry.path, cwd)) continue;
+
+    const depth = canonicalPath(entry.path).length;
+    if (depth > currentDepth) {
+      current = entry;
+      currentDepth = depth;
+      isAmbiguous = false;
+    } else if (depth === currentDepth) {
+      isAmbiguous = true;
+    }
+  }
+
+  return isAmbiguous ? undefined : current;
 }
 
 /** Select worktrees that can be shown in Pi from parsed Git output. */
@@ -66,12 +98,15 @@ export function selectVisibleWorktrees(
   cwd: string,
   isAccessible: (path: string) => boolean,
 ): VisibleWorktree[] {
-  const currentPath = findCurrentWorktree(entries, cwd)?.path;
+  const accessibleEntries = entries.filter(
+    (entry) => !entry.prunable && isAccessible(entry.path),
+  );
+  const current = findCurrentWorktree(accessibleEntries, cwd);
+  const currentPath = current ? canonicalPath(current.path) : undefined;
 
-  return entries.flatMap((entry) => {
+  return accessibleEntries.flatMap((entry) => {
     const label = entry.branch ?? entry.head?.slice(0, 7);
-    if (entry.prunable || !label || !isAccessible(entry.path)) return [];
-
+    if (!label) return [];
     return [
       {
         path: entry.path,
@@ -90,7 +125,7 @@ export async function getVisibleWorktrees(
     const { stdout } = await execFileAsync(
       "git",
       ["worktree", "list", "--porcelain"],
-      { cwd, timeout: 3000 },
+      { cwd: findExistingDirectory(cwd) ?? cwd, timeout: 3000 },
     );
     const entries = parseWorktreeList(stdout);
     const repositoryRoot = entries[0]?.path;

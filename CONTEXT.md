@@ -77,7 +77,7 @@ _Avoid_: 语义分析、上下文判断
 _Avoid_: 多分支仓库、多个 clone
 
 **Current Worktree（当前 worktree）**:
-包含 Pi 会话当前工作目录的 Git worktree；它是 worktree 集合中唯一需要在界面上标记的成员。
+包含 Pi 会话当前工作目录的最深层 Git worktree；嵌套时选择路径最具体的成员，worktree 集合变化后按最新发现重新确定。它是 worktree 集合中唯一需要在界面上呈现的成员。
 _Avoid_: 主 worktree、活跃分支
 
 **Closable Worktree（可关闭 worktree）**:
@@ -93,7 +93,7 @@ _Avoid_: 强制删除、关闭分支、直接 kill Pi
 _Avoid_: 硬编码 WezTerm、默认终端命令
 
 **Visible Worktree（可见 worktree）**:
-可由 Pi 访问且可在 worktree 组件中呈现的 worktree；失效或路径缺失的 prunable worktree 不属于此集合，detached HEAD 以短 commit SHA 作为标识。
+可由 Pi 访问、路径存在且非 prunable 的已注册 Git worktree；它参与判断 Multi-worktree Repository 的界面资格，但不一定被 Worktree Widget 展示。detached HEAD 以短 commit SHA 作为标识。
 _Avoid_: 已注册 worktree、有效分支
 
 **Worktree Manager（worktree 管理模块）**:
@@ -101,5 +101,5 @@ _Avoid_: 已注册 worktree、有效分支
 _Avoid_: 通用 Git 客户端、Worktree Widget 本身
 
 **Worktree Widget（worktree 组件）**:
-`my-worktree` 模块中的只读 Pi widget，用于在编辑器上方以 Todo 风格的无边框树呈现多 worktree 仓库的可见 worktree 集合；仅在至少两个成员可见时显示，以 `Worktrees (N)` 标题和 `├─`/`└─` 行连接符建立层级。每个成员显示分支与路径；主 worktree 根路径为 `<REPO>`，其子路径也以 `<REPO>/` 缩写，其他目录的 worktree 保持绝对路径；当前 worktree 使用实心符号和 accent，其余条目使用空心符号和弱化色；成员保持 Git 返回顺序；窄屏截断保留路径末尾。
-_Avoid_: my-hud worktree 字段、Git 状态栏
+`my-worktree` 模块中的只读 Pi widget，仅在拥有至少两个 Visible Worktree 的 Multi-worktree Repository 中能唯一确认 Current Worktree 时，于编辑器上方以两行树呈现其分支与 worktree 根路径，而不枚举其他 Visible Worktree。accent 的 `● Worktrees (N)` 标题只给出可见成员的聚合数量，唯一条目以中性的 `•` 呈现；主仓库内路径缩写为 `<REPO>`，窄屏从路径开头截断以保留末尾，若路径完全无可用宽度则隐藏整个组件。发现失败时安静隐藏。它是当前会话位置的补充定位信息，不是 worktree 清单。
+_Avoid_: worktree 列表、my-hud worktree 字段、Git 状态栏

@@ -1,9 +1,9 @@
 # my-worktree
 
 `my-worktree` is a Pi worktree-management module. Its Worktree Widget remains
-read-only: it shows Git worktrees above the editor when the current repository
-has at least two visible worktrees. The module also provides the separately
-invoked `/close-worktree` command for closing only the Current Worktree.
+read-only: it shows the Current Worktree above the editor when the current
+repository has at least two visible worktrees. The module also provides the
+separately invoked `/close-worktree` command for closing only the Current Worktree.
 
 ## Display
 
@@ -11,19 +11,18 @@ The Worktree Widget follows the Todo panel's tree layout:
 
 ```text
 ● Worktrees (2)
-├─ ○ main <REPO>
-└─ ● my-worktree <REPO>/.worktree/my-worktree
+└─ • my-worktree <REPO>/.worktree/my-worktree
 ```
 
-- Worktrees keep the order reported by Git.
-- `●` and the accent color identify the current worktree; `○` and dim text
-  identify other worktrees.
-- A branch name is shown when available. Detached `HEAD` worktrees show the
-  first seven characters of their commit SHA instead.
+- The accent heading reports the total number of visible worktrees, including
+  the current one, without listing peer branches or paths.
+- The only row is the neutral Current Worktree. A branch name is shown when
+  available; detached `HEAD` worktrees show the first seven characters of their
+  commit SHA instead.
 - The primary worktree root is abbreviated as `<REPO>`, including paths below
   it. Worktrees outside that path retain their absolute paths.
-- On narrow terminals, the beginning of a path is truncated so its ending stays
-  visible.
+- On narrow terminals, the beginning of the Current Worktree path is truncated
+  so its ending stays visible. The widget hides when no path character fits.
 
 ## `/close-worktree`
 
@@ -59,9 +58,10 @@ tmux, or another terminal controller; `my-worktree` does not hard-code one.
 
 ## Visibility and refresh
 
-Only accessible, non-prunable worktrees are shown. The Worktree Widget hides
-silently when Git is unavailable, discovery fails, or fewer than two worktrees
-remain visible.
+Only accessible, non-prunable worktrees with an identifiable branch or detached
+`HEAD` are counted. The Worktree Widget hides silently when Git is unavailable,
+discovery fails, fewer than two worktrees remain visible, or the Current
+Worktree cannot be uniquely identified.
 
 The widget refreshes at session startup and at the start and end of every turn.
 The widget itself has no command, configuration, polling loop, filesystem
