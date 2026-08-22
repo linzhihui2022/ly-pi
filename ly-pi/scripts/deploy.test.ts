@@ -225,6 +225,30 @@ describe("deploy model policy settings", () => {
     expect(existsSync(join(agentDir, "agents"))).toBe(false);
   });
 
+  it("rolls back model-policy outputs when writing the manifest fails", () => {
+    const staging = stagingDir();
+    const agentDir = join(staging, "agent");
+    const extensionDir = join(agentDir, "extensions", "ly-pi");
+    const settingsPath = join(agentDir, "settings.json");
+    const bundlePath = join(extensionDir, "index.js");
+    const runtimePath = join(agentDir, "extensions", "subagent", "config.json");
+    const manifestPath = join(extensionDir, "model-policies.json");
+    mkdirSync(extensionDir, { recursive: true });
+    writeFileSync(settingsPath, '{"sentinel":"settings"}\n');
+    writeFileSync(bundlePath, "existing bundle\n");
+    mkdirSync(manifestPath);
+
+    const result = deploy(staging);
+
+    expect(result.status).not.toBe(0);
+    expect(readFileSync(settingsPath, "utf-8")).toBe(
+      '{"sentinel":"settings"}\n',
+    );
+    expect(readFileSync(bundlePath, "utf-8")).toBe("existing bundle\n");
+    expect(existsSync(runtimePath)).toBe(false);
+    expect(existsSync(manifestPath)).toBe(true);
+  });
+
   it("deploys policy-generated specialist overrides without frontmatter model pins", () => {
     const staging = stagingDir();
 

@@ -140,6 +140,43 @@ describe("runPermissionSelfTest", () => {
     ]);
   });
 
+  it("aborts variant generation after the configured timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const { modelRunner } = createSecurityJudgeRunner();
+      let signal: AbortSignal | undefined;
+      const complete = vi.fn<ModelClient["complete"]>(
+        (_model, _context, options) =>
+          new Promise<never>((_resolve, reject) => {
+            signal = options?.signal;
+            signal?.addEventListener("abort", () =>
+              reject(new Error("aborted")),
+            );
+          }),
+      );
+
+      const resultPromise = runPermissionSelfTest(
+        {
+          config,
+          judgePrompt: "judge prompt",
+          modelClient: { find: () => makeModel(), complete },
+          modelRunner,
+        },
+        scenario,
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(signal).toBeInstanceOf(AbortSignal);
+
+      await vi.advanceTimersByTimeAsync(config.judgeTimeoutMs);
+      const result = await resultPromise;
+
+      expect(signal?.aborted).toBe(true);
+      expect(result.error).toBe("生成 管道外泄 变种超时（5000ms）");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns a clear error without direct fallback when no security-judge candidate is usable", async () => {
     const modelRunner = {
       run: vi.fn(async () => ({

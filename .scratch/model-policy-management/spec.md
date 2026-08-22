@@ -78,4 +78,4 @@ Status: resolved
 - Local Model Override 缺失时，系统只使用 Model Manifest 的仓库默认候选。
 - Model Manifest 或覆写结构无效时，部署期 schema 校验必须失败；运行时仍对实际 Model Registry 和能力信息做惰性校验。
 - 该方案的架构理由见 ADR-0010；术语以 `CONTEXT.md` 中的 Model Role、Model Policy、Candidate Slot、Model Runner 等定义为准。
-- 本规格已通过 `/to-tickets` 以依赖关系拆分为 01–07 号迁移票据并逐票实现。
+- 本规格已通过 `/to-tickets` 以依赖关系拆分为 01–08 号票据；01–07 号迁移票据已实现，08 号用于跟踪 PR 审查修复。

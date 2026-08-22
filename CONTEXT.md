@@ -29,7 +29,7 @@ _Avoid_: HUD 别名、显示映射
 _Avoid_: 私有策略、环境差异
 
 **Role Failure Policy（角色失败策略）**:
-当某个 Model Role 没有可用候选时的确定行为。安全角色失败闭合：Judge/self-test 的 `confirm` 交由用户手动确认；security-audit 的 `error-no-write` 报错并禁止写入。非关键角色可跳过或报告失败。
+当某个 Model Role 没有可用候选时的确定行为。安全角色失败闭合：Judge 的 `confirm` 交由用户手动确认；self-test 的 `confirm` 中止并报告失败；security-audit 的 `error-no-write` 报错并禁止写入。非关键角色可跳过或报告失败。
 _Avoid_: 全局 fallback、静默降级
 
 **Model Manifest（模型清单）**:

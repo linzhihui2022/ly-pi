@@ -424,6 +424,60 @@ describe("createModelPolicyRegistry", () => {
     });
   });
 
+  it("falls back after Pi reports a lowercase auth code", async () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            {
+              ...manifest.policies["fast-policy"].candidates[0],
+              model: "test/primary",
+            },
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "off",
+            },
+          ],
+        },
+      },
+    });
+    const attempts: string[] = [];
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        if (model.id === "primary") {
+          throw Object.assign(new Error("provider authentication failed"), {
+            code: "auth",
+          });
+        }
+        return "fallback result";
+      },
+    );
+
+    expect(attempts).toEqual(["primary", "fallback"]);
+    expect(result).toMatchObject({
+      status: "success",
+      value: "fallback result",
+      candidate: { slot: "fallback" },
+    });
+  });
+
   it("falls back when Pi reports an infrastructure error response", async () => {
     const registry = createModelPolicyRegistry({
       ...manifest,
@@ -922,6 +976,39 @@ describe("createModelPolicyRegistry", () => {
       status: "success",
       value: "usable result",
       candidate: { slot: "fallback" },
+    });
+  });
+
+  it("rejects off thinking when the registered model cannot disable it", () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          capabilities: {
+            input: ["text"],
+            minContextWindow: 128000,
+            requiresReasoning: true,
+          },
+        },
+      },
+    } as never);
+
+    expect(
+      registry.describe({
+        find: () => ({
+          provider: "test",
+          id: "fast",
+          input: ["text"],
+          reasoning: true,
+          contextWindow: 128000,
+          thinkingLevelMap: { off: null },
+        }),
+      }).roles.fast.candidates[0],
+    ).toMatchObject({
+      status: "incompatible",
+      diagnostics: ["thinking level 'off' is unsupported"],
     });
   });
 

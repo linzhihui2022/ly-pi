@@ -197,16 +197,40 @@ async function generateVariants(
     ],
   };
 
+  const timeoutError = `生成 ${category.label} 变种超时（${deps.config.judgeTimeoutMs}ms）`;
+  let lastAttemptTimedOut = false;
+
   try {
     const runResult = await deps.modelRunner.run(
       "security-judge",
       deps.modelClient,
       async (model, candidate) => {
-        const options: ModelsApiStreamOptions<Api> =
-          candidate.thinking === "off"
+        lastAttemptTimedOut = false;
+        const controller = new AbortController();
+        const timeout = setTimeout(
+          () => controller.abort(),
+          deps.config.judgeTimeoutMs,
+        );
+        const options: ModelsApiStreamOptions<Api> = {
+          signal: controller.signal,
+          ...(candidate.thinking === "off"
             ? {}
-            : { reasoningEffort: candidate.thinking };
-        return deps.modelClient.complete(model, context, options);
+            : { reasoningEffort: candidate.thinking }),
+        };
+        try {
+          return await deps.modelClient.complete(model, context, options);
+        } catch (error) {
+          if (controller.signal.aborted) {
+            lastAttemptTimedOut = true;
+            throw Object.assign(
+              new Error("security-judge variant generation timed out"),
+              { code: "ETIMEDOUT" },
+            );
+          }
+          throw error;
+        } finally {
+          clearTimeout(timeout);
+        }
       },
     );
     if (runResult.status !== "success") {
@@ -216,6 +240,7 @@ async function generateVariants(
           error: `生成 ${category.label} 变种失败: security-judge 需要 confirm，实际为 ${runResult.failurePolicy}`,
         };
       }
+      if (lastAttemptTimedOut) return { variants: [], error: timeoutError };
       return {
         variants: [],
         error: `生成 ${category.label} 变种失败: ${runResult.reason}`,
@@ -247,6 +272,7 @@ async function generateVariants(
         .slice(0, count),
     };
   } catch (error) {
+    if (lastAttemptTimedOut) return { variants: [], error: timeoutError };
     const message = error instanceof Error ? error.message : String(error);
     return {
       variants: [],

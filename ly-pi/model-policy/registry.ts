@@ -325,7 +325,9 @@ function supportsThinking(
   model: RegisteredModel,
   thinking: ModelThinkingLevel,
 ): boolean {
-  if (thinking === "off") return true;
+  if (thinking === "off") {
+    return !model.reasoning || model.thinkingLevelMap?.off !== null;
+  }
   if (!model.reasoning || model.thinkingLevelMap?.[thinking] === null) {
     return false;
   }
@@ -425,7 +427,8 @@ function isRetryableInfrastructureFailure(error: unknown): boolean {
   }
   if (status !== undefined && status >= 500 && status <= 599) return true;
 
-  const code = typeof details.code === "string" ? details.code : "";
+  const code =
+    typeof details.code === "string" ? details.code.toUpperCase() : "";
   if (
     [
       "AUTH",

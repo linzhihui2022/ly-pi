@@ -1,7 +1,7 @@
 import { cpSync, existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { BunFile } from "bun";
 import {
   createModelPolicyRegistry,
@@ -137,22 +137,97 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-async function write(path: string, data: string | Uint8Array | BunFile) {
-  await mkdir(join(path, ".."), { recursive: true });
+type WriteData = string | Uint8Array | BunFile;
+
+type FileSnapshot =
+  | { path: string; state: "absent" }
+  | { path: string; state: "file"; data: Uint8Array }
+  | { path: string; state: "other" };
+
+let temporaryWriteId = 0;
+
+async function write(path: string, data: WriteData) {
+  await mkdir(dirname(path), { recursive: true });
   await Bun.write(path, data);
 }
 
-// ── Extension bundle ────────────────────────────────────────────────────────
-await mkdir(extensionDir, { recursive: true });
-await write(join(extensionDir, "index.js"), Bun.file("dist/index.js"));
-console.log("Extension: deployed");
+async function snapshot(path: string): Promise<FileSnapshot> {
+  try {
+    const stat = await lstat(path);
+    if (!stat.isFile()) return { path, state: "other" };
+    return { path, state: "file", data: new Uint8Array(await readFile(path)) };
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return { path, state: "absent" };
+    }
+    throw error;
+  }
+}
 
-// ── Settings ────────────────────────────────────────────────────────────────
+async function writeAtomically(path: string, data: WriteData) {
+  const directory = dirname(path);
+  const temporaryPath = join(
+    directory,
+    `.${basename(path)}.ly-pi-${process.pid}-${temporaryWriteId++}.tmp`,
+  );
+  await mkdir(directory, { recursive: true });
+  try {
+    await Bun.write(temporaryPath, data);
+    await rename(temporaryPath, path);
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+  }
+}
+
+async function restore(snapshot: FileSnapshot) {
+  if (snapshot.state === "absent") {
+    await rm(snapshot.path, { force: true });
+  } else if (snapshot.state === "file") {
+    await writeAtomically(snapshot.path, snapshot.data);
+  }
+}
+
+async function writeTransaction(
+  writes: ReadonlyArray<{ path: string; data: WriteData }>,
+) {
+  const snapshots = await Promise.all(writes.map(({ path }) => snapshot(path)));
+  const written: FileSnapshot[] = [];
+
+  try {
+    for (const [index, write] of writes.entries()) {
+      await writeAtomically(write.path, write.data);
+      written.push(snapshots[index]);
+    }
+  } catch (error) {
+    const rollbackErrors: unknown[] = [];
+    for (const previous of written.reverse()) {
+      try {
+        await restore(previous);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+    }
+    if (rollbackErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...rollbackErrors],
+        "deployment write failed and rollback was incomplete",
+      );
+    }
+    throw error;
+  }
+}
+
+// ── Model-policy outputs ────────────────────────────────────────────────────
 {
   const merged = await Bun.file("assets/config/settings.json").json();
   const settingsPath = join(agentDir, "settings.json");
 
-  // Deep-merge settings block into target
+  // Deep-merge settings block into target before mutating deployment output.
   let target: Record<string, unknown> = {};
   try {
     target = await Bun.file(settingsPath).json();
@@ -169,15 +244,23 @@ console.log("Extension: deployed");
     target.subagents as Record<string, unknown>,
     compiledModelPolicySettings.subagents,
   );
-  await write(settingsPath, `${JSON.stringify(target, null, 2)}\n`);
-  console.log("Settings: deployed");
 
-  // subagentRuntime → subagent extension config.json
-  await write(
-    join(agentDir, "extensions", "subagent", "config.json"),
-    `${JSON.stringify(merged.subagentRuntime, null, 2)}\n`,
-  );
+  await writeTransaction([
+    { path: join(extensionDir, "index.js"), data: Bun.file("dist/index.js") },
+    { path: settingsPath, data: `${JSON.stringify(target, null, 2)}\n` },
+    {
+      path: join(agentDir, "extensions", "subagent", "config.json"),
+      data: `${JSON.stringify(merged.subagentRuntime, null, 2)}\n`,
+    },
+    {
+      path: join(extensionDir, "model-policies.json"),
+      data: Bun.file("assets/config/model-policies.json"),
+    },
+  ]);
+  console.log("Extension: deployed");
+  console.log("Settings: deployed");
   console.log("subagentRuntime: deployed");
+  console.log("model-policies.json: deployed");
 }
 
 // ── Other configs ───────────────────────────────────────────────────────────
@@ -224,12 +307,6 @@ console.log("Extension: deployed");
       dest: "my-back.json",
       base: extensionDir,
       label: "my-back.json",
-    },
-    {
-      src: "model-policies.json",
-      dest: "model-policies.json",
-      base: extensionDir,
-      label: "model-policies.json",
     },
   ];
 
