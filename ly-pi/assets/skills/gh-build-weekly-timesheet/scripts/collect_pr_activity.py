@@ -89,7 +89,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def run(command: list[str]) -> str:
-    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    try:
+        result = subprocess.run(command, check=False, capture_output=True, text=True)
+    except OSError as error:
+        raise RuntimeError(f"cannot start {' '.join(command[:2])}: {error}") from error
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "command failed"
         raise RuntimeError(f"{' '.join(command[:3])}: {detail}")
@@ -379,6 +382,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     duplicates_removed = 0
     commits_outside_range = 0
     commits_by_other_authors = 0
+    commits_by_unknown_authors = 0
 
     for pr in prs:
         for commit in pr.get("commits", []):
@@ -395,13 +399,13 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
                 if isinstance(commit_author, dict)
                 and isinstance(commit_author.get("login"), str)
             }
-            if (
-                not args.include_all_commit_authors
-                and author_logins
-                and resolved_author_key not in author_logins
-            ):
-                commits_by_other_authors += 1
-                continue
+            if not args.include_all_commit_authors:
+                if not author_logins:
+                    commits_by_unknown_authors += 1
+                    continue
+                if resolved_author_key not in author_logins:
+                    commits_by_other_authors += 1
+                    continue
 
             committed_at = parse_github_time(commit["committedDate"])
             local_time = committed_at.astimezone(local_tz)
@@ -498,6 +502,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         "duplicates_removed": duplicates_removed,
         "commits_outside_range": commits_outside_range,
         "commits_by_other_authors": commits_by_other_authors,
+        "commits_by_unknown_authors": commits_by_unknown_authors,
         "activities": activities,
         "daily_ticket_totals": sorted(
             daily.values(), key=lambda entry: (entry["date"], entry["ticket"])

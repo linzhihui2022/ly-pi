@@ -39,7 +39,7 @@ python3 scripts/collect_pr_activity.py \
 
 - `--start-date` 与 `--end-date` 必须成对传入，不能反向或晚于今天。
 - 旧的 `--week-start YYYY-MM-DD` 仍可使用；它统计到该周结束日或今天（取较早者），且不能与显式日期范围混用。
-- 按需传入 `--repo OWNER/REPO`、`--author LOGIN`、`--timezone IANA_NAME` 或 `--include-all-commit-authors`。
+- 按需传入 `--repo OWNER/REPO`、`--author LOGIN`、`--timezone IANA_NAME` 或 `--include-all-commit-authors`；默认只计入可确认属于所选账号的提交。
 - 未指定 `--timezone` 时，采集器使用运行 Pi 的系统本地时区。
 
 采集器通过 `gh api` 读取 GitHub 数据；较长历史范围可能需要很多只读请求。若 GitHub 访问被拦截，请请求运行相同 `gh` 查询的网络权限。绝不打印 token 或批量环境变量。
@@ -53,6 +53,8 @@ python3 scripts/collect_pr_activity.py \
 - `first_time` 与 `last_time` 是观察点，不是实际工时。
 - `UNASSIGNED` 表示存在活动但无法从 PR 或提交标题确定唯一票据。
 - `duplicates_removed` 表示同一提交经多个 PR 出现而被去重的次数。
+- `commits_by_other_authors` 表示默认过滤的、明确属于其他作者的提交数。
+- `commits_by_unknown_authors` 表示默认过滤的、无法确认 GitHub 作者的提交数；传入 `--include-all-commit-authors` 时这两类提交都会纳入活动。
 
 先检查提交标题，再写摘要。PR 标题和分支名只能提供上下文，不能证明实际耗时。
 
