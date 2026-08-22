@@ -140,7 +140,53 @@ class CliContractTests(unittest.TestCase):
             self.assertEqual(stdout, "")
             self.assertIn(f"{option} must not be empty", stderr)
 
-    def test_rejects_graphql_partial_data_response(self) -> None:
+    def test_discovers_ssh_alias_repo_through_gh(self) -> None:
+        with (
+            patch.object(
+                collector,
+                "run",
+                side_effect=[
+                    "git@jan24th:owner/repo.git",
+                    "owner/repo",
+                ],
+            ) as run,
+            patch.object(collector, "resolve_author", return_value="alice"),
+            patch.object(collector, "fetch_prs", return_value=[]),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                [
+                    "--author",
+                    "alice",
+                    "--start-date",
+                    "2024-01-01",
+                    "--end-date",
+                    "2024-01-01",
+                    "--timezone",
+                    "UTC",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["repository"], "owner/repo")
+        self.assertEqual(
+            run.call_args_list,
+            [
+                call(["git", "remote", "get-url", "origin"]),
+                call(
+                    [
+                        "gh",
+                        "repo",
+                        "view",
+                        "--json",
+                        "nameWithOwner",
+                        "--jq",
+                        ".nameWithOwner",
+                    ]
+                ),
+            ],
+        )
+
+    def test_rejects_graphql_error_in_later_page(self) -> None:
         pull_requests = [
             {
                 "number": 7,
@@ -152,6 +198,18 @@ class CliContractTests(unittest.TestCase):
                 "user": {"login": "alice"},
             }
         ]
+        first_page = {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "commits": {
+                            "nodes": [],
+                            "pageInfo": {"hasNextPage": True, "endCursor": "cursor-1"},
+                        }
+                    }
+                }
+            }
+        }
         partial_page = {
             "data": {
                 "repository": {
@@ -168,7 +226,7 @@ class CliContractTests(unittest.TestCase):
 
         def mocked_run(command: list[str]) -> str:
             if "graphql" in command:
-                return json.dumps([partial_page])
+                return json.dumps([first_page, partial_page])
             return json.dumps([pull_requests])
 
         with patch.object(collector, "run", side_effect=mocked_run):
@@ -230,6 +288,43 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(first["activities"][0]["ticket"], "UNASSIGNED")
         self.assertEqual(first["duplicates_removed"], 1)
 
+    def test_assigns_partially_ambiguous_duplicate_oid_to_unassigned(self) -> None:
+        pull_requests = [
+            {
+                "number": 8,
+                "title": "ABC-123 DEF-456 combined work",
+                "headRefName": "combined-work",
+                "url": "https://github.com/owner/repo/pull/8",
+                "commits": [
+                    {
+                        "oid": "shared",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "implement report output",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "headRefName": "ABC-123-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "shared",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "implement report output",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+        ]
+
+        result = self.collect_json(pull_requests)
+
+        self.assertEqual(result["activities"][0]["ticket"], "UNASSIGNED")
+        self.assertEqual(result["duplicates_removed"], 1)
+
     def test_preserves_dst_fold_order_and_offset_in_json(self) -> None:
         pull_requests = [
             {
@@ -263,6 +358,49 @@ class CliContractTests(unittest.TestCase):
         )
         self.assertEqual(activity["first_time"], "2024-11-03T01:50-04:00")
         self.assertEqual(activity["last_time"], "2024-11-03T01:10-05:00")
+
+    def test_orders_dst_fold_activities_by_instant(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "headRefName": "ABC-123-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "before-fold",
+                        "committedDate": "2024-11-03T05:50:00Z",
+                        "messageHeadline": "ABC-123 before fallback",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+            {
+                "number": 8,
+                "title": "DEF-456 add report",
+                "headRefName": "DEF-456-report",
+                "url": "https://github.com/owner/repo/pull/8",
+                "commits": [
+                    {
+                        "oid": "after-fold",
+                        "committedDate": "2024-11-03T06:10:00Z",
+                        "messageHeadline": "DEF-456 after fallback",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+        ]
+
+        result = self.collect_json(pull_requests, "America/New_York")
+
+        self.assertEqual(
+            [activity["ticket"] for activity in result["activities"]],
+            ["ABC-123", "DEF-456"],
+        )
+        self.assertEqual(
+            [activity["first_time"] for activity in result["activities"]],
+            ["2024-11-03T01:50-04:00", "2024-11-03T01:10-05:00"],
+        )
 
 
 class ResolveDateWindowTests(unittest.TestCase):
@@ -310,6 +448,13 @@ class ResolveDateWindowTests(unittest.TestCase):
         )
 
         self.assertEqual((start, end), (date(2024, 1, 8), date(2024, 1, 10)))
+
+    def test_counts_a_historical_full_week(self) -> None:
+        start, end = collector.resolve_date_window(
+            make_args(week_start=date(2024, 1, 1)), date(2024, 1, 10)
+        )
+
+        self.assertEqual((start, end), (date(2024, 1, 1), date(2024, 1, 7)))
 
     def test_rejects_mixing_week_start_and_explicit_range(self) -> None:
         with self.assertRaisesRegex(ValueError, "cannot be combined"):
@@ -515,6 +660,15 @@ class FetchPullRequestsTests(unittest.TestCase):
                 "html_url": "https://github.com/owner/repo/pull/8",
                 "user": {"login": "bob"},
             },
+            {
+                "number": 9,
+                "title": "DEF-456 add report",
+                "head": {"ref": "DEF-456-report"},
+                "created_at": "2024-01-02T00:00:00Z",
+                "merged_at": None,
+                "html_url": "https://github.com/owner/repo/pull/9",
+                "user": {"login": "ALICE"},
+            },
         ]
         commits = [
             {
@@ -550,14 +704,26 @@ class FetchPullRequestsTests(unittest.TestCase):
                     "mergedAt": None,
                     "url": "https://github.com/owner/repo/pull/7",
                     "commits": commits,
-                }
+                },
+                {
+                    "number": 9,
+                    "title": "DEF-456 add report",
+                    "headRefName": "DEF-456-report",
+                    "createdAt": "2024-01-02T00:00:00Z",
+                    "mergedAt": None,
+                    "url": "https://github.com/owner/repo/pull/9",
+                    "commits": commits,
+                },
             ],
         )
         self.assertEqual(
             fetch.call_args_list,
             [call("repos/owner/repo/pulls?state=all&per_page=100")],
         )
-        fetch_commits.assert_called_once_with("owner/repo", 7)
+        self.assertEqual(
+            fetch_commits.call_args_list,
+            [call("owner/repo", 7), call("owner/repo", 9)],
+        )
 
 
 class CollectTests(unittest.TestCase):

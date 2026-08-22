@@ -112,7 +112,14 @@ def detect_repo() -> str | None:
     except RuntimeError:
         return None
     match = GITHUB_REMOTE_PATTERN.search(remote)
-    return match.group("repo") if match else None
+    if match:
+        return match.group("repo")
+    try:
+        return run(
+            ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]
+        )
+    except RuntimeError:
+        return None
 
 
 def resolve_system_timezone() -> tuple[ZoneInfo, str]:
@@ -204,22 +211,29 @@ def resolve_commit_candidate(
 ) -> tuple[dict[str, Any], dict[str, Any], str]:
     ordered = sorted(candidates, key=lambda candidate: int(candidate[0]["number"]))
     pr, commit = ordered[0]
+    if len(ordered) == 1:
+        return pr, commit, select_ticket(pr, commit.get("messageHeadline", ""))
+
     commit_tickets = find_tickets(commit.get("messageHeadline", ""))
     if len(commit_tickets) == 1:
         return pr, commit, commit_tickets[0]
 
-    tickets = {
-        select_ticket(candidate_pr, candidate_commit.get("messageHeadline", ""))
-        for candidate_pr, candidate_commit in ordered
+    fallback_tickets = {
+        ticket
+        for candidate_pr, _ in ordered
+        for ticket in find_tickets(
+            candidate_pr.get("title", ""), candidate_pr.get("headRefName", "")
+        )
     }
-    tickets.discard("UNASSIGNED")
-    ticket = tickets.pop() if len(tickets) == 1 else "UNASSIGNED"
+    ticket = fallback_tickets.pop() if len(fallback_tickets) == 1 else "UNASSIGNED"
     if ticket != "UNASSIGNED":
         pr, commit = next(
             candidate
             for candidate in ordered
-            if select_ticket(candidate[0], candidate[1].get("messageHeadline", ""))
-            == ticket
+            if ticket
+            in find_tickets(
+                candidate[0].get("title", ""), candidate[0].get("headRefName", "")
+            )
         )
     return pr, commit, ticket
 
@@ -492,6 +506,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
                 "pr_url": pr.get("url", ""),
                 "commit_count": len(commits),
                 "work_commit_count": sum(not commit["is_merge"] for commit in commits),
+                "_first_instant": commits[0]["instant"],
                 "first_time": commits[0]["time"],
                 "last_time": commits[-1]["time"],
                 "headlines": [commit["headline"] for commit in commits],
@@ -500,11 +515,13 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     activities.sort(
         key=lambda activity: (
             activity["date"],
-            activity["first_time"],
+            activity["_first_instant"],
             activity["ticket"],
             activity["pr_number"],
         )
     )
+    for activity in activities:
+        activity.pop("_first_instant")
 
     daily: dict[tuple[str, str], dict[str, Any]] = {}
     ticket_totals: dict[str, dict[str, Any]] = {}
