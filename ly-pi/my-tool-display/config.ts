@@ -7,11 +7,13 @@ import { Value } from "typebox/value";
 const ToolDisplayConfigSchema = Type.Object(
   {
     enabled: Type.Boolean(),
-    bashCollapsedLines: Type.Optional(Type.Integer({ minimum: 0 })),
-    diffCollapsedLines: Type.Optional(Type.Integer({ minimum: 0 })),
+    bashCollapsedLines: Type.Optional(Type.Unknown()),
+    diffCollapsedLines: Type.Optional(Type.Unknown()),
   },
   { additionalProperties: false },
 );
+
+const CollapsedLinesSchema = Type.Integer({ minimum: 0 });
 
 type ToolDisplayConfigFile = Static<typeof ToolDisplayConfigSchema>;
 export type ToolDisplayConfig = Omit<
@@ -28,6 +30,12 @@ export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
   diffCollapsedLines: 24,
 };
 
+function parseCollapsedLines(value: unknown, fallback: number): number {
+  return Value.Check(CollapsedLinesSchema, value)
+    ? (value as number)
+    : fallback;
+}
+
 export function loadToolDisplayConfig(): ToolDisplayConfig {
   try {
     const path = join(
@@ -43,12 +51,14 @@ export function loadToolDisplayConfig(): ToolDisplayConfig {
 
     return {
       enabled: parsed.enabled,
-      bashCollapsedLines:
-        parsed.bashCollapsedLines ??
+      bashCollapsedLines: parseCollapsedLines(
+        parsed.bashCollapsedLines,
         DEFAULT_TOOL_DISPLAY_CONFIG.bashCollapsedLines,
-      diffCollapsedLines:
-        parsed.diffCollapsedLines ??
+      ),
+      diffCollapsedLines: parseCollapsedLines(
+        parsed.diffCollapsedLines,
         DEFAULT_TOOL_DISPLAY_CONFIG.diffCollapsedLines,
+      ),
     };
   } catch {
     return { ...DEFAULT_TOOL_DISPLAY_CONFIG };

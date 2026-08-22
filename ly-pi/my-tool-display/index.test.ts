@@ -1,6 +1,7 @@
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -17,6 +18,7 @@ import {
   createWriteToolDefinition,
   generateDiffString,
   getAgentDir,
+  SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -30,6 +32,7 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
   createWriteToolDefinition: vi.fn(),
   generateDiffString: vi.fn(),
   getAgentDir: vi.fn(),
+  SettingsManager: { create: vi.fn() },
 }));
 
 import { loadToolDisplayConfig } from "./config";
@@ -285,6 +288,10 @@ beforeEach(() => {
   workspaceDirs = [];
   nextNativeWriteResult = nativeWriteResult;
   vi.mocked(getAgentDir).mockReturnValue(agentDir);
+  vi.mocked(SettingsManager.create).mockReturnValue({
+    getShellCommandPrefix: () => undefined,
+    getShellPath: () => undefined,
+  } as never);
   vi.mocked(createBashToolDefinition).mockImplementation(
     (cwd) => createNativeBashDefinition(cwd) as never,
   );
@@ -681,6 +688,41 @@ describe("my-tool-display", () => {
     expect(generateDiffString).not.toHaveBeenCalled();
   });
 
+  it("writes oversized new content when its diff is unavailable", async () => {
+    const workspaceDir = createWorkspace();
+    const content = "a".repeat(1_000_001);
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+
+    const result = await write.execute(
+      "call-oversized-content",
+      { path: "large.txt", content },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(nativeWriteExecutions.get(workspaceDir)).toHaveBeenCalledWith(
+      "call-oversized-content",
+      { path: "large.txt", content },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+    expect(readFileSync(join(workspaceDir, "large.txt"), "utf8")).toBe(content);
+    expect(generateDiffString).not.toHaveBeenCalled();
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "large.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("new content exceeds");
+  });
+
   it("shows a safe summary when the generated diff exceeds the budget", async () => {
     const workspaceDir = createWorkspace();
     vi.mocked(generateDiffString).mockReturnValueOnce({
@@ -1028,6 +1070,40 @@ describe("my-tool-display", () => {
     expect(loadToolDisplayConfig().bashCollapsedLines).toBe(10);
   });
 
+  it.each([
+    {
+      config: {
+        enabled: false,
+        bashCollapsedLines: -1,
+        diffCollapsedLines: 3,
+      },
+      expected: {
+        enabled: false,
+        bashCollapsedLines: 10,
+        diffCollapsedLines: 3,
+      },
+    },
+    {
+      config: {
+        enabled: false,
+        bashCollapsedLines: 3,
+        diffCollapsedLines: -1,
+      },
+      expected: {
+        enabled: false,
+        bashCollapsedLines: 3,
+        diffCollapsedLines: 24,
+      },
+    },
+  ])("preserves valid settings when one collapsed-line setting is invalid", ({
+    config,
+    expected,
+  }) => {
+    writeConfig(JSON.stringify(config));
+
+    expect(loadToolDisplayConfig()).toEqual(expected);
+  });
+
   it("shows expanded bash output without applying the collapsed budget", () => {
     writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 1 }));
     const { registered } = setup("builtin", ["bash"]);
@@ -1057,6 +1133,31 @@ describe("my-tool-display", () => {
     ).toBe(output);
   });
 
+  it.each([
+    "bash",
+    "grep",
+    "find",
+    "ls",
+  ] as const)("removes terminal control characters from %s output", (name) => {
+    const { registered } = setup("builtin", [name]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          {
+            content: [
+              { type: "text", text: "\u001b[31mvisible\u001b[0m\u0000\u0007" },
+            ],
+            details: undefined,
+          },
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe("visible");
+  });
+
   it("keeps bash failure status and all available output visible", () => {
     writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 1 }));
     const { registered } = setup("builtin", ["bash"]);
@@ -1077,7 +1178,13 @@ describe("my-tool-display", () => {
     expect(rendered).not.toContain("more lines");
   });
 
-  it("delegates bash execution through the native definition for the execution cwd", async () => {
+  it("delegates bash execution with effective shell settings for the execution cwd", async () => {
+    const settings = {
+      getShellCommandPrefix: vi.fn(() => "source ~/.zshrc"),
+      getShellPath: vi.fn(() => "/bin/zsh"),
+    };
+    vi.mocked(SettingsManager.create).mockReturnValue(settings as never);
+
     const { registered } = setup("builtin", ["bash"]);
     const bash = registered[0]!;
     expect(bash).toMatchObject({
@@ -1089,7 +1196,10 @@ describe("my-tool-display", () => {
       parameters: { type: "object" },
       constrainedSampling: false,
     });
-    const context = { cwd: "/other-project" };
+    const context = {
+      cwd: "/other-project",
+      isProjectTrusted: () => true,
+    };
     const onUpdate = vi.fn();
 
     await expect(
@@ -1101,12 +1211,45 @@ describe("my-tool-display", () => {
         context,
       ),
     ).resolves.toBe(nativeBashResult);
+    expect(SettingsManager.create).toHaveBeenCalledWith(
+      "/other-project",
+      agentDir,
+      { projectTrusted: true },
+    );
+    expect(settings.getShellCommandPrefix).toHaveBeenCalledOnce();
+    expect(settings.getShellPath).toHaveBeenCalledOnce();
+    expect(createBashToolDefinition).toHaveBeenLastCalledWith(
+      "/other-project",
+      { commandPrefix: "source ~/.zshrc", shellPath: "/bin/zsh" },
+    );
     expect(nativeBashExecutions.get("/other-project")).toHaveBeenCalledWith(
       "call-1",
       { command: "printf output" },
       undefined,
       onUpdate,
       context,
+    );
+  });
+
+  it("does not load project shell settings for an untrusted execution cwd", async () => {
+    const { registered } = setup("builtin", ["bash"]);
+    const context = {
+      cwd: "/untrusted-project",
+      isProjectTrusted: () => false,
+    };
+
+    await registered[0]!.execute(
+      "call-1",
+      { command: "printf output" },
+      undefined,
+      undefined,
+      context,
+    );
+
+    expect(SettingsManager.create).toHaveBeenCalledWith(
+      "/untrusted-project",
+      agentDir,
+      { projectTrusted: false },
     );
   });
 

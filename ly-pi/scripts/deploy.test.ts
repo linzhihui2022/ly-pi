@@ -46,17 +46,25 @@ afterEach(() => {
 });
 
 describe("deploy", () => {
-  it("removes the legacy renderer config from an existing deployment", () => {
+  it("disables the legacy renderer while preserving its installed package", () => {
     const stagingDir = createStagingDir();
-    const legacyDir = join(
+    const legacyConfigDir = join(
       stagingDir,
       "agent",
       "extensions",
       "pi-tool-display",
     );
-    const legacyConfig = join(legacyDir, "config.json");
-    const packageFile = join(legacyDir, "package.json");
-    mkdirSync(legacyDir, { recursive: true });
+    const legacyConfig = join(legacyConfigDir, "config.json");
+    const packageFile = join(
+      stagingDir,
+      "agent",
+      "npm",
+      "node_modules",
+      "pi-tool-display",
+      "package.json",
+    );
+    mkdirSync(legacyConfigDir, { recursive: true });
+    mkdirSync(dirname(packageFile), { recursive: true });
     writeFileSync(legacyConfig, '{"enabled":true}\n');
     writeFileSync(packageFile, '{"name":"pi-tool-display"}\n');
 
@@ -82,7 +90,9 @@ describe("deploy", () => {
       cleanupBundle();
     }
 
-    expect(existsSync(legacyConfig)).toBe(false);
+    expect(readFileSync(legacyConfig, "utf8")).toBe(
+      '{\n  "enabled": false\n}\n',
+    );
     expect(readFileSync(packageFile, "utf8")).toBe(
       '{"name":"pi-tool-display"}\n',
     );

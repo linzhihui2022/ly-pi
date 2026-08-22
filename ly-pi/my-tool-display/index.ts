@@ -12,6 +12,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 import {
   createBashToolDefinition,
   createEditToolDefinition,
@@ -22,6 +23,8 @@ import {
   createWriteToolDefinition,
   type ExtensionAPI,
   generateDiffString,
+  getAgentDir,
+  SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { loadToolDisplayConfig } from "./config";
@@ -57,12 +60,28 @@ function getBuiltinToolNames(pi: ExtensionAPI): Set<string> {
   }
 }
 
+function sanitizeToolOutput(output: string): string {
+  return Array.from(stripVTControlCharacters(output))
+    .filter((character) => {
+      const code = character.codePointAt(0);
+      if (code === undefined) {
+        return false;
+      }
+      if (code === 0x09 || code === 0x0a || code === 0x0d) {
+        return true;
+      }
+      return code > 0x1f && (code < 0xfff9 || code > 0xfffb);
+    })
+    .join("")
+    .replace(/\r/g, "");
+}
+
 function textOutput(result: {
   content: Array<{ type: string; text?: string }>;
 }): string {
   return result.content
     .filter((content) => content.type === "text")
-    .map((content) => content.text ?? "")
+    .map((content) => sanitizeToolOutput(content.text ?? ""))
     .join("\n");
 }
 
@@ -643,13 +662,13 @@ function registerToolRenderers(
     const bashOverride: typeof nativeBash = {
       ...nativeBash,
       async execute(toolCallId, params, signal, onUpdate, ctx) {
-        return createBashToolDefinition(ctx.cwd).execute(
-          toolCallId,
-          params,
-          signal,
-          onUpdate,
-          ctx,
-        );
+        const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
+          projectTrusted: ctx.isProjectTrusted(),
+        });
+        return createBashToolDefinition(ctx.cwd, {
+          commandPrefix: settings.getShellCommandPrefix(),
+          shellPath: settings.getShellPath(),
+        }).execute(toolCallId, params, signal, onUpdate, ctx);
       },
       renderResult(result, options, theme, context) {
         return renderBashResult(

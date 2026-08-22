@@ -147,7 +147,7 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 pi uninstall npm:pi-tool-display
 ```
 
-部署流程不会自动卸载用户级 npm 包；如果尚未完成 TUI 验证，请先保留旧扩展并在确认后再执行上述命令。
+部署流程不会自动卸载用户级 npm 包；在手动卸载前，会部署 `enabled: false` 的兼容配置以防旧扩展重新接管工具。完成 TUI 验证后再执行上述命令。
 
 ### API key（可选）
 
