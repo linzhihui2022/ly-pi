@@ -18,7 +18,7 @@
 
 ## Answer
 
-- 删除旧的 `ly-pi/assets/config/pi-tool-display.json`，并从 `ly-pi/scripts/deploy.ts` 移除第三方配置复制项；部署流程不会卸载用户级 npm 包。
+- 删除旧的 `ly-pi/assets/config/pi-tool-display.json`，并从 `ly-pi/scripts/deploy.ts` 移除第三方配置复制项；部署时还会清理由本仓库管理的既有 `extensions/pi-tool-display/config.json`，但不会卸载用户级 npm 包。
 - README 不再说明旧配置文件，新增迁移指引：完成自有模块验证后由用户手动执行 `pi uninstall npm:pi-tool-display`。
 - `my-tool-display` 继续由统一入口注册七个原生工具的呈现覆盖；源码静态审计确认没有旧配置或旧 renderer 的双轨引用。
 - 验证：`bun run verify`、`bun run --cwd ly-pi build` 和 `git diff --check` 通过。

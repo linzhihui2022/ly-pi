@@ -183,8 +183,8 @@ pi uninstall npm:pi-tool-display
 
 本仓库是作者的个人配置开源，以下内容带有强烈的个人偏好，**作示例用途，按需修改**：
 
-- **`assets/config/settings.json`** 中的模型绑定（如 `kimi-coding`、`deepseek-v4-flash`）是作者自建的 provider/model 别名，你需要替换为自己的模型配置
-- **`assets/config/append-system.md`** 中的语言偏好（中文回复等）为作者个人设定
+- **`ly-pi/assets/config/settings.json`** 中的模型绑定（如 `kimi-coding`、`deepseek-v4-flash`）是作者自建的 provider/model 别名，你需要替换为自己的模型配置
+- **`ly-pi/assets/config/append-system.md`** 中的语言偏好（中文回复等）为作者个人设定
 - **`JUDGE.md`、`CONTEXT.md`** 是作者个人项目的权限法官规则与领域术语表
 - **`docs/agents/`** 是作者按 Matt Pocock skills 工作流配置的本地 issue tracker 约定
 - **`.scratch/`** 是作者本仓库的本地票据，可作为该工作流的实例参考

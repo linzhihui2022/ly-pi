@@ -6,7 +6,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import {
   createBashToolDefinition,
   createEditToolDefinition,
@@ -41,6 +41,7 @@ let nextNativeWriteResult: unknown;
 const nativeBashExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeEditExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeWriteExecutions = new Map<string, ReturnType<typeof vi.fn>>();
+const nativeWriteQueues = new Map<string, Promise<void>>();
 const nativeExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeSearchExecutions = new Map<string, ReturnType<typeof vi.fn>>();
 const nativeBashResult = {
@@ -129,8 +130,49 @@ function createNativeEditDefinition(cwd: string) {
   };
 }
 
-function createNativeWriteDefinition(cwd: string) {
-  const execute = vi.fn().mockResolvedValue(nextNativeWriteResult);
+function createNativeWriteDefinition(
+  cwd: string,
+  options?: {
+    operations?: {
+      mkdir(path: string): Promise<void>;
+      writeFile(path: string, content: string): Promise<void>;
+    };
+  },
+) {
+  const execute = vi.fn(
+    async (
+      _toolCallId,
+      params: {
+        path: string;
+        content: string;
+      },
+    ) => {
+      if (!options?.operations) {
+        return nextNativeWriteResult;
+      }
+
+      const path = resolve(cwd, params.path);
+      const current = nativeWriteQueues.get(path) ?? Promise.resolve();
+      let release!: () => void;
+      const next = new Promise<void>((resolveQueue) => {
+        release = resolveQueue;
+      });
+      const queued = current.then(() => next);
+      nativeWriteQueues.set(path, queued);
+
+      await current;
+      try {
+        await options.operations.mkdir(dirname(path));
+        await options.operations.writeFile(path, params.content);
+        return nextNativeWriteResult;
+      } finally {
+        release();
+        if (nativeWriteQueues.get(path) === queued) {
+          nativeWriteQueues.delete(path);
+        }
+      }
+    },
+  );
   nativeWriteExecutions.set(cwd, execute);
   return {
     name: "write",
@@ -202,8 +244,14 @@ function setup(source = "builtin", toolNames = ["read"]) {
     sourceInfo: { source },
   }));
   const registered: any[] = [];
+  const sessionStartHandlers: Array<() => unknown> = [];
   const pi = {
     getAllTools: vi.fn(() => tools),
+    on: vi.fn((event: string, handler: () => unknown) => {
+      if (event === "session_start") {
+        sessionStartHandlers.push(handler);
+      }
+    }),
     registerTool: vi.fn((tool: any) => {
       registered.push(tool);
       const index = tools.findIndex(
@@ -219,6 +267,9 @@ function setup(source = "builtin", toolNames = ["read"]) {
   };
 
   myToolDisplay(pi as never);
+  for (const handler of sessionStartHandlers) {
+    handler();
+  }
 
   return { pi, registered };
 }
@@ -227,6 +278,7 @@ beforeEach(() => {
   nativeBashExecutions.clear();
   nativeEditExecutions.clear();
   nativeWriteExecutions.clear();
+  nativeWriteQueues.clear();
   nativeExecutions.clear();
   nativeSearchExecutions.clear();
   agentDir = mkdtempSync(join(tmpdir(), "my-tool-display-"));
@@ -240,7 +292,7 @@ beforeEach(() => {
     (cwd) => createNativeEditDefinition(cwd) as never,
   );
   vi.mocked(createWriteToolDefinition).mockImplementation(
-    (cwd) => createNativeWriteDefinition(cwd) as never,
+    (cwd, options) => createNativeWriteDefinition(cwd, options) as never,
   );
   vi.mocked(createFindToolDefinition).mockImplementation(
     (cwd) => createNativeSearchDefinition("find", cwd) as never,
@@ -349,6 +401,46 @@ describe("my-tool-display", () => {
     ).toBe("Writing...");
   });
 
+  it("captures each concurrent write baseline inside the native mutation queue", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "file.txt"), "original\n");
+    vi.mocked(generateDiffString).mockReturnValue({
+      diff: "diff",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+
+    await Promise.all([
+      write.execute(
+        "call-first",
+        { path: "file.txt", content: "first\n" },
+        undefined,
+        undefined,
+        { cwd: workspaceDir },
+      ),
+      write.execute(
+        "call-second",
+        { path: "file.txt", content: "second\n" },
+        undefined,
+        undefined,
+        { cwd: workspaceDir },
+      ),
+    ]);
+
+    expect(generateDiffString).toHaveBeenNthCalledWith(
+      1,
+      "original\n",
+      "first\n",
+    );
+    expect(generateDiffString).toHaveBeenNthCalledWith(
+      2,
+      "first\n",
+      "second\n",
+    );
+  });
+
   it("renders a completed write diff for a new file", async () => {
     const workspaceDir = createWorkspace();
     vi.mocked(generateDiffString).mockReturnValueOnce({
@@ -441,7 +533,6 @@ describe("my-tool-display", () => {
   it.each([
     "binary",
     "oversized",
-    "directory",
     "outside the current workspace",
   ])("shows a safe summary for a %s write diff", async (kind) => {
     const workspaceDir = createWorkspace();
@@ -450,9 +541,6 @@ describe("my-tool-display", () => {
       writeFileSync(join(workspaceDir, path), Buffer.from([0, 1, 2]));
     } else if (kind === "oversized") {
       writeFileSync(join(workspaceDir, path), Buffer.alloc(1_000_001, "a"));
-    } else if (kind === "directory") {
-      path = "directory";
-      mkdirSync(join(workspaceDir, path));
     } else {
       const outsideDir = createWorkspace();
       path = join(outsideDir, "outside.txt");
@@ -534,6 +622,37 @@ describe("my-tool-display", () => {
         ),
       ),
     ).toContain("resolves outside the current workspace");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("does not read through an in-workspace symlink", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "target.txt"), "inside\n");
+    symlinkSync(
+      join(workspaceDir, "target.txt"),
+      join(workspaceDir, "link.txt"),
+    );
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-in-workspace-symlink",
+      { path: "link.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "link.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("target path is a symbolic link");
     expect(generateDiffString).not.toHaveBeenCalled();
   });
 
@@ -1388,15 +1507,65 @@ describe("my-tool-display", () => {
     expect(registered).toHaveLength(1);
   });
 
+  it("defers tool discovery until the runtime session starts", () => {
+    const tools = [{ name: "read", sourceInfo: { source: "builtin" } }];
+    const registered: unknown[] = [];
+    const sessionStartHandlers: Array<() => unknown> = [];
+    let runtimeBound = false;
+    const pi = {
+      getAllTools: vi.fn(() => {
+        if (!runtimeBound) {
+          throw new Error(
+            "tool registry is not bound during extension loading",
+          );
+        }
+        return tools;
+      }),
+      on: vi.fn((event: string, handler: () => unknown) => {
+        if (event === "session_start") {
+          sessionStartHandlers.push(handler);
+        }
+      }),
+      registerTool: vi.fn((tool: unknown) => {
+        registered.push(tool);
+      }),
+    };
+
+    myToolDisplay(pi as never);
+
+    expect(pi.getAllTools).not.toHaveBeenCalled();
+    expect(pi.registerTool).not.toHaveBeenCalled();
+    expect(pi.on).toHaveBeenCalledWith("session_start", expect.any(Function));
+
+    runtimeBound = true;
+    for (const handler of sessionStartHandlers) {
+      handler();
+    }
+
+    expect(pi.registerTool).toHaveBeenCalledTimes(1);
+    expect(registered).toHaveLength(1);
+  });
+
   it("safely degrades when tool discovery is unavailable", () => {
+    const sessionStartHandlers: Array<() => unknown> = [];
     const pi = {
       getAllTools: vi.fn(() => {
         throw new Error("no interactive tool registry");
       }),
+      on: vi.fn((event: string, handler: () => unknown) => {
+        if (event === "session_start") {
+          sessionStartHandlers.push(handler);
+        }
+      }),
       registerTool: vi.fn(),
     };
 
-    expect(() => myToolDisplay(pi as never)).not.toThrow();
+    expect(() => {
+      myToolDisplay(pi as never);
+      for (const handler of sessionStartHandlers) {
+        handler();
+      }
+    }).not.toThrow();
     expect(pi.registerTool).not.toHaveBeenCalled();
   });
 

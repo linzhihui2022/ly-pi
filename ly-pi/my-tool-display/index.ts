@@ -1,5 +1,6 @@
 import {
   closeSync,
+  constants,
   existsSync,
   fstatSync,
   lstatSync,
@@ -7,6 +8,7 @@ import {
   readSync,
   realpathSync,
 } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +26,7 @@ import {
 import { Text } from "@earendil-works/pi-tui";
 import { loadToolDisplayConfig } from "./config";
 
+const initializedApis = new WeakSet<ExtensionAPI>();
 const registeredApis = new WeakSet<ExtensionAPI>();
 const MAX_WRITE_DIFF_BYTES = 1_000_000;
 
@@ -72,7 +75,7 @@ function isWithinWorkspace(workspacePath: string, targetPath: string): boolean {
 }
 
 type SafeWritePath =
-  | { path: string; existed: true }
+  | { path: string; existed: true; device: number; inode: number }
   | { path: string; existed: false }
   | { reason: string };
 
@@ -153,20 +156,23 @@ function resolveSafeWritePath(cwd: string, rawPath: string): SafeWritePath {
       };
     }
     if (targetStat.isSymbolicLink()) {
-      const resolvedTargetStat = lstatSync(targetPath);
-      if (!resolvedTargetStat.isFile()) {
-        return {
-          reason:
-            "Write diff unavailable because the target path is not a regular file.",
-        };
-      }
-    } else if (!targetStat.isFile()) {
+      return {
+        reason:
+          "Write diff unavailable because the target path is a symbolic link.",
+      };
+    }
+    if (!targetStat.isFile()) {
       return {
         reason:
           "Write diff unavailable because the target path is not a regular file.",
       };
     }
-    return { path: targetPath, existed: true };
+    return {
+      path: resolvedPath,
+      existed: true,
+      device: targetStat.dev,
+      inode: targetStat.ino,
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       return {
@@ -226,8 +232,22 @@ function readWritePreview(
 
   let fileDescriptor: number | undefined;
   try {
-    fileDescriptor = openSync(safePath.path, "r");
+    fileDescriptor = openSync(
+      safePath.path,
+      constants.O_RDONLY | constants.O_NOFOLLOW,
+    );
     const initialStats = fstatSync(fileDescriptor);
+    if (
+      !initialStats.isFile() ||
+      initialStats.dev !== safePath.device ||
+      initialStats.ino !== safePath.inode
+    ) {
+      return {
+        safe: false,
+        reason:
+          "Write diff unavailable because the existing file could not be read safely.",
+      };
+    }
     if (initialStats.size > MAX_WRITE_DIFF_BYTES) {
       return {
         safe: false,
@@ -495,13 +515,11 @@ function formatReadCall(
   return `${theme.fg("toolTitle", theme.bold("read"))} ${theme.fg("accent", path)}${theme.fg("warning", range)}`;
 }
 
-export default function myToolDisplay(pi: ExtensionAPI): void {
+function registerToolRenderers(
+  pi: ExtensionAPI,
+  config: ReturnType<typeof loadToolDisplayConfig>,
+): void {
   if (registeredApis.has(pi)) {
-    return;
-  }
-
-  const config = loadToolDisplayConfig();
-  if (!config.enabled) {
     return;
   }
 
@@ -516,18 +534,26 @@ export default function myToolDisplay(pi: ExtensionAPI): void {
       ...nativeWrite,
       renderShell: "default",
       async execute(toolCallId, params, signal, onUpdate, ctx) {
-        const preview = readWritePreview(ctx.cwd, params.path, params.content);
-        const result = await createWriteToolDefinition(ctx.cwd).execute(
-          toolCallId,
-          params,
-          signal,
-          onUpdate,
-          ctx,
-        );
+        let preview: WritePreview | undefined;
+        const result = await createWriteToolDefinition(ctx.cwd, {
+          operations: {
+            async mkdir(path) {
+              await mkdir(path, { recursive: true });
+            },
+            async writeFile(path, content) {
+              preview = readWritePreview(ctx.cwd, path, content);
+              await writeFile(path, content, "utf8");
+            },
+          },
+        }).execute(toolCallId, params, signal, onUpdate, ctx);
 
         let details: WriteDiffDetails;
-        if (!preview.safe) {
-          details = { summary: preview.reason };
+        if (!preview?.safe) {
+          details = {
+            summary:
+              preview?.reason ??
+              "Write diff unavailable because the previous content could not be captured safely.",
+          };
         } else {
           try {
             const generated = generateDiffString(
@@ -764,4 +790,20 @@ export default function myToolDisplay(pi: ExtensionAPI): void {
   }
 
   registeredApis.add(pi);
+}
+
+export default function myToolDisplay(pi: ExtensionAPI): void {
+  if (initializedApis.has(pi)) {
+    return;
+  }
+
+  const config = loadToolDisplayConfig();
+  if (!config.enabled) {
+    return;
+  }
+
+  initializedApis.add(pi);
+  pi.on("session_start", () => {
+    registerToolRenderers(pi, config);
+  });
 }

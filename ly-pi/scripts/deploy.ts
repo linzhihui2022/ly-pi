@@ -1,4 +1,4 @@
-import { cpSync, existsSync } from "node:fs";
+import { cpSync, existsSync, rmSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -205,6 +205,17 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
   for (const { src, dest, base, label } of configManifest) {
     await write(join(base ?? agentDir, dest), Bun.file(join(configDir, src)));
     console.log(`${label}: deployed`);
+  }
+
+  const legacyToolDisplayConfig = join(
+    agentDir,
+    "extensions",
+    "pi-tool-display",
+    "config.json",
+  );
+  if (existsSync(legacyToolDisplayConfig)) {
+    rmSync(legacyToolDisplayConfig, { force: true });
+    console.log("Legacy pi-tool-display config: removed");
   }
 }
 
