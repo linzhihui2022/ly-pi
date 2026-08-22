@@ -88,6 +88,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def validate_explicit_values(args: argparse.Namespace) -> None:
+    for name in ("repo", "author", "timezone"):
+        value = getattr(args, name)
+        if value is not None and not value.strip():
+            raise ValueError(f"--{name.replace('_', '-')} must not be empty")
+
+
 def run(command: list[str]) -> str:
     try:
         result = subprocess.run(command, check=False, capture_output=True, text=True)
@@ -192,6 +199,31 @@ def select_ticket(pr: dict[str, Any], headline: str) -> str:
     return "UNASSIGNED"
 
 
+def resolve_commit_candidate(
+    candidates: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> tuple[dict[str, Any], dict[str, Any], str]:
+    ordered = sorted(candidates, key=lambda candidate: int(candidate[0]["number"]))
+    pr, commit = ordered[0]
+    commit_tickets = find_tickets(commit.get("messageHeadline", ""))
+    if len(commit_tickets) == 1:
+        return pr, commit, commit_tickets[0]
+
+    tickets = {
+        select_ticket(candidate_pr, candidate_commit.get("messageHeadline", ""))
+        for candidate_pr, candidate_commit in ordered
+    }
+    tickets.discard("UNASSIGNED")
+    ticket = tickets.pop() if len(tickets) == 1 else "UNASSIGNED"
+    if ticket != "UNASSIGNED":
+        pr, commit = next(
+            candidate
+            for candidate in ordered
+            if select_ticket(candidate[0], candidate[1].get("messageHeadline", ""))
+            == ticket
+        )
+    return pr, commit, ticket
+
+
 def fetch_paginated_items(endpoint: str) -> list[dict[str, Any]]:
     payload = json.loads(
         run(
@@ -239,6 +271,18 @@ def fetch_graphql_pages(
         isinstance(page, dict) for page in payload
     ):
         raise RuntimeError("unexpected paginated GitHub GraphQL response")
+    for page in payload:
+        errors = page.get("errors", [])
+        if not isinstance(errors, list):
+            raise RuntimeError("unexpected GitHub GraphQL errors")
+        if errors:
+            messages = [
+                error["message"]
+                for error in errors
+                if isinstance(error, dict) and isinstance(error.get("message"), str)
+            ]
+            detail = "; ".join(messages) or "unknown error"
+            raise RuntimeError(f"GitHub GraphQL error: {detail}")
     return payload
 
 
@@ -364,6 +408,7 @@ def build_calendar_days(
 
 
 def collect(args: argparse.Namespace) -> dict[str, Any]:
+    validate_explicit_values(args)
     local_tz, timezone_name = resolve_timezone(args.timezone)
     today = datetime.now(local_tz).date()
     window_start, window_end = resolve_date_window(args, today)
@@ -378,7 +423,10 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     prs = fetch_prs(repo, resolved_author)
 
     grouped: dict[tuple[str, str, int], list[dict[str, Any]]] = defaultdict(list)
-    seen_oids: set[str] = set()
+    commits_by_oid: dict[
+        str, list[tuple[dict[str, Any], dict[str, Any]]]
+    ] = defaultdict(list)
+    commits_without_oid: list[tuple[dict[str, Any], dict[str, Any]]] = []
     duplicates_removed = 0
     commits_outside_range = 0
     commits_by_other_authors = 0
@@ -387,48 +435,53 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     for pr in prs:
         for commit in pr.get("commits", []):
             oid = commit.get("oid", "")
-            if oid and oid in seen_oids:
-                duplicates_removed += 1
-                continue
             if oid:
-                seen_oids.add(oid)
+                commits_by_oid[oid].append((pr, commit))
+            else:
+                commits_without_oid.append((pr, commit))
 
-            author_logins = {
-                commit_author["login"].casefold()
-                for commit_author in commit.get("authors", [])
-                if isinstance(commit_author, dict)
-                and isinstance(commit_author.get("login"), str)
-            }
-            if not args.include_all_commit_authors:
-                if not author_logins:
-                    commits_by_unknown_authors += 1
-                    continue
-                if resolved_author_key not in author_logins:
-                    commits_by_other_authors += 1
-                    continue
+    candidate_groups = list(commits_by_oid.values())
+    candidate_groups.extend([[candidate] for candidate in commits_without_oid])
+    for candidates in candidate_groups:
+        duplicates_removed += len(candidates) - 1
+        pr, commit, ticket = resolve_commit_candidate(candidates)
 
-            committed_at = parse_github_time(commit["committedDate"])
-            local_time = committed_at.astimezone(local_tz)
-            if not range_start <= local_time < range_end:
-                commits_outside_range += 1
+        author_logins = {
+            commit_author["login"].casefold()
+            for commit_author in commit.get("authors", [])
+            if isinstance(commit_author, dict)
+            and isinstance(commit_author.get("login"), str)
+        }
+        if not args.include_all_commit_authors:
+            if not author_logins:
+                commits_by_unknown_authors += 1
+                continue
+            if resolved_author_key not in author_logins:
+                commits_by_other_authors += 1
                 continue
 
-            headline = commit.get("messageHeadline", "")
-            ticket = select_ticket(pr, headline)
-            key = (local_time.date().isoformat(), ticket, int(pr["number"]))
-            grouped[key].append(
-                {
-                    "oid": oid,
-                    "time": local_time.strftime("%H:%M"),
-                    "headline": headline,
-                    "is_merge": is_merge_commit(headline),
-                }
-            )
+        committed_at = parse_github_time(commit["committedDate"])
+        local_time = committed_at.astimezone(local_tz)
+        if not range_start <= local_time < range_end:
+            commits_outside_range += 1
+            continue
+
+        headline = commit.get("messageHeadline", "")
+        key = (local_time.date().isoformat(), ticket, int(pr["number"]))
+        grouped[key].append(
+            {
+                "oid": commit.get("oid", ""),
+                "instant": committed_at,
+                "time": local_time.isoformat(timespec="minutes"),
+                "headline": headline,
+                "is_merge": is_merge_commit(headline),
+            }
+        )
 
     activities: list[dict[str, Any]] = []
     pr_by_number = {int(pr["number"]): pr for pr in prs}
     for (day, ticket, pr_number), commits in grouped.items():
-        commits.sort(key=lambda commit: commit["time"])
+        commits.sort(key=lambda commit: commit["instant"])
         pr = pr_by_number[pr_number]
         activities.append(
             {
@@ -449,6 +502,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             activity["date"],
             activity["first_time"],
             activity["ticket"],
+            activity["pr_number"],
         )
     )
 

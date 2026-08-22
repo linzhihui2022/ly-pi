@@ -23,16 +23,16 @@ disable-model-invocation: true
 
 ## 收集证据
 
-从技能目录运行采集器：
+保持当前工作目录为目标 Git 仓库，并通过已部署技能的绝对路径运行采集器：
 
 ```bash
-python3 scripts/collect_pr_activity.py
+python3 "$HOME/.pi/agent/skills/gh-build-weekly-timesheet/scripts/collect_pr_activity.py"
 ```
 
 指定任意闭合日期范围：
 
 ```bash
-python3 scripts/collect_pr_activity.py \
+python3 "$HOME/.pi/agent/skills/gh-build-weekly-timesheet/scripts/collect_pr_activity.py" \
   --start-date 2026-08-03 \
   --end-date 2026-08-14
 ```
@@ -50,13 +50,13 @@ python3 scripts/collect_pr_activity.py \
 - `calendar_days` 列出证据窗口内的每个日历日及其 `has_activity` 状态。
 - `date_range` 是实际使用的闭合日期范围。
 - `work_commit_count` 排除机械 merge commit；`commit_count` 保留它们以便审计。
-- `first_time` 与 `last_time` 是观察点，不是实际工时。
-- `UNASSIGNED` 表示存在活动但无法从 PR 或提交标题确定唯一票据。
+- `first_time` 与 `last_time` 是带 UTC offset 的本地 ISO 8601 观察点，不是实际工时；它们保留 DST 回拨时的活动顺序。
+- `UNASSIGNED` 表示存在活动但无法确定唯一票据。提交标题优先；仅当提交标题未确定唯一票据时，PR 标题与分支名共同参与回退。同一 OID 经多个 PR 出现且回退票据冲突时，必须保持为 `UNASSIGNED`。
 - `duplicates_removed` 表示同一提交经多个 PR 出现而被去重的次数。
 - `commits_by_other_authors` 表示默认过滤的、明确属于其他作者的提交数。
 - `commits_by_unknown_authors` 表示默认过滤的、无法确认 GitHub 作者的提交数；传入 `--include-all-commit-authors` 时这两类提交都会纳入活动。
 
-先检查提交标题，再写摘要。PR 标题和分支名只能提供上下文，不能证明实际耗时。
+先检查提交标题，再写摘要。PR 标题和分支名不能证明实际耗时。
 
 ## 分配估算工时
 

@@ -7,7 +7,7 @@ import json
 import os
 import sys
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from argparse import Namespace
 from datetime import date, datetime, timezone
@@ -40,6 +40,18 @@ def make_args(**overrides: object) -> Namespace:
     return Namespace(**values)
 
 
+def run_cli(arguments: list[str]) -> tuple[int, str, str]:
+    stdout = StringIO()
+    stderr = StringIO()
+    with (
+        patch.object(sys, "argv", [str(SCRIPT_PATH), *arguments]),
+        redirect_stdout(stdout),
+        redirect_stderr(stderr),
+    ):
+        exit_code = collector.main()
+    return exit_code, stdout.getvalue(), stderr.getvalue()
+
+
 class CliFailureTests(unittest.TestCase):
     def test_reports_missing_command_without_traceback(self) -> None:
         stderr = StringIO()
@@ -67,6 +79,190 @@ class CliFailureTests(unittest.TestCase):
                     self.assertEqual(collector.main(), 1)
 
         self.assertIn("cannot start gh", stderr.getvalue())
+
+
+class CliContractTests(unittest.TestCase):
+    def collect_json(
+        self, pull_requests: list[dict[str, object]], timezone_name: str = "UTC"
+    ) -> dict[str, object]:
+        with (
+            patch.object(collector, "resolve_author", return_value="alice"),
+            patch.object(collector, "fetch_prs", return_value=pull_requests),
+        ):
+            exit_code, stdout, stderr = run_cli(
+                [
+                    "--repo",
+                    "owner/repo",
+                    "--author",
+                    "alice",
+                    "--start-date",
+                    "2024-01-01",
+                    "--end-date",
+                    "2024-12-31",
+                    "--timezone",
+                    timezone_name,
+                ]
+            )
+
+        self.assertEqual(exit_code, 0, stderr)
+        return json.loads(stdout)
+
+    def test_rejects_empty_explicit_cli_values(self) -> None:
+        base_arguments = [
+            "--repo",
+            "owner/repo",
+            "--author",
+            "alice",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-01-01",
+            "--timezone",
+            "UTC",
+        ]
+
+        for option in ("--repo", "--author", "--timezone"):
+            arguments = base_arguments.copy()
+            arguments[arguments.index(option) + 1] = ""
+            with (
+                self.subTest(option=option),
+                patch.object(collector, "detect_repo", return_value="owner/repo"),
+                patch.object(
+                    collector,
+                    "resolve_system_timezone",
+                    return_value=(collector.ZoneInfo("UTC"), "UTC"),
+                ),
+                patch.object(collector, "fetch_prs", return_value=[]),
+            ):
+                exit_code, stdout, stderr = run_cli(arguments)
+
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(stdout, "")
+            self.assertIn(f"{option} must not be empty", stderr)
+
+    def test_rejects_graphql_partial_data_response(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "head": {"ref": "ABC-123-report"},
+                "created_at": "2024-01-01T00:00:00Z",
+                "merged_at": None,
+                "html_url": "https://github.com/owner/repo/pull/7",
+                "user": {"login": "alice"},
+            }
+        ]
+        partial_page = {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "commits": {
+                            "nodes": [],
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                        }
+                    }
+                }
+            },
+            "errors": [{"message": "partial failure"}],
+        }
+
+        def mocked_run(command: list[str]) -> str:
+            if "graphql" in command:
+                return json.dumps([partial_page])
+            return json.dumps([pull_requests])
+
+        with patch.object(collector, "run", side_effect=mocked_run):
+            exit_code, stdout, stderr = run_cli(
+                [
+                    "--repo",
+                    "owner/repo",
+                    "--author",
+                    "alice",
+                    "--start-date",
+                    "2024-01-01",
+                    "--end-date",
+                    "2024-01-01",
+                    "--timezone",
+                    "UTC",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("GitHub GraphQL error: partial failure", stderr)
+
+    def test_assigns_conflicting_duplicate_oid_to_unassigned_stably(self) -> None:
+        pull_requests = [
+            {
+                "number": 8,
+                "title": "DEF-456 add report",
+                "headRefName": "DEF-456-report",
+                "url": "https://github.com/owner/repo/pull/8",
+                "commits": [
+                    {
+                        "oid": "shared",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "implement report output",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "headRefName": "ABC-123-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "shared",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "implement report output",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+        ]
+
+        first = self.collect_json(pull_requests)
+        second = self.collect_json(list(reversed(pull_requests)))
+
+        self.assertEqual(first["activities"], second["activities"])
+        self.assertEqual(first["activities"][0]["ticket"], "UNASSIGNED")
+        self.assertEqual(first["duplicates_removed"], 1)
+
+    def test_preserves_dst_fold_order_and_offset_in_json(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "headRefName": "ABC-123-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "before-fold",
+                        "committedDate": "2024-11-03T05:50:00Z",
+                        "messageHeadline": "ABC-123 before fallback",
+                        "authors": [{"login": "alice"}],
+                    },
+                    {
+                        "oid": "after-fold",
+                        "committedDate": "2024-11-03T06:10:00Z",
+                        "messageHeadline": "ABC-123 after fallback",
+                        "authors": [{"login": "alice"}],
+                    },
+                ],
+            }
+        ]
+
+        result = self.collect_json(pull_requests, "America/New_York")
+        activity = result["activities"][0]
+
+        self.assertEqual(
+            activity["headlines"],
+            ["ABC-123 before fallback", "ABC-123 after fallback"],
+        )
+        self.assertEqual(activity["first_time"], "2024-11-03T01:50-04:00")
+        self.assertEqual(activity["last_time"], "2024-11-03T01:10-05:00")
 
 
 class ResolveDateWindowTests(unittest.TestCase):
