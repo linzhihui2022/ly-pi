@@ -42,35 +42,53 @@ export function createJudge(
         { role: "user" as const, content: prompt, timestamp: Date.now() },
       ],
     };
-    let timedOut = false;
-
+    let modelRunner: JudgeModelPolicyRegistry;
     try {
-      const result = await (
-        deps.modelRunner ?? loadModelPolicyRegistry(EXT_DIR)
-      ).run("security-judge", deps.modelClient, async (model) => {
-        const controller = new AbortController();
-        const timeout = setTimeout(
-          () => controller.abort(),
-          config.judgeTimeoutMs,
-        );
-        const completeOpts: ModelsApiStreamOptions<Api> = {
-          signal: controller.signal,
-        };
+      modelRunner = deps.modelRunner ?? loadModelPolicyRegistry(EXT_DIR);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      log.error("judge model policy loading failed", { error: detail });
+      return failureResult(`法官模型策略不可用: ${detail}，请手动确认`, input);
+    }
 
-        try {
-          return await deps.modelClient.complete(model, context, completeOpts);
-        } catch (error) {
-          if (controller.signal.aborted) {
-            timedOut = true;
-            throw Object.assign(new Error("judge model timed out"), {
-              code: "ETIMEDOUT",
-            });
+    let lastAttemptTimedOut = false;
+    try {
+      const result = await modelRunner.run(
+        "security-judge",
+        deps.modelClient,
+        async (model, candidate) => {
+          lastAttemptTimedOut = false;
+          const controller = new AbortController();
+          const timeout = setTimeout(
+            () => controller.abort(),
+            config.judgeTimeoutMs,
+          );
+          const completeOpts: ModelsApiStreamOptions<Api> = {
+            signal: controller.signal,
+            ...(candidate.thinking === "off"
+              ? {}
+              : { reasoningEffort: candidate.thinking }),
+          };
+
+          try {
+            return await deps.modelClient.complete(
+              model,
+              context,
+              completeOpts,
+            );
+          } catch (error) {
+            if (controller.signal.aborted) {
+              lastAttemptTimedOut = true;
+              throw Object.assign(new Error("judge model timed out"), {
+                code: "ETIMEDOUT",
+              });
+            }
+            throw error;
+          } finally {
+            clearTimeout(timeout);
           }
-          throw error;
-        } finally {
-          clearTimeout(timeout);
-        }
-      });
+        },
+      );
 
       if (result.status !== "success") {
         log.warn("judge model unavailable", { reason: result.reason });
@@ -80,7 +98,7 @@ export function createJudge(
             input,
           );
         }
-        if (timedOut) {
+        if (lastAttemptTimedOut) {
           return failureResult(
             `法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`,
             input,
@@ -117,7 +135,7 @@ export function createJudge(
       return failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
       log.error("judge call failed", { error: (error as Error).message });
-      if (timedOut) {
+      if (lastAttemptTimedOut) {
         return failureResult(
           `法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`,
           input,

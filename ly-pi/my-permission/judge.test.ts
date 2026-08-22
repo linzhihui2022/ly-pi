@@ -1,5 +1,6 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { loadModelPolicyRegistry } from "../model-policy/config";
 import {
   createModelPolicyRegistry,
   type ModelCandidate,
@@ -7,6 +8,10 @@ import {
 } from "../model-policy/registry";
 import { createJudge } from "./judge";
 import type { Config, ModelClient } from "./types";
+
+vi.mock("../model-policy/config", () => ({
+  loadModelPolicyRegistry: vi.fn(),
+}));
 
 function makeModel(
   overrides: Partial<{ id: string; provider: string }> = {},
@@ -45,23 +50,30 @@ const modelClient: ModelClient = { find: resolveFnOk, complete: completeModel };
 function createSuccessfulModelRunner(
   model = resolvedModel,
   candidateModel = `${model.provider}/${model.id}`,
+  candidateThinking: ModelCandidate["thinking"] = "off",
 ) {
   const run = vi.fn(
     async (
       _role: string,
       _models: ModelClient,
-      operation: (model: Model<Api>) => Promise<unknown>,
-    ) => ({
-      status: "success" as const,
-      value: await operation(model),
-      candidate: {
+      operation: (
+        model: Model<Api>,
+        candidate: ModelCandidate,
+      ) => Promise<unknown>,
+    ) => {
+      const candidate = {
         slot: "primary",
         model: candidateModel,
         label: "Security judge",
-        thinking: "off",
+        thinking: candidateThinking,
         source: "manifest" as const,
-      },
-    }),
+      };
+      return {
+        status: "success" as const,
+        value: await operation(model, candidate),
+        candidate,
+      };
+    },
   );
   return { modelRunner: { run } as never, run };
 }
@@ -115,6 +127,7 @@ beforeEach(() => {
   completeModel.mockReset();
   defaultModelRunner.run.mockClear();
   resolveFnOk.mockClear();
+  vi.mocked(loadModelPolicyRegistry).mockReset();
 });
 
 function failureReason(
@@ -215,6 +228,21 @@ describe("createJudge", () => {
     );
   });
 
+  it("reports a security-judge policy loading failure", async () => {
+    vi.mocked(loadModelPolicyRegistry).mockImplementation(() => {
+      throw new Error("invalid manifest");
+    });
+    const judge = createJudge(config, {
+      judgePrompt: JUDGE_PROMPT,
+      modelClient,
+    });
+
+    await expect(judge(input, "/repo")).resolves.toEqual(
+      failureReason(input, "法官模型策略不可用: invalid manifest，请手动确认"),
+    );
+    expect(completeModel).not.toHaveBeenCalled();
+  });
+
   it("uses the next security-judge candidate after rate limiting", async () => {
     const primary = makeModel({ id: "primary", provider: "test" });
     const fallback = makeModel({ id: "fallback", provider: "test" });
@@ -268,6 +296,55 @@ describe("createJudge", () => {
       "primary",
       "fallback",
     ]);
+  });
+
+  it("reports the final failure after a timed-out candidate", async () => {
+    const primary = makeModel({ id: "primary", provider: "test" });
+    const fallback = makeModel({ id: "fallback", provider: "test" });
+    const complete = vi
+      .fn<ModelClient["complete"]>()
+      .mockImplementation((model, _context, options) => {
+        if (model.id === "primary") {
+          return new Promise<never>((_resolve, reject) => {
+            options?.signal?.addEventListener(
+              "abort",
+              () => reject(new Error("aborted")),
+              { once: true },
+            );
+          });
+        }
+        return Promise.reject(new Error("fallback unavailable"));
+      });
+    const securityModelClient: ModelClient = {
+      find: (_provider, id) =>
+        id === "primary" ? primary : id === "fallback" ? fallback : undefined,
+      complete,
+    };
+    const judge = createJudge(
+      { ...config, judgeTimeoutMs: 1 },
+      {
+        judgePrompt: JUDGE_PROMPT,
+        modelClient: securityModelClient,
+        modelRunner: createSecurityJudgeRunner([
+          {
+            slot: "primary",
+            model: "test/primary",
+            label: "Primary security judge",
+            thinking: "off",
+          },
+          {
+            slot: "fallback",
+            model: "test/fallback",
+            label: "Fallback security judge",
+            thinking: "off",
+          },
+        ]),
+      },
+    );
+
+    await expect(judge(input, "/repo")).resolves.toEqual(
+      failureReason(input, "法官模型调用失败: fallback unavailable"),
+    );
   });
 
   it("does not retry after a malformed judge protocol response", async () => {
@@ -389,6 +466,31 @@ describe("createJudge", () => {
     >;
     expect(options.thinking).toBeUndefined();
     expect(options.reasoningEffort).toBeUndefined();
+  });
+
+  it("uses the selected security-judge candidate thinking", async () => {
+    completeModel.mockResolvedValue({
+      content: [
+        {
+          type: "text" as const,
+          text: '{"safe":true,"score":8,"reason":"ok","toolFor":"read"}',
+        },
+      ],
+    } as never);
+    const { modelRunner } = createSuccessfulModelRunner(
+      resolvedModel,
+      "test/security-judge",
+      "max",
+    );
+    const judge = createJudge(config, { ...judgeDeps, modelRunner });
+
+    await judge(input, "/repo");
+
+    expect(completeModel).toHaveBeenCalledWith(
+      resolvedModel,
+      expect.any(Object),
+      expect.objectContaining({ reasoningEffort: "max" }),
+    );
   });
 
   it("returns failure result when JSON is missing 'safe' field", async () => {

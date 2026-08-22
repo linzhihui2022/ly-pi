@@ -369,6 +369,8 @@ function diagnoseCandidate(
   };
 }
 
+// Only Pi response-shaped errors may use message matching for fallback. This
+// prevents arbitrary operation errors from being misclassified and retried.
 const modelResponseErrors = new WeakSet<Error>();
 
 function modelResponseFailure(value: unknown): Error | undefined {
