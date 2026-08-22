@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
 import {
+  cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,10 +11,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 const LY_PI_DIR = fileURLToPath(new URL("..", import.meta.url));
+const DIST_DIR = join(LY_PI_DIR, "dist");
 const tempDirs: string[] = [];
+let distSnapshotDir: string | undefined;
+let hadDist = false;
 
 function stagingDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "ly-pi-deploy-"));
@@ -36,6 +41,12 @@ function deploy(staging: string) {
 
 describe("deploy model policy settings", () => {
   beforeAll(() => {
+    hadDist = existsSync(DIST_DIR);
+    if (hadDist) {
+      distSnapshotDir = mkdtempSync(join(tmpdir(), "ly-pi-dist-snapshot-"));
+      cpSync(DIST_DIR, join(distSnapshotDir, "dist"), { recursive: true });
+    }
+
     const build = runBun([
       "build",
       "./index.ts",
@@ -49,6 +60,14 @@ describe("deploy model policy settings", () => {
       "@earendil-works/*",
     ]);
     expect(build.status).toBe(0);
+  });
+
+  afterAll(() => {
+    rmSync(DIST_DIR, { recursive: true, force: true });
+    if (distSnapshotDir) {
+      cpSync(join(distSnapshotDir, "dist"), DIST_DIR, { recursive: true });
+      rmSync(distSnapshotDir, { recursive: true, force: true });
+    }
   });
 
   afterEach(() => {
@@ -173,8 +192,13 @@ describe("deploy model policy settings", () => {
 
   it("fails deployment before writing when a security policy is overridden", () => {
     const staging = stagingDir();
-    const extensionDir = join(staging, "agent", "extensions", "ly-pi");
+    const agentDir = join(staging, "agent");
+    const extensionDir = join(agentDir, "extensions", "ly-pi");
+    const settingsPath = join(agentDir, "settings.json");
+    const bundlePath = join(extensionDir, "index.js");
     mkdirSync(extensionDir, { recursive: true });
+    writeFileSync(settingsPath, '{"sentinel":"settings"}\n');
+    writeFileSync(bundlePath, "existing bundle\n");
     writeFileSync(
       join(extensionDir, "models.local.json"),
       JSON.stringify({
@@ -193,6 +217,12 @@ describe("deploy model policy settings", () => {
     expect(result.stderr).toContain(
       "cannot override security policy 'security-judge-default'",
     );
+    expect(readFileSync(settingsPath, "utf-8")).toBe(
+      '{"sentinel":"settings"}\n',
+    );
+    expect(readFileSync(bundlePath, "utf-8")).toBe("existing bundle\n");
+    expect(existsSync(join(extensionDir, "model-policies.json"))).toBe(false);
+    expect(existsSync(join(agentDir, "agents"))).toBe(false);
   });
 
   it("deploys policy-generated specialist overrides without frontmatter model pins", () => {

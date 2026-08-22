@@ -1,6 +1,6 @@
 # 统一模型策略管理
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
@@ -21,7 +21,7 @@ Status: ready-for-agent
 7. As a ly-pi 使用者, I want 图片分析使用 vision 策略, so that 候选必须满足图像输入能力要求。
 8. As a ly-pi 使用者, I want Judge 使用 security-judge、事后安全分析使用 security-audit, so that 安全工作不会意外继承普通深度档位。
 9. As a ly-pi 使用者, I want 权限对抗 self-test 复用 security-judge, so that 自测不再直接注册或写死某个 Provider。
-10. As a ly-pi 使用者, I want 普通策略可由本地覆写替换命名 Candidate Slot 的 model、label 和 thinking, so that 我能使用自己的服务商而不修改仓库默认策略。
+10. As a ly-pi 使用者, I want 非安全且非 vision 的普通策略可由本地覆写替换命名 Candidate Slot 的 model、label 和 thinking, so that 我能使用自己的服务商而不修改仓库默认策略。
 11. As a ly-pi 使用者, I want Local Model Override 不能修改候选顺序、能力契约或 Role Failure Policy, so that 本地便利性不会改变功能和安全语义。
 12. As a ly-pi 使用者, I want Security Model Role 只使用仓库批准的候选, so that 本地配置不会无意降低安全判定与审计质量。
 13. As a ly-pi 使用者, I want 模型候选声明人类可读的 Model Label, so that HUD 显示不再维护独立且易过期的短名表。
@@ -42,7 +42,7 @@ Status: ready-for-agent
 - 第一版策略集合为 primary、fast、standard、deep、vision、security-judge 和 security-audit。现有会话命名/scout、普通子代理、图片分析、Judge、安全审计和权限 self-test 分别绑定到已确认的对应策略。
 - 新建深模块 Model Policy Registry。它从 Model Manifest 和可选 Local Model Override 构造有效策略，提供统一的模型运行、Pi 设置编译和诊断能力；功能和 deploy 都只能跨越这个 seam。
 - Model Runner 接受 Model Role 与一次操作，负责解析候选、能力校验、固定顺序的基础设施故障回退和 Role Failure Policy。畸形输出、解析失败及业务协议错误不触发候选回退。
-- 普通策略可从扩展目录下、不纳入版本控制的 Local Model Override 读取具名槽位替换；该覆写只能替换 model、Model Label 和 thinking。security-judge 与 security-audit 一律拒绝本地候选覆写。
+- 非安全且非 vision 的普通策略可从扩展目录下、不纳入版本控制的 Local Model Override 读取具名槽位替换；该覆写只能替换 model、Model Label 和 thinking。vision、security-judge 与 security-audit 一律拒绝本地候选覆写。
 - Pi 原生 Provider Registry 继续管理 provider、认证和模型元数据。Model Manifest 只使用合格的 provider/model 引用，不保存凭据、端点或自定义 Provider 定义。
 - deploy 从有效策略编译 Pi 的初始默认模型、默认 thinking 和子代理 `agentOverrides`，并为普通子代理生成候选回退链。受管理的自定义 agent 不再在 frontmatter 中声明 model 或 thinking，以免其高优先级绕过策略。
 - 扩展内直接调用模型的功能一律使用 Model Runner；权限自测移动到扩展上下文，以复用 Pi 的 Model Registry，不再直接 import 特定 Provider。
@@ -78,4 +78,4 @@ Status: ready-for-agent
 - Local Model Override 缺失时，系统只使用 Model Manifest 的仓库默认候选。
 - Model Manifest 或覆写结构无效时，部署期 schema 校验必须失败；运行时仍对实际 Model Registry 和能力信息做惰性校验。
 - 该方案的架构理由见 ADR-0010；术语以 `CONTEXT.md` 中的 Model Role、Model Policy、Candidate Slot、Model Runner 等定义为准。
-- 本规格确认后应通过 `/to-tickets` 以依赖关系拆分迁移任务，再逐票实现。
+- 本规格已通过 `/to-tickets` 以依赖关系拆分为 01–07 号迁移票据并逐票实现。

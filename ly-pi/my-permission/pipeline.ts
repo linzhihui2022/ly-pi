@@ -100,6 +100,11 @@ export function createRoleAnalyzer<TInput, TResult>(
         log.error(`${roleConfig.modelLabel} model unavailable`, {
           reason: runResult.reason,
         });
+        if (runResult.failurePolicy !== "error-no-write") {
+          return {
+            error: `${roleConfig.modelLabel} 模型策略配置错误：security-audit 需要 error-no-write，实际为 ${runResult.failurePolicy}`,
+          };
+        }
         return {
           error: `${roleConfig.modelLabel} 模型调用失败: ${runResult.reason}`,
         };
@@ -169,6 +174,11 @@ export function createMerger(
       );
       if (runResult.status !== "success") {
         log.error("merger model unavailable", { reason: runResult.reason });
+        if (runResult.failurePolicy !== "error-no-write") {
+          return {
+            error: `合并模型策略错误：security-audit 需要 error-no-write，实际为 ${runResult.failurePolicy}`,
+          };
+        }
         return { error: `合并模型调用失败: ${runResult.reason}` };
       }
 

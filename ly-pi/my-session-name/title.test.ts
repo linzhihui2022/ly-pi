@@ -23,12 +23,16 @@ function createContext(options?: { model?: unknown }) {
   } as unknown as ExtensionContext;
 }
 
-function createRegistry(model: unknown, available = true) {
+function createRegistry(
+  model: unknown,
+  available = true,
+  thinking: "off" | "max" = "off",
+) {
   const run = vi.fn(
     async (
       _role: string,
       _models: unknown,
-      operation: (candidate: unknown) => Promise<unknown>,
+      operation: (model: unknown, candidate: unknown) => Promise<unknown>,
     ) => {
       if (!available) {
         return {
@@ -37,16 +41,17 @@ function createRegistry(model: unknown, available = true) {
           reason: "no usable candidate",
         };
       }
+      const candidate = {
+        slot: "primary",
+        model: "test/fast",
+        label: "Fast label",
+        thinking,
+        source: "manifest" as const,
+      };
       return {
         status: "success",
-        value: await operation(model),
-        candidate: {
-          slot: "primary",
-          model: "test/fast",
-          label: "Fast label",
-          thinking: "off",
-          source: "manifest",
-        },
+        value: await operation(model, candidate),
+        candidate,
       };
     },
   );
@@ -92,6 +97,23 @@ describe("requestSessionTitle", () => {
     );
   });
 
+  it("uses the selected fast candidate thinking", async () => {
+    completeModel.mockResolvedValue({
+      content: [{ type: "text", text: "任务标题" }],
+    });
+    const ctx = createContext();
+    const { registry } = createRegistry(ctx.model, true, "max");
+
+    await expect(requestSessionTitle("任务", ctx, registry)).resolves.toBe(
+      "任务标题",
+    );
+    expect(completeModel).toHaveBeenCalledWith(
+      ctx.model,
+      expect.any(Object),
+      expect.objectContaining({ reasoningEffort: "max" }),
+    );
+  });
+
   it("surfaces an invalid model policy configuration", async () => {
     vi.mocked(loadModelPolicyRegistry).mockImplementation(() => {
       throw new Error("invalid manifest");
@@ -115,6 +137,22 @@ describe("requestSessionTitle", () => {
       expect.any(Function),
     );
     expect(completeModel).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unexpected fast Role failure policy", async () => {
+    const registry = {
+      run: vi.fn(async () => ({
+        status: "failure" as const,
+        failurePolicy: "error" as const,
+        reason: "no usable candidate",
+      })),
+    } as any;
+
+    await expect(
+      requestSessionTitle("任务", createContext(), registry),
+    ).rejects.toThrow(
+      "fast Role requires 'skip' failure policy, received 'error'",
+    );
   });
 
   it("returns null when the model reports an auth error", async () => {

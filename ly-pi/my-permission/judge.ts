@@ -74,6 +74,12 @@ export function createJudge(
 
       if (result.status !== "success") {
         log.warn("judge model unavailable", { reason: result.reason });
+        if (result.failurePolicy !== "confirm") {
+          return failureResult(
+            `法官模型策略配置错误：security-judge 需要 confirm，实际为 ${result.failurePolicy}`,
+            input,
+          );
+        }
         if (timedOut) {
           return failureResult(
             `法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`,

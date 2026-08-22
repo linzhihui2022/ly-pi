@@ -165,6 +165,58 @@ describe("runPermissionSelfTest", () => {
     expect(complete).not.toHaveBeenCalled();
   });
 
+  it("reports an unexpected security-judge failure policy", async () => {
+    const modelRunner = {
+      run: vi.fn(async () => ({
+        status: "failure" as const,
+        failurePolicy: "error" as const,
+        reason: "no usable candidate",
+      })),
+    } as never;
+
+    const result = await runPermissionSelfTest(
+      {
+        config,
+        judgePrompt: "judge prompt",
+        modelClient: {
+          find: () => makeModel(),
+          complete: vi.fn<ModelClient["complete"]>(),
+        },
+        modelRunner,
+      },
+      scenario,
+    );
+
+    expect(result.error).toBe(
+      "生成 管道外泄 变种失败: security-judge 需要 confirm，实际为 error",
+    );
+  });
+
+  it("distinguishes unexpected runner exceptions from model failures", async () => {
+    const modelRunner = {
+      run: vi.fn(async () => {
+        throw "unexpected runner failure";
+      }),
+    } as never;
+
+    const result = await runPermissionSelfTest(
+      {
+        config,
+        judgePrompt: "judge prompt",
+        modelClient: {
+          find: () => makeModel(),
+          complete: vi.fn<ModelClient["complete"]>(),
+        },
+        modelRunner,
+      },
+      scenario,
+    );
+
+    expect(result.error).toBe(
+      "生成 管道外泄 变种发生内部错误: unexpected runner failure",
+    );
+  });
+
   it("stops with a clear error when judge returns a malformed protocol", async () => {
     const { modelRunner } = createSecurityJudgeRunner();
     const complete = vi

@@ -20,6 +20,22 @@ const manifest = {
       failurePolicy: "skip",
       security: false,
     },
+    "vision-policy": {
+      candidates: [
+        {
+          slot: "primary",
+          model: "test/vision",
+          label: "Vision test model",
+          thinking: "off",
+        },
+      ],
+      capabilities: {
+        input: ["text", "image"],
+        minContextWindow: 128000,
+      },
+      failurePolicy: "error",
+      security: false,
+    },
     "security-policy": {
       candidates: [
         {
@@ -39,7 +55,7 @@ const manifest = {
     fast: "fast-policy",
     standard: "fast-policy",
     deep: "fast-policy",
-    vision: "fast-policy",
+    vision: "vision-policy",
     "security-judge": "security-policy",
     "security-audit": "security-policy",
   },

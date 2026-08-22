@@ -70,6 +70,19 @@ function createSecurityJudgeRunner(candidates: readonly ModelCandidate[]) {
   const manifest: ModelPolicyManifest = {
     version: 1,
     policies: {
+      "vision-test": {
+        candidates: [
+          {
+            slot: "primary",
+            model: "test/vision",
+            label: "Vision test model",
+            thinking: "off",
+          },
+        ],
+        capabilities: { input: ["text", "image"], minContextWindow: 128000 },
+        failurePolicy: "error",
+        security: false,
+      },
       "security-judge-test": {
         candidates,
         capabilities: { input: ["text"], minContextWindow: 128000 },
@@ -82,7 +95,7 @@ function createSecurityJudgeRunner(candidates: readonly ModelCandidate[]) {
       fast: "security-judge-test",
       standard: "security-judge-test",
       deep: "security-judge-test",
-      vision: "security-judge-test",
+      vision: "vision-test",
       "security-judge": "security-judge-test",
       "security-audit": "security-judge-test",
     },
@@ -182,6 +195,24 @@ describe("createJudge", () => {
       failureReason(input, "未找到可用的法官模型，请手动确认"),
     );
     expect(completeModel).not.toHaveBeenCalled();
+  });
+
+  it("reports an unexpected security-judge failure policy", async () => {
+    const modelRunner = {
+      run: vi.fn(async () => ({
+        status: "failure" as const,
+        failurePolicy: "error" as const,
+        reason: "no usable candidate",
+      })),
+    } as never;
+    const judge = createJudge(config, { ...judgeDeps, modelRunner });
+
+    await expect(judge(input, "/repo")).resolves.toEqual(
+      failureReason(
+        input,
+        "法官模型策略配置错误：security-judge 需要 confirm，实际为 error",
+      ),
+    );
   });
 
   it("uses the next security-judge candidate after rate limiting", async () => {

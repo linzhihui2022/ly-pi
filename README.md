@@ -24,6 +24,7 @@ configure/
 │   ├── my-cd-guard/          # 冗余 cd 前缀自动纠正
 │   ├── my-script-guard/      # 内联脚本硬拦截 + 急迫升级
 │   ├── my-log/               # 开发日志：/ly-log 命令 + 浏览器查看
+│   ├── my-model-policy/      # /models-doctor 模型策略诊断
 │   ├── my-permission/        # 工具调用权限拦截器 + 模型法官
 │   ├── my-reload/            # 扩展热重载自动恢复
 │   ├── my-back/              # /back 命令
@@ -96,7 +97,7 @@ configure/
 
 ## 🤖 子代理
 
-运行时使用 [`pi-subagents`](https://pi.dev/packages/pi-subagents)。通用角色（scout、delegate、researcher、context-builder、planner、oracle、reviewer、worker）由 `pi-subagents` 官方包提供；`ly-pi/assets/agents/*.md` 只保留 PR 审查角色（另有 `image-reader` 供 my-vision 委托非视觉模型读图），部署到 `~/.pi/agent/agents/`。scout、delegate 的模型、thinking 与 fallback 由 `ly-pi/assets/config/model-policies.json` 编译后统一覆盖。
+运行时使用 [`pi-subagents`](https://pi.dev/packages/pi-subagents)。通用角色（scout、delegate、researcher、context-builder、planner、oracle、reviewer、worker）由 `pi-subagents` 官方包提供；`ly-pi/assets/agents/*.md` 只保留 PR 审查角色（另有 `image-reader` 供 my-vision 委托非视觉模型读图），部署到 `~/.pi/agent/agents/`。scout、delegate、image-reader 与所有 PR 审查 agent 的模型、thinking 与 fallback 均由 `ly-pi/assets/config/model-policies.json` 编译后统一覆盖，不再在 frontmatter 中声明。
 
 | 子代理 | 用途 |
 |--------|------|

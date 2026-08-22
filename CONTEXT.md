@@ -25,7 +25,7 @@ _Avoid_: 模型等级、供应商等级
 _Avoid_: HUD 别名、显示映射
 
 **Local Model Override（本地模型覆写）**:
-不纳入版本控制的用户级配置，用于替换仓库 Model Policy 的具体 Model Candidate 与 thinking 设置，不能改变能力要求或 Role Failure Policy。
+不纳入版本控制的用户级配置，用于替换非安全且非 vision 的仓库 Model Policy 的具体 Model Candidate 与 thinking 设置，不能改变能力要求或 Role Failure Policy。
 _Avoid_: 私有策略、环境差异
 
 **Role Failure Policy（角色失败策略）**:

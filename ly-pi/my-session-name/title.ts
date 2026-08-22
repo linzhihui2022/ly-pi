@@ -32,34 +32,40 @@ export async function requestSessionTitle(
 ): Promise<string | null> {
   const policyRegistry = registry ?? loadModelPolicyRegistry(EXT_DIR);
 
-  try {
-    const result = await policyRegistry.run(
-      "fast",
-      ctx.modelRegistry,
-      async (model) =>
-        ctx.modelRegistry.complete(
-          model,
-          {
-            systemPrompt: TITLE_SYSTEM_PROMPT,
-            messages: [
-              {
-                role: "user",
-                content: prompt,
-                timestamp: Date.now(),
-              },
-            ],
-          },
-          {
-            maxRetries: 0,
-            maxTokens: 32,
-            timeoutMs: 10_000,
-          },
-        ),
-    );
-    if (result.status !== "success") return null;
-
-    return normalizeSessionTitle(getAssistantText(result.value.content));
-  } catch {
+  const result = await policyRegistry
+    .run("fast", ctx.modelRegistry, async (model, candidate) =>
+      ctx.modelRegistry.complete(
+        model,
+        {
+          systemPrompt: TITLE_SYSTEM_PROMPT,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+              timestamp: Date.now(),
+            },
+          ],
+        },
+        {
+          maxRetries: 0,
+          maxTokens: 32,
+          timeoutMs: 10_000,
+          ...(candidate.thinking === "off"
+            ? {}
+            : { reasoningEffort: candidate.thinking }),
+        },
+      ),
+    )
+    .catch(() => undefined);
+  if (!result) return null;
+  if (result.status !== "success") {
+    if (result.failurePolicy !== "skip") {
+      throw new Error(
+        `fast Role requires 'skip' failure policy, received '${result.failurePolicy}'`,
+      );
+    }
     return null;
   }
+
+  return normalizeSessionTitle(getAssistantText(result.value.content));
 }

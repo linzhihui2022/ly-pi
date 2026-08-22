@@ -55,6 +55,8 @@ const SPLIT_DEFAULT_MODEL_LITERAL =
   /\bdefaultProvider\b\s*[:=]\s*["']([a-z0-9][\w.-]*)["'][\s\S]{0,200}?\bdefaultModel\b\s*[:=]\s*["']([a-z0-9][\w.-]*)["']/g;
 const REVERSED_SPLIT_DEFAULT_MODEL_LITERAL =
   /\bdefaultModel\b\s*[:=]\s*["']([a-z0-9][\w.-]*)["'][\s\S]{0,200}?\bdefaultProvider\b\s*[:=]\s*["']([a-z0-9][\w.-]*)["']/g;
+const DIRECT_PROVIDER_IMPORT =
+  /["'](?:@ai-sdk\/|@earendil-works\/pi-ai\/providers(?:\/|["']))/;
 function sourceFiles(root = LY_PI_DIR): string[] {
   return readdirSync(root, { recursive: true, encoding: "utf8" })
     .filter((path) => !/^(?:node_modules|dist|coverage)\//.test(path))
@@ -152,8 +154,23 @@ describe("model selection migration guard", () => {
     }
   });
 
-  it("has no direct AI SDK provider imports in extension source", () => {
-    expect(filesMatching(/["']@ai-sdk\//)).toEqual([]);
+  it("has no direct provider imports in extension source", () => {
+    expect(filesMatching(DIRECT_PROVIDER_IMPORT)).toEqual([]);
+  });
+
+  it("detects direct Pi AI provider imports", () => {
+    const root = mkdtempSync(join(tmpdir(), "model-policy-guard-"));
+    try {
+      writeFileSync(
+        join(root, "provider.ts"),
+        'import { deepseekProvider } from "@earendil-works/pi-ai/providers";',
+      );
+      expect(filesMatching(DIRECT_PROVIDER_IMPORT, root)).toEqual([
+        "provider.ts",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("leaves managed agent model selection to compiled settings", () => {

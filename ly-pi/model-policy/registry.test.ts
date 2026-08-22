@@ -17,6 +17,22 @@ const manifest = {
       failurePolicy: "skip",
       security: false,
     },
+    "vision-policy": {
+      candidates: [
+        {
+          slot: "primary",
+          model: "test/vision",
+          label: "Vision test model",
+          thinking: "off",
+        },
+      ],
+      capabilities: {
+        input: ["text", "image"],
+        minContextWindow: 128000,
+      },
+      failurePolicy: "error",
+      security: false,
+    },
     "security-judge-policy": {
       candidates: [
         {
@@ -49,7 +65,7 @@ const manifest = {
     fast: "fast-policy",
     standard: "fast-policy",
     deep: "fast-policy",
-    vision: "fast-policy",
+    vision: "vision-policy",
     "security-judge": "security-judge-policy",
     "security-audit": "security-audit-policy",
   },
@@ -202,6 +218,41 @@ describe("createModelPolicyRegistry", () => {
     ).toThrow("invalid model manifest");
   });
 
+  it("uses immutable snapshots after validating its inputs", () => {
+    const mutableManifest = structuredClone(manifest);
+    const localOverride = {
+      version: 1 as const,
+      policies: {
+        "fast-policy": {
+          slots: {
+            primary: {
+              model: "local/fast",
+              label: "Local fast model",
+            },
+          },
+        },
+      },
+    };
+    const registry = createModelPolicyRegistry(mutableManifest, localOverride);
+
+    Reflect.set(
+      mutableManifest.policies["security-judge-policy"].candidates[0],
+      "model",
+      "test/mutated-judge",
+    );
+    localOverride.policies["fast-policy"].slots.primary.model =
+      "local/mutated-fast";
+
+    const roles = registry.describe({ find: () => undefined }).roles;
+    expect(roles["security-judge"].candidates[0]).toMatchObject({
+      model: "test/judge",
+    });
+    expect(roles.fast.candidates[0]).toMatchObject({
+      model: "local/fast",
+      label: "Local fast model",
+    });
+  });
+
   it("rejects a role binding that refers to an unknown policy", () => {
     expect(() =>
       createModelPolicyRegistry({
@@ -231,6 +282,28 @@ describe("createModelPolicyRegistry", () => {
         roles: { ...manifest.roles, "security-judge": "fast-policy" },
       }),
     ).toThrow("security role 'security-judge' must bind a security policy");
+  });
+
+  it("requires the vision role to bind an image-capable policy", () => {
+    expect(() =>
+      createModelPolicyRegistry({
+        ...manifest,
+        roles: { ...manifest.roles, vision: "fast-policy" },
+      }),
+    ).toThrow("vision role 'vision' must bind an image-capable policy");
+  });
+
+  it("rejects a local override for the vision policy", () => {
+    expect(() =>
+      createModelPolicyRegistry(manifest, {
+        version: 1,
+        policies: {
+          "vision-policy": {
+            slots: { primary: { model: "local/vision" } },
+          },
+        },
+      }),
+    ).toThrow("cannot override vision policy 'vision-policy'");
   });
 
   it("rejects duplicate candidate slot names", () => {
@@ -274,6 +347,19 @@ describe("createModelPolicyRegistry", () => {
         policies: {
           "fast-policy": {
             slots: { primary: { model: "not-a-model" } },
+          },
+        },
+      }),
+    ).toThrow("invalid local model override");
+  });
+
+  it("rejects a local override with an empty Model Label", () => {
+    expect(() =>
+      createModelPolicyRegistry(manifest, {
+        version: 1,
+        policies: {
+          "fast-policy": {
+            slots: { primary: { label: "" } },
           },
         },
       }),
@@ -387,6 +473,159 @@ describe("createModelPolicyRegistry", () => {
       status: "success",
       value: "fallback result",
       candidate: { slot: "fallback" },
+    });
+  });
+
+  it("falls back after a Pi rate-limit response without status metadata", async () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            {
+              ...manifest.policies["fast-policy"].candidates[0],
+              model: "test/primary",
+            },
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "off",
+            },
+          ],
+        },
+      },
+    });
+    const attempts: string[] = [];
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        if (model.id === "primary") {
+          return {
+            stopReason: "error",
+            errorMessage: "HTTP 429 Too Many Requests",
+          };
+        }
+        return "fallback result";
+      },
+    );
+
+    expect(attempts).toEqual(["primary", "fallback"]);
+    expect(result).toMatchObject({
+      status: "success",
+      candidate: { slot: "fallback" },
+    });
+  });
+
+  it("does not classify arbitrary thrown messages as infrastructure failures", async () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            {
+              ...manifest.policies["fast-policy"].candidates[0],
+              model: "test/primary",
+            },
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "off",
+            },
+          ],
+        },
+      },
+    });
+    const attempts: string[] = [];
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        throw new Error("network format is invalid");
+      },
+    );
+
+    expect(attempts).toEqual(["primary"]);
+    expect(result).toEqual({
+      status: "failure",
+      failurePolicy: "skip",
+      reason: "network format is invalid",
+    });
+  });
+
+  it("retains skipped-candidate diagnostics when every candidate is exhausted", async () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            {
+              ...manifest.policies["fast-policy"].candidates[0],
+              model: "test/missing",
+            },
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "off",
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) =>
+          id === "fallback"
+            ? {
+                provider,
+                id,
+                input: ["text"],
+                reasoning: false,
+                contextWindow: 128000,
+              }
+            : undefined,
+      },
+      async () => {
+        throw Object.assign(new Error("rate limited"), { status: 429 });
+      },
+    );
+
+    expect(result).toEqual({
+      status: "failure",
+      failurePolicy: "skip",
+      reason:
+        "no usable candidate for role 'fast': primary (test/missing): model not found; fallback (test/fallback): rate limited",
     });
   });
 
@@ -604,7 +843,8 @@ describe("createModelPolicyRegistry", () => {
     ).resolves.toEqual({
       status: "failure",
       failurePolicy: "skip",
-      reason: "no usable candidate for role 'fast'",
+      reason:
+        "no usable candidate for role 'fast': primary (test/fast): model not found",
     });
   });
 
@@ -766,6 +1006,31 @@ describe("createModelPolicyRegistry", () => {
       registry.compilePiSettings().subagents.agentOverrides.scout
         .fallbackModels,
     ).toEqual(["test/fallback"]);
+  });
+
+  it("rejects mixed candidate thinking for a deployed agent role", () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            ...manifest.policies["fast-policy"].candidates,
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "max",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(() => registry.compilePiSettings()).toThrow(
+      "cannot compile agent 'scout': role 'fast' has mixed candidate thinking levels",
+    );
   });
 
   it("diagnoses when Pi's active primary differs from the initial selection", () => {

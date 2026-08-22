@@ -210,6 +210,12 @@ async function generateVariants(
       },
     );
     if (runResult.status !== "success") {
+      if (runResult.failurePolicy !== "confirm") {
+        return {
+          variants: [],
+          error: `生成 ${category.label} 变种失败: security-judge 需要 confirm，实际为 ${runResult.failurePolicy}`,
+        };
+      }
       return {
         variants: [],
         error: `生成 ${category.label} 变种失败: ${runResult.reason}`,
@@ -241,9 +247,10 @@ async function generateVariants(
         .slice(0, count),
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     return {
       variants: [],
-      error: `生成 ${category.label} 变种失败: ${(error as Error).message}`,
+      error: `生成 ${category.label} 变种发生内部错误: ${message}`,
     };
   }
 }

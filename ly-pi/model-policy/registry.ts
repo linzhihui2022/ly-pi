@@ -97,6 +97,7 @@ const ModelReferenceSchema = Type.String({
   minLength: 3,
   pattern: "^[^/]+/.+",
 });
+const ModelLabelSchema = Type.String({ minLength: 1 });
 
 const ModelPolicySchema = Type.Object(
   {
@@ -105,7 +106,7 @@ const ModelPolicySchema = Type.Object(
         {
           slot: Type.String({ minLength: 1 }),
           model: ModelReferenceSchema,
-          label: Type.String({ minLength: 1 }),
+          label: ModelLabelSchema,
           thinking: ThinkingLevelSchema,
         },
         { additionalProperties: false },
@@ -170,7 +171,7 @@ const LocalModelOverrideSchema = Type.Object(
             Type.Partial(
               Type.Object({
                 model: ModelReferenceSchema,
-                label: Type.String(),
+                label: ModelLabelSchema,
                 thinking: ThinkingLevelSchema,
               }),
               { additionalProperties: false },
@@ -252,6 +253,9 @@ function assertValidModelManifest(manifest: ModelPolicyManifest): void {
     if (SECURITY_ROLES.has(role) && !policy.security) {
       throw new Error(`security role '${role}' must bind a security policy`);
     }
+    if (role === "vision" && !policy.capabilities.input.includes("image")) {
+      throw new Error("vision role 'vision' must bind an image-capable policy");
+    }
 
     const slots = new Set<string>();
     for (const candidate of policy.candidates) {
@@ -280,6 +284,9 @@ function assertLocalOverrideAllowed(
     }
     if (policy.security) {
       throw new Error(`cannot override security policy '${policyName}'`);
+    }
+    if (policyName === manifest.roles.vision) {
+      throw new Error(`cannot override vision policy '${policyName}'`);
     }
     const slots = new Set(policy.candidates.map((candidate) => candidate.slot));
     for (const slot of Object.keys(override.slots)) {
@@ -362,13 +369,7 @@ function diagnoseCandidate(
   };
 }
 
-function candidateStatus(
-  candidate: ModelCandidate,
-  policy: ModelPolicy,
-  models: ModelLookup,
-): CandidateDescription["status"] {
-  return diagnoseCandidate(candidate, policy, models).status;
-}
+const modelResponseErrors = new WeakSet<Error>();
 
 function modelResponseFailure(value: unknown): Error | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -386,7 +387,7 @@ function modelResponseFailure(value: unknown): Error | undefined {
     return undefined;
   }
 
-  return Object.assign(
+  const error = Object.assign(
     new Error(
       typeof response.errorMessage === "string"
         ? response.errorMessage
@@ -398,6 +399,8 @@ function modelResponseFailure(value: unknown): Error | undefined {
       statusCode: response.statusCode,
     },
   );
+  modelResponseErrors.add(error);
+  return error;
 }
 
 function isRetryableInfrastructureFailure(error: unknown): boolean {
@@ -405,6 +408,7 @@ function isRetryableInfrastructureFailure(error: unknown): boolean {
   const details = error as {
     code?: unknown;
     message?: unknown;
+    name?: unknown;
     status?: unknown;
     statusCode?: unknown;
   };
@@ -436,9 +440,12 @@ function isRetryableInfrastructureFailure(error: unknown): boolean {
     return true;
   }
 
+  if (details.name === "AbortError") return true;
+  if (!modelResponseErrors.has(error as Error)) return false;
+
   const message =
     typeof details.message === "string" ? details.message.toLowerCase() : "";
-  return /api key|auth|forbidden|rate limit|timeout|network|service unavailable/.test(
+  return /\b(?:401|403|408|429|5\d\d)\b|api key|authentication|auth failed|forbidden|rate limit|too many requests|request (?:was )?aborted|timed? out|timeout|network (?:error|unavailable|failure)|service unavailable/.test(
     message,
   );
 }
@@ -449,6 +456,8 @@ export function createModelPolicyRegistry(
 ) {
   assertValidModelManifest(manifest);
   assertLocalOverrideAllowed(manifest, localOverride);
+  manifest = structuredClone(manifest);
+  localOverride = localOverride && structuredClone(localOverride);
 
   return {
     getModelLabel(
@@ -565,6 +574,15 @@ export function createModelPolicyRegistry(
           agentOverrides: Object.fromEntries(
             Object.entries(manifest.deployment.agents).map(([agent, role]) => {
               const [candidate, ...fallbacks] = candidatesForRole(role);
+              if (
+                fallbacks.some(
+                  (fallback) => fallback.thinking !== candidate.thinking,
+                )
+              ) {
+                throw new Error(
+                  `cannot compile agent '${agent}': role '${role}' has mixed candidate thinking levels`,
+                );
+              }
               return [
                 agent,
                 {
@@ -590,17 +608,23 @@ export function createModelPolicyRegistry(
       const policyName = manifest.roles[role];
       const policy = requirePolicy(manifest, policyName, role);
 
+      const skippedCandidates: string[] = [];
       for (const candidate of policy.candidates) {
         const effective = effectiveCandidate(
           policyName,
           candidate,
           localOverride,
         );
+        const diagnosis = diagnoseCandidate(
+          effective.candidate,
+          policy,
+          models,
+        );
         const model = models.find(...splitModelRef(effective.candidate.model));
-        if (
-          !model ||
-          candidateStatus(effective.candidate, policy, models) !== "ready"
-        ) {
+        if (!model || diagnosis.status !== "ready") {
+          skippedCandidates.push(
+            `${effective.candidate.slot} (${effective.candidate.model}): ${diagnosis.diagnostics.join(", ")}`,
+          );
           continue;
         }
 
@@ -612,7 +636,12 @@ export function createModelPolicyRegistry(
           const value = await operation(model, resolvedCandidate);
           const responseError = modelResponseFailure(value);
           if (responseError) {
-            if (isRetryableInfrastructureFailure(responseError)) continue;
+            if (isRetryableInfrastructureFailure(responseError)) {
+              skippedCandidates.push(
+                `${resolvedCandidate.slot} (${resolvedCandidate.model}): ${responseError.message}`,
+              );
+              continue;
+            }
             return {
               status: "failure",
               failurePolicy: policy.failurePolicy,
@@ -625,7 +654,12 @@ export function createModelPolicyRegistry(
             candidate: resolvedCandidate,
           };
         } catch (error) {
-          if (isRetryableInfrastructureFailure(error)) continue;
+          if (isRetryableInfrastructureFailure(error)) {
+            skippedCandidates.push(
+              `${resolvedCandidate.slot} (${resolvedCandidate.model}): ${error instanceof Error ? error.message : "model operation failed"}`,
+            );
+            continue;
+          }
           return {
             status: "failure",
             failurePolicy: policy.failurePolicy,
@@ -638,7 +672,7 @@ export function createModelPolicyRegistry(
       return {
         status: "failure",
         failurePolicy: policy.failurePolicy,
-        reason: `no usable candidate for role '${role}'`,
+        reason: `no usable candidate for role '${role}': ${skippedCandidates.join("; ")}`,
       };
     },
   };

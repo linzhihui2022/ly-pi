@@ -67,10 +67,13 @@ function createSuccessfulSecurityAuditRunner(thinking: "off" | "max") {
   return { modelRunner: { run } as never, run };
 }
 
-function createFailedSecurityAuditRunner(reason: string) {
+function createFailedSecurityAuditRunner(
+  reason: string,
+  failurePolicy: "error-no-write" | "skip" = "error-no-write",
+) {
   const run = vi.fn(async () => ({
     status: "failure" as const,
-    failurePolicy: "error-no-write" as const,
+    failurePolicy,
     reason,
   }));
   return { modelRunner: { run } as never, run };
@@ -145,6 +148,22 @@ describe("createRoleAnalyzer", () => {
     );
     expect(result.error).toContain("no usable candidate");
     expect(completeModel).not.toHaveBeenCalled();
+  });
+
+  it("reports an unexpected security-audit failure policy", async () => {
+    const { modelRunner } = createFailedSecurityAuditRunner(
+      "no usable candidate",
+      "skip",
+    );
+    const result = await createTestAnalyzer(
+      makeAnalyzerConfig(),
+      modelClient,
+      modelRunner,
+    )(["item"], "/repo", "", "");
+
+    expect(result.error).toBe(
+      "test-analyzer 模型策略配置错误：security-audit 需要 error-no-write，实际为 skip",
+    );
   });
 
   it("uses security-audit Model Runner and its candidate thinking", async () => {
@@ -338,6 +357,24 @@ describe("createMerger", () => {
     );
     expect(result.error).toContain("no usable candidate");
     expect(completeModel).not.toHaveBeenCalled();
+  });
+
+  it("reports an unexpected security-audit failure policy", async () => {
+    const { modelRunner } = createFailedSecurityAuditRunner(
+      "no usable candidate",
+      "skip",
+    );
+    const result = await createTestMerger(
+      modelClient,
+      modelRunner,
+    )({
+      current: "规则1",
+      operations: ["新规则"],
+    });
+
+    expect(result.error).toBe(
+      "合并模型策略错误：security-audit 需要 error-no-write，实际为 skip",
+    );
   });
 
   it("uses the selected security-audit candidate thinking", async () => {
