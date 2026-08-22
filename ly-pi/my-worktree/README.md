@@ -1,9 +1,9 @@
 # my-worktree
 
 `my-worktree` is a Pi worktree-management module. Its Worktree Widget remains
-read-only: it shows Git worktrees above the editor when the current repository
-has at least two visible worktrees. The module also provides the separately
-invoked `/close-worktree` command for closing only the Current Worktree.
+read-only: it shows the Current Worktree above the editor when the current
+repository has at least two visible worktrees. The module also provides the
+separately invoked `/close-worktree` command for closing only the Current Worktree.
 
 ## Display
 
