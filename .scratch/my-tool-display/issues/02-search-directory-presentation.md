@@ -21,4 +21,4 @@
 - `my-tool-display` 现在仅在目标仍由 Pi 内置工具拥有时覆盖 `grep`、`find` 与 `ls`；执行继续通过当前 `ctx.cwd` 创建的原生 definition 委托。
 - 成功结果默认隐藏，展开后显示 Pi 返回的原始文本；失败结果即使折叠也保留可用诊断。原生 call renderer、参数 schema、prompt metadata 和 result details 均保留。
 - README 已同步当前覆盖范围。
-- 验证：`bun run verify`（899 tests）通过；未执行部署或 `/reload`。
+- 验证：`bun run verify`（本 ticket 完成时的测试快照为 899 tests）通过；未执行部署或 `/reload`。

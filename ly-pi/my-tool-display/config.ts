@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
+import { createDevLogger } from "../my-log/index";
 
 const ToolDisplayConfigSchema = Type.Object(
   {
@@ -30,10 +31,32 @@ export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
   diffCollapsedLines: 24,
 };
 
-function parseCollapsedLines(value: unknown, fallback: number): number {
-  return Value.Check(CollapsedLinesSchema, value)
-    ? (value as number)
-    : fallback;
+const log = createDevLogger("my-tool-display:config");
+const warnedConfigValues = new Set<string>();
+
+function warnOnce(key: string, message: string): void {
+  if (warnedConfigValues.has(key)) {
+    return;
+  }
+  warnedConfigValues.add(key);
+  log.warn(message);
+}
+
+function parseCollapsedLines(
+  field: "bashCollapsedLines" | "diffCollapsedLines",
+  value: unknown,
+  fallback: number,
+): number {
+  if (Value.Check(CollapsedLinesSchema, value)) {
+    return value as number;
+  }
+  if (value !== undefined) {
+    warnOnce(
+      field,
+      `Invalid ${field} in my-tool-display.json; using the default value.`,
+    );
+  }
+  return fallback;
 }
 
 export function loadToolDisplayConfig(): ToolDisplayConfig {
@@ -46,16 +69,22 @@ export function loadToolDisplayConfig(): ToolDisplayConfig {
     );
     const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
     if (!Value.Check(ToolDisplayConfigSchema, parsed)) {
+      warnOnce(
+        "schema",
+        "Invalid my-tool-display.json; using the default configuration.",
+      );
       return { ...DEFAULT_TOOL_DISPLAY_CONFIG };
     }
 
     return {
       enabled: parsed.enabled,
       bashCollapsedLines: parseCollapsedLines(
+        "bashCollapsedLines",
         parsed.bashCollapsedLines,
         DEFAULT_TOOL_DISPLAY_CONFIG.bashCollapsedLines,
       ),
       diffCollapsedLines: parseCollapsedLines(
+        "diffCollapsedLines",
         parsed.diffCollapsedLines,
         DEFAULT_TOOL_DISPLAY_CONFIG.diffCollapsedLines,
       ),

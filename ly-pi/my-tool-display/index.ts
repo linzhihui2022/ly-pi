@@ -27,25 +27,64 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
+import { createDevLogger } from "../my-log/index";
 import { loadToolDisplayConfig } from "./config";
 
 const initializedApis = new WeakSet<ExtensionAPI>();
-const registeredApis = new WeakSet<ExtensionAPI>();
+const registeredToolNames = new WeakMap<ExtensionAPI, Set<string>>();
 const MAX_WRITE_DIFF_BYTES = 1_000_000;
+const log = createDevLogger("my-tool-display");
 
 type WritePreview =
   | { safe: true; previousContent: string }
   | { safe: false; reason: string };
 
-type WriteDiffDetails = {
-  diff?: string;
-  summary?: string;
-};
+type WriteDiffDetails =
+  | { kind: "diff"; diff: string }
+  | { kind: "summary"; summary: string };
 
 type WriteDisplayDetails = {
   writeDiff: WriteDiffDetails;
   [key: string]: unknown;
 };
+
+type SafeWritePath =
+  | { safe: true; path: string; existed: true; device: number; inode: number }
+  | { safe: true; path: string; existed: false }
+  | { safe: false; reason: string };
+
+type ResolvedWritePath =
+  | { resolved: true; path: string }
+  | { resolved: false; reason: string };
+
+type RealpathResult =
+  | { resolved: true; path: string }
+  | { resolved: false; error: unknown };
+
+function getErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) {
+    return undefined;
+  }
+  const code = (error as NodeJS.ErrnoException).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+function describeError(error: unknown): string | undefined {
+  const code = getErrorCode(error);
+  if (error instanceof Error) {
+    const message = error.message || error.name;
+    return code ? `${code}: ${message}` : message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return code;
+}
+
+function withErrorDetails(reason: string, error: unknown): string {
+  const details = describeError(error);
+  return details ? `${reason} (${sanitizeToolOutput(details)})` : reason;
+}
 
 function getBuiltinToolNames(pi: ExtensionAPI): Set<string> {
   try {
@@ -55,7 +94,11 @@ function getBuiltinToolNames(pi: ExtensionAPI): Set<string> {
         .filter((tool) => tool.sourceInfo.source === "builtin")
         .map((tool) => tool.name),
     );
-  } catch {
+  } catch (error) {
+    log.warn(
+      "Unable to discover builtin tools; custom tool renderers are disabled.",
+      { error: describeError(error) },
+    );
     return new Set();
   }
 }
@@ -93,23 +136,15 @@ function isWithinWorkspace(workspacePath: string, targetPath: string): boolean {
   );
 }
 
-type SafeWritePath =
-  | { path: string; existed: true; device: number; inode: number }
-  | { path: string; existed: false }
-  | { reason: string };
-
-function realpathOrUndefined(path: string): string | undefined {
+function realpathOrUndefined(path: string): RealpathResult {
   try {
-    return realpathSync(path);
-  } catch {
-    return undefined;
+    return { resolved: true, path: realpathSync(path) };
+  } catch (error) {
+    return { resolved: false, error };
   }
 }
 
-function resolveWritePath(
-  cwd: string,
-  rawPath: string,
-): { path?: string; reason?: string } {
+function resolveWritePath(cwd: string, rawPath: string): ResolvedWritePath {
   let normalized = rawPath.replace(
     /[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g,
     " ",
@@ -126,14 +161,18 @@ function resolveWritePath(
       normalized = fileURLToPath(normalized);
     }
     return {
+      resolved: true,
       path: isAbsolute(normalized)
         ? resolve(normalized)
         : resolve(cwd, normalized),
     };
-  } catch {
+  } catch (error) {
     return {
-      reason:
+      resolved: false,
+      reason: withErrorDetails(
         "Write diff unavailable because the target path cannot be resolved safely.",
+        error,
+      ),
     };
   }
 }
@@ -141,62 +180,78 @@ function resolveWritePath(
 function resolveSafeWritePath(cwd: string, rawPath: string): SafeWritePath {
   if (!rawPath.trim()) {
     return {
+      safe: false,
       reason: "Write diff unavailable because the target path is empty.",
     };
   }
 
-  const workspacePath = realpathOrUndefined(cwd);
-  if (!workspacePath) {
+  const workspacePathResult = realpathOrUndefined(cwd);
+  if (!workspacePathResult.resolved) {
     return {
-      reason:
+      safe: false,
+      reason: withErrorDetails(
         "Write diff unavailable because the current workspace cannot be resolved safely.",
+        workspacePathResult.error,
+      ),
     };
   }
+  const workspacePath = workspacePathResult.path;
 
   const resolved = resolveWritePath(cwd, rawPath);
-  if (resolved.reason || !resolved.path) {
-    return { reason: resolved.reason ?? "Write diff unavailable." };
+  if (!resolved.resolved) {
+    return { safe: false, reason: resolved.reason };
   }
   const resolvedPath = resolved.path;
 
   try {
     const targetStat = lstatSync(resolvedPath);
-    const targetPath = realpathOrUndefined(resolvedPath);
-    if (!targetPath) {
+    const targetPathResult = realpathOrUndefined(resolvedPath);
+    if (!targetPathResult.resolved) {
       return {
-        reason:
+        safe: false,
+        reason: withErrorDetails(
           "Write diff unavailable because the target path cannot be resolved safely.",
+          targetPathResult.error,
+        ),
       };
     }
+    const targetPath = targetPathResult.path;
     if (!isWithinWorkspace(workspacePath, targetPath)) {
       return {
+        safe: false,
         reason:
           "Write diff unavailable because the target path resolves outside the current workspace.",
       };
     }
     if (targetStat.isSymbolicLink()) {
       return {
+        safe: false,
         reason:
           "Write diff unavailable because the target path is a symbolic link.",
       };
     }
     if (!targetStat.isFile()) {
       return {
+        safe: false,
         reason:
           "Write diff unavailable because the target path is not a regular file.",
       };
     }
     return {
+      safe: true,
       path: resolvedPath,
       existed: true,
       device: targetStat.dev,
       inode: targetStat.ino,
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    if (getErrorCode(error) !== "ENOENT") {
       return {
-        reason:
+        safe: false,
+        reason: withErrorDetails(
           "Write diff unavailable because the target path could not be resolved safely.",
+          error,
+        ),
       };
     }
 
@@ -204,21 +259,26 @@ function resolveSafeWritePath(cwd: string, rawPath: string): SafeWritePath {
     while (parentPath !== dirname(parentPath) && !existsSync(parentPath)) {
       parentPath = dirname(parentPath);
     }
-    const parentRealpath = realpathOrUndefined(parentPath);
-    if (!parentRealpath) {
+    const parentPathResult = realpathOrUndefined(parentPath);
+    if (!parentPathResult.resolved) {
       return {
-        reason:
+        safe: false,
+        reason: withErrorDetails(
           "Write diff unavailable because the target directory cannot be resolved safely.",
+          parentPathResult.error,
+        ),
       };
     }
+    const parentRealpath = parentPathResult.path;
     if (!isWithinWorkspace(workspacePath, parentRealpath)) {
       return {
+        safe: false,
         reason:
           "Write diff unavailable because the target directory resolves outside the current workspace.",
       };
     }
 
-    return { path: resolvedPath, existed: false };
+    return { safe: true, path: resolvedPath, existed: false };
   }
 }
 
@@ -228,7 +288,7 @@ function readWritePreview(
   nextContent: string,
 ): WritePreview {
   const safePath = resolveSafeWritePath(cwd, rawPath);
-  if ("reason" in safePath) {
+  if (!safePath.safe) {
     return { safe: false, reason: safePath.reason };
   }
 
@@ -314,11 +374,13 @@ function readWritePreview(
         content,
       ),
     };
-  } catch {
+  } catch (error) {
     return {
       safe: false,
-      reason:
+      reason: withErrorDetails(
         "Write diff unavailable because the existing file could not be read safely.",
+        error,
+      ),
     };
   } finally {
     if (fileDescriptor !== undefined) {
@@ -418,7 +480,7 @@ function renderEditDiff(
   theme: { fg(color: string, text: string): string },
   collapsedLines: number,
 ): Text {
-  const lines = diff.split(/\r?\n/);
+  const lines = sanitizeToolOutput(diff).split(/\r?\n/);
   if (lines.at(-1) === "") {
     lines.pop();
   }
@@ -487,13 +549,15 @@ function renderWriteResult(
     return new Text(theme.fg("warning", "Writing..."), 0, 0);
   }
   const writeDiff = result.details?.writeDiff;
-  if (typeof writeDiff?.diff === "string" && writeDiff.diff) {
+  if (writeDiff?.kind === "diff") {
     return renderEditDiff(writeDiff.diff, options, theme, collapsedLines);
   }
   return new Text(
     theme.fg(
       "warning",
-      writeDiff?.summary || output || "Write completed (diff unavailable).",
+      (writeDiff?.kind === "summary" && writeDiff.summary) ||
+        output ||
+        "Write completed (diff unavailable).",
     ),
     0,
     0,
@@ -534,18 +598,35 @@ function formatReadCall(
   return `${theme.fg("toolTitle", theme.bold("read"))} ${theme.fg("accent", path)}${theme.fg("warning", range)}`;
 }
 
+function registerToolOverride(
+  toolName: string,
+  register: () => void,
+  registeredNames: Set<string>,
+): void {
+  if (registeredNames.has(toolName)) {
+    return;
+  }
+  try {
+    register();
+    registeredNames.add(toolName);
+  } catch (error) {
+    log.error(`Unable to register ${toolName} renderer.`, {
+      error: describeError(error),
+      tool: toolName,
+    });
+  }
+}
+
 function registerToolRenderers(
   pi: ExtensionAPI,
   config: ReturnType<typeof loadToolDisplayConfig>,
 ): void {
-  if (registeredApis.has(pi)) {
-    return;
-  }
-
   const builtinToolNames = getBuiltinToolNames(pi);
   if (builtinToolNames.size === 0) {
     return;
   }
+  const registeredNames = registeredToolNames.get(pi) ?? new Set<string>();
+  registeredToolNames.set(pi, registeredNames);
 
   if (builtinToolNames.has("write")) {
     const nativeWrite = createWriteToolDefinition(process.cwd());
@@ -569,6 +650,7 @@ function registerToolRenderers(
         let details: WriteDiffDetails;
         if (!preview?.safe) {
           details = {
+            kind: "summary",
             summary:
               preview?.reason ??
               "Write diff unavailable because the previous content could not be captured safely.",
@@ -579,21 +661,34 @@ function registerToolRenderers(
               preview.previousContent,
               params.content,
             );
-            if (
+            if (!generated || typeof generated.diff !== "string") {
+              details = {
+                kind: "summary",
+                summary:
+                  "Write diff unavailable because it could not be computed safely.",
+              };
+            } else if (
               Buffer.byteLength(generated.diff, "utf8") > MAX_WRITE_DIFF_BYTES
             ) {
               details = {
+                kind: "summary",
                 summary: `Write diff unavailable because the generated diff exceeds the ${MAX_WRITE_DIFF_BYTES} byte preview limit.`,
               };
             } else {
               details = generated.diff
-                ? { diff: generated.diff }
-                : { summary: "Write completed; no text changes to display." };
+                ? { kind: "diff", diff: generated.diff }
+                : {
+                    kind: "summary",
+                    summary: "Write completed; no text changes to display.",
+                  };
             }
-          } catch {
+          } catch (error) {
             details = {
-              summary:
+              kind: "summary",
+              summary: withErrorDetails(
                 "Write diff unavailable because it could not be computed safely.",
+                error,
+              ),
             };
           }
         }
@@ -604,6 +699,8 @@ function registerToolRenderers(
           !Array.isArray(result.details)
             ? (result.details as Record<string, unknown>)
             : {};
+        // Pi's native result type keeps details opaque; preserve that metadata
+        // while adding the discriminated writeDiff payload owned by this renderer.
         return {
           ...result,
           details: { ...nativeDetails, writeDiff: details },
@@ -623,7 +720,11 @@ function registerToolRenderers(
       },
     };
 
-    pi.registerTool(writeOverride);
+    registerToolOverride(
+      "write",
+      () => pi.registerTool(writeOverride),
+      registeredNames,
+    );
   }
 
   if (builtinToolNames.has("edit")) {
@@ -654,7 +755,11 @@ function registerToolRenderers(
       },
     };
 
-    pi.registerTool(editOverride);
+    registerToolOverride(
+      "edit",
+      () => pi.registerTool(editOverride),
+      registeredNames,
+    );
   }
 
   if (builtinToolNames.has("bash")) {
@@ -681,7 +786,11 @@ function registerToolRenderers(
       },
     };
 
-    pi.registerTool(bashOverride);
+    registerToolOverride(
+      "bash",
+      () => pi.registerTool(bashOverride),
+      registeredNames,
+    );
   }
 
   if (builtinToolNames.has("read")) {
@@ -721,7 +830,11 @@ function registerToolRenderers(
       },
     };
 
-    pi.registerTool(readOverride);
+    registerToolOverride(
+      "read",
+      () => pi.registerTool(readOverride),
+      registeredNames,
+    );
   }
 
   if (builtinToolNames.has("grep")) {
@@ -749,7 +862,11 @@ function registerToolRenderers(
       },
     };
 
-    pi.registerTool(grepOverride);
+    registerToolOverride(
+      "grep",
+      () => pi.registerTool(grepOverride),
+      registeredNames,
+    );
   }
 
   if (builtinToolNames.has("find")) {
@@ -777,7 +894,11 @@ function registerToolRenderers(
       },
     };
 
-    pi.registerTool(findOverride);
+    registerToolOverride(
+      "find",
+      () => pi.registerTool(findOverride),
+      registeredNames,
+    );
   }
 
   if (builtinToolNames.has("ls")) {
@@ -805,10 +926,12 @@ function registerToolRenderers(
       },
     };
 
-    pi.registerTool(lsOverride);
+    registerToolOverride(
+      "ls",
+      () => pi.registerTool(lsOverride),
+      registeredNames,
+    );
   }
-
-  registeredApis.add(pi);
 }
 
 export default function myToolDisplay(pi: ExtensionAPI): void {
@@ -816,13 +939,12 @@ export default function myToolDisplay(pi: ExtensionAPI): void {
     return;
   }
 
-  const config = loadToolDisplayConfig();
-  if (!config.enabled) {
-    return;
-  }
-
   initializedApis.add(pi);
   pi.on("session_start", () => {
+    const config = loadToolDisplayConfig();
+    if (!config.enabled) {
+      return;
+    }
     registerToolRenderers(pi, config);
   });
 }

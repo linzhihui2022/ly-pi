@@ -172,6 +172,7 @@ pi uninstall npm:pi-tool-display
 |------|------|
 | `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
 | `ly-pi/assets/config/my-tool-display.json` | `my-tool-display` 启用开关、Bash 折叠行数（`bashCollapsedLines`，默认 10）与 diff 折叠行数（`diffCollapsedLines`，默认 24） |
+| `ly-pi/assets/config/pi-tool-display-disabled.json` | 旧版 `pi-tool-display` 的禁用兼容配置，部署时防止旧 renderer 重新接管工具 |
 | `ly-pi/assets/config/settings.json` | 子代理模型绑定与 fallback（部署时按 `settings-schema.json` 校验） |
 | `ly-pi/assets/config/mcp.json` | MCP 服务器配置 |
 | `ly-pi/assets/config/my-sound.json` | 音效开关、语音包与分类配置 |

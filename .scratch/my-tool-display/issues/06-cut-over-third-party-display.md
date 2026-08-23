@@ -21,9 +21,9 @@
 - 删除旧的启用配置 `ly-pi/assets/config/pi-tool-display.json`；部署改为写入 `ly-pi/assets/config/pi-tool-display-disabled.json`，将既有 `extensions/pi-tool-display/config.json` 设为 `enabled: false`，但不会卸载用户级 npm 包。
 - README 新增迁移指引：部署会保留禁用状态的兼容配置；完成自有模块验证后由用户手动执行 `pi uninstall npm:pi-tool-display`。
 - `my-tool-display` 继续由统一入口注册七个原生工具的呈现覆盖；源码静态审计确认没有旧配置或旧 renderer 的双轨引用。
+- A1 修复在工具发现失败时记录开发日志，并安全降级为不注册自有 renderer。
 - A2 修复使所有自有文本 renderer 通过共享净化路径移除 VT/ANSI 序列与危险控制字符。
 - A3 修复在按执行 cwd 重建 Bash definition 时，通过公开 `SettingsManager` 恢复有效的 `shellCommandPrefix` 与 `shellPath`，并只在项目受信任时应用项目级设置。
 - B1 修复对折叠行数逐字段回退，避免一个非法值将明确的 `enabled: false` 或另一个有效折叠行数改回全局默认值。
 - C1 新增超大新内容跳过 diff 预览时仍委托原生 `write` 并写入文件的回归测试。
-- 验证：`bun run verify`（949 tests）和 `git diff --check` 通过；未执行正常部署、`/reload`、TUI 手动确认或用户级卸载。
-- 按当前会话约束未执行正常部署、`/reload`、TUI 手动确认或用户级卸载；这些是交付前由用户执行的最后迁移步骤。
+- 验证：`bun run verify` 和 `git diff --check` 通过；未执行正常部署、`/reload`、TUI 手动确认或用户级卸载；这些是交付前由用户执行的最后迁移步骤。

@@ -97,4 +97,50 @@ describe("deploy", () => {
       '{"name":"pi-tool-display"}\n',
     );
   });
+
+  it("creates the disabled legacy config on the first deployment", () => {
+    const stagingDir = createStagingDir();
+    const legacyConfig = join(
+      stagingDir,
+      "agent",
+      "extensions",
+      "pi-tool-display",
+      "config.json",
+    );
+    const packageFile = join(
+      stagingDir,
+      "agent",
+      "npm",
+      "node_modules",
+      "pi-tool-display",
+      "package.json",
+    );
+
+    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
+    if (bunLookup.status !== 0) {
+      throw new Error("Bun executable is required to test deployment.");
+    }
+
+    const cleanupBundle = ensureExtensionBundle();
+    try {
+      const result = spawnSync(
+        bunLookup.stdout.trim(),
+        ["run", "scripts/deploy.ts"],
+        {
+          cwd: projectDir,
+          encoding: "utf8",
+          env: { PATH: "", PI_STAGING_DIR: stagingDir },
+        },
+      );
+
+      expect(result.status, result.stderr).toBe(0);
+    } finally {
+      cleanupBundle();
+    }
+
+    expect(readFileSync(legacyConfig, "utf8")).toBe(
+      '{\n  "enabled": false\n}\n',
+    );
+    expect(existsSync(packageFile)).toBe(false);
+  });
 });

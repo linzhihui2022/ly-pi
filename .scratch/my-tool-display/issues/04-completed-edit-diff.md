@@ -23,4 +23,4 @@
 - edit 调用头只显示目标路径；完成后使用当前主题的新增、删除和上下文颜色呈现 Pi 返回的 display diff。长 diff 默认按 `diffCollapsedLines`（默认 24）折叠，展开显示完整返回 diff。
 - 覆盖将 `renderShell` 切回 Pi 标准 shell，因此成功/失败状态由 Pi 原生 TUI 提供；没有参数生成期间的 diff preview、split diff 或词级高亮。
 - 失败结果优先显示错误文本，不渲染成功 diff；缺少 diff 数据时显示安全摘要。`Text` 组件负责窄宽度换行。
-- 验证：`bun run verify`（923 tests）通过；`bun run --cwd ly-pi build` 与 typecheck 通过；未执行部署或 `/reload`。
+- 验证：`bun run verify`（本 ticket 完成时的测试快照为 923 tests）通过；`bun run --cwd ly-pi build` 与 typecheck 通过；未执行部署或 `/reload`。

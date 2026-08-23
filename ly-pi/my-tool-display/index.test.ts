@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -35,6 +36,16 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
   SettingsManager: { create: vi.fn() },
 }));
 
+vi.mock("../my-log/index", () => ({
+  createDevLogger: vi.fn(() => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  })),
+}));
+
+import { createDevLogger } from "../my-log/index";
 import { loadToolDisplayConfig } from "./config";
 import myToolDisplay from "./index";
 
@@ -287,6 +298,7 @@ beforeEach(() => {
   agentDir = mkdtempSync(join(tmpdir(), "my-tool-display-"));
   workspaceDirs = [];
   nextNativeWriteResult = nativeWriteResult;
+  vi.mocked(generateDiffString).mockReset();
   vi.mocked(getAgentDir).mockReturnValue(agentDir);
   vi.mocked(SettingsManager.create).mockReturnValue({
     getShellCommandPrefix: () => undefined,
@@ -324,6 +336,40 @@ afterEach(() => {
 });
 
 describe("my-tool-display", () => {
+  it("logs when builtin tool discovery fails before degrading", () => {
+    const sessionStartHandlers: Array<() => unknown> = [];
+    const pi = {
+      getAllTools: vi.fn(() => {
+        throw new Error("registry unavailable");
+      }),
+      on: vi.fn((event: string, handler: () => unknown) => {
+        if (event === "session_start") {
+          sessionStartHandlers.push(handler);
+        }
+      }),
+      registerTool: vi.fn(),
+    };
+
+    myToolDisplay(pi as never);
+    for (const handler of sessionStartHandlers) {
+      handler();
+    }
+
+    const loggerMock = vi.mocked(createDevLogger);
+    const loggerIndex = loggerMock.mock.calls.findIndex(
+      ([source]) => source === "my-tool-display",
+    );
+    const loggerResult = loggerMock.mock.results[loggerIndex];
+    expect(loggerResult?.type).toBe("return");
+    if (loggerResult?.type === "return") {
+      expect(loggerResult.value.warn).toHaveBeenCalledWith(
+        "Unable to discover builtin tools; custom tool renderers are disabled.",
+        { error: "registry unavailable" },
+      );
+    }
+    expect(pi.registerTool).not.toHaveBeenCalled();
+  });
+
   it("renders a completed write overwrite diff after native execution", async () => {
     const workspaceDir = createWorkspace();
     writeFileSync(join(workspaceDir, "file.ts"), "const oldValue = true;\n");
@@ -574,6 +620,82 @@ describe("my-tool-display", () => {
     expect(generateDiffString).not.toHaveBeenCalled();
   });
 
+  it("normalizes supported write target path forms before previewing", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "file.txt"), "old file\n");
+    writeFileSync(join(workspaceDir, "file name.txt"), "old name\n");
+    vi.mocked(generateDiffString).mockReturnValue({
+      diff: "diff",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const paths = [
+      join(workspaceDir, "file\u00a0name.txt"),
+      join(workspaceDir, "file.txt"),
+      join(workspaceDir, "file\u00a0name.txt"),
+    ];
+
+    for (const path of paths) {
+      await write.execute(
+        `call-${path}`,
+        { path, content: "new text\n" },
+        undefined,
+        undefined,
+        { cwd: workspaceDir },
+      );
+    }
+
+    expect(generateDiffString).toHaveBeenNthCalledWith(
+      1,
+      "old name\n",
+      "new text\n",
+    );
+    expect(generateDiffString).toHaveBeenNthCalledWith(
+      2,
+      "old file\n",
+      "new text\n",
+    );
+    expect(generateDiffString).toHaveBeenNthCalledWith(
+      3,
+      "old name\n",
+      "new text\n",
+    );
+  });
+
+  it("shows errno details when an existing file cannot be read", async () => {
+    const workspaceDir = createWorkspace();
+    const path = join(workspaceDir, "protected.txt");
+    writeFileSync(path, "protected\n");
+    chmodSync(path, 0o200);
+
+    try {
+      const { registered } = setup("builtin", ["write"]);
+      const write = registered[0]!;
+      const result = await write.execute(
+        "call-protected",
+        { path: "protected.txt", content: "safe text\n" },
+        undefined,
+        undefined,
+        { cwd: workspaceDir },
+      );
+
+      expect(
+        render(
+          write.renderResult(
+            result,
+            { expanded: false, isPartial: false },
+            theme,
+            { isError: false, args: { path: "protected.txt" }, state: {} },
+          ),
+        ),
+      ).toContain("EACCES");
+    } finally {
+      chmodSync(path, 0o644);
+    }
+  });
+
   it("shows a safe summary for invalid UTF-8 existing content", async () => {
     const workspaceDir = createWorkspace();
     writeFileSync(join(workspaceDir, "invalid.txt"), Buffer.from([0xff, 0xfe]));
@@ -779,6 +901,34 @@ describe("my-tool-display", () => {
     ).toContain("could not be computed safely");
   });
 
+  it("keeps diff generation errors in the safe summary", async () => {
+    const workspaceDir = createWorkspace();
+    vi.mocked(generateDiffString).mockImplementationOnce(() => {
+      throw new Error("diff engine failed");
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-diff-error",
+      { path: "file.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("diff engine failed");
+  });
+
   it("keeps write failures diagnostic and does not render a success diff", () => {
     const { registered } = setup("builtin", ["write"]);
     const write = registered[0]!;
@@ -892,6 +1042,41 @@ describe("my-tool-display", () => {
     ).toBe(diff);
   });
 
+  it("sanitizes edit and write diffs before applying theme colors", () => {
+    const { registered: editRegistered } = setup("builtin", ["edit"]);
+    const edit = editRegistered[0]!;
+    const unsafeDiff = "+ 1|\u001b[31mvisible\u001b[0m\u0000\u0007";
+
+    expect(
+      render(
+        edit.renderResult(
+          { content: [], details: { diff: unsafeDiff } },
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("+ 1|visible");
+
+    const { registered: writeRegistered } = setup("builtin", ["write"]);
+    const write = writeRegistered[0]!;
+    expect(
+      render(
+        write.renderResult(
+          {
+            content: [],
+            details: {
+              writeDiff: { kind: "diff", diff: unsafeDiff },
+            },
+          },
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("+ 1|visible");
+  });
+
   it.each([
     { label: "missing", config: { enabled: true } },
     {
@@ -940,6 +1125,34 @@ describe("my-tool-display", () => {
     expect(colors).toContain("error");
     expect(colors).not.toContain("toolDiffAdded");
     expect(colors).not.toContain("toolDiffRemoved");
+  });
+
+  it("uses explicit fallbacks when completed diff details are missing", () => {
+    const { registered: editRegistered } = setup("builtin", ["edit"]);
+    const edit = editRegistered[0]!;
+    expect(
+      render(
+        edit.renderResult(
+          { content: [], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("Edit completed (diff unavailable).");
+
+    const { registered: writeRegistered } = setup("builtin", ["write"]);
+    const write = writeRegistered[0]!;
+    expect(
+      render(
+        write.renderResult(
+          { content: [], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("Write completed (diff unavailable).");
   });
 
   it("delegates edit execution and preserves native metadata for the execution cwd", async () => {
@@ -1055,6 +1268,22 @@ describe("my-tool-display", () => {
     ).toContain("one\ntwo\n... (1 more line");
   });
 
+  it("hides all successful bash output when bashCollapsedLines is zero", () => {
+    writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 0 }));
+    const { registered } = setup("builtin", ["bash"]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [{ type: "text", text: "one\ntwo" }], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe("Output hidden (2 lines; expand to view)");
+  });
+
   it.each([
     { label: "missing", config: { enabled: true } },
     {
@@ -1138,6 +1367,7 @@ describe("my-tool-display", () => {
     "grep",
     "find",
     "ls",
+    "read",
   ] as const)("removes terminal control characters from %s output", (name) => {
     const { registered } = setup("builtin", [name]);
 
@@ -1260,6 +1490,27 @@ describe("my-tool-display", () => {
     expect(pi.registerTool).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { isPartial: false, expected: "(no output)" },
+    { isPartial: true, expected: "Running..." },
+  ])("uses a visible fallback for empty bash output", ({
+    isPartial,
+    expected,
+  }) => {
+    const { registered } = setup("builtin", ["bash"]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [], details: undefined },
+          { expanded: false, isPartial },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe(expected);
+  });
+
   it("hides successful ls output until expanded", () => {
     const { registered } = setup("builtin", ["ls"]);
     expect(registered).toHaveLength(1);
@@ -1378,6 +1629,25 @@ describe("my-tool-display", () => {
         ),
       ),
     ).toBe(output);
+  });
+
+  it.each([
+    ["grep", "Searching..."],
+    ["find", "Finding files..."],
+    ["ls", "Listing files..."],
+  ] as const)("shows a pending label for %s", (name, label) => {
+    const { registered } = setup("builtin", [name]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [], details: undefined },
+          { expanded: false, isPartial: true },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe(label);
   });
 
   it("retains grep metadata, delegates execution, and keeps failures visible", async () => {
@@ -1650,6 +1920,63 @@ describe("my-tool-display", () => {
     expect(registered).toHaveLength(1);
   });
 
+  it("retries failed registrations without duplicating successful renderers", () => {
+    const tools = [
+      { name: "read", sourceInfo: { source: "builtin" } },
+      { name: "bash", sourceInfo: { source: "builtin" } },
+    ];
+    const registered: Array<{ name: string }> = [];
+    const sessionStartHandlers: Array<() => unknown> = [];
+    let failBash = true;
+    const pi = {
+      getAllTools: vi.fn(() => tools),
+      on: vi.fn((event: string, handler: () => unknown) => {
+        if (event === "session_start") {
+          sessionStartHandlers.push(handler);
+        }
+      }),
+      registerTool: vi.fn((tool: { name: string }) => {
+        if (tool.name === "bash" && failBash) {
+          failBash = false;
+          throw new Error("temporary registration failure");
+        }
+        registered.push(tool);
+      }),
+    };
+
+    myToolDisplay(pi as never);
+    sessionStartHandlers[0]!();
+    sessionStartHandlers[0]!();
+
+    expect(registered.map((tool) => tool.name)).toEqual(["read", "bash"]);
+    expect(pi.registerTool).toHaveBeenCalledTimes(3);
+  });
+
+  it("only overrides builtin tools when ownership is mixed", () => {
+    const tools = [
+      { name: "read", sourceInfo: { source: "builtin" } },
+      { name: "bash", sourceInfo: { source: "extension" } },
+    ];
+    const registered: Array<{ name: string }> = [];
+    const sessionStartHandlers: Array<() => unknown> = [];
+    const pi = {
+      getAllTools: vi.fn(() => tools),
+      on: vi.fn((event: string, handler: () => unknown) => {
+        if (event === "session_start") {
+          sessionStartHandlers.push(handler);
+        }
+      }),
+      registerTool: vi.fn((tool: { name: string }) => {
+        registered.push(tool);
+      }),
+    };
+
+    myToolDisplay(pi as never);
+    sessionStartHandlers[0]!();
+
+    expect(registered.map((tool) => tool.name)).toEqual(["read"]);
+  });
+
   it("defers tool discovery until the runtime session starts", () => {
     const tools = [{ name: "read", sourceInfo: { source: "builtin" } }];
     const registered: unknown[] = [];
@@ -1727,6 +2054,19 @@ describe("my-tool-display", () => {
     const { registered } = setup();
 
     expect(registered).toHaveLength(1);
+  });
+
+  it("falls back to enabled defaults when enabled is missing", () => {
+    writeConfig(JSON.stringify({ bashCollapsedLines: 2 }));
+
+    const { registered } = setup();
+
+    expect(registered).toHaveLength(1);
+    expect(loadToolDisplayConfig()).toEqual({
+      enabled: true,
+      bashCollapsedLines: 10,
+      diffCollapsedLines: 24,
+    });
   });
 
   it("falls back to enabled defaults when the config is malformed", () => {
