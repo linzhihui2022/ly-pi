@@ -10,12 +10,14 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Final, TypedDict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
+UNASSIGNED_TICKET: Final = "UNASSIGNED"
 TICKET_PATTERN = re.compile(r"(?i)\b([a-z][a-z0-9]+-\d+)\b")
 GITHUB_REMOTE_PATTERN = re.compile(
     r"github\.com(?::|/)(?P<repo>[^/\s]+/[^/\s]+?)(?:\.git)?$"
@@ -55,11 +57,142 @@ query PullRequestCommits(
 """
 
 
+class CommitAuthor(TypedDict):
+    login: str
+
+
+class Commit(TypedDict):
+    oid: str
+    committedDate: str
+    messageHeadline: str
+    authors: list[CommitAuthor]
+
+
+class PullRequest(TypedDict):
+    number: int
+    title: str
+    headRefName: str
+    url: str
+    commits: list[Commit]
+
+
+class CommitEntry(TypedDict):
+    oid: str
+    instant: datetime
+    time: str
+    headline: str
+    is_merge: bool
+
+
+class Activity(TypedDict):
+    date: str
+    ticket: str
+    pr_number: int
+    pr_title: str
+    pr_url: str
+    commit_count: int
+    work_commit_count: int
+    first_time: str
+    last_time: str
+    headlines: list[str]
+
+
+class CalendarDay(TypedDict):
+    date: str
+    has_activity: bool
+
+
+class DateRange(TypedDict):
+    start: str
+    end: str
+
+
+class DailyTicketTotal(TypedDict):
+    date: str
+    ticket: str
+    commit_count: int
+    work_commit_count: int
+    prs: list[int]
+
+
+class TicketTotalAccumulator(TypedDict):
+    ticket: str
+    commit_count: int
+    work_commit_count: int
+    dates: set[str]
+
+
+class TicketTotal(TypedDict):
+    ticket: str
+    commit_count: int
+    work_commit_count: int
+    dates: list[str]
+
+
+class CollectResult(TypedDict):
+    repository: str
+    author: str
+    timezone: str
+    date_range: DateRange
+    calendar_days: list[CalendarDay]
+    pull_requests_scanned: int
+    duplicates_removed: int
+    commits_outside_range: int
+    commits_by_other_authors: int
+    commits_by_unknown_authors: int
+    activities: list[Activity]
+    daily_ticket_totals: list[DailyTicketTotal]
+    ticket_totals: list[TicketTotal]
+
+
+@dataclass(frozen=True)
+class CollectorConfig:
+    repo: str | None
+    author: str
+    timezone: str | None
+    start_date: date | None
+    end_date: date | None
+    week_start: date | None
+    include_all_commit_authors: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> CollectorConfig:
+        for flag, value in (
+            ("--repo", args.repo),
+            ("--author", args.author),
+            ("--timezone", args.timezone),
+        ):
+            if value is not None and not value.strip():
+                raise ValueError(f"{flag} must not be empty")
+        if args.repo is not None:
+            split_repo(args.repo)
+        has_explicit_range = args.start_date is not None or args.end_date is not None
+        if args.week_start is not None and has_explicit_range:
+            raise ValueError(
+                "--week-start cannot be combined with --start-date or --end-date"
+            )
+        if has_explicit_range and (args.start_date is None or args.end_date is None):
+            raise ValueError("--start-date and --end-date must both be provided")
+        return cls(
+            repo=args.repo,
+            author=args.author,
+            timezone=args.timezone,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            week_start=args.week_start,
+            include_all_commit_authors=args.include_all_commit_authors,
+        )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Collect and group authored pull-request commits in a date window."
     )
-    parser.add_argument("--repo", help="GitHub repository as OWNER/REPO; defaults to origin")
+    parser.add_argument(
+        "--repo",
+        help="GitHub repository as OWNER/REPO; defaults to the GitHub origin "
+        "remote, falling back to the repository resolved by gh repo view",
+    )
     parser.add_argument("--author", default="@me", help="PR author login; defaults to @me")
     parser.add_argument(
         "--start-date",
@@ -83,43 +216,64 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--include-all-commit-authors",
         action="store_true",
-        help="Include commits whose author does not match the PR author",
+        help="Include commits by other authors or without a verified GitHub author",
     )
     return parser.parse_args()
 
 
-def validate_explicit_values(args: argparse.Namespace) -> None:
-    for name in ("repo", "author", "timezone"):
-        value = getattr(args, name)
-        if value is not None and not value.strip():
-            raise ValueError(f"--{name.replace('_', '-')} must not be empty")
+def split_repo(repo: str) -> tuple[str, str]:
+    owner, separator, name = repo.partition("/")
+    if not separator or not owner or not name:
+        raise ValueError("--repo must use OWNER/REPO format")
+    return owner, name
 
 
-def run(command: list[str]) -> str:
+def run(command: list[str], context: str | None = None) -> str:
+    label = context if context is not None else " ".join(command[:3])
     try:
         result = subprocess.run(command, check=False, capture_output=True, text=True)
     except OSError as error:
         raise RuntimeError(f"cannot start {' '.join(command[:2])}: {error}") from error
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "command failed"
-        raise RuntimeError(f"{' '.join(command[:3])}: {detail}")
+        raise RuntimeError(f"{label}: {detail}")
     return result.stdout.strip()
 
 
-def detect_repo() -> str | None:
+def detect_repo() -> str:
+    failures: list[str] = []
     try:
         remote = run(["git", "remote", "get-url", "origin"])
-    except RuntimeError:
-        return None
-    match = GITHUB_REMOTE_PATTERN.search(remote)
-    if match:
-        return match.group("repo")
+    except RuntimeError as error:
+        failures.append(str(error))
+    else:
+        match = GITHUB_REMOTE_PATTERN.search(remote)
+        if match:
+            return match.group("repo")
+        failures.append(f"origin remote {remote!r} is not a GitHub URL")
+
     try:
         return run(
             ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]
         )
-    except RuntimeError:
+    except RuntimeError as error:
+        failures.append(str(error))
+    raise RuntimeError(
+        f"cannot determine GitHub repository ({'; '.join(failures)}); pass --repo"
+    )
+
+
+def timezone_name_from_localtime(target: Path) -> str | None:
+    parts = target.parts
+    if "zoneinfo" not in parts:
         return None
+    name = "/".join(parts[parts.index("zoneinfo") + 1 :])
+    return name or None
+
+
+def load_localtime_zoneinfo(localtime: Path) -> ZoneInfo:
+    with localtime.open("rb") as localtime_file:
+        return ZoneInfo.from_file(localtime_file, key="system")
 
 
 def resolve_system_timezone() -> tuple[ZoneInfo, str]:
@@ -128,12 +282,23 @@ def resolve_system_timezone() -> tuple[ZoneInfo, str]:
         timezone_name = configured_timezone.removeprefix(":")
         try:
             return ZoneInfo(timezone_name), timezone_name
-        except ZoneInfoNotFoundError as error:
+        except (ZoneInfoNotFoundError, ValueError) as error:
             raise ValueError(f"unknown system timezone: {configured_timezone}") from error
 
+    localtime = Path("/etc/localtime")
     try:
-        with Path("/etc/localtime").open("rb") as localtime:
-            return ZoneInfo.from_file(localtime, key="system"), "system"
+        target = localtime.resolve()
+    except OSError:
+        target = localtime
+    timezone_name = timezone_name_from_localtime(target)
+    if timezone_name is not None:
+        try:
+            return ZoneInfo(timezone_name), timezone_name
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+
+    try:
+        return load_localtime_zoneinfo(localtime), "system"
     except (OSError, ValueError) as error:
         raise ValueError(
             "cannot determine system local timezone; pass --timezone"
@@ -149,17 +314,11 @@ def resolve_timezone(name: str | None) -> tuple[ZoneInfo, str]:
         raise ValueError(f"unknown timezone: {name}") from error
 
 
-def resolve_date_window(args: argparse.Namespace, today: date) -> tuple[date, date]:
-    has_explicit_range = args.start_date is not None or args.end_date is not None
-    if args.week_start is not None and has_explicit_range:
-        raise ValueError("--week-start cannot be combined with --start-date or --end-date")
-
-    if has_explicit_range:
-        if args.start_date is None or args.end_date is None:
-            raise ValueError("--start-date and --end-date must both be provided")
-        start, end = args.start_date, args.end_date
-    elif args.week_start is not None:
-        start = args.week_start
+def resolve_date_window(config: CollectorConfig, today: date) -> tuple[date, date]:
+    if config.start_date is not None and config.end_date is not None:
+        start, end = config.start_date, config.end_date
+    elif config.week_start is not None:
+        start = config.week_start
         end = min(start + timedelta(days=6), today)
     else:
         start = today - timedelta(days=today.weekday())
@@ -196,44 +355,40 @@ def is_merge_commit(headline: str) -> bool:
     return headline.lower().startswith("merge ")
 
 
-def select_ticket(pr: dict[str, Any], headline: str) -> str:
+def select_ticket(pr: PullRequest, headline: str) -> str:
     commit_tickets = find_tickets(headline)
     if len(commit_tickets) == 1:
         return commit_tickets[0]
-    pr_tickets = find_tickets(pr.get("title", ""), pr.get("headRefName", ""))
+    pr_tickets = find_tickets(pr["title"], pr["headRefName"])
     if len(pr_tickets) == 1:
         return pr_tickets[0]
-    return "UNASSIGNED"
+    return UNASSIGNED_TICKET
 
 
 def resolve_commit_candidate(
-    candidates: list[tuple[dict[str, Any], dict[str, Any]]],
-) -> tuple[dict[str, Any], dict[str, Any], str]:
-    ordered = sorted(candidates, key=lambda candidate: int(candidate[0]["number"]))
+    candidates: list[tuple[PullRequest, Commit]],
+) -> tuple[PullRequest, Commit, str]:
+    ordered = sorted(candidates, key=lambda candidate: candidate[0]["number"])
     pr, commit = ordered[0]
     if len(ordered) == 1:
-        return pr, commit, select_ticket(pr, commit.get("messageHeadline", ""))
+        return pr, commit, select_ticket(pr, commit["messageHeadline"])
 
-    commit_tickets = find_tickets(commit.get("messageHeadline", ""))
+    commit_tickets = find_tickets(commit["messageHeadline"])
     if len(commit_tickets) == 1:
         return pr, commit, commit_tickets[0]
 
     fallback_tickets = {
         ticket
         for candidate_pr, _ in ordered
-        for ticket in find_tickets(
-            candidate_pr.get("title", ""), candidate_pr.get("headRefName", "")
-        )
+        for ticket in find_tickets(candidate_pr["title"], candidate_pr["headRefName"])
     }
-    ticket = fallback_tickets.pop() if len(fallback_tickets) == 1 else "UNASSIGNED"
-    if ticket != "UNASSIGNED":
+    ticket = fallback_tickets.pop() if len(fallback_tickets) == 1 else UNASSIGNED_TICKET
+    if ticket != UNASSIGNED_TICKET:
         pr, commit = next(
             candidate
             for candidate in ordered
             if ticket
-            in find_tickets(
-                candidate[0].get("title", ""), candidate[0].get("headRefName", "")
-            )
+            in find_tickets(candidate[0]["title"], candidate[0]["headRefName"])
         )
     return pr, commit, ticket
 
@@ -249,7 +404,8 @@ def fetch_paginated_items(endpoint: str) -> list[dict[str, Any]]:
                 "--method",
                 "GET",
                 endpoint,
-            ]
+            ],
+            context=f"gh api GET {endpoint}",
         )
     )
     if not isinstance(payload, list):
@@ -278,7 +434,8 @@ def fetch_graphql_pages(
         f"query={query}",
     ]
     for name, value in variables.items():
-        command.extend(["-F", f"{name}={value}"])
+        flag = "-F" if isinstance(value, int) else "-f"
+        command.extend([flag, f"{name}={value}"])
 
     payload = json.loads(run(command))
     if not isinstance(payload, list) or not all(
@@ -300,7 +457,7 @@ def fetch_graphql_pages(
     return payload
 
 
-def normalize_graphql_commit(node: dict[str, Any]) -> dict[str, Any]:
+def normalize_graphql_commit(node: dict[str, Any]) -> Commit:
     commit = node.get("commit")
     if not isinstance(commit, dict):
         raise RuntimeError("pull request commit is missing details")
@@ -312,7 +469,7 @@ def normalize_graphql_commit(node: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(author_nodes, list):
         raise RuntimeError("pull request commit authors are malformed")
 
-    authors = []
+    authors: list[CommitAuthor] = []
     for author_node in author_nodes:
         if not isinstance(author_node, dict):
             continue
@@ -336,38 +493,44 @@ def normalize_graphql_commit(node: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def fetch_pull_request_commits(repo: str, number: int) -> list[dict[str, Any]]:
+def fetch_pull_request_commits(repo: str, number: int) -> list[Commit]:
+    owner, name = split_repo(repo)
     try:
-        owner, name = repo.split("/", maxsplit=1)
-    except ValueError as error:
-        raise ValueError("--repo must use OWNER/REPO format") from error
-    if not owner or not name:
-        raise ValueError("--repo must use OWNER/REPO format")
+        pages = fetch_graphql_pages(
+            PULL_REQUEST_COMMITS_QUERY,
+            {"owner": owner, "name": name, "number": number},
+        )
+    except RuntimeError as error:
+        raise RuntimeError(f"pull request #{number}: {error}") from error
 
-    pages = fetch_graphql_pages(
-        PULL_REQUEST_COMMITS_QUERY,
-        {"owner": owner, "name": name, "number": number},
-    )
-    commits: list[dict[str, Any]] = []
+    commits: list[Commit] = []
     for page in pages:
         try:
             connection = page["data"]["repository"]["pullRequest"]["commits"]
         except (KeyError, TypeError) as error:
-            raise RuntimeError("unexpected pull request commits response") from error
+            raise RuntimeError(
+                f"unexpected commits response for pull request #{number}"
+            ) from error
         if not isinstance(connection, dict):
-            raise RuntimeError("unexpected pull request commits connection")
+            raise RuntimeError(
+                f"unexpected commits connection for pull request #{number}"
+            )
         nodes = connection.get("nodes")
         if not isinstance(nodes, list) or not all(
             isinstance(node, dict) for node in nodes
         ):
-            raise RuntimeError("unexpected pull request commit nodes")
+            raise RuntimeError(f"unexpected commit nodes for pull request #{number}")
         commits.extend(normalize_graphql_commit(node) for node in nodes)
     return commits
 
 
+def as_str(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
 def normalize_pull_request(
-    pull_request: dict[str, Any], commits: list[dict[str, Any]]
-) -> dict[str, Any]:
+    pull_request: dict[str, Any], commits: list[Commit]
+) -> PullRequest:
     head = pull_request.get("head")
     if not isinstance(head, dict):
         raise RuntimeError("pull request is missing a head branch")
@@ -378,27 +541,34 @@ def normalize_pull_request(
 
     return {
         "number": number,
-        "title": pull_request.get("title", ""),
-        "headRefName": head.get("ref", ""),
-        "createdAt": pull_request.get("created_at"),
-        "mergedAt": pull_request.get("merged_at"),
-        "url": pull_request.get("html_url", ""),
+        "title": as_str(pull_request.get("title")),
+        "headRefName": as_str(head.get("ref")),
+        "url": as_str(pull_request.get("html_url")),
         "commits": commits,
     }
 
 
-def fetch_prs(repo: str, author: str) -> list[dict[str, Any]]:
+def pull_request_author_login(pull_request: dict[str, Any]) -> str | None:
+    user = pull_request.get("user")
+    if not isinstance(user, dict):
+        return None
+    login = user.get("login")
+    return login if isinstance(login, str) else None
+
+
+def fetch_prs(repo: str, author: str) -> list[PullRequest]:
     pull_requests = fetch_paginated_items(
         f"repos/{repo}/pulls?state=all&per_page=100"
     )
+    author_key = author.casefold()
     authored_pull_requests = [
         pull_request
         for pull_request in pull_requests
-        if isinstance(pull_request.get("user"), dict)
-        and pull_request["user"].get("login", "").casefold() == author.casefold()
+        if (login := pull_request_author_login(pull_request)) is not None
+        and login.casefold() == author_key
     ]
 
-    prs: list[dict[str, Any]] = []
+    prs: list[PullRequest] = []
     for pull_request in authored_pull_requests:
         number = pull_request.get("number")
         if not isinstance(number, int):
@@ -409,10 +579,10 @@ def fetch_prs(repo: str, author: str) -> list[dict[str, Any]]:
 
 
 def build_calendar_days(
-    start: date, end: date, activities: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+    start: date, end: date, activities: list[Activity]
+) -> list[CalendarDay]:
     activity_dates = {activity["date"] for activity in activities}
-    calendar_days: list[dict[str, Any]] = []
+    calendar_days: list[CalendarDay] = []
     current = start
     while current <= end:
         day = current.isoformat()
@@ -421,52 +591,37 @@ def build_calendar_days(
     return calendar_days
 
 
-def collect(args: argparse.Namespace) -> dict[str, Any]:
-    validate_explicit_values(args)
-    local_tz, timezone_name = resolve_timezone(args.timezone)
+def collect(config: CollectorConfig) -> CollectResult:
+    local_tz, timezone_name = resolve_timezone(config.timezone)
     today = datetime.now(local_tz).date()
-    window_start, window_end = resolve_date_window(args, today)
+    window_start, window_end = resolve_date_window(config, today)
     range_start = datetime.combine(window_start, time.min, local_tz)
     range_end = datetime.combine(window_end + timedelta(days=1), time.min, local_tz)
 
-    repo = args.repo or detect_repo()
-    if repo is None:
-        raise ValueError("cannot determine GitHub repository; pass --repo")
-    resolved_author = resolve_author(args.author)
+    repo = config.repo or detect_repo()
+    resolved_author = resolve_author(config.author)
     resolved_author_key = resolved_author.casefold()
     prs = fetch_prs(repo, resolved_author)
 
-    grouped: dict[tuple[str, str, int], list[dict[str, Any]]] = defaultdict(list)
-    commits_by_oid: dict[
-        str, list[tuple[dict[str, Any], dict[str, Any]]]
-    ] = defaultdict(list)
-    commits_without_oid: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    grouped: dict[tuple[str, str, int], list[CommitEntry]] = defaultdict(list)
+    commits_by_oid: dict[str, list[tuple[PullRequest, Commit]]] = defaultdict(list)
     duplicates_removed = 0
     commits_outside_range = 0
     commits_by_other_authors = 0
     commits_by_unknown_authors = 0
 
     for pr in prs:
-        for commit in pr.get("commits", []):
-            oid = commit.get("oid", "")
-            if oid:
-                commits_by_oid[oid].append((pr, commit))
-            else:
-                commits_without_oid.append((pr, commit))
+        for commit in pr["commits"]:
+            commits_by_oid[commit["oid"]].append((pr, commit))
 
-    candidate_groups = list(commits_by_oid.values())
-    candidate_groups.extend([[candidate] for candidate in commits_without_oid])
-    for candidates in candidate_groups:
+    for candidates in commits_by_oid.values():
         duplicates_removed += len(candidates) - 1
         pr, commit, ticket = resolve_commit_candidate(candidates)
 
         author_logins = {
-            commit_author["login"].casefold()
-            for commit_author in commit.get("authors", [])
-            if isinstance(commit_author, dict)
-            and isinstance(commit_author.get("login"), str)
+            commit_author["login"].casefold() for commit_author in commit["authors"]
         }
-        if not args.include_all_commit_authors:
+        if not config.include_all_commit_authors:
             if not author_logins:
                 commits_by_unknown_authors += 1
                 continue
@@ -474,17 +629,23 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
                 commits_by_other_authors += 1
                 continue
 
-        committed_at = parse_github_time(commit["committedDate"])
+        try:
+            committed_at = parse_github_time(commit["committedDate"])
+        except ValueError as error:
+            raise RuntimeError(
+                f"commit {commit['oid']} in pull request #{pr['number']} "
+                f"has an invalid committedDate: {error}"
+            ) from error
         local_time = committed_at.astimezone(local_tz)
         if not range_start <= local_time < range_end:
             commits_outside_range += 1
             continue
 
-        headline = commit.get("messageHeadline", "")
-        key = (local_time.date().isoformat(), ticket, int(pr["number"]))
+        headline = commit["messageHeadline"]
+        key = (local_time.date().isoformat(), ticket, pr["number"])
         grouped[key].append(
             {
-                "oid": commit.get("oid", ""),
+                "oid": commit["oid"],
                 "instant": committed_at,
                 "time": local_time.isoformat(timespec="minutes"),
                 "headline": headline,
@@ -492,39 +653,37 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
-    activities: list[dict[str, Any]] = []
-    pr_by_number = {int(pr["number"]): pr for pr in prs}
+    activity_rows: list[tuple[datetime, Activity]] = []
+    pr_by_number = {pr["number"]: pr for pr in prs}
     for (day, ticket, pr_number), commits in grouped.items():
         commits.sort(key=lambda commit: commit["instant"])
         pr = pr_by_number[pr_number]
-        activities.append(
-            {
-                "date": day,
-                "ticket": ticket,
-                "pr_number": pr_number,
-                "pr_title": pr.get("title", ""),
-                "pr_url": pr.get("url", ""),
-                "commit_count": len(commits),
-                "work_commit_count": sum(not commit["is_merge"] for commit in commits),
-                "_first_instant": commits[0]["instant"],
-                "first_time": commits[0]["time"],
-                "last_time": commits[-1]["time"],
-                "headlines": [commit["headline"] for commit in commits],
-            }
+        activity_rows.append(
+            (
+                commits[0]["instant"],
+                {
+                    "date": day,
+                    "ticket": ticket,
+                    "pr_number": pr_number,
+                    "pr_title": pr["title"],
+                    "pr_url": pr["url"],
+                    "commit_count": len(commits),
+                    "work_commit_count": sum(
+                        not commit["is_merge"] for commit in commits
+                    ),
+                    "first_time": commits[0]["time"],
+                    "last_time": commits[-1]["time"],
+                    "headlines": [commit["headline"] for commit in commits],
+                },
+            )
         )
-    activities.sort(
-        key=lambda activity: (
-            activity["date"],
-            activity["_first_instant"],
-            activity["ticket"],
-            activity["pr_number"],
-        )
+    activity_rows.sort(
+        key=lambda row: (row[1]["date"], row[0], row[1]["ticket"], row[1]["pr_number"])
     )
-    for activity in activities:
-        activity.pop("_first_instant")
+    activities = [activity for _, activity in activity_rows]
 
-    daily: dict[tuple[str, str], dict[str, Any]] = {}
-    ticket_totals: dict[str, dict[str, Any]] = {}
+    daily: dict[tuple[str, str], DailyTicketTotal] = {}
+    ticket_accumulators: dict[str, TicketTotalAccumulator] = {}
     for activity in activities:
         daily_key = (activity["date"], activity["ticket"])
         daily_entry = daily.setdefault(
@@ -541,7 +700,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         daily_entry["work_commit_count"] += activity["work_commit_count"]
         daily_entry["prs"].append(activity["pr_number"])
 
-        ticket_entry = ticket_totals.setdefault(
+        ticket_entry = ticket_accumulators.setdefault(
             activity["ticket"],
             {
                 "ticket": activity["ticket"],
@@ -554,11 +713,16 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         ticket_entry["work_commit_count"] += activity["work_commit_count"]
         ticket_entry["dates"].add(activity["date"])
 
-    totals = []
-    for entry in ticket_totals.values():
-        entry["dates"] = sorted(entry["dates"])
-        totals.append(entry)
-    totals.sort(key=lambda entry: (-entry["work_commit_count"], entry["ticket"]))
+    ticket_totals: list[TicketTotal] = [
+        {
+            "ticket": entry["ticket"],
+            "commit_count": entry["commit_count"],
+            "work_commit_count": entry["work_commit_count"],
+            "dates": sorted(entry["dates"]),
+        }
+        for entry in ticket_accumulators.values()
+    ]
+    ticket_totals.sort(key=lambda entry: (-entry["work_commit_count"], entry["ticket"]))
 
     return {
         "repository": repo,
@@ -578,13 +742,13 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         "daily_ticket_totals": sorted(
             daily.values(), key=lambda entry: (entry["date"], entry["ticket"])
         ),
-        "ticket_totals": totals,
+        "ticket_totals": ticket_totals,
     }
 
 
 def main() -> int:
     try:
-        output = collect(parse_args())
+        output = collect(CollectorConfig.from_args(parse_args()))
     except (RuntimeError, ValueError, KeyError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
