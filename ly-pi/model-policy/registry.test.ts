@@ -75,6 +75,8 @@ const manifest = {
   },
 } as const;
 
+const successfulResponse = { stopReason: "stop" as const };
+
 describe("createModelPolicyRegistry", () => {
   it("describes the manifest candidate selected for a role", () => {
     const registry = createModelPolicyRegistry(manifest);
@@ -146,6 +148,44 @@ describe("createModelPolicyRegistry", () => {
       source: "local",
       status: "ready",
       diagnostics: [],
+    });
+  });
+
+  it("passes a local override model to the operation at run time", async () => {
+    const registry = createModelPolicyRegistry(manifest, {
+      version: 1,
+      policies: {
+        "fast-policy": {
+          slots: { primary: { model: "local/fast" } },
+        },
+      },
+    });
+    const seenModels: string[] = [];
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) =>
+          provider === "local" && id === "fast"
+            ? {
+                provider,
+                id,
+                input: ["text"],
+                reasoning: false,
+                contextWindow: 128000,
+              }
+            : undefined,
+      },
+      async (model) => {
+        seenModels.push(`${model.provider}/${model.id}`);
+        return successfulResponse;
+      },
+    );
+
+    expect(seenModels).toEqual(["local/fast"]);
+    expect(result).toMatchObject({
+      status: "success",
+      candidate: { model: "local/fast", source: "local" },
     });
   });
 
@@ -293,6 +333,18 @@ describe("createModelPolicyRegistry", () => {
     ).toThrow("vision role 'vision' must bind an image-capable policy");
   });
 
+  it("requires the image-reader agent to deploy the vision role", () => {
+    expect(() =>
+      createModelPolicyRegistry({
+        ...manifest,
+        deployment: {
+          ...manifest.deployment,
+          agents: { "image-reader": "fast" },
+        },
+      }),
+    ).toThrow("agent 'image-reader' must deploy the 'vision' role");
+  });
+
   it("rejects a local override for the vision policy", () => {
     expect(() =>
       createModelPolicyRegistry(manifest, {
@@ -406,14 +458,14 @@ describe("createModelPolicyRegistry", () => {
         if (model.id === "primary") {
           throw Object.assign(new Error("rate limited"), { status: 429 });
         }
-        return "fallback result";
+        return successfulResponse;
       },
     );
 
     expect(attempts).toEqual(["primary", "fallback"]);
     expect(result).toEqual({
       status: "success",
-      value: "fallback result",
+      value: successfulResponse,
       candidate: {
         slot: "fallback",
         model: "test/fallback",
@@ -466,14 +518,14 @@ describe("createModelPolicyRegistry", () => {
             code: "auth",
           });
         }
-        return "fallback result";
+        return successfulResponse;
       },
     );
 
     expect(attempts).toEqual(["primary", "fallback"]);
     expect(result).toMatchObject({
       status: "success",
-      value: "fallback result",
+      value: successfulResponse,
       candidate: { slot: "fallback" },
     });
   });
@@ -518,14 +570,68 @@ describe("createModelPolicyRegistry", () => {
         if (model.id === "primary") {
           return { stopReason: "error", errorMessage: "missing API key" };
         }
-        return "fallback result";
+        return successfulResponse;
       },
     );
 
     expect(attempts).toEqual(["primary", "fallback"]);
     expect(result).toMatchObject({
       status: "success",
-      value: "fallback result",
+      value: successfulResponse,
+      candidate: { slot: "fallback" },
+    });
+  });
+
+  it("falls back when Pi reports a network_error finish reason", async () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            {
+              ...manifest.policies["fast-policy"].candidates[0],
+              model: "test/primary",
+            },
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "off",
+            },
+          ],
+        },
+      },
+    });
+    const attempts: string[] = [];
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        if (model.id === "primary") {
+          return {
+            stopReason: "error",
+            errorMessage: "Provider finish_reason: network_error",
+          };
+        }
+        return successfulResponse;
+      },
+    );
+
+    expect(attempts).toEqual(["primary", "fallback"]);
+    expect(result).toMatchObject({
+      status: "success",
       candidate: { slot: "fallback" },
     });
   });
@@ -573,7 +679,7 @@ describe("createModelPolicyRegistry", () => {
             errorMessage: "HTTP 429 Too Many Requests",
           };
         }
-        return "fallback result";
+        return successfulResponse;
       },
     );
 
@@ -777,7 +883,7 @@ describe("createModelPolicyRegistry", () => {
         async (model) => {
           attempts.push(model.id);
           if (model.id === "primary") throw error;
-          return "fallback result";
+          return successfulResponse;
         },
       );
 
@@ -878,7 +984,7 @@ describe("createModelPolicyRegistry", () => {
       },
       async (model) => {
         attempts.push(model.id);
-        return "fallback result";
+        return successfulResponse;
       },
     );
 
@@ -893,7 +999,11 @@ describe("createModelPolicyRegistry", () => {
     const registry = createModelPolicyRegistry(manifest);
 
     await expect(
-      registry.run("fast", { find: () => undefined }, async () => "unused"),
+      registry.run(
+        "fast",
+        { find: () => undefined },
+        async () => successfulResponse,
+      ),
     ).resolves.toEqual({
       status: "failure",
       failurePolicy: "skip",
@@ -919,7 +1029,11 @@ describe("createModelPolicyRegistry", () => {
     });
 
     await expect(
-      registry.run("fast", { find: () => undefined }, async () => "unused"),
+      registry.run(
+        "fast",
+        { find: () => undefined },
+        async () => successfulResponse,
+      ),
     ).resolves.toMatchObject({ status: "failure", failurePolicy });
   });
 
@@ -967,14 +1081,14 @@ describe("createModelPolicyRegistry", () => {
       },
       async (model) => {
         attempts.push(model.id);
-        return "usable result";
+        return successfulResponse;
       },
     );
 
     expect(attempts).toEqual(["fallback"]);
     expect(result).toMatchObject({
       status: "success",
-      value: "usable result",
+      value: successfulResponse,
       candidate: { slot: "fallback" },
     });
   });

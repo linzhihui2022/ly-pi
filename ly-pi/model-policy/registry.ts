@@ -1,3 +1,4 @@
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 
@@ -185,6 +186,12 @@ const LocalModelOverrideSchema = Type.Object(
   { additionalProperties: false },
 );
 
+/** Minimal Pi response shape used to classify provider failures. */
+export type PiModelResponse = Pick<
+  AssistantMessage,
+  "stopReason" | "errorMessage"
+>;
+
 export interface RegisteredModel {
   readonly provider: string;
   readonly id: string;
@@ -266,6 +273,13 @@ function assertValidModelManifest(manifest: ModelPolicyManifest): void {
       }
       slots.add(candidate.slot);
     }
+  }
+
+  const imageReaderRole = manifest.deployment.agents["image-reader"];
+  if (imageReaderRole !== undefined && imageReaderRole !== "vision") {
+    throw new Error(
+      `agent 'image-reader' must deploy the 'vision' role, received '${imageReaderRole}'`,
+    );
   }
 }
 
@@ -450,7 +464,7 @@ function isRetryableInfrastructureFailure(error: unknown): boolean {
 
   const message =
     typeof details.message === "string" ? details.message.toLowerCase() : "";
-  return /\b(?:401|403|408|429|5\d\d)\b|api key|authentication|auth failed|forbidden|rate limit|too many requests|request (?:was )?aborted|timed? out|timeout|network (?:error|unavailable|failure)|service unavailable/.test(
+  return /\b(?:401|403|408|429|5\d\d)\b|api key|authentication|auth failed|forbidden|rate limit|too many requests|request (?:was )?aborted|timed? out|timeout|network[_ ](?:error|unavailable|failure)|service unavailable/.test(
     message,
   );
 }
@@ -602,7 +616,7 @@ export function createModelPolicyRegistry(
       };
     },
 
-    async run<TModel extends RegisteredModel, TResult>(
+    async run<TModel extends RegisteredModel, TResult extends PiModelResponse>(
       role: ModelRole,
       models: ModelLookup<TModel>,
       operation: (

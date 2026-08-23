@@ -37,7 +37,7 @@ Status: resolved
 ## Implementation Decisions
 
 - 新增独立 JSON Model Manifest，作为所有仓库默认模型选择的唯一真源。它包含可复用的 Model Policy、功能到策略的 bindings，以及各策略中具名且有固定顺序语义的 Candidate Slot。
-- Model Policy 仅拥有候选、Model Label、thinking、核心 Model Capability Contract、Candidate Slot 顺序与 Role Failure Policy；prompt、timeout、maxTokens 等 Operation Parameters 保留在各功能中。
+- Model Policy 仅拥有候选、Model Label、thinking、核心 Model Capability Contract、必填 `security` 标志、Candidate Slot 顺序与 Role Failure Policy；prompt、timeout、maxTokens 等 Operation Parameters 保留在各功能中。
 - 核心 Model Capability Contract 校验输入类型、推理支持、所选 thinking level 和最小上下文窗口，不引入动态质量评分或伪精确质量指标。
 - 第一版策略集合为 primary、fast、standard、deep、vision、security-judge 和 security-audit。现有会话命名/scout、普通子代理、图片分析、Judge、安全审计和权限 self-test 分别绑定到已确认的对应策略。
 - 新建深模块 Model Policy Registry。它从 Model Manifest 和可选 Local Model Override 构造有效策略，提供统一的模型运行、Pi 设置编译和诊断能力；功能和 deploy 都只能跨越这个 seam。
