@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import unittest
@@ -113,7 +114,10 @@ class CliFailureTests(unittest.TestCase):
                 fetch.assert_not_called()
 
     def test_accepts_repository_names_starting_with_dot(self) -> None:
-        with patch.object(collector, "fetch_prs", return_value=[]) as fetch:
+        with (
+            patch.object(collector, "resolve_author", return_value="alice"),
+            patch.object(collector, "fetch_prs", return_value=[]) as fetch,
+        ):
             exit_code, stdout, stderr = run_cli(
                 [
                     "--repo",
@@ -154,6 +158,79 @@ class CliFailureTests(unittest.TestCase):
         self.assertIn("--repo must use OWNER/REPO format", stderr)
         self.assertNotIn("super-secret", stderr)
 
+    def test_rejects_an_unknown_explicit_author_before_fetching_prs(self) -> None:
+        with (
+            patch.object(
+                collector,
+                "run",
+                side_effect=RuntimeError("gh api user: HTTP 404"),
+            ),
+            patch.object(collector, "fetch_prs") as fetch,
+        ):
+            exit_code, stdout, stderr = run_cli(
+                [
+                    "--repo",
+                    "owner/repo",
+                    "--author",
+                    "missing-user",
+                    "--start-date",
+                    "2024-01-01",
+                    "--end-date",
+                    "2024-01-01",
+                    "--timezone",
+                    "UTC",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("HTTP 404", stderr)
+        fetch.assert_not_called()
+
+    def test_rejects_an_organization_as_an_explicit_author(self) -> None:
+        profile = json.dumps({"login": "acme", "type": "Organization"})
+        with (
+            patch.object(collector, "run", return_value=profile),
+            patch.object(collector, "fetch_prs") as fetch,
+        ):
+            exit_code, stdout, stderr = run_cli(
+                [
+                    "--repo",
+                    "owner/repo",
+                    "--author",
+                    "acme",
+                    "--start-date",
+                    "2024-01-01",
+                    "--end-date",
+                    "2024-01-01",
+                    "--timezone",
+                    "UTC",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("cannot author pull requests", stderr)
+        fetch.assert_not_called()
+
+    def test_rejects_date_max_week_start_without_a_traceback(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            [
+                "--repo",
+                "owner/repo",
+                "--author",
+                "alice",
+                "--week-start",
+                "9999-12-31",
+                "--timezone",
+                "UTC",
+            ]
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("date range cannot include future dates", stderr)
+
 
 class CliContractTests(unittest.TestCase):
     def collect_json(
@@ -193,6 +270,8 @@ class CliContractTests(unittest.TestCase):
         author: str = "alice",
     ) -> tuple[int, str, str]:
         def mocked_run(command: list[str], context: str | None = None) -> str:
+            if command[:3] == ["gh", "api", f"users/{author}"]:
+                return json.dumps({"login": author, "type": "User"})
             if "graphql" in command:
                 return json.dumps(graphql_pages)
             return json.dumps([pull_requests])
@@ -271,6 +350,58 @@ class CliContractTests(unittest.TestCase):
         resolve_author.assert_called_once_with("alice")
         fetch.assert_called_once_with("owner/repo", "alice")
 
+    def test_zero_argument_cli_uses_all_documented_defaults(self) -> None:
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz: object = None) -> FixedDateTime:
+                return cls(2024, 1, 10, 12, tzinfo=tz)
+
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "headRefName": "ABC-123-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "other-author",
+                        "committedDate": "2024-01-10T09:00:00Z",
+                        "messageHeadline": "ABC-123 collaborator work",
+                        "authors": [{"login": "bob"}],
+                    }
+                ],
+            }
+        ]
+        with (
+            patch.object(collector, "datetime", FixedDateTime),
+            patch.object(collector, "detect_repo", return_value="owner/repo"),
+            patch.object(
+                collector, "resolve_author", return_value="alice"
+            ) as resolve_author,
+            patch.object(
+                collector,
+                "resolve_system_timezone",
+                return_value=(collector.ZoneInfo("UTC"), "UTC"),
+            ),
+            patch.object(
+                collector, "fetch_prs", return_value=pull_requests
+            ) as fetch,
+        ):
+            exit_code, stdout, stderr = run_cli([])
+
+        self.assertEqual(exit_code, 0, stderr)
+        result = json.loads(stdout)
+        self.assertEqual(result["repository"], "owner/repo")
+        self.assertEqual(result["author"], "alice")
+        self.assertEqual(result["timezone"], "UTC")
+        self.assertEqual(
+            result["date_range"], {"start": "2024-01-08", "end": "2024-01-10"}
+        )
+        self.assertEqual(result["activities"], [])
+        self.assertEqual(result["commits_by_other_authors"], 1)
+        resolve_author.assert_called_once_with("@me")
+        fetch.assert_called_once_with("owner/repo", "alice")
+
     def test_collects_successful_api_chain_with_audit_metadata(self) -> None:
         pull_requests = [
             {
@@ -297,8 +428,10 @@ class CliContractTests(unittest.TestCase):
                                                 "nodes": [
                                                     {"user": {"login": "bob"}},
                                                     {"user": {"login": "alice"}},
-                                                ]
+                                                ],
+                                                "pageInfo": {"hasNextPage": False},
                                             },
+                                            "parents": {"totalCount": 1},
                                         }
                                     }
                                 ],
@@ -349,6 +482,34 @@ class CliContractTests(unittest.TestCase):
 
         self.assertEqual(result["activities"][0]["ticket"], "ABC-123")
 
+    def test_recognizes_ticket_next_to_non_ascii_or_underscore_text(self) -> None:
+        for headline in (
+            "修复ABC-123登录问题",
+            "fix_ABC-123_report",
+            "ıABC-123",
+        ):
+            with self.subTest(headline=headline):
+                pull_requests = [
+                    {
+                        "number": 7,
+                        "title": "fallback ticket DEF-456",
+                        "headRefName": "fallback/DEF-456",
+                        "url": "https://github.com/owner/repo/pull/7",
+                        "commits": [
+                            {
+                                "oid": headline,
+                                "committedDate": "2024-01-02T09:00:00Z",
+                                "messageHeadline": headline,
+                                "authors": [{"login": "alice"}],
+                            }
+                        ],
+                    }
+                ]
+
+                result = self.collect_json(pull_requests)
+
+                self.assertEqual(result["activities"][0]["ticket"], "ABC-123")
+
     def test_returns_no_activity_calendar_for_empty_pull_requests(self) -> None:
         result = self.collect_json([])
 
@@ -373,6 +534,7 @@ class CliContractTests(unittest.TestCase):
                         "committedDate": "2024-01-02T09:00:00Z",
                         "messageHeadline": "Merge pull request #7 from feature/report",
                         "authors": [{"login": "alice"}],
+                        "parentCount": 2,
                     }
                 ],
             }
@@ -385,6 +547,29 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(activity["work_commit_count"], 0)
         self.assertEqual(result["daily_ticket_totals"][0]["work_commit_count"], 0)
         self.assertEqual(result["ticket_totals"][0]["work_commit_count"], 0)
+
+    def test_counts_normal_work_whose_title_starts_with_merge(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "headRefName": "ABC-123-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "merge-data",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "Merge pull request checks into validator",
+                        "authors": [{"login": "alice"}],
+                        "parentCount": 1,
+                    }
+                ],
+            }
+        ]
+
+        result = self.collect_json(pull_requests)
+
+        self.assertEqual(result["activities"][0]["work_commit_count"], 1)
 
     def test_cli_include_all_commit_authors_includes_other_and_unknown(self) -> None:
         pull_requests = [
@@ -552,6 +737,8 @@ class CliContractTests(unittest.TestCase):
         }
 
         def mocked_run(command: list[str], context: str | None = None) -> str:
+            if command[:3] == ["gh", "api", "users/alice"]:
+                return json.dumps({"login": "alice", "type": "User"})
             if "graphql" in command:
                 return json.dumps([first_page, partial_page])
             return json.dumps([pull_requests])
@@ -600,8 +787,10 @@ class CliContractTests(unittest.TestCase):
                                             "committedDate": "2024-01-02T09:00:00Z",
                                             "messageHeadline": "ABC-123 add report",
                                             "authors": {
-                                                "nodes": [{"user": {"login": "alice"}}]
+                                                "nodes": [{"user": {"login": "alice"}}],
+                                                "pageInfo": {"hasNextPage": False},
                                             },
+                                            "parents": {"totalCount": 1},
                                         }
                                     }
                                 ],
@@ -624,6 +813,147 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertIn("pull request #7", stderr)
         self.assertIn("non-empty identifier", stderr)
+
+    def test_rejects_invalid_graphql_timestamp_before_author_filtering(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "head": {"ref": "ABC-123-report"},
+                "html_url": "https://github.com/owner/repo/pull/7",
+                "user": {"login": "alice"},
+            }
+        ]
+        graphql_pages = [
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "commits": {
+                                "nodes": [
+                                    {
+                                        "commit": {
+                                            "oid": "invalid-date",
+                                            "committedDate": "not-a-timestamp",
+                                            "messageHeadline": "ABC-123 add report",
+                                            "authors": {
+                                                "nodes": [
+                                                    {"user": {"login": "bob"}}
+                                                ],
+                                                "pageInfo": {"hasNextPage": False},
+                                            },
+                                            "parents": {"totalCount": 1},
+                                        }
+                                    }
+                                ],
+                                "pageInfo": {
+                                    "hasNextPage": False,
+                                    "endCursor": None,
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+
+        exit_code, stdout, stderr = self.run_with_api_payloads(
+            pull_requests, graphql_pages
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("pull request #7", stderr)
+        self.assertIn("invalid committedDate", stderr)
+
+    def test_rejects_truncated_commit_authors_through_cli(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "head": {"ref": "ABC-123-report"},
+                "html_url": "https://github.com/owner/repo/pull/7",
+                "user": {"login": "alice"},
+            }
+        ]
+        graphql_pages = [
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "commits": {
+                                "nodes": [
+                                    {
+                                        "commit": {
+                                            "oid": "commit-1",
+                                            "committedDate": "2024-01-02T09:00:00Z",
+                                            "messageHeadline": "ABC-123 add report",
+                                            "authors": {
+                                                "nodes": [
+                                                    {"user": {"login": "alice"}}
+                                                ],
+                                                "pageInfo": {"hasNextPage": True},
+                                            },
+                                            "parents": {"totalCount": 1},
+                                        }
+                                    }
+                                ],
+                                "pageInfo": {
+                                    "hasNextPage": False,
+                                    "endCursor": None,
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+
+        exit_code, stdout, stderr = self.run_with_api_payloads(
+            pull_requests, graphql_pages
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("pull request #7", stderr)
+        self.assertIn("commit authors are truncated", stderr)
+
+    def test_rejects_truncated_commit_pages_through_cli(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "head": {"ref": "ABC-123-report"},
+                "html_url": "https://github.com/owner/repo/pull/7",
+                "user": {"login": "alice"},
+            }
+        ]
+        graphql_pages = [
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "commits": {
+                                "nodes": [],
+                                "pageInfo": {
+                                    "hasNextPage": True,
+                                    "endCursor": "cursor-1",
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+
+        exit_code, stdout, stderr = self.run_with_api_payloads(
+            pull_requests, graphql_pages
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("pull request #7", stderr)
+        self.assertIn("commit pagination is incomplete", stderr)
 
     def test_rejects_malformed_graphql_page_info_through_cli(self) -> None:
         pull_requests = [
@@ -685,6 +1015,8 @@ class CliContractTests(unittest.TestCase):
         malformed_page = {"number": 7}
 
         def mocked_run(command: list[str], context: str | None = None) -> str:
+            if command[:3] == ["gh", "api", "users/alice"]:
+                return json.dumps({"login": "alice", "type": "User"})
             return json.dumps([malformed_page])
 
         with patch.object(collector, "run", side_effect=mocked_run):
@@ -710,7 +1042,7 @@ class CliContractTests(unittest.TestCase):
     def test_rejects_null_current_user_through_cli(self) -> None:
         def mocked_run(command: list[str], context: str | None = None) -> str:
             if command[:3] == ["gh", "api", "user"]:
-                return "null"
+                return json.dumps({"login": None, "type": "User"})
             return json.dumps([[]])
 
         with patch.object(collector, "run", side_effect=mocked_run) as run:
@@ -732,7 +1064,9 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(stdout, "")
         self.assertIn("empty login", stderr)
-        run.assert_called_once_with(["gh", "api", "user", "--jq", ".login"])
+        run.assert_called_once_with(
+            ["gh", "api", "user", "--jq", "{login,type}"]
+        )
 
     def test_assigns_conflicting_duplicate_oid_to_unassigned_stably(self) -> None:
         pull_requests = [
@@ -1031,6 +1365,52 @@ class CollectorConfigInvariantTests(unittest.TestCase):
                 include_all_commit_authors=False,
             )
 
+    def test_rejects_direct_construction_with_empty_text_options(self) -> None:
+        defaults: dict[str, object] = {
+            "repo": "owner/repo",
+            "author": "alice",
+            "timezone": "UTC",
+            "start_date": None,
+            "end_date": None,
+            "week_start": None,
+            "include_all_commit_authors": False,
+        }
+        for field in ("repo", "author", "timezone"):
+            with self.subTest(field=field):
+                values = defaults.copy()
+                values[field] = ""
+                with self.assertRaisesRegex(ValueError, "must not be empty"):
+                    collector.CollectorConfig(**values)
+
+    def test_rejects_datetime_values_at_date_only_fields(self) -> None:
+        cases = (
+            {
+                "start_date": datetime(2024, 1, 1),
+                "end_date": date(2024, 1, 2),
+                "week_start": None,
+            },
+            {
+                "start_date": date(2024, 1, 1),
+                "end_date": datetime(2024, 1, 2),
+                "week_start": None,
+            },
+            {
+                "start_date": None,
+                "end_date": None,
+                "week_start": datetime(2024, 1, 1),
+            },
+        )
+        for values in cases:
+            with self.subTest(values=values):
+                with self.assertRaisesRegex(ValueError, "must be a date"):
+                    collector.CollectorConfig(
+                        repo="owner/repo",
+                        author="alice",
+                        timezone="UTC",
+                        include_all_commit_authors=False,
+                        **values,
+                    )
+
 
 class ResolveDateWindowTests(unittest.TestCase):
     def test_defaults_to_current_local_week_through_today(self) -> None:
@@ -1182,7 +1562,7 @@ class CalendarDaysTests(unittest.TestCase):
         result = collector.build_calendar_days(
             date(2024, 1, 1),
             date(2024, 1, 3),
-            [{"date": "2024-01-02"}],
+            ["2024-01-02"],
         )
 
         self.assertEqual(
@@ -1297,26 +1677,34 @@ class DetectRepoTests(unittest.TestCase):
 
 class ResolveAuthorTests(unittest.TestCase):
     def test_resolves_me_through_the_github_api(self) -> None:
-        with patch.object(collector, "run", return_value="alice") as run:
+        profile = json.dumps({"login": "alice", "type": "User"})
+        with patch.object(collector, "run", return_value=profile) as run:
             self.assertEqual(collector.resolve_author("@me"), "alice")
 
-        run.assert_called_once_with(["gh", "api", "user", "--jq", ".login"])
+        run.assert_called_once_with(
+            ["gh", "api", "user", "--jq", "{login,type}"]
+        )
 
     def test_rejects_an_empty_login_from_gh_api(self) -> None:
-        with patch.object(collector, "run", return_value=""):
+        profile = json.dumps({"login": "", "type": "User"})
+        with patch.object(collector, "run", return_value=profile):
             with self.assertRaisesRegex(RuntimeError, "empty login"):
                 collector.resolve_author("@me")
 
     def test_rejects_a_null_login_from_gh_api(self) -> None:
-        with patch.object(collector, "run", return_value="null"):
+        profile = json.dumps({"login": None, "type": "User"})
+        with patch.object(collector, "run", return_value=profile):
             with self.assertRaisesRegex(RuntimeError, "empty login or null"):
                 collector.resolve_author("@me")
 
-    def test_passes_through_an_explicit_login(self) -> None:
-        with patch.object(collector, "run") as run:
-            self.assertEqual(collector.resolve_author("bob"), "bob")
+    def test_resolves_an_explicit_login_through_the_github_api(self) -> None:
+        profile = json.dumps({"login": "Bob", "type": "User"})
+        with patch.object(collector, "run", return_value=profile) as run:
+            self.assertEqual(collector.resolve_author("bob"), "Bob")
 
-        run.assert_not_called()
+        run.assert_called_once_with(
+            ["gh", "api", "users/bob", "--jq", "{login,type}"]
+        )
 
 
 class FetchPaginatedItemsTests(unittest.TestCase):
@@ -1422,8 +1810,10 @@ class FetchPullRequestCommitsTests(unittest.TestCase):
                                                 "nodes": [
                                                     {"user": {"login": "Alice"}},
                                                     {"user": None},
-                                                ]
+                                                ],
+                                                "pageInfo": {"hasNextPage": False},
                                             },
+                                            "parents": {"totalCount": 1},
                                         }
                                     }
                                 ],
@@ -1447,7 +1837,11 @@ class FetchPullRequestCommitsTests(unittest.TestCase):
                                             "oid": "def",
                                             "committedDate": "2024-01-03T10:00:00Z",
                                             "messageHeadline": "ABC-123 test report",
-                                            "authors": {"nodes": []},
+                                            "authors": {
+                                                "nodes": [],
+                                                "pageInfo": {"hasNextPage": False},
+                                            },
+                                            "parents": {"totalCount": 1},
                                         }
                                     }
                                 ],
@@ -1475,17 +1869,33 @@ class FetchPullRequestCommitsTests(unittest.TestCase):
                     "committedDate": "2024-01-02T10:00:00Z",
                     "messageHeadline": "ABC-123 add report",
                     "authors": [{"login": "Alice"}],
+                    "parentCount": 1,
                 },
                 {
                     "oid": "def",
                     "committedDate": "2024-01-03T10:00:00Z",
                     "messageHeadline": "ABC-123 test report",
                     "authors": [],
+                    "parentCount": 1,
                 },
             ],
         )
         query, variables = fetch.call_args.args
         self.assertIn("$endCursor", query)
+        self.assertRegex(
+            query,
+            re.compile(
+                r"authors\(first: 100\).*?pageInfo\s*\{\s*hasNextPage",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            query,
+            re.compile(
+                r"parents\(first: 2\).*?totalCount",
+                re.DOTALL,
+            ),
+        )
         self.assertEqual(variables, {"owner": "owner", "name": "repo", "number": 7})
 
     def test_includes_the_pr_number_in_unexpected_response_errors(self) -> None:
@@ -2263,6 +2673,7 @@ class CollectTests(unittest.TestCase):
                         "committedDate": "2024-01-02T10:00:00Z",
                         "messageHeadline": "Merge main into ABC-123-report",
                         "authors": [{"login": "alice"}],
+                        "parentCount": 2,
                     },
                 ],
             },

@@ -13,13 +13,22 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any, Final, TypedDict
-from urllib.parse import urlsplit
+from typing import Any, Final, Iterable, NewType, TypedDict
+from urllib.parse import quote, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 UNASSIGNED_TICKET: Final = "UNASSIGNED"
-TICKET_PATTERN = re.compile(r"(?i)\b([a-z][a-z0-9]+-\d+)\b")
+GitHubTimestamp = NewType("GitHubTimestamp", str)
+TICKET_PATTERN = re.compile(
+    r"(?<![a-z0-9])([a-z][a-z0-9]+-\d+)(?![a-z0-9])",
+    re.ASCII | re.IGNORECASE,
+)
+MECHANICAL_MERGE_PATTERN = re.compile(
+    r"^merge (?:(?:pull request|branch(?:es)?|remote-tracking branch|tag|commit)\b"
+    r"|\S+ into \S+$)",
+    re.ASCII | re.IGNORECASE,
+)
 SSH_REMOTE_PATTERN = re.compile(
     r"^(?P<user>[^@\s/:]+)@(?P<host>[^:\s/]+):(?P<path>[^?#\s]+)$"
 )
@@ -45,6 +54,12 @@ query PullRequestCommits(
                   login
                 }
               }
+              pageInfo {
+                hasNextPage
+              }
+            }
+            parents(first: 2) {
+              totalCount
             }
           }
         }
@@ -63,9 +78,13 @@ class CommitAuthor(TypedDict):
     login: str
 
 
-class Commit(TypedDict):
+class CommitTopology(TypedDict, total=False):
+    parentCount: int
+
+
+class Commit(CommitTopology):
     oid: str
-    committedDate: str
+    committedDate: GitHubTimestamp
     messageHeadline: str
     authors: list[CommitAuthor]
 
@@ -158,6 +177,30 @@ class CollectorConfig:
     include_all_commit_authors: bool
 
     def __post_init__(self) -> None:
+        repo = self.repo.strip() if self.repo is not None else None
+        author = self.author.strip()
+        timezone = self.timezone.strip() if self.timezone is not None else None
+        for flag, value in (
+            ("--repo", repo),
+            ("--author", author),
+            ("--timezone", timezone),
+        ):
+            if value is not None and not value:
+                raise ValueError(f"{flag} must not be empty")
+        if repo is not None:
+            split_repo(repo)
+        object.__setattr__(self, "repo", repo)
+        object.__setattr__(self, "author", author)
+        object.__setattr__(self, "timezone", timezone)
+
+        for flag, value in (
+            ("--start-date", self.start_date),
+            ("--end-date", self.end_date),
+            ("--week-start", self.week_start),
+        ):
+            if value is not None and type(value) is not date:
+                raise ValueError(f"{flag} must be a date")
+
         has_explicit_range = self.start_date is not None or self.end_date is not None
         if has_explicit_range and (self.start_date is None or self.end_date is None):
             raise ValueError("--start-date and --end-date must both be provided")
@@ -168,19 +211,9 @@ class CollectorConfig:
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> CollectorConfig:
-        author = args.author.strip()
-        for flag, value in (
-            ("--repo", args.repo),
-            ("--author", author),
-            ("--timezone", args.timezone),
-        ):
-            if value is not None and not value.strip():
-                raise ValueError(f"{flag} must not be empty")
-        if args.repo is not None:
-            split_repo(args.repo)
         return cls(
             repo=args.repo,
-            author=author,
+            author=args.author,
             timezone=args.timezone,
             start_date=args.start_date,
             end_date=args.end_date,
@@ -378,7 +411,7 @@ def resolve_system_timezone() -> tuple[ZoneInfo, str]:
 
 
 def resolve_timezone(name: str | None) -> tuple[ZoneInfo, str]:
-    if not name:
+    if name is None:
         return resolve_system_timezone()
     try:
         return ZoneInfo(name), name
@@ -391,6 +424,8 @@ def resolve_date_window(config: CollectorConfig, today: date) -> tuple[date, dat
         start, end = config.start_date, config.end_date
     elif config.week_start is not None:
         start = config.week_start
+        if start > today:
+            raise ValueError("date range cannot include future dates")
         end = min(start + timedelta(days=6), today)
     else:
         start = today - timedelta(days=today.weekday())
@@ -404,11 +439,23 @@ def resolve_date_window(config: CollectorConfig, today: date) -> tuple[date, dat
 
 
 def resolve_author(author: str) -> str:
-    if author != "@me":
-        return author
-    login = run(["gh", "api", "user", "--jq", ".login"])
-    if not login or login.casefold() == "null":
-        raise RuntimeError("gh api user returned an empty login or null")
+    endpoint = "user" if author == "@me" else f"users/{quote(author, safe='')}"
+    raw_profile = run(["gh", "api", endpoint, "--jq", "{login,type}"])
+    try:
+        profile = json.loads(raw_profile)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"gh api {endpoint} returned an invalid profile") from error
+    if not isinstance(profile, dict):
+        raise RuntimeError(f"gh api {endpoint} returned an invalid profile")
+    login = profile.get("login")
+    account_type = profile.get("type")
+    if not isinstance(login, str) or not login or login.casefold() == "null":
+        raise RuntimeError(f"gh api {endpoint} returned an empty login or null")
+    if account_type not in {"User", "Bot"}:
+        raise RuntimeError(
+            f"GitHub account {login} cannot author pull requests "
+            f"(type: {account_type or 'unknown'})"
+        )
     return login
 
 
@@ -429,8 +476,8 @@ def parse_github_time(value: str) -> datetime:
     return parsed
 
 
-def is_merge_commit(headline: str) -> bool:
-    return headline.lower().startswith("merge ")
+def is_merge_commit(headline: str, parent_count: int) -> bool:
+    return parent_count > 1 and MECHANICAL_MERGE_PATTERN.match(headline) is not None
 
 
 def select_ticket(pr: PullRequest, headline: str) -> str:
@@ -564,11 +611,27 @@ def normalize_graphql_commit(node: dict[str, Any]) -> Commit:
         raise RuntimeError("pull request commit is missing details")
 
     authors_connection = commit.get("authors")
+    parents_connection = commit.get("parents")
     if not isinstance(authors_connection, dict):
         raise RuntimeError("pull request commit is missing authors")
+    if not isinstance(parents_connection, dict):
+        raise RuntimeError("pull request commit is missing parents")
+    parent_count = parents_connection.get("totalCount")
+    if (
+        not isinstance(parent_count, int)
+        or isinstance(parent_count, bool)
+        or parent_count < 0
+    ):
+        raise RuntimeError("pull request commit parents are malformed")
     author_nodes = authors_connection.get("nodes")
-    if not isinstance(author_nodes, list):
+    author_page_info = authors_connection.get("pageInfo")
+    if not isinstance(author_nodes, list) or not isinstance(author_page_info, dict):
         raise RuntimeError("pull request commit authors are malformed")
+    authors_have_next_page = author_page_info.get("hasNextPage")
+    if not isinstance(authors_have_next_page, bool):
+        raise RuntimeError("pull request commit authors are malformed")
+    if authors_have_next_page:
+        raise RuntimeError("pull request commit authors are truncated")
 
     authors: list[CommitAuthor] = []
     for author_node in author_nodes:
@@ -590,12 +653,19 @@ def normalize_graphql_commit(node: dict[str, Any]) -> Commit:
         )
     if not isinstance(headline, str):
         raise RuntimeError("pull request commit is missing a headline")
+    try:
+        parse_github_time(committed_date)
+    except ValueError as error:
+        raise RuntimeError(
+            f"commit {oid} has an invalid committedDate: {error}"
+        ) from error
 
     return {
         "oid": oid,
-        "committedDate": committed_date,
+        "committedDate": GitHubTimestamp(committed_date),
         "messageHeadline": headline,
         "authors": authors,
+        "parentCount": parent_count,
     }
 
 
@@ -610,7 +680,7 @@ def fetch_pull_request_commits(repo: str, number: int) -> list[Commit]:
         raise RuntimeError(f"pull request #{number}: {error}") from error
 
     commits: list[Commit] = []
-    for page in pages:
+    for page_index, page in enumerate(pages):
         try:
             connection = page["data"]["repository"]["pullRequest"]["commits"]
         except (KeyError, TypeError) as error:
@@ -640,6 +710,10 @@ def fetch_pull_request_commits(repo: str, number: int) -> list[Commit]:
         ):
             raise RuntimeError(
                 f"unexpected commits pageInfo for pull request #{number}"
+            )
+        if has_next_page != (page_index < len(pages) - 1):
+            raise RuntimeError(
+                f"pull request #{number}: commit pagination is incomplete"
             )
         nodes = connection.get("nodes")
         if not isinstance(nodes, list) or not all(
@@ -731,14 +805,14 @@ def fetch_prs(repo: str, author: str) -> list[PullRequest]:
 
 
 def build_calendar_days(
-    start: date, end: date, activities: list[Activity]
+    start: date, end: date, activity_dates: Iterable[str]
 ) -> list[CalendarDay]:
-    activity_dates = {activity["date"] for activity in activities}
+    evidence_dates = set(activity_dates)
     calendar_days: list[CalendarDay] = []
     current = start
     while current <= end:
         day = current.isoformat()
-        calendar_days.append({"date": day, "has_activity": day in activity_dates})
+        calendar_days.append({"date": day, "has_activity": day in evidence_dates})
         current += timedelta(days=1)
     return calendar_days
 
@@ -750,7 +824,7 @@ def collect(config: CollectorConfig) -> CollectResult:
     range_start = datetime.combine(window_start, time.min, local_tz)
     range_end = datetime.combine(window_end + timedelta(days=1), time.min, local_tz)
 
-    repo = config.repo or detect_repo()
+    repo = config.repo if config.repo is not None else detect_repo()
     resolved_author = resolve_author(config.author)
     resolved_author_key = resolved_author.casefold()
     prs = fetch_prs(repo, resolved_author)
@@ -803,7 +877,9 @@ def collect(config: CollectorConfig) -> CollectResult:
                 "instant": committed_at,
                 "time": local_time.isoformat(timespec="minutes"),
                 "headline": headline,
-                "is_merge": is_merge_commit(headline),
+                "is_merge": is_merge_commit(
+                    headline, commit.get("parentCount", 1)
+                ),
             }
         )
 
@@ -886,7 +962,11 @@ def collect(config: CollectorConfig) -> CollectResult:
             "start": window_start.isoformat(),
             "end": window_end.isoformat(),
         },
-        "calendar_days": build_calendar_days(window_start, window_end, activities),
+        "calendar_days": build_calendar_days(
+            window_start,
+            window_end,
+            (activity["date"] for activity in activities),
+        ),
         "pull_requests_scanned": len(prs),
         "duplicates_removed": duplicates_removed,
         "commits_outside_range": commits_outside_range,

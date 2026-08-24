@@ -1,6 +1,6 @@
 ---
 name: gh-build-weekly-timesheet
-description: 从 GitHub PR 提交证据生成可审计的周工时表。手动调用此技能以汇总近期或指定日期范围内的票据、工时估算和中英双语进度。
+description: 从 GitHub PR 提交证据生成可审计的周工时表。手动调用此技能以汇总近期或指定日期范围内的票据、工时估算和（按需）中英双语进度。
 compatibility: Requires Python 3.9+ and an authenticated gh CLI.
 disable-model-invocation: true
 ---
@@ -44,17 +44,18 @@ python3 "$HOME/.pi/agent/skills/gh-build-weekly-timesheet/scripts/collect_pr_act
 
 采集器通过 `gh api` 读取 GitHub 数据；较长历史范围可能需要很多只读请求。若 GitHub 访问被拦截，请请求运行相同 `gh` 查询的网络权限。绝不打印 token 或批量环境变量。
 
-- PR 列表条目缺少可验证的作者 login 时，采集器会失败退出，不将异常响应静默当作无活动。
+- 显式 `--author LOGIN` 会先通过 GitHub API 解析规范 login；账号不存在、不可访问或不是可署名 PR 的 `User`/`Bot` 时失败退出。
+- PR 列表条目缺少可验证的作者 login、提交分页未完整结束，或单个提交的作者连接超过 100 条时，采集器会失败退出，不将异常响应静默当作无活动。
 - `gh` 返回非 JSON 时，采集器会失败退出，并在错误中保留 `invalid JSON response` 及 API/PR 上下文。
 
-以 JSON 输出为事实来源：
+以 JSON 输出为事实来源。请求完整工时表时，将采集器的原始 JSON 原样保存到临时证据文件，供分配校验器读取。
 
 顶层 JSON 字段包括：`repository`、`author`、`timezone`、`date_range`、`calendar_days`、`pull_requests_scanned`、`duplicates_removed`、`commits_outside_range`、`commits_by_other_authors`、`commits_by_unknown_authors`、`activities`、`daily_ticket_totals` 和 `ticket_totals`。
 
 - `activities` 按本地日期、票据和 PR 分组。
 - `calendar_days` 列出证据窗口内的每个日历日及其 `has_activity` 状态；`date_range` 是实际使用的闭合日期范围。
 - `daily_ticket_totals` 按日期和票据汇总提交数、工作提交数及涉及的 PR；`ticket_totals` 按票据汇总提交数、工作提交数和日期。
-- `work_commit_count` 排除机械 merge commit；`commit_count` 保留它们以便审计。
+- `work_commit_count` 排除具有多个父提交且标题符合已知机械格式的 merge commit；`commit_count` 保留它们以便审计。
 - `first_time` 与 `last_time` 是带 UTC offset 的本地 ISO 8601 观察点，不是实际工时；它们保留 DST 回拨时的活动顺序。
 - `UNASSIGNED` 表示存在活动但无法确定唯一票据。提交标题优先；仅当提交标题未确定唯一票据时，PR 标题与分支名共同参与回退。同一 OID 经多个 PR 出现且回退票据冲突时，必须保持为 `UNASSIGNED`。
 - `duplicates_removed` 表示同一提交经多个 PR 出现而被去重的次数；`commits_outside_range` 表示窗口外的有效提交数。
@@ -75,6 +76,43 @@ python3 "$HOME/.pi/agent/skills/gh-build-weekly-timesheet/scripts/collect_pr_act
 6. 不叠加 `first_time` 到 `last_time` 的时间跨度。
 
 所有小时都必须标为基于提交证据的估算值。
+
+## 校验分配
+
+请求工时或完整工时表时，先把拟呈现的分配写入临时 JSON：
+
+```json
+{
+  "entries": [
+    {"date": "2026-08-03", "ticket": "ABC-123", "hours": "5"},
+    {"date": "2026-08-03", "ticket": "UNASSIGNED", "hours": "3"},
+    {"date": "2026-08-04", "ticket": "NO_ACTIVITY", "hours": "0"}
+  ],
+  "ticket_totals": [
+    {"ticket": "ABC-123", "hours": "5"},
+    {"ticket": "UNASSIGNED", "hours": "3"}
+  ]
+}
+```
+
+- `entries` 必须覆盖证据窗口内每一天，并与证据中的日期—票据集合一致。
+- 有活动条目的小时必须大于零、符合已确定的增量，且每天精确等于目标；无活动日期只能有一条 `NO_ACTIVITY | 0h`。
+- `ticket_totals` 必须等于 `entries` 的跨日汇总，不得包含 `NO_ACTIVITY`。
+- 分配 JSON 不声明规则；把调用者确认的规则独立传给校验器。`--increment` 默认 `0.5`，`--target-hours` 默认每个活动日 `8`，单日覆盖使用可重复的 `--target DATE=HOURS`。
+
+用采集器原始 JSON 和分配 JSON 的实际绝对路径运行：
+
+```bash
+python3 "$HOME/.pi/agent/skills/gh-build-weekly-timesheet/scripts/validate_timesheet.py" \
+  --evidence "/absolute/path/to/evidence.json" \
+  --allocation "/absolute/path/to/allocation.json" \
+  --increment "0.5" \
+  --target-hours "8"
+```
+
+调用者覆盖单日目标时追加 `--target "2026-08-07=4"`；每个覆盖日期传一次。
+
+只有校验器输出 `Timesheet allocation is valid.` 后才可呈现结果。校验失败时修正分配 JSON 并重跑；最终表格必须直接渲染该 JSON，完成后删除两个临时文件。
 
 ## 写摘要
 

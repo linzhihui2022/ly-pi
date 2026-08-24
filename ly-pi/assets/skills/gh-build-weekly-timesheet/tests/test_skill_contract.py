@@ -35,6 +35,29 @@ class SkillContractTests(unittest.TestCase):
             with self.subTest(requirement=requirement):
                 self.assertIn(requirement, skill)
 
+    def test_requires_deterministic_allocation_validation(self) -> None:
+        skill = SKILL_PATH.read_text(encoding="utf-8")
+
+        for requirement in (
+            "validate_timesheet.py",
+            "--evidence",
+            "--allocation",
+            "--increment",
+            "--target-hours",
+            "--target",
+            '"entries"',
+            '"ticket_totals"',
+            "只有校验器输出 `Timesheet allocation is valid.` 后才可呈现结果。",
+            "最终表格必须直接渲染该 JSON",
+        ):
+            with self.subTest(requirement=requirement):
+                self.assertIn(requirement, skill)
+
+    def test_describes_bilingual_output_as_optional(self) -> None:
+        skill = SKILL_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("（按需）中英双语进度", skill)
+
 
 if __name__ == "__main__":
     unittest.main()
