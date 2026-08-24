@@ -58,11 +58,17 @@ const run = vi.fn(
       model: Model<Api>,
       candidate: typeof securityAuditCandidate,
     ) => Promise<unknown>,
-  ) => ({
-    status: "success" as const,
-    value: await operation(makeModel(), securityAuditCandidate),
-    candidate: securityAuditCandidate,
-  }),
+  ) => {
+    const value = await operation(makeModel(), securityAuditCandidate);
+    return {
+      status: "success" as const,
+      value:
+        value && typeof value === "object"
+          ? { stopReason: "stop", ...value }
+          : value,
+      candidate: securityAuditCandidate,
+    };
+  },
 );
 const modelRunner = { run } as never;
 

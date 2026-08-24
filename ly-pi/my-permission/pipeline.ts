@@ -111,6 +111,13 @@ export function createRoleAnalyzer<TInput, TResult>(
       }
 
       const response = runResult.value;
+      if (response.stopReason !== "stop") {
+        const reason = String(response.stopReason ?? "unknown");
+        log.error(`${roleConfig.modelLabel} incomplete response`, { reason });
+        return {
+          error: `${roleConfig.modelLabel} 模型返回了非完整响应（${reason}）`,
+        };
+      }
       const cost = response.usage?.cost?.total;
       const text = extractResponseText(response);
       if (!text) {
@@ -183,6 +190,11 @@ export function createMerger(
       }
 
       const response = runResult.value;
+      if (response.stopReason !== "stop") {
+        const reason = String(response.stopReason ?? "unknown");
+        log.error("merger incomplete response", { reason });
+        return { error: `合并模型返回了非完整响应（${reason}）` };
+      }
       const cost = response.usage?.cost?.total;
       const text = extractResponseText(response);
       if (!text) {

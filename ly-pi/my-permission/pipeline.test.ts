@@ -58,11 +58,17 @@ function createSuccessfulSecurityAuditRunner(thinking: "off" | "max") {
         model: Model<Api>,
         resolvedCandidate: typeof candidate,
       ) => Promise<unknown>,
-    ) => ({
-      status: "success" as const,
-      value: await operation(makeModel(), candidate),
-      candidate,
-    }),
+    ) => {
+      const value = await operation(makeModel(), candidate);
+      return {
+        status: "success" as const,
+        value:
+          value && typeof value === "object"
+            ? { stopReason: "stop", ...value }
+            : value,
+        candidate,
+      };
+    },
   );
   return { modelRunner: { run } as never, run };
 }
@@ -190,6 +196,31 @@ describe("createRoleAnalyzer", () => {
       expect.any(Function),
     );
     expect(completeModel.mock.calls.at(-1)?.[2]).toEqual({});
+  });
+
+  it.each([
+    "length",
+    "toolUse",
+  ] as const)("rejects a non-stop analyzer response: %s", async (stopReason) => {
+    await mockComplete({
+      stopReason,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ suggestions: [], summary: "ok" }),
+        },
+      ],
+    });
+    const { modelRunner } = createSuccessfulSecurityAuditRunner("off");
+    const analyzer = createTestAnalyzer(
+      makeAnalyzerConfig(),
+      modelClient,
+      modelRunner,
+    );
+
+    await expect(analyzer(["item"], "/repo", "", "")).resolves.toEqual({
+      error: `test-analyzer 模型返回了非完整响应（${stopReason}）`,
+    });
   });
 
   it("returns parsed result on successful model call", async () => {
@@ -390,6 +421,24 @@ describe("createMerger", () => {
 
     expect(result.mergedText).toBe("merged");
     expect(completeModel.mock.calls.at(-1)?.[2]).toEqual({});
+  });
+
+  it.each([
+    "length",
+    "toolUse",
+  ] as const)("rejects a non-stop merger response: %s", async (stopReason) => {
+    await mockComplete({
+      stopReason,
+      content: [{ type: "text", text: "merged" }],
+    });
+    const { modelRunner } = createSuccessfulSecurityAuditRunner("off");
+    const merger = createTestMerger(modelClient, modelRunner);
+
+    await expect(
+      merger({ current: "规则1", operations: ["新规则"] }),
+    ).resolves.toEqual({
+      error: `合并模型返回了非完整响应（${stopReason}）`,
+    });
   });
 
   it("merges string operations", async () => {

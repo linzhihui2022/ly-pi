@@ -139,4 +139,16 @@ describe("loadModelPolicyRegistry", () => {
       "cannot load local model override",
     );
   });
+
+  it.each([
+    null,
+    false,
+  ])("rejects a non-object local override: %s", (override) => {
+    writeFileSync(join(dir, "model-policies.json"), JSON.stringify(manifest));
+    writeFileSync(join(dir, "models.local.json"), JSON.stringify(override));
+
+    expect(() => loadModelPolicyRegistry(dir)).toThrow(
+      "invalid local model override",
+    );
+  });
 });

@@ -207,10 +207,18 @@ async function generateVariants(
       async (model, candidate) => {
         lastAttemptTimedOut = false;
         const controller = new AbortController();
-        const timeout = setTimeout(
-          () => controller.abort(),
-          deps.config.judgeTimeoutMs,
+        const timeoutError = Object.assign(
+          new Error("security-judge variant generation timed out"),
+          { code: "ETIMEDOUT" },
         );
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        const deadline = new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            lastAttemptTimedOut = true;
+            controller.abort();
+            reject(timeoutError);
+          }, deps.config.judgeTimeoutMs);
+        });
         const options: ModelsApiStreamOptions<Api> = {
           signal: controller.signal,
           ...(candidate.thinking === "off"
@@ -218,18 +226,23 @@ async function generateVariants(
             : { reasoningEffort: candidate.thinking }),
         };
         try {
-          return await deps.modelClient.complete(model, context, options);
-        } catch (error) {
-          if (controller.signal.aborted) {
+          const response = await Promise.race([
+            deps.modelClient.complete(model, context, options),
+            deadline,
+          ]);
+          if (response.stopReason === "aborted") {
             lastAttemptTimedOut = true;
-            throw Object.assign(
-              new Error("security-judge variant generation timed out"),
-              { code: "ETIMEDOUT" },
-            );
+            throw timeoutError;
+          }
+          return response;
+        } catch (error) {
+          if (controller.signal.aborted || error === timeoutError) {
+            lastAttemptTimedOut = true;
+            throw timeoutError;
           }
           throw error;
         } finally {
-          clearTimeout(timeout);
+          if (timeout !== undefined) clearTimeout(timeout);
         }
       },
     );
@@ -248,10 +261,19 @@ async function generateVariants(
     }
 
     const response = runResult.value;
-    if (response.stopReason === "error" || response.errorMessage) {
+    if (response.stopReason === "aborted") {
+      return { variants: [], error: timeoutError };
+    }
+    if (response.stopReason !== "stop") {
       return {
         variants: [],
-        error: `生成 ${category.label} 变种失败: ${response.errorMessage ?? response.stopReason}`,
+        error: `生成 ${category.label} 变种失败: 模型返回了非完整响应（${response.stopReason}）`,
+      };
+    }
+    if (response.errorMessage) {
+      return {
+        variants: [],
+        error: `生成 ${category.label} 变种失败: ${response.errorMessage}`,
       };
     }
     const text = response.content.find(
@@ -264,13 +286,18 @@ async function generateVariants(
       };
     }
 
-    return {
-      variants: text
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !line.startsWith("#"))
-        .slice(0, count),
-    };
+    const variants = text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("#"))
+      .slice(0, count);
+    if (variants.length < count) {
+      return {
+        variants: [],
+        error: `生成 ${category.label} 变种数量不足：要求 ${count} 个，实际 ${variants.length} 个`,
+      };
+    }
+    return { variants };
   } catch (error) {
     if (lastAttemptTimedOut) return { variants: [], error: timeoutError };
     const message = error instanceof Error ? error.message : String(error);

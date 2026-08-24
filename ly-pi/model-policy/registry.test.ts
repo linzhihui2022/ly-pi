@@ -418,6 +418,15 @@ describe("createModelPolicyRegistry", () => {
     ).toThrow("invalid local model override");
   });
 
+  it.each([
+    null,
+    false,
+  ])("rejects a non-object local override: %s", (override) => {
+    expect(() =>
+      createModelPolicyRegistry(manifest, override as never),
+    ).toThrow("invalid local model override");
+  });
+
   it("tries the next candidate after a retryable infrastructure failure", async () => {
     const registry = createModelPolicyRegistry({
       ...manifest,
@@ -476,7 +485,10 @@ describe("createModelPolicyRegistry", () => {
     });
   });
 
-  it("falls back after Pi reports a lowercase auth code", async () => {
+  it.each([
+    "auth",
+    "oauth",
+  ] as const)("falls back after Pi reports a lowercase %s code", async (code) => {
     const registry = createModelPolicyRegistry({
       ...manifest,
       policies: {
@@ -515,7 +527,7 @@ describe("createModelPolicyRegistry", () => {
         attempts.push(model.id);
         if (model.id === "primary") {
           throw Object.assign(new Error("provider authentication failed"), {
-            code: "auth",
+            code,
           });
         }
         return successfulResponse;
@@ -579,6 +591,181 @@ describe("createModelPolicyRegistry", () => {
       status: "success",
       value: successfulResponse,
       candidate: { slot: "fallback" },
+    });
+  });
+
+  it.each([
+    "Provider is not configured: test/provider",
+    "OAuth refresh failed for test/provider",
+    "fetch failed",
+    "Connection error",
+    "Bad Gateway",
+    "Internal Server Error",
+    "provider is overloaded",
+  ])("falls back after Pi reports %s", async (errorMessage) => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            {
+              ...manifest.policies["fast-policy"].candidates[0],
+              model: "test/primary",
+            },
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "off",
+            },
+          ],
+        },
+      },
+    });
+    const attempts: string[] = [];
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        if (model.id === "primary") {
+          return { stopReason: "error", errorMessage };
+        }
+        return successfulResponse;
+      },
+    );
+
+    expect(attempts).toEqual(["primary", "fallback"]);
+    expect(result).toMatchObject({
+      status: "success",
+      candidate: { slot: "fallback" },
+    });
+  });
+
+  it("falls back after an aborted model response", async () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            {
+              ...manifest.policies["fast-policy"].candidates[0],
+              model: "test/primary",
+            },
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "off",
+            },
+          ],
+        },
+      },
+    });
+    const attempts: string[] = [];
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        if (model.id === "primary") return { stopReason: "aborted" };
+        return successfulResponse;
+      },
+    );
+
+    expect(attempts).toEqual(["primary", "fallback"]);
+    expect(result).toMatchObject({
+      status: "success",
+      candidate: { slot: "fallback" },
+    });
+  });
+
+  it.each([
+    "pending",
+    "deferred",
+  ] as const)("rejects an incomplete %s model response", async (stopReason) => {
+    const registry = createModelPolicyRegistry(manifest);
+    const attempts: string[] = [];
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        return { stopReason };
+      },
+    );
+
+    expect(attempts).toEqual(["fast"]);
+    expect(result).toEqual({
+      status: "failure",
+      failurePolicy: "skip",
+      reason: `model response is not complete: ${stopReason}`,
+    });
+  });
+
+  it.each([
+    ["missing", {}, "model response has invalid stop reason: missing"],
+    [
+      "unknown",
+      { stopReason: "unknown" },
+      "model response has invalid stop reason: unknown",
+    ],
+    ["non-object", undefined, "model response is not an object"],
+  ] as const)("rejects %s model responses without fallback", async (_label, response, reason) => {
+    const registry = createModelPolicyRegistry(manifest);
+    const attempts: string[] = [];
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        return response as never;
+      },
+    );
+
+    expect(attempts).toEqual(["fast"]);
+    expect(result).toEqual({
+      status: "failure",
+      failurePolicy: "skip",
+      reason,
     });
   });
 
@@ -789,7 +976,10 @@ describe("createModelPolicyRegistry", () => {
     });
   });
 
-  it("does not fall back after an unclassified model error response", async () => {
+  it.each([
+    "malformed structured response",
+    "request overloaded",
+  ] as const)("does not fall back after a non-infrastructure model error response: %s", async (errorMessage) => {
     const registry = createModelPolicyRegistry({
       ...manifest,
       policies: {
@@ -828,7 +1018,7 @@ describe("createModelPolicyRegistry", () => {
         attempts.push(model.id);
         return {
           stopReason: "error",
-          errorMessage: "malformed structured response",
+          errorMessage,
         };
       },
     );
@@ -837,7 +1027,7 @@ describe("createModelPolicyRegistry", () => {
     expect(result).toEqual({
       status: "failure",
       failurePolicy: "skip",
-      reason: "malformed structured response",
+      reason: errorMessage,
     });
   });
 
@@ -865,6 +1055,9 @@ describe("createModelPolicyRegistry", () => {
     });
 
     for (const error of [
+      Object.assign(new Error("internal server error"), { status: 500 }),
+      Object.assign(new Error("bad gateway"), { status: 502 }),
+      Object.assign(new Error("internal server error"), { statusCode: 500 }),
       Object.assign(new Error("server unavailable"), { status: 503 }),
       Object.assign(new Error("network unavailable"), { code: "ETIMEDOUT" }),
     ]) {

@@ -287,7 +287,7 @@ function assertLocalOverrideAllowed(
   manifest: ModelPolicyManifest,
   localOverride: LocalModelOverride | undefined,
 ): void {
-  if (!localOverride) return;
+  if (localOverride === undefined) return;
   if (!Value.Check(LocalModelOverrideSchema, localOverride)) {
     throw new Error("invalid local model override");
   }
@@ -388,9 +388,17 @@ function diagnoseCandidate(
 // Only Pi response-shaped errors may use message matching for fallback. This
 // prevents arbitrary operation errors from being misclassified and retried.
 const modelResponseErrors = new WeakSet<Error>();
+const PI_TERMINAL_STOP_REASONS = new Set([
+  "stop",
+  "length",
+  "toolUse",
+  "deferred",
+]);
 
 function modelResponseFailure(value: unknown): Error | undefined {
-  if (!value || typeof value !== "object") return undefined;
+  if (!value || typeof value !== "object") {
+    return new Error("model response is not an object");
+  }
   const response = value as {
     code?: unknown;
     errorMessage?: unknown;
@@ -398,27 +406,59 @@ function modelResponseFailure(value: unknown): Error | undefined {
     statusCode?: unknown;
     stopReason?: unknown;
   };
-  if (
-    response.stopReason !== "error" &&
-    typeof response.errorMessage !== "string"
-  ) {
-    return undefined;
+  if (response.stopReason === "aborted") {
+    const error = Object.assign(
+      new Error(
+        typeof response.errorMessage === "string"
+          ? response.errorMessage
+          : "model request aborted",
+      ),
+      {
+        code: "ETIMEDOUT",
+        status: response.status,
+        statusCode: response.statusCode,
+      },
+    );
+    modelResponseErrors.add(error);
+    return error;
   }
-
-  const error = Object.assign(
-    new Error(
+  if (response.stopReason === "error") {
+    const error = Object.assign(
+      new Error(
+        typeof response.errorMessage === "string"
+          ? response.errorMessage
+          : "model reported an error",
+      ),
+      {
+        code: response.code,
+        status: response.status,
+        statusCode: response.statusCode,
+      },
+    );
+    modelResponseErrors.add(error);
+    return error;
+  }
+  if (response.stopReason === "pending" || response.stopReason === "deferred") {
+    return new Error(
       typeof response.errorMessage === "string"
         ? response.errorMessage
-        : "model reported an error",
-    ),
-    {
-      code: response.code,
-      status: response.status,
-      statusCode: response.statusCode,
-    },
-  );
-  modelResponseErrors.add(error);
-  return error;
+        : `model response is not complete: ${response.stopReason}`,
+    );
+  }
+  if (
+    typeof response.stopReason !== "string" ||
+    !PI_TERMINAL_STOP_REASONS.has(response.stopReason)
+  ) {
+    return new Error(
+      `model response has invalid stop reason: ${String(response.stopReason ?? "missing")}`,
+    );
+  }
+  if (typeof response.errorMessage === "string") {
+    return new Error(
+      `model response has an error message for stop reason '${response.stopReason}'`,
+    );
+  }
+  return undefined;
 }
 
 function isRetryableInfrastructureFailure(error: unknown): boolean {
@@ -446,6 +486,7 @@ function isRetryableInfrastructureFailure(error: unknown): boolean {
   if (
     [
       "AUTH",
+      "OAUTH",
       "ECONNABORTED",
       "ECONNREFUSED",
       "ECONNRESET",
@@ -464,7 +505,7 @@ function isRetryableInfrastructureFailure(error: unknown): boolean {
 
   const message =
     typeof details.message === "string" ? details.message.toLowerCase() : "";
-  return /\b(?:401|403|408|429|5\d\d)\b|api key|authentication|auth failed|forbidden|rate limit|too many requests|request (?:was )?aborted|timed? out|timeout|network[_ ](?:error|unavailable|failure)|service unavailable/.test(
+  return /\b(?:401|403|408|429|5\d\d)\b|api key|authentication|auth failed|forbidden|provider (?:is )?not configured|oauth (?:refresh|auth derivation) (?:failed|returned)|rate limit|too many requests|request (?:was )?aborted|timed? out|timeout|fetch failed|connection (?:error|failed|failure)|bad gateway|internal server error|network[_ ](?:error|unavailable|failure)|service unavailable|(?:provider|server|service) (?:is )?overload(?:ed)?/.test(
     message,
   );
 }

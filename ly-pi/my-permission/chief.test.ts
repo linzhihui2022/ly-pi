@@ -43,11 +43,17 @@ function createSecurityAuditRunner(thinking: "off" | "max" = "max") {
         model: Model<Api>,
         resolvedCandidate: typeof candidate,
       ) => Promise<unknown>,
-    ) => ({
-      status: "success" as const,
-      value: await operation(makeModel(), candidate),
-      candidate,
-    }),
+    ) => {
+      const value = await operation(makeModel(), candidate);
+      return {
+        status: "success" as const,
+        value:
+          value && typeof value === "object"
+            ? { stopReason: "stop", ...value }
+            : value,
+        candidate,
+      };
+    },
   );
   return { modelRunner: { run } as never, run };
 }

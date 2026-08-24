@@ -68,9 +68,13 @@ function createSuccessfulModelRunner(
         thinking: candidateThinking,
         source: "manifest" as const,
       };
+      const value = await operation(model, candidate);
       return {
         status: "success" as const,
-        value: await operation(model, candidate),
+        value:
+          value && typeof value === "object"
+            ? { stopReason: "stop", ...value }
+            : value,
         candidate,
       };
     },
@@ -260,6 +264,7 @@ describe("createJudge", () => {
             text: '{"safe":true,"score":9,"reason":"fallback ok","toolFor":"read"}',
           },
         ],
+        stopReason: "stop",
       } as never);
     const securityModelClient: ModelClient = {
       find: (_provider, id) =>
@@ -347,11 +352,89 @@ describe("createJudge", () => {
     );
   });
 
+  it("rejects a judge response that resolves after the configured timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      let lateResponseProduced = false;
+      const complete = vi.fn<ModelClient["complete"]>(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(() => {
+              lateResponseProduced = true;
+              resolve({
+                stopReason: "stop",
+                content: [
+                  {
+                    type: "text",
+                    text: '{"safe":true,"score":8,"reason":"read only","toolFor":"read"}',
+                  },
+                ],
+              } as never);
+            }, config.judgeTimeoutMs + 1);
+          }),
+      );
+      const judge = createJudge(
+        { ...config, judgeTimeoutMs: 1 },
+        {
+          ...judgeDeps,
+          modelClient: { ...modelClient, complete },
+        },
+      );
+      const resultPromise = judge(input, "/repo");
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(resultPromise).resolves.toEqual(
+        failureReason(input, "法官模型调用超时（1ms），请手动确认"),
+      );
+      expect(lateResponseProduced).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(config.judgeTimeoutMs);
+      expect(lateResponseProduced).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fails closed when the judge returns an aborted response", async () => {
+    completeModel.mockResolvedValue({
+      stopReason: "aborted",
+      content: [
+        {
+          type: "text",
+          text: '{"safe":true,"score":8,"reason":"read only","toolFor":"read"}',
+        },
+      ],
+    } as never);
+    const judge = createJudge(config, judgeDeps);
+
+    await expect(judge(input, "/repo")).resolves.toEqual(
+      failureReason(input, "法官模型调用超时（5000ms），请手动确认"),
+    );
+  });
+
+  it("fails closed when the judge response is truncated", async () => {
+    completeModel.mockResolvedValue({
+      stopReason: "length",
+      content: [
+        {
+          type: "text",
+          text: '{"safe":true,"score":8,"reason":"read only","toolFor":"read"}',
+        },
+      ],
+    } as never);
+    const judge = createJudge(config, judgeDeps);
+
+    await expect(judge(input, "/repo")).resolves.toEqual(
+      failureReason(input, "法官模型返回了非完整响应（length），请手动确认"),
+    );
+  });
+
   it("does not retry after a malformed judge protocol response", async () => {
     const primary = makeModel({ id: "primary", provider: "test" });
     const fallback = makeModel({ id: "fallback", provider: "test" });
     const complete = vi.fn<ModelClient["complete"]>().mockResolvedValue({
       content: [{ type: "text", text: "not json" }],
+      stopReason: "stop",
     } as never);
     const securityModelClient: ModelClient = {
       find: (_provider, id) =>

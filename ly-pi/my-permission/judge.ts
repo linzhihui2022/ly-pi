@@ -59,10 +59,18 @@ export function createJudge(
         async (model, candidate) => {
           lastAttemptTimedOut = false;
           const controller = new AbortController();
-          const timeout = setTimeout(
-            () => controller.abort(),
-            config.judgeTimeoutMs,
+          const timeoutError = Object.assign(
+            new Error("judge model timed out"),
+            { code: "ETIMEDOUT" },
           );
+          let timeout: ReturnType<typeof setTimeout> | undefined;
+          const deadline = new Promise<never>((_, reject) => {
+            timeout = setTimeout(() => {
+              lastAttemptTimedOut = true;
+              controller.abort();
+              reject(timeoutError);
+            }, config.judgeTimeoutMs);
+          });
           const completeOpts: ModelsApiStreamOptions<Api> = {
             signal: controller.signal,
             ...(candidate.thinking === "off"
@@ -71,21 +79,23 @@ export function createJudge(
           };
 
           try {
-            return await deps.modelClient.complete(
-              model,
-              context,
-              completeOpts,
-            );
-          } catch (error) {
-            if (controller.signal.aborted) {
+            const response = await Promise.race([
+              deps.modelClient.complete(model, context, completeOpts),
+              deadline,
+            ]);
+            if (response.stopReason === "aborted") {
               lastAttemptTimedOut = true;
-              throw Object.assign(new Error("judge model timed out"), {
-                code: "ETIMEDOUT",
-              });
+              throw timeoutError;
+            }
+            return response;
+          } catch (error) {
+            if (controller.signal.aborted || error === timeoutError) {
+              lastAttemptTimedOut = true;
+              throw timeoutError;
             }
             throw error;
           } finally {
-            clearTimeout(timeout);
+            if (timeout !== undefined) clearTimeout(timeout);
           }
         },
       );
@@ -115,6 +125,18 @@ export function createJudge(
         const detail = response.errorMessage ?? response.stopReason;
         log.error("judge API error", { detail, model: result.candidate.model });
         return failureResult(`法官模型调用失败: ${detail}`, input);
+      }
+      if (response.stopReason === "aborted") {
+        return failureResult(
+          `法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`,
+          input,
+        );
+      }
+      if (response.stopReason !== "stop") {
+        return failureResult(
+          `法官模型返回了非完整响应（${response.stopReason}），请手动确认`,
+          input,
+        );
       }
 
       const parsed = parseJudgeResponse(response);
