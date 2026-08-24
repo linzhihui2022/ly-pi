@@ -76,7 +76,7 @@ configure/
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-session-name** | 自动生成 Session Display Name：首条 prompt 后异步摘要，支持旧 session 补命名与 fork 短 hash |
 | **my-hud** | 自定义单行状态栏：项目名、模型（含思考级别）、Git 分支与状态、PR 链接、上下文百分比（颜色阈值）、Token 与成本、权限统计、Hide thinking 状态 |
-| **my-tool-display** | Pi 原生工具的紧凑呈现；当前覆盖 `read`：成功输出默认隐藏，展开显示完整结果，失败始终显示诊断 |
+| **my-tool-display** | Pi 原生工具的紧凑呈现；当前覆盖 `read`、`grep`、`find`、`ls`、`bash`、`edit`、`write`：读/搜索成功正文默认隐藏，bash 成功输出默认显示最多 10 行，edit/write 完成后显示主题化统一 diff；write 对二进制、过大、不可读或工作区外路径安全降级，失败始终显示诊断 |
 | **my-worktree** | 只读 Worktree Widget 在多 Git worktree 时显示可访问工作树；`/close-worktree` 经确认后安全关闭 Current Worktree，保留本地分支，并通过用户配置的终端 hook 收尾 |
 | **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |
 
@@ -139,6 +139,16 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 "$REPO/install.sh"
 ```
 
+### 从 pi-tool-display 迁移
+
+`my-tool-display` 验证完成并由用户在 TUI 中确认后，手动卸载旧的第三方扩展：
+
+```bash
+pi uninstall npm:pi-tool-display
+```
+
+部署流程不会自动卸载用户级 npm 包；在手动卸载前，会部署 `enabled: false` 的兼容配置，前提是旧扩展支持该字段。完成 TUI 验证后再执行上述命令。
+
 ### API key（可选）
 
 以下功能按需配置环境变量，不配置则对应功能不可用，其余不受影响：
@@ -161,21 +171,21 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 | 配置 | 说明 |
 |------|------|
 | `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
-| `assets/config/pi-tool-display.json` | pi-tool-display 配置 |
-| `assets/config/my-tool-display.json` | `my-tool-display` 启用开关 |
-| `assets/config/settings.json` | 子代理模型绑定与 fallback（部署时按 `settings-schema.json` 校验） |
-| `assets/config/mcp.json` | MCP 服务器配置 |
-| `assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
-| `assets/config/my-back.json` | `/back` 命令配置 |
-| `assets/config/append-system.md` | 追加到系统提示的全局指令 |
-| `assets/config/web-search.json` / `rpiv-todo.json` | 第三方扩展配置 |
+| `ly-pi/assets/config/my-tool-display.json` | `my-tool-display` 启用开关、Bash 折叠行数（`bashCollapsedLines`，默认 10）与 diff 折叠行数（`diffCollapsedLines`，默认 24） |
+| `ly-pi/assets/config/pi-tool-display-disabled.json` | 旧版 `pi-tool-display` 的禁用兼容配置（效果取决于旧 renderer 是否支持 `enabled` 字段） |
+| `ly-pi/assets/config/settings.json` | 子代理模型绑定与 fallback（部署时按 `settings-schema.json` 校验） |
+| `ly-pi/assets/config/mcp.json` | MCP 服务器配置 |
+| `ly-pi/assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
+| `ly-pi/assets/config/my-back.json` | `/back` 命令配置 |
+| `ly-pi/assets/config/append-system.md` | 追加到系统提示的全局指令 |
+| `ly-pi/assets/config/web-search.json` / `rpiv-todo.json` | 第三方扩展配置 |
 
 ### 作者个人化内容（使用前请自行调整）
 
 本仓库是作者的个人配置开源，以下内容带有强烈的个人偏好，**作示例用途，按需修改**：
 
-- **`assets/config/settings.json`** 中的模型绑定（如 `kimi-coding`、`deepseek-v4-flash`）是作者自建的 provider/model 别名，你需要替换为自己的模型配置
-- **`assets/config/append-system.md`** 中的语言偏好（中文回复等）为作者个人设定
+- **`ly-pi/assets/config/settings.json`** 中的模型绑定（如 `kimi-coding`、`deepseek-v4-flash`）是作者自建的 provider/model 别名，你需要替换为自己的模型配置
+- **`ly-pi/assets/config/append-system.md`** 中的语言偏好（中文回复等）为作者个人设定
 - **`JUDGE.md`、`CONTEXT.md`** 是作者个人项目的权限法官规则与领域术语表
 - **`docs/agents/`** 是作者按 Matt Pocock skills 工作流配置的本地 issue tracker 约定
 - **`.scratch/`** 是作者本仓库的本地票据，可作为该工作流的实例参考

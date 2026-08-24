@@ -1,3 +1,5 @@
 {
-  "enabled": true
+  "enabled": true,
+  "bashCollapsedLines": 10,
+  "diffCollapsedLines": 24
 }

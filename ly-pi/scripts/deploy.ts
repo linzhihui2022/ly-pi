@@ -1,5 +1,5 @@
 import { cpSync, existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { BunFile } from "bun";
@@ -117,17 +117,131 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
   await Bun.write(path, data);
 }
 
-// ── Extension bundle ────────────────────────────────────────────────────────
+async function writeAtomically(
+  path: string,
+  data: string | Uint8Array | BunFile,
+): Promise<void> {
+  const temporaryPath = `${path}.tmp-${process.pid}`;
+  try {
+    await write(temporaryPath, data);
+    await rename(temporaryPath, path);
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
+}
+
+type FileSnapshot = { exists: true; data: Uint8Array } | { exists: false };
+
+async function snapshotFile(path: string): Promise<FileSnapshot> {
+  if (!existsSync(path)) {
+    return { exists: false };
+  }
+  return { exists: true, data: await Bun.file(path).bytes() };
+}
+
+async function restoreFile(
+  path: string,
+  snapshot: FileSnapshot,
+): Promise<void> {
+  if (snapshot.exists) {
+    await writeAtomically(path, snapshot.data);
+    return;
+  }
+  try {
+    await rm(path, { force: true });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTDIR") {
+      throw error;
+    }
+  }
+}
+
+async function rollbackFiles(
+  files: Array<{ path: string; snapshot: FileSnapshot }>,
+): Promise<void> {
+  let firstError: unknown;
+  for (const file of files) {
+    try {
+      await restoreFile(file.path, file.snapshot);
+    } catch (error) {
+      firstError ??= error;
+    }
+  }
+  if (firstError) {
+    console.error("Deployment rollback failed:", firstError);
+  }
+}
+
+const configDir = "assets/config";
+
+// ── Legacy renderer cutover ─────────────────────────────────────────────────
 {
-  const extDir = join(agentDir, "extensions", "ly-pi");
-  await mkdir(extDir, { recursive: true });
-  await write(join(extDir, "index.js"), Bun.file("dist/index.js"));
-  await write(
-    join(extDir, "close-worktree-worker.js"),
-    Bun.file("dist/my-worktree/close-worker-main.js"),
+  const legacyConfigPath = join(
+    agentDir,
+    "extensions",
+    "pi-tool-display",
+    "config.json",
   );
-  await write(join(extDir, "package.json"), '{\n  "type": "module"\n}\n');
+  const extensionPath = join(agentDir, "extensions", "ly-pi", "index.js");
+  const toolDisplayConfigPath = join(
+    agentDir,
+    "extensions",
+    "ly-pi",
+    "my-tool-display.json",
+  );
+  const files = [
+    { path: legacyConfigPath, snapshot: await snapshotFile(legacyConfigPath) },
+    { path: extensionPath, snapshot: await snapshotFile(extensionPath) },
+    {
+      path: toolDisplayConfigPath,
+      snapshot: await snapshotFile(toolDisplayConfigPath),
+    },
+  ];
+
+  const closeWorkerPath = join(
+    agentDir,
+    "extensions",
+    "ly-pi",
+    "close-worktree-worker.js",
+  );
+  const extensionPackagePath = join(
+    agentDir,
+    "extensions",
+    "ly-pi",
+    "package.json",
+  );
+  files.push(
+    { path: closeWorkerPath, snapshot: await snapshotFile(closeWorkerPath) },
+    {
+      path: extensionPackagePath,
+      snapshot: await snapshotFile(extensionPackagePath),
+    },
+  );
+
+  try {
+    await writeAtomically(
+      legacyConfigPath,
+      Bun.file(join(configDir, "pi-tool-display-disabled.json")),
+    );
+    await writeAtomically(extensionPath, Bun.file("dist/index.js"));
+    await writeAtomically(
+      closeWorkerPath,
+      Bun.file("dist/my-worktree/close-worker-main.js"),
+    );
+    await writeAtomically(extensionPackagePath, '{\n  "type": "module"\n}\n');
+    await writeAtomically(
+      toolDisplayConfigPath,
+      Bun.file(join(configDir, "my-tool-display.json")),
+    );
+  } catch (error) {
+    await rollbackFiles(files);
+    throw error;
+  }
+
+  console.log("pi-tool-display compatibility config: deployed");
   console.log("Extension: deployed");
+  console.log("my-tool-display config: deployed");
 }
 
 // ── Settings ────────────────────────────────────────────────────────────────
@@ -160,7 +274,6 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
 
 // ── Other configs ───────────────────────────────────────────────────────────
 {
-  const configDir = "assets/config";
   const extDir = join(agentDir, "extensions", "ly-pi");
 
   const configManifest: Array<{
@@ -174,11 +287,6 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
       src: "append-system.md",
       dest: "APPEND_SYSTEM.md",
       label: "append-system.md",
-    },
-    {
-      src: "pi-tool-display.json",
-      dest: "extensions/pi-tool-display/config.json",
-      label: "pi-tool-display",
     },
     {
       src: "web-search.json",
@@ -197,12 +305,6 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
       dest: "my-sound.json",
       base: extDir,
       label: "my-sound.json",
-    },
-    {
-      src: "my-tool-display.json",
-      dest: "my-tool-display.json",
-      base: extDir,
-      label: "my-tool-display.json",
     },
     {
       src: "my-back.json",
