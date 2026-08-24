@@ -1156,6 +1156,11 @@ class ResolveAuthorTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "empty login"):
                 collector.resolve_author("@me")
 
+    def test_rejects_a_null_login_from_gh_api(self) -> None:
+        with patch.object(collector, "run", return_value="null"):
+            with self.assertRaisesRegex(RuntimeError, "empty login or null"):
+                collector.resolve_author("@me")
+
     def test_passes_through_an_explicit_login(self) -> None:
         with patch.object(collector, "run") as run:
             self.assertEqual(collector.resolve_author("bob"), "bob")

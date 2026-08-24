@@ -46,13 +46,15 @@ python3 "$HOME/.pi/agent/skills/gh-build-weekly-timesheet/scripts/collect_pr_act
 
 以 JSON 输出为事实来源：
 
+顶层 JSON 字段包括：`repository`、`author`、`timezone`、`date_range`、`calendar_days`、`pull_requests_scanned`、`duplicates_removed`、`commits_outside_range`、`commits_by_other_authors`、`commits_by_unknown_authors`、`activities`、`daily_ticket_totals` 和 `ticket_totals`。
+
 - `activities` 按本地日期、票据和 PR 分组。
-- `calendar_days` 列出证据窗口内的每个日历日及其 `has_activity` 状态。
-- `date_range` 是实际使用的闭合日期范围。
+- `calendar_days` 列出证据窗口内的每个日历日及其 `has_activity` 状态；`date_range` 是实际使用的闭合日期范围。
+- `daily_ticket_totals` 按日期和票据汇总提交数、工作提交数及涉及的 PR；`ticket_totals` 按票据汇总提交数、工作提交数和日期。
 - `work_commit_count` 排除机械 merge commit；`commit_count` 保留它们以便审计。
 - `first_time` 与 `last_time` 是带 UTC offset 的本地 ISO 8601 观察点，不是实际工时；它们保留 DST 回拨时的活动顺序。
 - `UNASSIGNED` 表示存在活动但无法确定唯一票据。提交标题优先；仅当提交标题未确定唯一票据时，PR 标题与分支名共同参与回退。同一 OID 经多个 PR 出现且回退票据冲突时，必须保持为 `UNASSIGNED`。
-- `duplicates_removed` 表示同一提交经多个 PR 出现而被去重的次数。
+- `duplicates_removed` 表示同一提交经多个 PR 出现而被去重的次数；`commits_outside_range` 表示窗口外的有效提交数。
 - `commits_by_other_authors` 表示默认过滤的、明确属于其他作者的提交数。
 - `commits_by_unknown_authors` 表示默认过滤的、无法确认 GitHub 作者的提交数；传入 `--include-all-commit-authors` 时这两类提交都会纳入活动。
 
