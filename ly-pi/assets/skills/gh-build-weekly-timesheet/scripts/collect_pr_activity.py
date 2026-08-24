@@ -212,7 +212,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--week-start",
         type=date.fromisoformat,
-        help="Legacy shortcut: start date through that week’s end or today",
+        help="Legacy shortcut: start date through 6 days later or today",
     )
     parser.add_argument(
         "--timezone",
@@ -575,8 +575,9 @@ def normalize_graphql_commit(node: dict[str, Any]) -> Commit:
         if not isinstance(author_node, dict):
             continue
         user = author_node.get("user")
-        if isinstance(user, dict) and isinstance(user.get("login"), str):
-            authors.append({"login": user["login"]})
+        login = user.get("login") if isinstance(user, dict) else None
+        if isinstance(login, str) and login.strip():
+            authors.append({"login": login})
 
     oid = commit.get("oid")
     committed_date = commit.get("committedDate")
@@ -694,7 +695,7 @@ def pull_request_author_login(pull_request: dict[str, Any]) -> str | None:
     if not isinstance(user, dict):
         return None
     login = user.get("login")
-    return login if isinstance(login, str) else None
+    return login if isinstance(login, str) and login.strip() else None
 
 
 def fetch_prs(repo: str, author: str) -> list[PullRequest]:
@@ -770,7 +771,9 @@ def collect(config: CollectorConfig) -> CollectResult:
         pr, commit, ticket = resolve_commit_candidate(candidates)
 
         author_logins = {
-            commit_author["login"].casefold() for commit_author in commit["authors"]
+            commit_author["login"].casefold()
+            for commit_author in commit["authors"]
+            if commit_author["login"].strip()
         }
         if not config.include_all_commit_authors:
             if not author_logins:

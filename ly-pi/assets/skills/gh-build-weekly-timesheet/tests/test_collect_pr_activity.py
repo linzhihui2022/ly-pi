@@ -1597,6 +1597,20 @@ class FetchPullRequestsTests(unittest.TestCase):
                     ):
                         collector.fetch_prs("owner/repo", "alice")
 
+    def test_rejects_empty_or_whitespace_pull_request_author_login(self) -> None:
+        for login in ("", "   "):
+            with self.subTest(login=login):
+                pull_request = {"number": 7, "user": {"login": login}}
+                with patch.object(
+                    collector,
+                    "fetch_paginated_items",
+                    return_value=[pull_request],
+                ):
+                    with self.assertRaisesRegex(
+                        RuntimeError, r"pull request #7.*author login"
+                    ):
+                        collector.fetch_prs("owner/repo", "alice")
+
     def test_rejects_malformed_required_pull_request_fields(self) -> None:
         invalid_fields = (
             ("title", {"title": None}, "title"),
@@ -1815,6 +1829,41 @@ class CollectTests(unittest.TestCase):
         self.assertEqual(result["activities"][0]["headlines"], ["ABC-123 own work"])
         self.assertEqual(result["commits_by_other_authors"], 1)
         self.assertEqual(result["commits_by_unknown_authors"], 1)
+
+    def test_counts_empty_or_whitespace_commit_author_login_as_unknown(self) -> None:
+        for login in ("", "   "):
+            with self.subTest(login=login):
+                prs = [
+                    {
+                        "number": 7,
+                        "title": "ABC-123 add report",
+                        "headRefName": "ABC-123-report",
+                        "url": "https://github.com/owner/repo/pull/7",
+                        "commits": [
+                            {
+                                "oid": f"blank-author-{len(login)}",
+                                "committedDate": "2024-01-02T09:00:00Z",
+                                "messageHeadline": "ABC-123 unverified work",
+                                "authors": [{"login": login}],
+                            }
+                        ],
+                    }
+                ]
+
+                with (
+                    patch.object(collector, "resolve_author", return_value="alice"),
+                    patch.object(collector, "fetch_prs", return_value=prs),
+                ):
+                    result = collector.collect(
+                        make_config(
+                            start_date=date(2024, 1, 2),
+                            end_date=date(2024, 1, 2),
+                        )
+                    )
+
+                self.assertEqual(result["activities"], [])
+                self.assertEqual(result["commits_by_other_authors"], 0)
+                self.assertEqual(result["commits_by_unknown_authors"], 1)
 
     def test_includes_all_authors_when_requested(self) -> None:
         prs = [

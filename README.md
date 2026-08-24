@@ -86,7 +86,7 @@ configure/
 
 - **仓库自有**（`ly-pi/assets/skills/`，随 deploy 快照式部署）：
   - `review-pr` — 并行调度专职 reviewer 子代理做多维度 PR 审查
-  - `gh-build-weekly-timesheet` — 手动根据 GitHub PR 提交证据生成可审计的工时表（需要已认证的 `gh` CLI）
+  - `gh-build-weekly-timesheet` — 手动根据 GitHub PR 提交证据生成可审计的工时表（需要 Python 3.9+ 和已认证的 `gh` CLI）
 - **由 [mattpocock/skills](https://github.com/mattpocock/skills) 工作流提供**（外部安装，不镜像到本仓库），驱动「需求与规格」流程
 
 ---
