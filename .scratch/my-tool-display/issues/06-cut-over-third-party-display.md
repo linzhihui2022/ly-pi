@@ -18,7 +18,7 @@
 
 ## Answer
 
-- 删除旧的启用配置 `ly-pi/assets/config/pi-tool-display.json`；部署改为写入 `ly-pi/assets/config/pi-tool-display-disabled.json`，将既有 `extensions/pi-tool-display/config.json` 设为 `enabled: false`，但不会卸载用户级 npm 包。
+- 删除旧的启用配置 `ly-pi/assets/config/pi-tool-display.json`；部署会写入 `ly-pi/assets/config/pi-tool-display-disabled.json`，将既有 `extensions/pi-tool-display/config.json` 设为 `enabled: false`，但不会卸载用户级 npm 包。
 - README 新增迁移指引：部署会保留禁用状态的兼容配置；完成自有模块验证后由用户手动执行 `pi uninstall npm:pi-tool-display`。
 - `my-tool-display` 继续由统一入口注册七个原生工具的呈现覆盖；源码静态审计确认没有旧配置或旧 renderer 的双轨引用。
 - A1 修复在工具发现失败时记录开发日志，并安全降级为不注册自有 renderer。

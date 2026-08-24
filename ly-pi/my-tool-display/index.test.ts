@@ -36,13 +36,25 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
   SettingsManager: { create: vi.fn() },
 }));
 
-vi.mock("../my-log/index", () => ({
-  createDevLogger: vi.fn(() => ({
+const loggerMocks = vi.hoisted(() => ({
+  toolDisplay: {
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-  })),
+  },
+  config: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+vi.mock("../my-log/index", () => ({
+  createDevLogger: vi.fn((source: string) =>
+    source === "my-tool-display" ? loggerMocks.toolDisplay : loggerMocks.config,
+  ),
 }));
 
 import { createDevLogger } from "../my-log/index";
@@ -178,7 +190,14 @@ function createNativeWriteDefinition(
       try {
         await options.operations.mkdir(dirname(path));
         await options.operations.writeFile(path, params.content);
-        return nextNativeWriteResult;
+        const result = nextNativeWriteResult as {
+          content: Array<{ type: string; text?: string }>;
+          details?: unknown;
+        };
+        return {
+          ...result,
+          content: result.content.map((content) => ({ ...content })),
+        };
       } finally {
         release();
         if (nativeWriteQueues.get(path) === queued) {
@@ -425,13 +444,20 @@ describe("my-tool-display", () => {
     expect(result).toMatchObject({
       details: {
         native: "metadata",
+        writeDiff: {
+          kind: "diff",
+          diff: "- 1|const oldValue = true;\n+ 1|const newValue = false;",
+        },
       },
     });
     expect(generateDiffString).toHaveBeenCalledWith(
       "const oldValue = true;\n",
       "const newValue = false;\n",
     );
-    const rendererResult = { content: result.content, details: result.details };
+    const rendererResult = {
+      content: [...result.content],
+      details: structuredClone(result.details),
+    };
     expect(
       render(
         write.renderResult(
@@ -457,15 +483,17 @@ describe("my-tool-display", () => {
   it("captures each concurrent write baseline inside the native mutation queue", async () => {
     const workspaceDir = createWorkspace();
     writeFileSync(join(workspaceDir, "file.txt"), "original\n");
-    vi.mocked(generateDiffString).mockReturnValue({
-      diff: "diff",
-      firstChangedLine: 1,
-    });
+    vi.mocked(generateDiffString).mockImplementation(
+      (previousContent, nextContent) => ({
+        diff: `from ${previousContent} to ${nextContent}`,
+        firstChangedLine: 1,
+      }),
+    );
 
     const { registered } = setup("builtin", ["write"]);
     const write = registered[0]!;
 
-    await Promise.all([
+    const [firstResult, secondResult] = await Promise.all([
       write.execute(
         "call-first",
         { path: "file.txt", content: "first\n" },
@@ -492,6 +520,26 @@ describe("my-tool-display", () => {
       "first\n",
       "second\n",
     );
+    expect(
+      render(
+        write.renderResult(
+          firstResult,
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toBe("from original\n to first");
+    expect(
+      render(
+        write.renderResult(
+          secondResult,
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toBe("from first\n to second");
   });
 
   it("renders a completed write diff for a new file", async () => {
@@ -734,10 +782,39 @@ describe("my-tool-display", () => {
     expect(generateDiffString).not.toHaveBeenCalled();
   });
 
+  it("shows a safe summary for content that cannot round-trip through UTF-8", async () => {
+    const workspaceDir = createWorkspace();
+    const content = `safe${String.fromCharCode(0xd800)}text\n`;
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-unpaired-surrogate",
+      { path: "file.txt", content },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(readFileSync(join(workspaceDir, "file.txt"), "utf8")).toBe(
+      "safe\ufffdtext\n",
+    );
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("cannot be represented faithfully as UTF-8");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
   it("does not read through a symlink outside the workspace", async () => {
     const workspaceDir = createWorkspace();
     const outsideDir = createWorkspace();
-    writeFileSync(join(outsideDir, "outside.txt"), "outside\n");
+    writeFileSync(join(outsideDir, "outside.txt"), "outside-secret\n");
     symlinkSync(
       join(outsideDir, "outside.txt"),
       join(workspaceDir, "link.txt"),
@@ -753,17 +830,20 @@ describe("my-tool-display", () => {
       { cwd: workspaceDir },
     );
 
-    expect(
-      render(
-        write.renderResult(
-          result,
-          { expanded: false, isPartial: false },
-          theme,
-          { isError: false, args: { path: "link.txt" }, state: {} },
-        ),
-      ),
-    ).toContain("resolves outside the current workspace");
+    const rendered = render(
+      write.renderResult(result, { expanded: false, isPartial: false }, theme, {
+        isError: false,
+        args: { path: "link.txt" },
+        state: {},
+      }),
+    );
+    expect(rendered).toContain("resolves outside the current workspace");
+    expect(rendered).not.toContain("outside-secret");
     expect(generateDiffString).not.toHaveBeenCalled();
+    expect(generateDiffString).not.toHaveBeenCalledWith(
+      "outside-secret\n",
+      "safe text\n",
+    );
   });
 
   it("does not read through an in-workspace symlink", async () => {
@@ -829,6 +909,26 @@ describe("my-tool-display", () => {
         ),
       ),
     ).toContain("target path resolves outside the current workspace");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("does not compute a diff for a non-regular file target", async () => {
+    const workspaceDir = createWorkspace();
+    mkdirSync(join(workspaceDir, "directory"));
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+
+    await expect(
+      write.execute(
+        "call-directory",
+        { path: "directory", content: "safe text\n" },
+        undefined,
+        undefined,
+        { cwd: workspaceDir },
+      ),
+    ).rejects.toMatchObject({ code: "EISDIR" });
+    expect(nativeWriteExecutions.get(workspaceDir)).toHaveBeenCalled();
     expect(generateDiffString).not.toHaveBeenCalled();
   });
 
@@ -974,6 +1074,17 @@ describe("my-tool-display", () => {
         ),
       ),
     ).toContain("diff engine failed");
+
+    expect(loggerMocks.toolDisplay.error).toHaveBeenCalledWith(
+      "Unexpected error while computing write diff.",
+      {
+        error: {
+          name: "Error",
+          message: "diff engine failed",
+          stack: expect.any(String),
+        },
+      },
+    );
   });
 
   it("keeps write failures diagnostic and does not render a success diff", () => {
@@ -1615,6 +1726,50 @@ describe("my-tool-display", () => {
           { expanded: false, isPartial },
           theme,
           { isError: false },
+        ),
+      ),
+    ).toBe(expected);
+  });
+
+  it.each([
+    { output: "\n", expected: "(no output)" },
+    { output: "\n\n", expected: "(no output)" },
+  ])("does not render newline-only bash output as blank", ({
+    output,
+    expected,
+  }) => {
+    const { registered } = setup("builtin", ["bash"]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [{ type: "text", text: output }], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe(expected);
+  });
+
+  it.each([
+    ["bash", "Bash command failed."],
+    ["edit", "Edit failed."],
+    ["write", "Write failed."],
+    ["read", "Read failed."],
+    ["grep", "Search failed."],
+    ["find", "Find failed."],
+    ["ls", "List failed."],
+  ] as const)("uses an explicit fallback for empty %s errors", (name, expected) => {
+    const { registered } = setup("builtin", [name]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: true },
         ),
       ),
     ).toBe(expected);

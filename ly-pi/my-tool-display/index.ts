@@ -34,6 +34,23 @@ const initializedApis = new WeakSet<ExtensionAPI>();
 const registeredToolNames = new WeakMap<ExtensionAPI, Set<string>>();
 const writeDiffByContent = new WeakMap<object, WriteDiffDetails>();
 const MAX_WRITE_DIFF_BYTES = 1_000_000;
+const EXPECTED_PREVIEW_ERROR_CODES = new Set([
+  "EACCES",
+  "EAGAIN",
+  "EBADF",
+  "EINTR",
+  "EINVAL",
+  "EIO",
+  "EISDIR",
+  "ELOOP",
+  "ENAMETOOLONG",
+  "ENODEV",
+  "ENOENT",
+  "ENOTDIR",
+  "ENXIO",
+  "EOVERFLOW",
+  "EPERM",
+]);
 const log = createDevLogger("my-tool-display");
 
 type WritePreview =
@@ -63,6 +80,25 @@ function getErrorCode(error: unknown): string | undefined {
   }
   const code = (error as NodeJS.ErrnoException).code;
   return typeof code === "string" ? code : undefined;
+}
+
+function serializeError(error: unknown): unknown {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+  return error;
+}
+
+function logUnexpectedPreviewError(message: string, error: unknown): void {
+  const code = getErrorCode(error);
+  if (code && EXPECTED_PREVIEW_ERROR_CODES.has(code)) {
+    return;
+  }
+  log.error(message, { error: serializeError(error) });
 }
 
 function describeError(error: unknown): string | undefined {
@@ -99,6 +135,10 @@ function getBuiltinToolNames(pi: ExtensionAPI): Set<string> {
   }
 }
 
+function canRoundTripUtf8(content: string): boolean {
+  return Buffer.from(content, "utf8").toString("utf8") === content;
+}
+
 function sanitizeToolOutput(output: string): string {
   return Array.from(stripVTControlCharacters(output))
     .filter((character) => {
@@ -122,8 +162,12 @@ function sanitizeToolLabel(label: string): string {
   return sanitizeToolOutput(label).replace(/[\t\r\n\u2028\u2029]/g, " ");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function getWriteDiffDetails(details: unknown): WriteDiffDetails | undefined {
-  if (typeof details !== "object" || details === null) {
+  if (!isRecord(details)) {
     return undefined;
   }
   const writeDiff = (details as Record<string, unknown>).writeDiff;
@@ -326,6 +370,13 @@ function readWritePreview(
         "Write diff unavailable because the new content appears to be binary.",
     };
   }
+  if (!canRoundTripUtf8(nextContent)) {
+    return {
+      safe: false,
+      reason:
+        "Write diff unavailable because the new content cannot be represented faithfully as UTF-8.",
+    };
+  }
   if (!safePath.existed) {
     return { safe: true, previousContent: "" };
   }
@@ -389,13 +440,33 @@ function readWritePreview(
       };
     }
 
-    return {
-      safe: true,
-      previousContent: new TextDecoder("utf-8", { fatal: true }).decode(
+    let previousContent: string;
+    try {
+      previousContent = new TextDecoder("utf-8", { fatal: true }).decode(
         content,
-      ),
-    };
+      );
+    } catch (error) {
+      if (!(error instanceof TypeError)) {
+        logUnexpectedPreviewError(
+          "Unexpected error while decoding write diff preview.",
+          error,
+        );
+      }
+      return {
+        safe: false,
+        reason: withErrorDetails(
+          "Write diff unavailable because the existing file contains invalid UTF-8 and could not be read safely.",
+          error,
+        ),
+      };
+    }
+
+    return { safe: true, previousContent };
   } catch (error) {
+    logUnexpectedPreviewError(
+      "Unexpected error while reading write diff preview.",
+      error,
+    );
     return {
       safe: false,
       reason: withErrorDetails(
@@ -461,8 +532,15 @@ function renderBashResult(
   }
 
   const lines = output.split(/\r?\n/);
-  if (lines.at(-1) === "") {
+  while (lines.at(-1) === "") {
     lines.pop();
+  }
+  if (lines.length === 0) {
+    return new Text(
+      theme.fg("muted", options.isPartial ? "Running..." : "(no output)"),
+      0,
+      0,
+    );
   }
   if (collapsedLines === 0) {
     return new Text(
@@ -550,6 +628,17 @@ function renderEditResult(
     0,
     0,
   );
+}
+
+function addWriteDiffDetails<T extends { details?: unknown }>(
+  result: T,
+  writeDiff: WriteDiffDetails,
+): T {
+  const nativeDetails = isRecord(result.details) ? result.details : {};
+  return {
+    ...result,
+    details: { ...nativeDetails, writeDiff },
+  } as T;
 }
 
 function renderWriteResult(
@@ -709,6 +798,10 @@ function registerToolRenderers(
                   };
             }
           } catch (error) {
+            logUnexpectedPreviewError(
+              "Unexpected error while computing write diff.",
+              error,
+            );
             details = {
               kind: "summary",
               summary: withErrorDetails(
@@ -719,8 +812,9 @@ function registerToolRenderers(
           }
         }
 
-        writeDiffByContent.set(result.content, details);
-        return result;
+        const resultWithDetails = addWriteDiffDetails(result, details);
+        writeDiffByContent.set(resultWithDetails.content, details);
+        return resultWithDetails;
       },
       renderCall(args, theme) {
         return new Text(formatWriteCall(args, theme), 0, 0);
