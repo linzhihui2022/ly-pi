@@ -108,9 +108,19 @@ const extensionDir = join(agentDir, "extensions", "ly-pi");
     "assets/config/model-policies.json",
   ).json()) as ModelPolicyManifest;
   const localOverridePath = join(extensionDir, "models.local.json");
-  const localOverride = existsSync(localOverridePath)
-    ? ((await Bun.file(localOverridePath).json()) as LocalModelOverride)
-    : undefined;
+  let localOverride: LocalModelOverride | undefined;
+  try {
+    localOverride = (await Bun.file(
+      localOverridePath,
+    ).json()) as LocalModelOverride;
+  } catch (error) {
+    if (!isNotFoundError(error)) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `cannot load local model override '${localOverridePath}': ${message}`,
+      );
+    }
+  }
   compiledModelPolicySettings = createModelPolicyRegistry(
     modelManifest,
     localOverride,
@@ -196,12 +206,34 @@ async function writeAtomically(path: string, data: WriteData) {
     `.${basename(targetPath)}.ly-pi-${process.pid}-${temporaryWriteId++}.tmp`,
   );
   await mkdir(directory, { recursive: true });
+
+  let writeFailed = false;
+  let writeError: unknown;
   try {
     await Bun.write(temporaryPath, data);
     await rename(temporaryPath, targetPath);
-  } finally {
-    await rm(temporaryPath, { force: true }).catch(() => undefined);
+  } catch (error) {
+    writeFailed = true;
+    writeError = error;
   }
+
+  let cleanupFailed = false;
+  let cleanupError: unknown;
+  try {
+    await rm(temporaryPath, { force: true });
+  } catch (error) {
+    cleanupFailed = true;
+    cleanupError = error;
+  }
+
+  if (writeFailed && cleanupFailed) {
+    throw new AggregateError(
+      [writeError, cleanupError],
+      `atomic write and temporary cleanup failed: ${targetPath}`,
+    );
+  }
+  if (writeFailed) throw writeError;
+  if (cleanupFailed) throw cleanupError;
 }
 
 async function restore(snapshot: FileSnapshot) {
@@ -220,8 +252,8 @@ async function writeTransaction(
 
   try {
     for (const [index, write] of writes.entries()) {
-      await writeAtomically(write.path, write.data);
       written.push(snapshots[index]);
+      await writeAtomically(write.path, write.data);
     }
   } catch (error) {
     const rollbackErrors: unknown[] = [];
@@ -277,7 +309,7 @@ const deploymentMessages: string[] = [];
   const merged = await Bun.file("assets/config/settings.json").json();
   const settingsPath = join(agentDir, "settings.json");
 
-  // Deep-merge settings block into target before mutating deployment output.
+  // Build the complete settings target in memory before the write transaction.
   let target: Record<string, unknown> = {};
   try {
     target = await Bun.file(settingsPath).json();

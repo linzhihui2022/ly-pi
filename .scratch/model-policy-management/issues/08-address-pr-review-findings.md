@@ -47,3 +47,6 @@
 - 2026-08-23：用户明确要求“修正”默认 self-test 外泄样例中的无效 `curl -Y POST`。风险为 High（权限模块），批准仅覆盖该 flag 的源码修正、票据更新与本地验证；不得发送真实模型请求、部署 `~/.pi`、执行 `/reload`、提交或推送。
 - 2026-08-23：已将默认外泄样例恢复为 `curl -X POST`。`bun run verify` 通过（64 test files / 931 tests）；未发送真实模型请求，未部署 `~/.pi`，未执行 `/reload`。
 - 2026-08-24：按最终 PR 审查继续处理：Registry 将 HTTP 404/model-not-found 纳入候选回退，Manifest 强制要求全部受管理 agent binding，迁移防线仅在测试 fixture 中豁免保留前缀；补充安全审计合并失败不写入、实际安全角色、vision 能力和默认 self-test POST 测试，并同步 README、CONTEXT 与部署注释。
+- 2026-08-24：新一轮 PR 审查提出 A1–A4、B1–B7 与 C1；用户明确要求“全部处理”，并确认以 `createModelPolicyRegistry().run/compilePiSettings`、`runPermissionSelfTest` 与 `/permission-self-test` handler、`scripts/deploy.ts` 进程级部署行为作为测试 seam。风险维持 High；批准仅覆盖对应仓库源码、测试、注释和本票据记录，以及本地 `bun run verify` 验收。不得发送真实模型请求、部署 `~/.pi`、执行 `/reload`、修改凭据、提交或推送；若范围扩大或必要检查出现原因不明的失败，立即停止并升级。
+- 2026-08-24：A1–A4、B1–B7 与 C1 已全部处理。Registry 传播程序错误、保留结构化 fallback diagnostics、输出 schema 字段路径、拒绝纯空白 Model Label，并收紧模型引用、输入能力与编译后 agent override 类型；permission self-test 使用成功/失败判别联合；deploy 对不可读 Local Override、临时文件清理失败及 symlink rollback 失败闭合并保留诊断；部署注释已澄清。`bun run verify` 通过（64 test files / 993 tests），fresh-context 最终审查无 P0/P1/P2，`Merge verdict: OK`。未发送真实模型请求、部署 `~/.pi`、执行 `/reload`、修改凭据、提交或推送。
+- 2026-08-24：用户随后明确要求“提交，推送”，授权将上述已验收改动提交并推送至当前分支 `model-change`；仍不授权部署 `~/.pi`、执行 `/reload`、修改凭据或发送真实模型请求。

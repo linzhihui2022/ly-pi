@@ -76,7 +76,7 @@ describe("checked-in model policy manifest", () => {
       "pr-silent-failure-hunter",
       "pr-test-analyzer",
       "pr-type-design-analyzer",
-    ]) {
+    ] as const) {
       expect(compiled[agent]).toEqual(compiled.delegate);
     }
     expect(report.roles.standard.failurePolicy).toBe("error");

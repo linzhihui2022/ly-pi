@@ -1,5 +1,5 @@
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { Type } from "typebox";
+import { type TSchema, Type } from "typebox";
 import { Value } from "typebox/value";
 
 export type ModelRole =
@@ -39,11 +39,13 @@ export type ModelThinkingLevel =
   | "xhigh"
   | "max";
 
+export type ModelInput = "text" | "image";
+export type QualifiedModelReference = `${string}/${string}`;
 export type RoleFailurePolicy = "skip" | "error" | "confirm" | "error-no-write";
 
 export interface ModelCandidate {
   readonly slot: string;
-  readonly model: string;
+  readonly model: QualifiedModelReference;
   readonly label: string;
   readonly thinking: ModelThinkingLevel;
 }
@@ -51,7 +53,7 @@ export interface ModelCandidate {
 export interface ModelPolicy {
   readonly candidates: readonly ModelCandidate[];
   readonly capabilities: {
-    readonly input: readonly string[];
+    readonly input: readonly ModelInput[];
     readonly minContextWindow?: number;
     readonly requiresReasoning?: boolean;
   };
@@ -84,6 +86,25 @@ export interface LocalModelOverride {
       }
     >
   >;
+}
+
+export interface CompiledAgentOverride {
+  readonly model: QualifiedModelReference;
+  readonly thinking: ModelThinkingLevel;
+  readonly fallbackModels: readonly QualifiedModelReference[];
+}
+
+export interface CompiledModelPolicySettings {
+  readonly settings: {
+    readonly defaultProvider: string;
+    readonly defaultModel: string;
+    readonly defaultThinkingLevel: ModelThinkingLevel;
+  };
+  readonly subagents: {
+    readonly agentOverrides: Readonly<
+      Record<ManagedAgentName, CompiledAgentOverride>
+    >;
+  };
 }
 
 const ThinkingLevelSchema = Type.Union([
@@ -129,7 +150,7 @@ const ModelReferenceSchema = Type.String({
   minLength: 3,
   pattern: "^[^/]+/.+",
 });
-const ModelLabelSchema = Type.String({ minLength: 1 });
+const ModelLabelSchema = Type.String({ minLength: 1, pattern: "\\S" });
 
 const ModelPolicySchema = Type.Object(
   {
@@ -258,11 +279,18 @@ export interface ResolvedCandidate extends ModelCandidate {
   readonly source: "manifest" | "local";
 }
 
+export interface CandidateDiagnostic {
+  readonly slot: string;
+  readonly model: QualifiedModelReference;
+  readonly reason: string;
+}
+
 export type ModelRunResult<T> =
   | {
       status: "success";
       value: T;
       candidate: ResolvedCandidate;
+      diagnostics?: readonly CandidateDiagnostic[];
     }
   | {
       status: "failure";
@@ -277,9 +305,24 @@ function splitModelRef(model: string): [string, string] {
 
 const SECURITY_ROLES = new Set<ModelRole>(["security-judge", "security-audit"]);
 
+function invalidSchemaValue(
+  label: string,
+  schema: TSchema,
+  value: unknown,
+): Error {
+  const [error] = Value.Errors(schema, value);
+  const path = error?.instancePath || "/";
+  const detail = error?.message ? `: ${error.message}` : "";
+  return new Error(`invalid ${label} at ${path}${detail}`);
+}
+
 function assertValidModelManifest(manifest: ModelPolicyManifest): void {
   if (!Value.Check(ModelPolicyManifestSchema, manifest)) {
-    throw new Error("invalid model manifest");
+    throw invalidSchemaValue(
+      "model manifest",
+      ModelPolicyManifestSchema,
+      manifest,
+    );
   }
   for (const [role, policyName] of Object.entries(manifest.roles) as Array<
     [ModelRole, string]
@@ -320,7 +363,11 @@ function assertLocalOverrideAllowed(
 ): void {
   if (localOverride === undefined) return;
   if (!Value.Check(LocalModelOverrideSchema, localOverride)) {
-    throw new Error("invalid local model override");
+    throw invalidSchemaValue(
+      "local model override",
+      LocalModelOverrideSchema,
+      localOverride,
+    );
   }
   for (const [policyName, override] of Object.entries(localOverride.policies)) {
     const policy = manifest.policies[policyName];
@@ -559,6 +606,18 @@ function formatOperationError(error: unknown): string {
   return String(error);
 }
 
+function isProgrammingError(error: unknown): boolean {
+  return (
+    error instanceof EvalError ||
+    error instanceof RangeError ||
+    error instanceof ReferenceError ||
+    error instanceof SyntaxError ||
+    error instanceof TypeError ||
+    error instanceof URIError ||
+    (error instanceof Error && error.name === "AssertionError")
+  );
+}
+
 export function createModelPolicyRegistry(
   manifest: ModelPolicyManifest,
   localOverride?: LocalModelOverride,
@@ -657,7 +716,7 @@ export function createModelPolicyRegistry(
       };
     },
 
-    compilePiSettings() {
+    compilePiSettings(): CompiledModelPolicySettings {
       const candidatesForRole = (role: ModelRole): ResolvedCandidate[] => {
         const policyName = manifest.roles[role];
         const policy = requirePolicy(manifest, policyName, role);
@@ -672,6 +731,28 @@ export function createModelPolicyRegistry(
       };
       const [primary] = candidatesForRole(manifest.deployment.primary);
       const primaryRef = splitModelRef(primary.model);
+      const agentOverrides = {} as Record<
+        ManagedAgentName,
+        CompiledAgentOverride
+      >;
+
+      for (const [agent, role] of Object.entries(
+        manifest.deployment.agents,
+      ) as Array<[ManagedAgentName, DeployableModelRole]>) {
+        const [candidate, ...fallbacks] = candidatesForRole(role);
+        if (
+          fallbacks.some((fallback) => fallback.thinking !== candidate.thinking)
+        ) {
+          throw new Error(
+            `cannot compile agent '${agent}': role '${role}' has mixed candidate thinking levels`,
+          );
+        }
+        agentOverrides[agent] = {
+          model: candidate.model,
+          thinking: candidate.thinking,
+          fallbackModels: fallbacks.map((fallback) => fallback.model),
+        };
+      }
 
       return {
         settings: {
@@ -679,30 +760,7 @@ export function createModelPolicyRegistry(
           defaultModel: primaryRef[1],
           defaultThinkingLevel: primary.thinking,
         },
-        subagents: {
-          agentOverrides: Object.fromEntries(
-            Object.entries(manifest.deployment.agents).map(([agent, role]) => {
-              const [candidate, ...fallbacks] = candidatesForRole(role);
-              if (
-                fallbacks.some(
-                  (fallback) => fallback.thinking !== candidate.thinking,
-                )
-              ) {
-                throw new Error(
-                  `cannot compile agent '${agent}': role '${role}' has mixed candidate thinking levels`,
-                );
-              }
-              return [
-                agent,
-                {
-                  model: candidate.model,
-                  thinking: candidate.thinking,
-                  fallbackModels: fallbacks.map((fallback) => fallback.model),
-                },
-              ];
-            }),
-          ),
-        },
+        subagents: { agentOverrides },
       };
     },
 
@@ -717,7 +775,7 @@ export function createModelPolicyRegistry(
       const policyName = manifest.roles[role];
       const policy = requirePolicy(manifest, policyName, role);
 
-      const skippedCandidates: string[] = [];
+      const diagnostics: CandidateDiagnostic[] = [];
       for (const candidate of policy.candidates) {
         const effective = effectiveCandidate(
           policyName,
@@ -731,9 +789,11 @@ export function createModelPolicyRegistry(
         );
         const model = models.find(...splitModelRef(effective.candidate.model));
         if (!model || diagnosis.status !== "ready") {
-          skippedCandidates.push(
-            `${effective.candidate.slot} (${effective.candidate.model}): ${diagnosis.diagnostics.join(", ")}`,
-          );
+          diagnostics.push({
+            slot: effective.candidate.slot,
+            model: effective.candidate.model,
+            reason: diagnosis.diagnostics.join(", "),
+          });
           continue;
         }
 
@@ -746,9 +806,11 @@ export function createModelPolicyRegistry(
           const responseError = modelResponseFailure(value);
           if (responseError) {
             if (isRetryableInfrastructureFailure(responseError)) {
-              skippedCandidates.push(
-                `${resolvedCandidate.slot} (${resolvedCandidate.model}): ${responseError.message}`,
-              );
+              diagnostics.push({
+                slot: resolvedCandidate.slot,
+                model: resolvedCandidate.model,
+                reason: responseError.message,
+              });
               continue;
             }
             return {
@@ -761,12 +823,16 @@ export function createModelPolicyRegistry(
             status: "success",
             value,
             candidate: resolvedCandidate,
+            ...(diagnostics.length > 0 ? { diagnostics } : {}),
           };
         } catch (error) {
+          if (isProgrammingError(error)) throw error;
           if (isRetryableInfrastructureFailure(error)) {
-            skippedCandidates.push(
-              `${resolvedCandidate.slot} (${resolvedCandidate.model}): ${formatOperationError(error)}`,
-            );
+            diagnostics.push({
+              slot: resolvedCandidate.slot,
+              model: resolvedCandidate.model,
+              reason: formatOperationError(error),
+            });
             continue;
           }
           return {
@@ -780,7 +846,12 @@ export function createModelPolicyRegistry(
       return {
         status: "failure",
         failurePolicy: policy.failurePolicy,
-        reason: `no usable candidate for role '${role}': ${skippedCandidates.join("; ")}`,
+        reason: `no usable candidate for role '${role}': ${diagnostics
+          .map(
+            (diagnostic) =>
+              `${diagnostic.slot} (${diagnostic.model}): ${diagnostic.reason}`,
+          )
+          .join("; ")}`,
       };
     },
   };

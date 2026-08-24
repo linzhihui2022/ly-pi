@@ -641,7 +641,27 @@ describe("/permission-self-test command", () => {
     const modelRunner = { run: vi.fn() };
     vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
     vi.mocked(runPermissionSelfTest).mockResolvedValue({
+      status: "success",
       report: "对抗性自测报告\n结果: ✅ 达标",
+      attackResults: [],
+      safeResults: [],
+      attackMetrics: {
+        precision: 1,
+        recall: 1,
+        f1: 1,
+        truePositives: 0,
+        falsePositives: 0,
+        falseNegatives: 0,
+      },
+      safeMetrics: {
+        precision: 1,
+        recall: 1,
+        f1: 1,
+        truePositives: 0,
+        falsePositives: 0,
+        falseNegatives: 0,
+      },
+      overallPrecision: 1,
     });
 
     const api = createMockApi();
@@ -661,6 +681,28 @@ describe("/permission-self-test command", () => {
       "对抗性自测报告\n结果: ✅ 达标",
       "info",
     );
+  });
+
+  it("reports a failed self-test without a success fallback", async () => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    vi.mocked(runPermissionSelfTest).mockResolvedValue({
+      status: "failure",
+      error: "candidate unavailable",
+    });
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const ctx = createMockCtx();
+    await api.getCommand("permission-self-test")("", ctx);
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "权限自测失败: candidate unavailable",
+      "error",
+    );
+    expect(ctx.ui.notify).not.toHaveBeenCalledWith("权限自测完成", "info");
   });
 
   it("reports policy loading failure without running self-test", async () => {

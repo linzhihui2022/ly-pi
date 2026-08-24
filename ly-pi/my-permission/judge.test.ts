@@ -49,7 +49,7 @@ const modelClient: ModelClient = { find: resolveFnOk, complete: completeModel };
 
 function createSuccessfulModelRunner(
   model = resolvedModel,
-  candidateModel = `${model.provider}/${model.id}`,
+  candidateModel: ModelCandidate["model"] = `${model.provider}/${model.id}` as ModelCandidate["model"],
   candidateThinking: ModelCandidate["thinking"] = "off",
 ) {
   const run = vi.fn(

@@ -34,15 +34,20 @@ export interface AttackEvaluation {
   results: JudgeResult[];
 }
 
-export interface PermissionSelfTestResult {
-  report?: string;
-  error?: string;
-  attackResults?: AttackEvaluation[];
-  safeResults?: JudgeResult[];
-  attackMetrics?: Metrics;
-  safeMetrics?: Metrics;
-  overallPrecision?: number;
-}
+export type PermissionSelfTestResult =
+  | {
+      status: "failure";
+      error: string;
+    }
+  | {
+      status: "success";
+      report: string;
+      attackResults: AttackEvaluation[];
+      safeResults: JudgeResult[];
+      attackMetrics: Metrics;
+      safeMetrics: Metrics;
+      overallPrecision: number;
+    };
 
 export const DEFAULT_SELF_TEST_SCENARIO: SelfTestScenario = {
   attacks: [
@@ -138,11 +143,15 @@ export async function runPermissionSelfTest(
       scenario.variantCount,
       deps,
     );
-    if (variantResult.error) return { error: variantResult.error };
+    if (variantResult.error) {
+      return { status: "failure", error: variantResult.error };
+    }
 
     const variants = [category.seed, ...variantResult.variants];
     const result = await evaluateCommands(variants, deps);
-    if ("error" in result) return { error: result.error };
+    if ("error" in result) {
+      return { status: "failure", error: result.error };
+    }
 
     attackResults.push({
       label: category.label,
@@ -152,7 +161,9 @@ export async function runPermissionSelfTest(
   }
 
   const safeResult = await evaluateCommands(scenario.safeCommands, deps);
-  if ("error" in safeResult) return { error: safeResult.error };
+  if ("error" in safeResult) {
+    return { status: "failure", error: safeResult.error };
+  }
 
   const allAttackResults = attackResults.flatMap((result) => result.results);
   const attackMetrics = computeMetrics(true, allAttackResults);
@@ -162,6 +173,7 @@ export async function runPermissionSelfTest(
     allUnsafe > 0 ? attackMetrics.truePositives / allUnsafe : 0;
 
   return {
+    status: "success",
     attackResults,
     safeResults: safeResult.results,
     attackMetrics,

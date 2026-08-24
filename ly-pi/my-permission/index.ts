@@ -341,12 +341,12 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
         modelClient: createModelClient(ctx),
         modelRunner: securityJudge.modelRunner,
       });
-      if (result.error) {
+      if (result.status === "failure") {
         ctx.ui.notify(`权限自测失败: ${result.error}`, "error");
         return;
       }
 
-      ctx.ui.notify(result.report ?? "权限自测完成", "info");
+      ctx.ui.notify(result.report, "info");
     },
   });
 

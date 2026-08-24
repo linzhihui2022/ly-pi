@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   cpSync,
   existsSync,
   lstatSync,
@@ -18,6 +19,12 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 const LY_PI_DIR = fileURLToPath(new URL("..", import.meta.url));
 const DIST_DIR = join(LY_PI_DIR, "dist");
+const CLEANUP_FAILURE_PRELOAD = join(
+  LY_PI_DIR,
+  "scripts",
+  "fixtures",
+  "deploy-cleanup-failure-preload.ts",
+);
 const tempDirs: string[] = [];
 let distSnapshotDir: string | undefined;
 let hadDist = false;
@@ -38,6 +45,12 @@ function runBun(args: string[], env: NodeJS.ProcessEnv = {}) {
 
 function deploy(staging: string) {
   return runBun(["run", "scripts/deploy.ts"], {
+    PI_STAGING_DIR: staging,
+  });
+}
+
+function deployWithCleanupFailure(staging: string) {
+  return runBun(["--preload", CLEANUP_FAILURE_PRELOAD, "scripts/deploy.ts"], {
     PI_STAGING_DIR: staging,
   });
 }
@@ -193,6 +206,29 @@ describe("deploy model policy settings", () => {
     });
   });
 
+  it("fails before writing when a local override cannot be read", () => {
+    const staging = stagingDir();
+    const agentDir = join(staging, "agent");
+    const extensionDir = join(agentDir, "extensions", "ly-pi");
+    const privateDir = join(staging, "private");
+    const overrideTarget = join(privateDir, "models.local.json");
+    mkdirSync(extensionDir, { recursive: true });
+    mkdirSync(privateDir);
+    writeFileSync(overrideTarget, JSON.stringify({ version: 1, policies: {} }));
+    symlinkSync(overrideTarget, join(extensionDir, "models.local.json"));
+
+    chmodSync(privateDir, 0o000);
+    try {
+      const result = deploy(staging);
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("cannot load local model override");
+      expect(existsSync(join(agentDir, "settings.json"))).toBe(false);
+    } finally {
+      chmodSync(privateDir, 0o700);
+    }
+  });
+
   it("fails deployment before writing when a security policy is overridden", () => {
     const staging = stagingDir();
     const agentDir = join(staging, "agent");
@@ -252,6 +288,20 @@ describe("deploy model policy settings", () => {
     expect(existsSync(manifestPath)).toBe(true);
   });
 
+  it("fails and restores the previous output when temporary cleanup fails", () => {
+    const staging = stagingDir();
+    const extensionDir = join(staging, "agent", "extensions", "ly-pi");
+    const bundlePath = join(extensionDir, "index.js");
+    mkdirSync(extensionDir, { recursive: true });
+    writeFileSync(bundlePath, "existing bundle\n");
+
+    const result = deployWithCleanupFailure(staging);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("forced temporary cleanup failure");
+    expect(readFileSync(bundlePath, "utf-8")).toBe("existing bundle\n");
+  });
+
   it("writes through an existing settings symlink without replacing it", () => {
     const staging = stagingDir();
     const agentDir = join(staging, "agent");
@@ -270,6 +320,26 @@ describe("deploy model policy settings", () => {
       customSetting: true,
       defaultProvider: "openai-codex",
     });
+  });
+
+  it("restores a symlinked settings target when a later config fails", () => {
+    const staging = stagingDir();
+    const agentDir = join(staging, "agent");
+    const settingsPath = join(agentDir, "settings.json");
+    const settingsTarget = join(staging, "settings-target.json");
+    mkdirSync(agentDir, { recursive: true });
+    mkdirSync(join(agentDir, "mcp.json"));
+    writeFileSync(settingsTarget, '{"sentinel":"settings"}\n');
+    symlinkSync(settingsTarget, settingsPath);
+
+    const result = deploy(staging);
+
+    expect(result.status).not.toBe(0);
+    expect(lstatSync(settingsPath).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(settingsPath)).toBe(settingsTarget);
+    expect(readFileSync(settingsTarget, "utf-8")).toBe(
+      '{"sentinel":"settings"}\n',
+    );
   });
 
   it("rolls back all deployment writes when a later config fails", () => {

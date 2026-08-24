@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   computeMetrics,
   DEFAULT_SELF_TEST_SCENARIO,
+  type PermissionSelfTestResult,
   runPermissionSelfTest,
   type SelfTestScenario,
 } from "./self-test";
@@ -65,6 +66,13 @@ const scenario: SelfTestScenario = {
   safeCommands: ["git status"],
   variantCount: 1,
 };
+
+function failureMessage(result: PermissionSelfTestResult): string {
+  if (result.status !== "failure") {
+    throw new Error("expected permission self-test failure");
+  }
+  return result.error;
+}
 
 describe("default self-test scenario", () => {
   it("uses curl's explicit POST method for the exfiltration sample", () => {
@@ -142,7 +150,10 @@ describe("runPermissionSelfTest", () => {
       scenario,
     );
 
-    expect(result.error).toBeUndefined();
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error(`unexpected self-test failure: ${result.error}`);
+    }
     expect(result.attackMetrics).toMatchObject({
       truePositives: 2,
       falseNegatives: 0,
@@ -189,6 +200,7 @@ describe("runPermissionSelfTest", () => {
 
       await vi.advanceTimersByTimeAsync(config.judgeTimeoutMs);
       await expect(resultPromise).resolves.toEqual({
+        status: "failure",
         error: "生成 管道外泄 变种超时（5000ms）",
       });
       expect(lateResponseProduced).toBe(false);
@@ -218,6 +230,7 @@ describe("runPermissionSelfTest", () => {
     );
 
     expect(result).toEqual({
+      status: "failure",
       error: "生成 管道外泄 变种超时（5000ms）",
     });
   });
@@ -239,6 +252,7 @@ describe("runPermissionSelfTest", () => {
     );
 
     expect(result).toEqual({
+      status: "failure",
       error: "生成 管道外泄 变种数量不足：要求 2 个，实际 1 个",
     });
     expect(complete).toHaveBeenCalledTimes(1);
@@ -275,7 +289,7 @@ describe("runPermissionSelfTest", () => {
       const result = await resultPromise;
 
       expect(signal?.aborted).toBe(true);
-      expect(result.error).toBe("生成 管道外泄 变种超时（5000ms）");
+      expect(failureMessage(result)).toBe("生成 管道外泄 变种超时（5000ms）");
     } finally {
       vi.useRealTimers();
     }
@@ -301,8 +315,8 @@ describe("runPermissionSelfTest", () => {
       scenario,
     );
 
-    expect(result.error).toContain("管道外泄");
-    expect(result.error).toContain("no usable candidate");
+    expect(failureMessage(result)).toContain("管道外泄");
+    expect(failureMessage(result)).toContain("no usable candidate");
     expect(complete).not.toHaveBeenCalled();
   });
 
@@ -328,7 +342,7 @@ describe("runPermissionSelfTest", () => {
       scenario,
     );
 
-    expect(result.error).toBe(
+    expect(failureMessage(result)).toBe(
       "生成 管道外泄 变种失败: security-judge 需要 confirm，实际为 error",
     );
   });
@@ -353,7 +367,7 @@ describe("runPermissionSelfTest", () => {
       scenario,
     );
 
-    expect(result.error).toBe(
+    expect(failureMessage(result)).toBe(
       "生成 管道外泄 变种发生内部错误: unexpected runner failure",
     );
   });
@@ -379,7 +393,7 @@ describe("runPermissionSelfTest", () => {
       scenario,
     );
 
-    expect(result.error).toContain("法官模型返回格式不正确");
+    expect(failureMessage(result)).toContain("法官模型返回格式不正确");
     expect(complete).toHaveBeenCalledTimes(2);
   });
 });

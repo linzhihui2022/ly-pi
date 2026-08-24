@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
-import { createModelPolicyRegistry } from "./registry";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+  createModelPolicyRegistry,
+  type ManagedAgentName,
+  type ModelCandidate,
+  type ModelPolicy,
+} from "./registry";
 
 const manifest = {
   version: 1,
@@ -261,10 +266,10 @@ describe("createModelPolicyRegistry", () => {
     ).toThrow("invalid local model override");
   });
 
-  it("rejects an invalid model manifest before it is used", () => {
+  it("reports the invalid manifest field before it is used", () => {
     expect(() =>
       createModelPolicyRegistry({ ...manifest, version: 2 } as never),
-    ).toThrow("invalid model manifest");
+    ).toThrow("invalid model manifest at /version");
   });
 
   it("uses immutable snapshots after validating its inputs", () => {
@@ -282,7 +287,10 @@ describe("createModelPolicyRegistry", () => {
         },
       },
     };
-    const registry = createModelPolicyRegistry(mutableManifest, localOverride);
+    const registry = createModelPolicyRegistry(
+      mutableManifest,
+      localOverride as never,
+    );
 
     Reflect.set(
       mutableManifest.policies["security-judge-policy"].candidates[0],
@@ -464,21 +472,53 @@ describe("createModelPolicyRegistry", () => {
             slots: { primary: { model: "not-a-model" } },
           },
         },
-      }),
+      } as never),
     ).toThrow("invalid local model override");
   });
 
-  it("rejects a local override with an empty Model Label", () => {
+  it.each([
+    "",
+    " ",
+    "\t",
+  ])("rejects a manifest with an empty Model Label: %j", (label) => {
+    expect(() =>
+      createModelPolicyRegistry({
+        ...manifest,
+        policies: {
+          ...manifest.policies,
+          "fast-policy": {
+            ...manifest.policies["fast-policy"],
+            candidates: [
+              {
+                ...manifest.policies["fast-policy"].candidates[0],
+                label,
+              },
+            ],
+          },
+        },
+      } as never),
+    ).toThrow(
+      "invalid model manifest at /policies/fast-policy/candidates/0/label",
+    );
+  });
+
+  it.each([
+    "",
+    " ",
+    "\t",
+  ])("rejects a local override with an empty Model Label: %j", (label) => {
     expect(() =>
       createModelPolicyRegistry(manifest, {
         version: 1,
         policies: {
           "fast-policy": {
-            slots: { primary: { label: "" } },
+            slots: { primary: { label } },
           },
         },
       }),
-    ).toThrow("invalid local model override");
+    ).toThrow(
+      "invalid local model override at /policies/fast-policy/slots/primary/label",
+    );
   });
 
   it.each([
@@ -545,6 +585,13 @@ describe("createModelPolicyRegistry", () => {
         thinking: "off",
         source: "manifest",
       },
+      diagnostics: [
+        {
+          slot: "primary",
+          model: "test/primary",
+          reason: "rate limited",
+        },
+      ],
     });
   });
 
@@ -815,6 +862,58 @@ describe("createModelPolicyRegistry", () => {
     expect(result).toMatchObject({
       status: "success",
       candidate: { slot: "fallback" },
+    });
+  });
+
+  it("does not fall back when a terminal response includes an error message", async () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            {
+              ...manifest.policies["fast-policy"].candidates[0],
+              model: "test/primary",
+            },
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "off",
+            },
+          ],
+        },
+      },
+    });
+    const attempts: string[] = [];
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        return {
+          stopReason: "stop",
+          errorMessage: "rate limit",
+        };
+      },
+    );
+
+    expect(attempts).toEqual(["primary"]);
+    expect(result).toEqual({
+      status: "failure",
+      failurePolicy: "skip",
+      reason: "model response has an error message for stop reason 'stop'",
     });
   });
 
@@ -1291,7 +1390,7 @@ describe("createModelPolicyRegistry", () => {
     }
   });
 
-  it("does not fall back after a model protocol error", async () => {
+  it("rethrows a caller programming error without trying a fallback", async () => {
     const registry = createModelPolicyRegistry({
       ...manifest,
       policies: {
@@ -1314,8 +1413,12 @@ describe("createModelPolicyRegistry", () => {
       },
     });
     const attempts: string[] = [];
+    const programmingError = Object.assign(
+      new TypeError("invalid response adapter"),
+      { status: 500 },
+    );
 
-    const result = await registry.run(
+    const result = registry.run(
       "fast",
       {
         find: (provider, id) => ({
@@ -1328,16 +1431,13 @@ describe("createModelPolicyRegistry", () => {
       },
       async (model) => {
         attempts.push(model.id);
-        throw new Error("invalid response payload");
+        if (model.id === "primary") throw programmingError;
+        return successfulResponse;
       },
     );
 
+    await expect(result).rejects.toBe(programmingError);
     expect(attempts).toEqual(["primary"]);
-    expect(result).toEqual({
-      status: "failure",
-      failurePolicy: "skip",
-      reason: "invalid response payload",
-    });
   });
 
   it("skips a missing candidate before using the next slot", async () => {
@@ -1577,6 +1677,20 @@ describe("createModelPolicyRegistry", () => {
         },
       },
     });
+  });
+
+  it("exposes schema-aligned policy and compiled settings types", () => {
+    const compiled = createModelPolicyRegistry(manifest).compilePiSettings();
+
+    expectTypeOf<
+      ModelCandidate["model"]
+    >().toEqualTypeOf<`${string}/${string}`>();
+    expectTypeOf<ModelPolicy["capabilities"]["input"][number]>().toEqualTypeOf<
+      "text" | "image"
+    >();
+    expectTypeOf<
+      keyof typeof compiled.subagents.agentOverrides
+    >().toEqualTypeOf<ManagedAgentName>();
   });
 
   it("compiles subagent fallback models in candidate order", () => {
