@@ -159,9 +159,10 @@ class CollectorConfig:
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> CollectorConfig:
+        author = args.author.strip()
         for flag, value in (
             ("--repo", args.repo),
-            ("--author", args.author),
+            ("--author", author),
             ("--timezone", args.timezone),
         ):
             if value is not None and not value.strip():
@@ -177,7 +178,7 @@ class CollectorConfig:
             raise ValueError("--start-date and --end-date must both be provided")
         return cls(
             repo=args.repo,
-            author=args.author,
+            author=author,
             timezone=args.timezone,
             start_date=args.start_date,
             end_date=args.end_date,

@@ -38,7 +38,7 @@ python3 "$HOME/.pi/agent/skills/gh-build-weekly-timesheet/scripts/collect_pr_act
 ```
 
 - `--start-date` 与 `--end-date` 必须成对传入，不能反向或晚于今天。
-- 旧的 `--week-start YYYY-MM-DD` 仍可使用；它统计到该周结束日或今天（取较早者），且不能与显式日期范围混用。
+- 旧的 `--week-start YYYY-MM-DD` 仍可使用；它统计从该日期开始的 7 天（或截至今天的更短窗口），不能晚于今天，且不能与显式日期范围混用。
 - 按需传入 `--repo OWNER/REPO`、`--author LOGIN`、`--timezone IANA_NAME` 或 `--include-all-commit-authors`；默认只计入可确认属于所选账号的提交。
 - 未指定 `--timezone` 时，采集器使用运行 Pi 的系统本地时区。
 
@@ -78,7 +78,7 @@ python3 "$HOME/.pi/agent/skills/gh-build-weekly-timesheet/scripts/collect_pr_act
 为每个日期—票据区块写一条短小、结果导向的摘要：
 
 - 从 PR 标题和提交标题推导行为或调查结论，而非提交数量。
-- 保留 NeoDay、Deployteq、SQS、voucher-used 等标识符。
+- 保留票据或项目相关的品牌、系统和业务标识符。
 - 双语时中文在前、自然英文在后；每种语言各一条简洁句子。
 - 除非提交能证明，否则不要声称已部署、完成或产生生产影响。
 - `NO_ACTIVITY` 行使用“没有 GitHub 活动证据”而不是伪造任务摘要。

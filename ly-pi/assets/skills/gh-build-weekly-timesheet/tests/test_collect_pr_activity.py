@@ -246,6 +246,87 @@ class CliContractTests(unittest.TestCase):
             self.assertEqual(stdout, "")
             self.assertIn(f"{option} must not be empty", stderr)
 
+    def test_normalizes_author_whitespace_before_fetching(self) -> None:
+        with (
+            patch.object(collector, "resolve_author", return_value="alice") as resolve_author,
+            patch.object(collector, "fetch_prs", return_value=[]) as fetch,
+        ):
+            exit_code, stdout, stderr = run_cli(
+                [
+                    "--repo",
+                    "owner/repo",
+                    "--author",
+                    " alice ",
+                    "--start-date",
+                    "2024-01-01",
+                    "--end-date",
+                    "2024-01-01",
+                    "--timezone",
+                    "UTC",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["author"], "alice")
+        resolve_author.assert_called_once_with("alice")
+        fetch.assert_called_once_with("owner/repo", "alice")
+
+    def test_collects_successful_api_chain_with_audit_metadata(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "head": {"ref": "ABC-123-report"},
+                "html_url": "https://github.com/owner/repo/pull/7",
+                "user": {"login": "alice"},
+            }
+        ]
+        graphql_pages = [
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "commits": {
+                                "nodes": [
+                                    {
+                                        "commit": {
+                                            "oid": "commit-1",
+                                            "committedDate": "2024-01-02T09:00:00Z",
+                                            "messageHeadline": "ABC-123 add report",
+                                            "authors": {
+                                                "nodes": [
+                                                    {"user": {"login": "bob"}},
+                                                    {"user": {"login": "alice"}},
+                                                ]
+                                            },
+                                        }
+                                    }
+                                ],
+                                "pageInfo": {
+                                    "hasNextPage": False,
+                                    "endCursor": None,
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+
+        exit_code, stdout, stderr = self.run_with_api_payloads(
+            pull_requests, graphql_pages
+        )
+
+        self.assertEqual(exit_code, 0, stderr)
+        result = json.loads(stdout)
+        activity = result["activities"][0]
+        self.assertEqual(activity["ticket"], "ABC-123")
+        self.assertEqual(activity["pr_title"], "ABC-123 add report")
+        self.assertEqual(
+            activity["pr_url"], "https://github.com/owner/repo/pull/7"
+        )
+        self.assertEqual(activity["commit_count"], 1)
+
     def test_prefers_commit_ticket_over_pull_request_ticket(self) -> None:
         pull_requests = [
             {
@@ -267,6 +348,43 @@ class CliContractTests(unittest.TestCase):
         result = self.collect_json(pull_requests)
 
         self.assertEqual(result["activities"][0]["ticket"], "ABC-123")
+
+    def test_returns_no_activity_calendar_for_empty_pull_requests(self) -> None:
+        result = self.collect_json([])
+
+        self.assertEqual(result["activities"], [])
+        self.assertEqual(result["daily_ticket_totals"], [])
+        self.assertEqual(result["ticket_totals"], [])
+        self.assertTrue(result["calendar_days"])
+        self.assertTrue(
+            all(not day["has_activity"] for day in result["calendar_days"])
+        )
+
+    def test_preserves_activity_for_merge_only_commit(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "headRefName": "ABC-123-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "merge-only",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "Merge pull request #7 from feature/report",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            }
+        ]
+
+        result = self.collect_json(pull_requests)
+        activity = result["activities"][0]
+
+        self.assertEqual(activity["commit_count"], 1)
+        self.assertEqual(activity["work_commit_count"], 0)
+        self.assertEqual(result["daily_ticket_totals"][0]["work_commit_count"], 0)
+        self.assertEqual(result["ticket_totals"][0]["work_commit_count"], 0)
 
     def test_cli_include_all_commit_authors_includes_other_and_unknown(self) -> None:
         pull_requests = [

@@ -91,7 +91,7 @@ _Avoid_: my-hud worktree 字段、Git 状态栏
 ## Weekly Timesheet
 
 **Evidence Window（证据窗口）**:
-用于工时表、截至当前本地日期的闭合本地日历区间；其中 GitHub 活动可作为记工时证据。
+用于工时表、终点不晚于当前本地日期的闭合本地日历区间；其中 GitHub 活动可作为记工时证据。
 _Avoid_: 预测周期、未来周期
 
 **No Activity（无活动）**:
