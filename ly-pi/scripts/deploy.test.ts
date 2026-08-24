@@ -63,6 +63,13 @@ describe("deploy", () => {
       "pi-tool-display",
       "package.json",
     );
+    const toolDisplayConfig = join(
+      stagingDir,
+      "agent",
+      "extensions",
+      "ly-pi",
+      "my-tool-display.json",
+    );
     mkdirSync(legacyConfigDir, { recursive: true });
     mkdirSync(dirname(packageFile), { recursive: true });
     writeFileSync(legacyConfig, '{"enabled":true}\n');
@@ -95,6 +102,9 @@ describe("deploy", () => {
     );
     expect(readFileSync(packageFile, "utf8")).toBe(
       '{"name":"pi-tool-display"}\n',
+    );
+    expect(readFileSync(toolDisplayConfig, "utf8")).toBe(
+      '{\n  "enabled": true,\n  "bashCollapsedLines": 10,\n  "diffCollapsedLines": 24\n}\n',
     );
   });
 

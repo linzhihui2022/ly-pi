@@ -46,7 +46,7 @@ vi.mock("../my-log/index", () => ({
 }));
 
 import { createDevLogger } from "../my-log/index";
-import { loadToolDisplayConfig } from "./config";
+import { DEFAULT_TOOL_DISPLAY_CONFIG, loadToolDisplayConfig } from "./config";
 import myToolDisplay from "./index";
 
 let agentDir: string;
@@ -425,17 +425,17 @@ describe("my-tool-display", () => {
     expect(result).toMatchObject({
       details: {
         native: "metadata",
-        writeDiff: { diff: expect.any(String) },
       },
     });
     expect(generateDiffString).toHaveBeenCalledWith(
       "const oldValue = true;\n",
       "const newValue = false;\n",
     );
+    const rendererResult = { content: result.content, details: result.details };
     expect(
       render(
         write.renderResult(
-          result,
+          rendererResult,
           { expanded: true, isPartial: false },
           theme,
           { isError: false, args: { path: "file.ts" }, state: {} },
@@ -445,7 +445,7 @@ describe("my-tool-display", () => {
     expect(
       render(
         write.renderResult(
-          result,
+          rendererResult,
           { expanded: false, isPartial: true },
           theme,
           { isError: false, args: { path: "file.ts" }, state: {} },
@@ -618,6 +618,18 @@ describe("my-tool-display", () => {
     );
     expect(rendered).toContain("Write diff unavailable");
     expect(generateDiffString).not.toHaveBeenCalled();
+    expect(nativeWriteExecutions.get(workspaceDir)).toHaveBeenCalledWith(
+      `call-${kind}`,
+      { path, content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+    const targetPath =
+      kind === "outside the current workspace"
+        ? path
+        : join(workspaceDir, path);
+    expect(readFileSync(targetPath, "utf8")).toBe("safe text\n");
   });
 
   it("normalizes supported write target path forms before previewing", async () => {
@@ -782,6 +794,41 @@ describe("my-tool-display", () => {
         ),
       ),
     ).toContain("target path is a symbolic link");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("does not read through an external symlink parent directory", async () => {
+    const workspaceDir = createWorkspace();
+    const outsideDir = createWorkspace();
+    const outsideTarget = join(outsideDir, "existing.txt");
+    const linkedDirectory = join(workspaceDir, "link-dir");
+    writeFileSync(outsideTarget, "outside\n");
+    symlinkSync(outsideDir, linkedDirectory);
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-symlink-parent",
+      { path: "link-dir/existing.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          {
+            isError: false,
+            args: { path: "link-dir/existing.txt" },
+            state: {},
+          },
+        ),
+      ),
+    ).toContain("target path resolves outside the current workspace");
     expect(generateDiffString).not.toHaveBeenCalled();
   });
 
@@ -1045,7 +1092,7 @@ describe("my-tool-display", () => {
   it("sanitizes edit and write diffs before applying theme colors", () => {
     const { registered: editRegistered } = setup("builtin", ["edit"]);
     const edit = editRegistered[0]!;
-    const unsafeDiff = "+ 1|\u001b[31mvisible\u001b[0m\u0000\u0007";
+    const unsafeDiff = "+ 1|\u001b[31mvisible\u001b[0m\u0000\u0007\u009d\u202e";
 
     expect(
       render(
@@ -1082,6 +1129,10 @@ describe("my-tool-display", () => {
     {
       label: "non-numeric",
       config: { enabled: true, diffCollapsedLines: "2" },
+    },
+    {
+      label: "fractional",
+      config: { enabled: true, diffCollapsedLines: 1.5 },
     },
     { label: "negative", config: { enabled: true, diffCollapsedLines: -1 } },
   ])("falls back to 24 for a $label diffCollapsedLines setting", ({
@@ -1133,7 +1184,12 @@ describe("my-tool-display", () => {
     expect(
       render(
         edit.renderResult(
-          { content: [], details: undefined },
+          {
+            content: [
+              { type: "text", text: "Successfully replaced 1 block(s)." },
+            ],
+            details: undefined,
+          },
           { expanded: false, isPartial: false },
           theme,
           { isError: false, args: { path: "file.ts" }, state: {} },
@@ -1146,13 +1202,42 @@ describe("my-tool-display", () => {
     expect(
       render(
         write.renderResult(
-          { content: [], details: undefined },
+          {
+            content: [{ type: "text", text: "Successfully wrote 12 bytes." }],
+            details: undefined,
+          },
           { expanded: false, isPartial: false },
           theme,
           { isError: false, args: { path: "file.ts" }, state: {} },
         ),
       ),
     ).toBe("Write completed (diff unavailable).");
+  });
+
+  it("sanitizes edit, write, and read call paths", () => {
+    const unsafePath = "file\u001b[31m\u009d\u202e.txt\nspoof";
+    const expectedPath = "file.txt spoof";
+
+    const { registered: editRegistered } = setup("builtin", ["edit"]);
+    expect(
+      render(
+        editRegistered[0]!.renderCall(
+          { path: unsafePath, edits: [] },
+          theme,
+          {},
+        ),
+      ),
+    ).toBe(`edit ${expectedPath}`);
+
+    const { registered: writeRegistered } = setup("builtin", ["write"]);
+    expect(
+      render(writeRegistered[0]!.renderCall({ path: unsafePath }, theme, {})),
+    ).toBe(`write ${expectedPath}`);
+
+    const { registered: readRegistered } = setup("builtin", ["read"]);
+    expect(
+      render(readRegistered[0]!.renderCall({ path: unsafePath }, theme, {})),
+    ).toBe(`read ${expectedPath}`);
   });
 
   it("delegates edit execution and preserves native metadata for the execution cwd", async () => {
@@ -1244,6 +1329,10 @@ describe("my-tool-display", () => {
     );
   });
 
+  it("keeps the default tool display config immutable", () => {
+    expect(Object.isFrozen(DEFAULT_TOOL_DISPLAY_CONFIG)).toBe(true);
+  });
+
   it("uses a valid bashCollapsedLines setting", () => {
     writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 2 }));
 
@@ -1289,6 +1378,10 @@ describe("my-tool-display", () => {
     {
       label: "non-numeric",
       config: { enabled: true, bashCollapsedLines: "2" },
+    },
+    {
+      label: "fractional",
+      config: { enabled: true, bashCollapsedLines: 1.5 },
     },
     { label: "negative", config: { enabled: true, bashCollapsedLines: -1 } },
   ])("falls back to 10 for a $label bashCollapsedLines setting", ({
@@ -1462,6 +1555,18 @@ describe("my-tool-display", () => {
   });
 
   it("does not load project shell settings for an untrusted execution cwd", async () => {
+    vi.mocked(SettingsManager.create).mockImplementation(
+      (_cwd, _agentDir, options) =>
+        ({
+          getShellCommandPrefix: vi.fn(() =>
+            options?.projectTrusted ? "project-prefix" : undefined,
+          ),
+          getShellPath: vi.fn(() =>
+            options?.projectTrusted ? "/project-shell" : undefined,
+          ),
+        }) as never,
+    );
+
     const { registered } = setup("builtin", ["bash"]);
     const context = {
       cwd: "/untrusted-project",
@@ -1480,6 +1585,10 @@ describe("my-tool-display", () => {
       "/untrusted-project",
       agentDir,
       { projectTrusted: false },
+    );
+    expect(createBashToolDefinition).toHaveBeenLastCalledWith(
+      "/untrusted-project",
+      { commandPrefix: undefined, shellPath: undefined },
     );
   });
 

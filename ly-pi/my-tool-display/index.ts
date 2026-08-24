@@ -32,6 +32,7 @@ import { loadToolDisplayConfig } from "./config";
 
 const initializedApis = new WeakSet<ExtensionAPI>();
 const registeredToolNames = new WeakMap<ExtensionAPI, Set<string>>();
+const writeDiffByContent = new WeakMap<object, WriteDiffDetails>();
 const MAX_WRITE_DIFF_BYTES = 1_000_000;
 const log = createDevLogger("my-tool-display");
 
@@ -42,11 +43,6 @@ type WritePreview =
 type WriteDiffDetails =
   | { kind: "diff"; diff: string }
   | { kind: "summary"; summary: string };
-
-type WriteDisplayDetails = {
-  writeDiff: WriteDiffDetails;
-  [key: string]: unknown;
-};
 
 type SafeWritePath =
   | { safe: true; path: string; existed: true; device: number; inode: number }
@@ -113,10 +109,35 @@ function sanitizeToolOutput(output: string): string {
       if (code === 0x09 || code === 0x0a || code === 0x0d) {
         return true;
       }
+      if ((code >= 0x7f && code <= 0x9f) || /\p{Cf}/u.test(character)) {
+        return false;
+      }
       return code > 0x1f && (code < 0xfff9 || code > 0xfffb);
     })
     .join("")
     .replace(/\r/g, "");
+}
+
+function sanitizeToolLabel(label: string): string {
+  return sanitizeToolOutput(label).replace(/[\t\r\n\u2028\u2029]/g, " ");
+}
+
+function getWriteDiffDetails(details: unknown): WriteDiffDetails | undefined {
+  if (typeof details !== "object" || details === null) {
+    return undefined;
+  }
+  const writeDiff = (details as Record<string, unknown>).writeDiff;
+  if (typeof writeDiff !== "object" || writeDiff === null) {
+    return undefined;
+  }
+  const record = writeDiff as Record<string, unknown>;
+  if (record.kind === "diff" && typeof record.diff === "string") {
+    return { kind: "diff", diff: record.diff };
+  }
+  if (record.kind === "summary" && typeof record.summary === "string") {
+    return { kind: "summary", summary: record.summary };
+  }
+  return undefined;
 }
 
 function textOutput(result: {
@@ -470,7 +491,7 @@ function formatEditCall(
     bold(text: string): string;
   },
 ): string {
-  const path = args.file_path ?? args.path ?? "...";
+  const path = sanitizeToolLabel(args.file_path ?? args.path ?? "...");
   return `${theme.fg("toolTitle", theme.bold("edit"))} ${theme.fg("accent", path)}`;
 }
 
@@ -525,7 +546,7 @@ function renderEditResult(
     return renderEditDiff(result.details.diff, options, theme, collapsedLines);
   }
   return new Text(
-    theme.fg("muted", output || "Edit completed (diff unavailable)."),
+    theme.fg("muted", "Edit completed (diff unavailable)."),
     0,
     0,
   );
@@ -534,8 +555,9 @@ function renderEditResult(
 function renderWriteResult(
   result: {
     content: Array<{ type: string; text?: string }>;
-    details?: WriteDisplayDetails;
+    details?: unknown;
   },
+  writeDiff: WriteDiffDetails | undefined,
   options: { expanded: boolean; isPartial: boolean },
   theme: { fg(color: string, text: string): string },
   context: { isError: boolean },
@@ -548,15 +570,19 @@ function renderWriteResult(
   if (options.isPartial) {
     return new Text(theme.fg("warning", "Writing..."), 0, 0);
   }
-  const writeDiff = result.details?.writeDiff;
-  if (writeDiff?.kind === "diff") {
-    return renderEditDiff(writeDiff.diff, options, theme, collapsedLines);
+  const displayWriteDiff = writeDiff ?? getWriteDiffDetails(result.details);
+  if (displayWriteDiff?.kind === "diff") {
+    return renderEditDiff(
+      displayWriteDiff.diff,
+      options,
+      theme,
+      collapsedLines,
+    );
   }
   return new Text(
     theme.fg(
       "warning",
-      (writeDiff?.kind === "summary" && writeDiff.summary) ||
-        output ||
+      (displayWriteDiff?.kind === "summary" && displayWriteDiff.summary) ||
         "Write completed (diff unavailable).",
     ),
     0,
@@ -571,7 +597,7 @@ function formatWriteCall(
     bold(text: string): string;
   },
 ): string {
-  const path = args.file_path ?? args.path ?? "...";
+  const path = sanitizeToolLabel(args.file_path ?? args.path ?? "...");
   return `${theme.fg("toolTitle", theme.bold("write"))} ${theme.fg("accent", path)}`;
 }
 
@@ -587,7 +613,7 @@ function formatReadCall(
     bold(text: string): string;
   },
 ): string {
-  const path = args.file_path ?? args.path ?? "...";
+  const path = sanitizeToolLabel(args.file_path ?? args.path ?? "...");
   const start = args.offset ?? 1;
   const range =
     args.offset === undefined && args.limit === undefined
@@ -693,25 +719,17 @@ function registerToolRenderers(
           }
         }
 
-        const nativeDetails =
-          result.details &&
-          typeof result.details === "object" &&
-          !Array.isArray(result.details)
-            ? (result.details as Record<string, unknown>)
-            : {};
-        // Pi's native result type keeps details opaque; preserve that metadata
-        // while adding the discriminated writeDiff payload owned by this renderer.
-        return {
-          ...result,
-          details: { ...nativeDetails, writeDiff: details },
-        } as unknown as typeof result;
+        writeDiffByContent.set(result.content, details);
+        return result;
       },
       renderCall(args, theme) {
         return new Text(formatWriteCall(args, theme), 0, 0);
       },
       renderResult(result, options, theme, context) {
         return renderWriteResult(
-          result as typeof result & { details?: WriteDisplayDetails },
+          result,
+          writeDiffByContent.get(result.content) ??
+            getWriteDiffDetails(result.details),
           options,
           theme,
           context,

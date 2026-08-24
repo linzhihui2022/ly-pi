@@ -17,19 +17,23 @@ const ToolDisplayConfigSchema = Type.Object(
 const CollapsedLinesSchema = Type.Integer({ minimum: 0 });
 
 type ToolDisplayConfigFile = Static<typeof ToolDisplayConfigSchema>;
+export type NonNegativeInteger = number & {
+  readonly __brand: "NonNegativeInteger";
+};
 export type ToolDisplayConfig = Omit<
   ToolDisplayConfigFile,
   "bashCollapsedLines" | "diffCollapsedLines"
 > & {
-  bashCollapsedLines: number;
-  diffCollapsedLines: number;
+  bashCollapsedLines: NonNegativeInteger;
+  diffCollapsedLines: NonNegativeInteger;
 };
 
-export const DEFAULT_TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
-  enabled: true,
-  bashCollapsedLines: 10,
-  diffCollapsedLines: 24,
-};
+export const DEFAULT_TOOL_DISPLAY_CONFIG: Readonly<ToolDisplayConfig> =
+  Object.freeze({
+    enabled: true,
+    bashCollapsedLines: 10 as NonNegativeInteger,
+    diffCollapsedLines: 24 as NonNegativeInteger,
+  });
 
 const log = createDevLogger("my-tool-display:config");
 const warnedConfigValues = new Set<string>();
@@ -45,10 +49,10 @@ function warnOnce(key: string, message: string): void {
 function parseCollapsedLines(
   field: "bashCollapsedLines" | "diffCollapsedLines",
   value: unknown,
-  fallback: number,
-): number {
+  fallback: NonNegativeInteger,
+): NonNegativeInteger {
   if (Value.Check(CollapsedLinesSchema, value)) {
-    return value as number;
+    return value as NonNegativeInteger;
   }
   if (value !== undefined) {
     warnOnce(
