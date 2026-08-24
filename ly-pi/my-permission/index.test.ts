@@ -41,8 +41,20 @@ vi.mock("../model-policy/config", () => ({
   loadModelPolicyRegistry: vi.fn(),
 }));
 
+vi.mock("../src/shared/file", () => ({
+  loadFile: vi.fn(() => "existing rule"),
+}));
+
 vi.mock("./professor", () => ({
   createAdvocate: vi.fn(),
+}));
+
+vi.mock("./prosecutor", () => ({
+  createProsecutor: vi.fn(),
+}));
+
+vi.mock("./chief", () => ({
+  createChief: vi.fn(),
 }));
 
 vi.mock("./pipeline", async (importOriginal) => {
@@ -98,10 +110,12 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import open from "open";
 import { loadModelPolicyRegistry } from "../model-policy/config";
 import { ensurePreviewServer, stopPreviewServer } from "../web-preview/index";
+import { createChief } from "./chief";
 import { appendCost } from "./cost-tracker";
 import { createJudge } from "./judge";
 import { createMerger as createPipelineMerger } from "./pipeline";
 import { createAdvocate } from "./professor";
+import { createProsecutor } from "./prosecutor";
 import { decide } from "./rules";
 import { runPermissionSelfTest } from "./self-test";
 import { confirmToolCall, isChildSession } from "./ui";
@@ -419,10 +433,26 @@ describe("security audit tools", () => {
     ];
   }
 
-  function createSecurityAuditCtx() {
+  function createAllowedEntries() {
+    return [
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: {
+          toolName: "bash",
+          value: "git status",
+          safe: true,
+          reason: "read only",
+          toolFor: "status",
+        },
+      },
+    ];
+  }
+
+  function createSecurityAuditCtx(entries = createAdvocateEntries()) {
     return createMockCtx({
       sessionManager: {
-        getEntries: () => createAdvocateEntries(),
+        getEntries: () => entries,
         getSessionId: () => "session-xyz",
       },
     });
@@ -508,6 +538,57 @@ describe("security audit tools", () => {
     );
     expect(result).toMatchObject({
       content: [{ type: "text", text: "✅ JUDGE.md 已更新，共 1 条规则" }],
+    });
+  });
+
+  it("wires the security-audit runner into Prosecutor", async () => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    const prosecutor = vi.fn().mockResolvedValue({ error: "audit failed" });
+    vi.mocked(createProsecutor).mockReturnValue(prosecutor as never);
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const result = await api
+      .getTool("permission_prosecutor")
+      .execute(
+        "call-1",
+        {},
+        undefined,
+        undefined,
+        createSecurityAuditCtx(createAllowedEntries()),
+      );
+
+    expect(createProsecutor).toHaveBeenCalledWith(
+      expect.anything(),
+      modelRunner,
+    );
+    expect(prosecutor).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "检察官分析失败: audit failed" }],
+    });
+  });
+
+  it("wires the security-audit runner into Chief", async () => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    const chief = vi.fn().mockResolvedValue({ error: "audit failed" });
+    vi.mocked(createChief).mockReturnValue(chief as never);
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const result = await api
+      .getTool("permission_chief")
+      .execute("call-1", {}, undefined, undefined, createSecurityAuditCtx());
+
+    expect(createChief).toHaveBeenCalledWith(expect.anything(), modelRunner);
+    expect(chief).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "审判长分析失败: audit failed" }],
     });
   });
 });

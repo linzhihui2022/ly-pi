@@ -169,7 +169,7 @@ describe("requestSessionTitle", () => {
     ).resolves.toBeNull();
   });
 
-  it("returns null for invalid output or a failed request", async () => {
+  it("returns null for invalid output", async () => {
     const ctx = createContext();
     const { registry } = createRegistry(ctx.model);
     completeModel.mockResolvedValueOnce({
@@ -178,11 +178,16 @@ describe("requestSessionTitle", () => {
     await expect(
       requestSessionTitle("任务", ctx, registry),
     ).resolves.toBeNull();
+  });
 
-    completeModel.mockRejectedValueOnce(new Error("network"));
+  it("does not hide an unexpected Registry exception", async () => {
+    const registry = {
+      run: vi.fn().mockRejectedValue(new Error("registry failure")),
+    } as any;
+
     await expect(
-      requestSessionTitle("任务", ctx, registry),
-    ).resolves.toBeNull();
+      requestSessionTitle("任务", createContext(), registry),
+    ).rejects.toThrow("registry failure");
   });
 
   it("ignores non-text assistant content", async () => {

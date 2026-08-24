@@ -345,6 +345,18 @@ describe("createModelPolicyRegistry", () => {
     ).toThrow("agent 'image-reader' must deploy the 'vision' role");
   });
 
+  it.each([
+    ["primary", { primary: "security-judge" }],
+    ["agent", { agents: { scout: "security-audit" } }],
+  ] as const)("rejects a security role in deployment %s", (_kind, deployment) => {
+    expect(() =>
+      createModelPolicyRegistry({
+        ...manifest,
+        deployment: { ...manifest.deployment, ...deployment } as never,
+      }),
+    ).toThrow("invalid model manifest");
+  });
+
   it("rejects a local override for the vision policy", () => {
     expect(() =>
       createModelPolicyRegistry(manifest, {
@@ -702,6 +714,59 @@ describe("createModelPolicyRegistry", () => {
     });
   });
 
+  it("falls back after an AbortError exception", async () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            {
+              ...manifest.policies["fast-policy"].candidates[0],
+              model: "test/primary",
+            },
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "off",
+            },
+          ],
+        },
+      },
+    });
+    const attempts: string[] = [];
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        if (model.id === "primary") {
+          throw Object.assign(new Error("request aborted"), {
+            name: "AbortError",
+          });
+        }
+        return successfulResponse;
+      },
+    );
+
+    expect(attempts).toEqual(["primary", "fallback"]);
+    expect(result).toMatchObject({
+      status: "success",
+      candidate: { slot: "fallback" },
+    });
+  });
+
   it.each([
     "pending",
     "deferred",
@@ -923,6 +988,38 @@ describe("createModelPolicyRegistry", () => {
       status: "failure",
       failurePolicy: "skip",
       reason: "network format is invalid",
+    });
+  });
+
+  it.each([
+    ["string", "unexpected operation failure", "unexpected operation failure"],
+    [
+      "structured error",
+      { code: "E_UNEXPECTED", status: 418 },
+      '{"code":"E_UNEXPECTED","status":418}',
+    ],
+  ] as const)("preserves a non-Error %s operation failure", async (_kind, error, reason) => {
+    const registry = createModelPolicyRegistry(manifest);
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async () => {
+        throw error;
+      },
+    );
+
+    expect(result).toEqual({
+      status: "failure",
+      failurePolicy: "skip",
+      reason,
     });
   });
 

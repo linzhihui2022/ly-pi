@@ -1,7 +1,7 @@
-import { cpSync, existsSync } from "node:fs";
-import { lstat, mkdir, readFile, rename, rm } from "node:fs/promises";
+import { existsSync, readdirSync } from "node:fs";
+import { lstat, mkdir, readFile, readlink, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { BunFile } from "bun";
 import {
   createModelPolicyRegistry,
@@ -146,39 +146,59 @@ type FileSnapshot =
 
 let temporaryWriteId = 0;
 
-async function write(path: string, data: WriteData) {
-  await mkdir(dirname(path), { recursive: true });
-  await Bun.write(path, data);
+function isNotFoundError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
+}
+
+async function resolveWritePath(path: string): Promise<string> {
+  let current = path;
+  for (let hop = 0; hop < 40; hop++) {
+    try {
+      const stat = await lstat(current);
+      if (!stat.isSymbolicLink()) return current;
+      current = resolve(dirname(current), await readlink(current));
+    } catch (error) {
+      if (isNotFoundError(error)) return current;
+      throw error;
+    }
+  }
+  throw new Error(`too many symbolic links in deployment path: ${path}`);
 }
 
 async function snapshot(path: string): Promise<FileSnapshot> {
+  const targetPath = await resolveWritePath(path);
   try {
-    const stat = await lstat(path);
-    if (!stat.isFile()) return { path, state: "other" };
-    return { path, state: "file", data: new Uint8Array(await readFile(path)) };
+    const stat = await lstat(targetPath);
+    if (!stat.isFile()) return { path: targetPath, state: "other" };
+    return {
+      path: targetPath,
+      state: "file",
+      data: new Uint8Array(await readFile(targetPath)),
+    };
   } catch (error) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
-      return { path, state: "absent" };
+    if (isNotFoundError(error)) {
+      return { path: targetPath, state: "absent" };
     }
     throw error;
   }
 }
 
 async function writeAtomically(path: string, data: WriteData) {
-  const directory = dirname(path);
+  const targetPath = await resolveWritePath(path);
+  const directory = dirname(targetPath);
   const temporaryPath = join(
     directory,
-    `.${basename(path)}.ly-pi-${process.pid}-${temporaryWriteId++}.tmp`,
+    `.${basename(targetPath)}.ly-pi-${process.pid}-${temporaryWriteId++}.tmp`,
   );
   await mkdir(directory, { recursive: true });
   try {
     await Bun.write(temporaryPath, data);
-    await rename(temporaryPath, path);
+    await rename(temporaryPath, targetPath);
   } finally {
     await rm(temporaryPath, { force: true }).catch(() => undefined);
   }
@@ -222,6 +242,36 @@ async function writeTransaction(
   }
 }
 
+function collectFileWrites(
+  sourceDir: string,
+  destinationDir: string,
+): Array<{ path: string; data: WriteData }> {
+  const writes: Array<{ path: string; data: WriteData }> = [];
+
+  function visit(currentDir: string, relativeDir: string): void {
+    for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+      const sourcePath = join(currentDir, entry.name);
+      const relativePath = join(relativeDir, entry.name);
+      if (entry.isDirectory()) {
+        visit(sourcePath, relativePath);
+      } else if (entry.isFile() || entry.isSymbolicLink()) {
+        writes.push({
+          path: join(destinationDir, relativePath),
+          data: Bun.file(sourcePath),
+        });
+      } else {
+        throw new Error(`unsupported deployment asset: ${sourcePath}`);
+      }
+    }
+  }
+
+  visit(sourceDir, "");
+  return writes;
+}
+
+const deploymentWrites: Array<{ path: string; data: WriteData }> = [];
+const deploymentMessages: string[] = [];
+
 // ── Model-policy outputs ────────────────────────────────────────────────────
 {
   const merged = await Bun.file("assets/config/settings.json").json();
@@ -245,7 +295,7 @@ async function writeTransaction(
     compiledModelPolicySettings.subagents,
   );
 
-  await writeTransaction([
+  deploymentWrites.push(
     { path: join(extensionDir, "index.js"), data: Bun.file("dist/index.js") },
     { path: settingsPath, data: `${JSON.stringify(target, null, 2)}\n` },
     {
@@ -256,11 +306,13 @@ async function writeTransaction(
       path: join(extensionDir, "model-policies.json"),
       data: Bun.file("assets/config/model-policies.json"),
     },
-  ]);
-  console.log("Extension: deployed");
-  console.log("Settings: deployed");
-  console.log("subagentRuntime: deployed");
-  console.log("model-policies.json: deployed");
+  );
+  deploymentMessages.push(
+    "Extension: deployed",
+    "Settings: deployed",
+    "subagentRuntime: deployed",
+    "model-policies.json: deployed",
+  );
 }
 
 // ── Other configs ───────────────────────────────────────────────────────────
@@ -311,8 +363,11 @@ async function writeTransaction(
   ];
 
   for (const { src, dest, base, label } of configManifest) {
-    await write(join(base ?? agentDir, dest), Bun.file(join(configDir, src)));
-    console.log(`${label}: deployed`);
+    deploymentWrites.push({
+      path: join(base ?? agentDir, dest),
+      data: Bun.file(join(configDir, src)),
+    });
+    deploymentMessages.push(`${label}: deployed`);
   }
 }
 
@@ -322,26 +377,35 @@ async function writeTransaction(
 
 // Skills
 if (existsSync("assets/skills")) {
-  cpSync("assets/skills", join(agentDir, "skills"), { recursive: true });
-  console.log("Skills: deployed");
+  deploymentWrites.push(
+    ...collectFileWrites("assets/skills", join(agentDir, "skills")),
+  );
+  deploymentMessages.push("Skills: deployed");
 }
 
 // Themes
 if (existsSync("assets/themes")) {
-  for (const f of new Bun.Glob("*.json").scanSync("assets/themes")) {
-    await write(
-      join(agentDir, "themes", f),
-      Bun.file(join("assets/themes", f)),
-    );
+  for (const entry of readdirSync("assets/themes", { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith(".json")) {
+      deploymentWrites.push({
+        path: join(agentDir, "themes", entry.name),
+        data: Bun.file(join("assets/themes", entry.name)),
+      });
+    }
   }
-  console.log("Themes: deployed");
+  deploymentMessages.push("Themes: deployed");
 }
 
 // Agents
 if (existsSync("assets/agents")) {
-  cpSync("assets/agents", join(agentDir, "agents"), { recursive: true });
-  console.log("Agents: deployed");
+  deploymentWrites.push(
+    ...collectFileWrites("assets/agents", join(agentDir, "agents")),
+  );
+  deploymentMessages.push("Agents: deployed");
 }
+
+await writeTransaction(deploymentWrites);
+for (const message of deploymentMessages) console.log(message);
 
 // ── rtk init ────────────────────────────────────────────────────────────────
 if (process.env.PI_SKIP_RTK === "1") {

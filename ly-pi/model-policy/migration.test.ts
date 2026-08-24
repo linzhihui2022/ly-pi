@@ -158,13 +158,16 @@ describe("model selection migration guard", () => {
     expect(filesMatching(DIRECT_PROVIDER_IMPORT)).toEqual([]);
   });
 
-  it("detects direct Pi AI provider imports", () => {
+  it.each([
+    [
+      "Pi AI",
+      'import { deepseekProvider } from "@earendil-works/pi-ai/providers";',
+    ],
+    ["AI SDK", 'import { createOpenAI } from "@ai-sdk/openai";'],
+  ] as const)("detects direct %s provider imports", (_kind, source) => {
     const root = mkdtempSync(join(tmpdir(), "model-policy-guard-"));
     try {
-      writeFileSync(
-        join(root, "provider.ts"),
-        'import { deepseekProvider } from "@earendil-works/pi-ai/providers";',
-      );
+      writeFileSync(join(root, "provider.ts"), source);
       expect(filesMatching(DIRECT_PROVIDER_IMPORT, root)).toEqual([
         "provider.ts",
       ]);

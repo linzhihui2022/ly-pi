@@ -11,6 +11,11 @@ export type ModelRole =
   | "security-judge"
   | "security-audit";
 
+export type DeployableModelRole = Exclude<
+  ModelRole,
+  "security-judge" | "security-audit"
+>;
+
 export type ModelThinkingLevel =
   | "off"
   | "minimal"
@@ -45,8 +50,8 @@ export interface ModelPolicyManifest {
   readonly policies: Readonly<Record<string, ModelPolicy>>;
   readonly roles: Readonly<Record<ModelRole, string>>;
   readonly deployment: {
-    readonly primary: ModelRole;
-    readonly agents: Readonly<Record<string, ModelRole>>;
+    readonly primary: DeployableModelRole;
+    readonly agents: Readonly<Record<string, DeployableModelRole>>;
   };
 }
 
@@ -77,14 +82,12 @@ const ThinkingLevelSchema = Type.Union([
   Type.Literal("max"),
 ]);
 
-const ModelRoleSchema = Type.Union([
+const DeployableModelRoleSchema = Type.Union([
   Type.Literal("primary"),
   Type.Literal("fast"),
   Type.Literal("standard"),
   Type.Literal("deep"),
   Type.Literal("vision"),
-  Type.Literal("security-judge"),
-  Type.Literal("security-audit"),
 ]);
 
 const RoleFailurePolicySchema = Type.Union([
@@ -151,8 +154,11 @@ const ModelPolicyManifestSchema = Type.Object(
     ),
     deployment: Type.Object(
       {
-        primary: ModelRoleSchema,
-        agents: Type.Record(Type.String({ minLength: 1 }), ModelRoleSchema),
+        primary: DeployableModelRoleSchema,
+        agents: Type.Record(
+          Type.String({ minLength: 1 }),
+          DeployableModelRoleSchema,
+        ),
       },
       { additionalProperties: false },
     ),
@@ -510,6 +516,18 @@ function isRetryableInfrastructureFailure(error: unknown): boolean {
   );
 }
 
+function formatOperationError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  try {
+    const serialized = JSON.stringify(error);
+    if (serialized !== undefined) return serialized;
+  } catch {
+    // Fall through to String for circular or otherwise unserializable values.
+  }
+  return String(error);
+}
+
 export function createModelPolicyRegistry(
   manifest: ModelPolicyManifest,
   localOverride?: LocalModelOverride,
@@ -716,15 +734,14 @@ export function createModelPolicyRegistry(
         } catch (error) {
           if (isRetryableInfrastructureFailure(error)) {
             skippedCandidates.push(
-              `${resolvedCandidate.slot} (${resolvedCandidate.model}): ${error instanceof Error ? error.message : "model operation failed"}`,
+              `${resolvedCandidate.slot} (${resolvedCandidate.model}): ${formatOperationError(error)}`,
             );
             continue;
           }
           return {
             status: "failure",
             failurePolicy: policy.failurePolicy,
-            reason:
-              error instanceof Error ? error.message : "model operation failed",
+            reason: formatOperationError(error),
           };
         }
       }

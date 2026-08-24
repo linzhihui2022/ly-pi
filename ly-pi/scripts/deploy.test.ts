@@ -2,14 +2,17 @@ import { spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
@@ -247,6 +250,54 @@ describe("deploy model policy settings", () => {
     expect(readFileSync(bundlePath, "utf-8")).toBe("existing bundle\n");
     expect(existsSync(runtimePath)).toBe(false);
     expect(existsSync(manifestPath)).toBe(true);
+  });
+
+  it("writes through an existing settings symlink without replacing it", () => {
+    const staging = stagingDir();
+    const agentDir = join(staging, "agent");
+    const settingsPath = join(agentDir, "settings.json");
+    const settingsTarget = join(staging, "settings-target.json");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(settingsTarget, '{"customSetting":true}\n');
+    symlinkSync(settingsTarget, settingsPath);
+
+    const result = deploy(staging);
+
+    expect(result.status).toBe(0);
+    expect(lstatSync(settingsPath).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(settingsPath)).toBe(settingsTarget);
+    expect(JSON.parse(readFileSync(settingsTarget, "utf-8"))).toMatchObject({
+      customSetting: true,
+      defaultProvider: "openai-codex",
+    });
+  });
+
+  it("rolls back all deployment writes when a later config fails", () => {
+    const staging = stagingDir();
+    const agentDir = join(staging, "agent");
+    const extensionDir = join(agentDir, "extensions", "ly-pi");
+    const settingsPath = join(agentDir, "settings.json");
+    const bundlePath = join(extensionDir, "index.js");
+    const runtimePath = join(agentDir, "extensions", "subagent", "config.json");
+    const manifestPath = join(extensionDir, "model-policies.json");
+    mkdirSync(extensionDir, { recursive: true });
+    mkdirSync(join(agentDir, "mcp.json"));
+    writeFileSync(settingsPath, '{"sentinel":"settings"}\n');
+    writeFileSync(bundlePath, "existing bundle\n");
+    mkdirSync(dirname(runtimePath), { recursive: true });
+    writeFileSync(runtimePath, '{"sentinel":"runtime"}\n');
+    writeFileSync(manifestPath, "existing manifest\n");
+
+    const result = deploy(staging);
+
+    expect(result.status).not.toBe(0);
+    expect(readFileSync(settingsPath, "utf-8")).toBe(
+      '{"sentinel":"settings"}\n',
+    );
+    expect(readFileSync(bundlePath, "utf-8")).toBe("existing bundle\n");
+    expect(readFileSync(runtimePath, "utf-8")).toBe('{"sentinel":"runtime"}\n');
+    expect(readFileSync(manifestPath, "utf-8")).toBe("existing manifest\n");
+    expect(existsSync(join(agentDir, "agents"))).toBe(false);
   });
 
   it("deploys policy-generated specialist overrides without frontmatter model pins", () => {

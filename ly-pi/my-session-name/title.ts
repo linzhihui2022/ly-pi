@@ -32,8 +32,10 @@ export async function requestSessionTitle(
 ): Promise<string | null> {
   const policyRegistry = registry ?? loadModelPolicyRegistry(EXT_DIR);
 
-  const result = await policyRegistry
-    .run("fast", ctx.modelRegistry, async (model, candidate) =>
+  const result = await policyRegistry.run(
+    "fast",
+    ctx.modelRegistry,
+    async (model, candidate) =>
       ctx.modelRegistry.complete(
         model,
         {
@@ -55,8 +57,7 @@ export async function requestSessionTitle(
             : { reasoningEffort: candidate.thinking }),
         },
       ),
-    )
-    .catch(() => undefined);
+  );
   if (!result) return null;
   if (result.status !== "success") {
     if (result.failurePolicy !== "skip") {
