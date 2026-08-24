@@ -157,6 +157,15 @@ class CollectorConfig:
     week_start: date | None
     include_all_commit_authors: bool
 
+    def __post_init__(self) -> None:
+        has_explicit_range = self.start_date is not None or self.end_date is not None
+        if has_explicit_range and (self.start_date is None or self.end_date is None):
+            raise ValueError("--start-date and --end-date must both be provided")
+        if self.week_start is not None and has_explicit_range:
+            raise ValueError(
+                "--week-start cannot be combined with --start-date or --end-date"
+            )
+
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> CollectorConfig:
         author = args.author.strip()
@@ -169,13 +178,6 @@ class CollectorConfig:
                 raise ValueError(f"{flag} must not be empty")
         if args.repo is not None:
             split_repo(args.repo)
-        has_explicit_range = args.start_date is not None or args.end_date is not None
-        if args.week_start is not None and has_explicit_range:
-            raise ValueError(
-                "--week-start cannot be combined with --start-date or --end-date"
-            )
-        if has_explicit_range and (args.start_date is None or args.end_date is None):
-            raise ValueError("--start-date and --end-date must both be provided")
         return cls(
             repo=args.repo,
             author=author,
@@ -346,8 +348,10 @@ def load_localtime_zoneinfo(localtime: Path) -> ZoneInfo:
 
 def resolve_system_timezone() -> tuple[ZoneInfo, str]:
     configured_timezone = os.environ.get("TZ")
-    if configured_timezone:
+    if configured_timezone is not None:
         timezone_name = configured_timezone.removeprefix(":")
+        if not timezone_name:
+            return ZoneInfo("UTC"), "UTC"
         try:
             return ZoneInfo(timezone_name), timezone_name
         except (ZoneInfoNotFoundError, ValueError) as error:
@@ -481,20 +485,25 @@ def resolve_commit_candidate(
 
 
 def fetch_paginated_items(endpoint: str) -> list[dict[str, Any]]:
-    payload = json.loads(
-        run(
-            [
-                "gh",
-                "api",
-                "--paginate",
-                "--slurp",
-                "--method",
-                "GET",
-                endpoint,
-            ],
-            context=f"gh api GET {endpoint}",
+    try:
+        payload = json.loads(
+            run(
+                [
+                    "gh",
+                    "api",
+                    "--paginate",
+                    "--slurp",
+                    "--method",
+                    "GET",
+                    endpoint,
+                ],
+                context=f"gh api GET {endpoint}",
+            )
         )
-    )
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            f"gh api GET {endpoint}: invalid JSON response: {error.msg}"
+        ) from error
     if not isinstance(payload, list):
         raise RuntimeError("unexpected paginated GitHub API response")
 
@@ -524,7 +533,12 @@ def fetch_graphql_pages(
         flag = "-F" if isinstance(value, int) else "-f"
         command.extend([flag, f"{name}={value}"])
 
-    payload = json.loads(run(command))
+    try:
+        payload = json.loads(run(command))
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            f"gh api graphql: invalid JSON response: {error.msg}"
+        ) from error
     if not payload or not isinstance(payload, list) or not all(
         isinstance(page, dict) for page in payload
     ):
@@ -690,12 +704,20 @@ def fetch_prs(repo: str, author: str) -> list[PullRequest]:
         f"repos/{repository}/pulls?state=all&per_page=100"
     )
     author_key = author.casefold()
-    authored_pull_requests = [
-        pull_request
-        for pull_request in pull_requests
-        if (login := pull_request_author_login(pull_request)) is not None
-        and login.casefold() == author_key
-    ]
+    authored_pull_requests: list[dict[str, Any]] = []
+    for pull_request in pull_requests:
+        login = pull_request_author_login(pull_request)
+        if login is None:
+            number = pull_request.get("number")
+            if isinstance(number, int) and not isinstance(number, bool):
+                raise RuntimeError(
+                    f"pull request #{number} is missing a verifiable author login"
+                )
+            raise RuntimeError(
+                "pull request list contains an item without a verifiable author login"
+            )
+        if login.casefold() == author_key:
+            authored_pull_requests.append(pull_request)
 
     prs: list[PullRequest] = []
     for pull_request in authored_pull_requests:
@@ -878,7 +900,7 @@ def collect(config: CollectorConfig) -> CollectResult:
 def main() -> int:
     try:
         output = collect(CollectorConfig.from_args(parse_args()))
-    except (RuntimeError, ValueError, KeyError, json.JSONDecodeError) as error:
+    except (RuntimeError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     json.dump(output, sys.stdout, ensure_ascii=False, indent=2)

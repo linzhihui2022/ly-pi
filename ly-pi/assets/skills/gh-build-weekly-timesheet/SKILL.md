@@ -44,6 +44,9 @@ python3 "$HOME/.pi/agent/skills/gh-build-weekly-timesheet/scripts/collect_pr_act
 
 采集器通过 `gh api` 读取 GitHub 数据；较长历史范围可能需要很多只读请求。若 GitHub 访问被拦截，请请求运行相同 `gh` 查询的网络权限。绝不打印 token 或批量环境变量。
 
+- PR 列表条目缺少可验证的作者 login 时，采集器会失败退出，不将异常响应静默当作无活动。
+- `gh` 返回非 JSON 时，采集器会失败退出，并在错误中保留 `invalid JSON response` 及 API/PR 上下文。
+
 以 JSON 输出为事实来源：
 
 顶层 JSON 字段包括：`repository`、`author`、`timezone`、`date_range`、`calendar_days`、`pull_requests_scanned`、`duplicates_removed`、`commits_outside_range`、`commits_by_other_authors`、`commits_by_unknown_authors`、`activities`、`daily_ticket_totals` 和 `ticket_totals`。

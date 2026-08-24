@@ -1006,6 +1006,32 @@ class CliContractTests(unittest.TestCase):
         )
 
 
+class CollectorConfigInvariantTests(unittest.TestCase):
+    def test_rejects_direct_construction_of_a_partial_date_range(self) -> None:
+        with self.assertRaisesRegex(ValueError, "both"):
+            collector.CollectorConfig(
+                repo="owner/repo",
+                author="alice",
+                timezone="UTC",
+                start_date=date(2024, 1, 2),
+                end_date=None,
+                week_start=None,
+                include_all_commit_authors=False,
+            )
+
+    def test_rejects_direct_construction_of_a_mixed_date_range(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be combined"):
+            collector.CollectorConfig(
+                repo="owner/repo",
+                author="alice",
+                timezone="UTC",
+                start_date=date(2024, 1, 2),
+                end_date=date(2024, 1, 5),
+                week_start=date(2024, 1, 1),
+                include_all_commit_authors=False,
+            )
+
+
 class ResolveDateWindowTests(unittest.TestCase):
     def test_defaults_to_current_local_week_through_today(self) -> None:
         start, end = collector.resolve_date_window(
@@ -1086,6 +1112,13 @@ class ResolveTimezoneTests(unittest.TestCase):
 
 
 class ResolveSystemTimezoneTests(unittest.TestCase):
+    def test_treats_an_empty_tz_as_utc(self) -> None:
+        with patch.dict(os.environ, {"TZ": ""}, clear=True):
+            local_tz, timezone_name = collector.resolve_system_timezone()
+
+        self.assertEqual(str(local_tz), "UTC")
+        self.assertEqual(timezone_name, "UTC")
+
     def test_reports_unknown_system_timezone_for_an_invalid_tz(self) -> None:
         with patch.dict(os.environ, {"TZ": "Not/AZone"}, clear=True):
             with self.assertRaisesRegex(ValueError, "unknown system timezone"):
@@ -1287,6 +1320,17 @@ class ResolveAuthorTests(unittest.TestCase):
 
 
 class FetchPaginatedItemsTests(unittest.TestCase):
+    def test_reports_invalid_rest_json_with_endpoint_context(self) -> None:
+        endpoint = "repos/owner/repo/pulls?state=all&per_page=100"
+        with patch.object(collector, "run", return_value="not-json"):
+            with self.assertRaises(RuntimeError) as raised:
+                collector.fetch_paginated_items(endpoint)
+
+        self.assertIn(
+            f"gh api GET {endpoint}: invalid JSON response",
+            str(raised.exception),
+        )
+
     def test_flattens_every_rest_page(self) -> None:
         pages = [[{"number": 7}], [{"number": 8}]]
 
@@ -1311,6 +1355,13 @@ class FetchPaginatedItemsTests(unittest.TestCase):
 
 
 class FetchGraphqlPagesTests(unittest.TestCase):
+    def test_reports_invalid_graphql_json_with_operation_context(self) -> None:
+        with patch.object(collector, "run", return_value="not-json"):
+            with self.assertRaisesRegex(
+                RuntimeError, "gh api graphql: invalid JSON response"
+            ):
+                collector.fetch_graphql_pages("query", {"owner": "owner"})
+
     def test_assembles_a_paginated_graphql_command(self) -> None:
         query = collector.PULL_REQUEST_COMMITS_QUERY
         pages = [{"data": {"viewer": {"login": "alice"}}}]
@@ -1529,28 +1580,22 @@ class FetchPullRequestsTests(unittest.TestCase):
             [call("owner/repo", 7), call("owner/repo", 9)],
         )
 
-    def test_skips_pull_requests_without_a_verifiable_author_login(self) -> None:
-        pull_requests = [
+    def test_rejects_pull_requests_without_a_verifiable_author_login(self) -> None:
+        for pull_request in (
             {"number": 7, "user": None},
             {"number": 8, "user": {"login": None}},
-            {
-                "number": 9,
-                "title": "ABC-123 add report",
-                "head": {"ref": "ABC-123-report"},
-                "html_url": "https://github.com/owner/repo/pull/9",
-                "user": {"login": "alice"},
-            },
-        ]
-
-        with (
-            patch.object(
-                collector, "fetch_paginated_items", return_value=pull_requests
-            ),
-            patch.object(collector, "fetch_pull_request_commits", return_value=[]),
         ):
-            result = collector.fetch_prs("owner/repo", "alice")
-
-        self.assertEqual([pr["number"] for pr in result], [9])
+            with self.subTest(number=pull_request["number"]):
+                with patch.object(
+                    collector,
+                    "fetch_paginated_items",
+                    return_value=[pull_request],
+                ):
+                    with self.assertRaisesRegex(
+                        RuntimeError,
+                        rf"pull request #{pull_request['number']}.*author login",
+                    ):
+                        collector.fetch_prs("owner/repo", "alice")
 
     def test_rejects_malformed_required_pull_request_fields(self) -> None:
         invalid_fields = (
@@ -1591,6 +1636,95 @@ class FetchPullRequestsTests(unittest.TestCase):
 
 
 class CollectTests(unittest.TestCase):
+    def test_emits_complete_audit_fields_and_combined_counters(self) -> None:
+        shared_commit = {
+            "oid": "shared",
+            "committedDate": "2024-01-02T12:00:00Z",
+            "messageHeadline": "ABC-123 shared work",
+            "authors": [{"login": "alice"}],
+        }
+        prs = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "headRefName": "ABC-123-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    shared_commit,
+                    {
+                        "oid": "own",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "ABC-123 own work",
+                        "authors": [{"login": "alice"}],
+                    },
+                    {
+                        "oid": "other",
+                        "committedDate": "2024-01-02T10:00:00Z",
+                        "messageHeadline": "ABC-123 other work",
+                        "authors": [{"login": "bob"}],
+                    },
+                    {
+                        "oid": "unknown",
+                        "committedDate": "2024-01-02T11:00:00Z",
+                        "messageHeadline": "ABC-123 unknown work",
+                        "authors": [],
+                    },
+                    {
+                        "oid": "outside",
+                        "committedDate": "2024-01-01T23:00:00Z",
+                        "messageHeadline": "ABC-123 outside work",
+                        "authors": [{"login": "alice"}],
+                    },
+                ],
+            },
+            {
+                "number": 8,
+                "title": "DEF-456 follow-up",
+                "headRefName": "DEF-456-follow-up",
+                "url": "https://github.com/owner/repo/pull/8",
+                "commits": [shared_commit],
+            },
+        ]
+
+        with (
+            patch.object(collector, "resolve_author", return_value="alice"),
+            patch.object(collector, "fetch_prs", return_value=prs),
+        ):
+            result = collector.collect(
+                make_config(
+                    start_date=date(2024, 1, 2),
+                    end_date=date(2024, 1, 2),
+                )
+            )
+
+        self.assertEqual(
+            set(result),
+            {
+                "repository",
+                "author",
+                "timezone",
+                "date_range",
+                "calendar_days",
+                "pull_requests_scanned",
+                "duplicates_removed",
+                "commits_outside_range",
+                "commits_by_other_authors",
+                "commits_by_unknown_authors",
+                "activities",
+                "daily_ticket_totals",
+                "ticket_totals",
+            },
+        )
+        self.assertEqual(result["repository"], "owner/repo")
+        self.assertEqual(result["author"], "alice")
+        self.assertEqual(result["timezone"], "UTC")
+        self.assertEqual(result["pull_requests_scanned"], 2)
+        self.assertEqual(result["duplicates_removed"], 1)
+        self.assertEqual(result["commits_outside_range"], 1)
+        self.assertEqual(result["commits_by_other_authors"], 1)
+        self.assertEqual(result["commits_by_unknown_authors"], 1)
+        self.assertEqual(result["activities"][0]["commit_count"], 2)
+
     def test_emits_date_window_and_calendar_days_without_no_activity_ticket(self) -> None:
         prs = [
             {
