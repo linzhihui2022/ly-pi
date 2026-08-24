@@ -82,7 +82,14 @@ class CliFailureTests(unittest.TestCase):
         self.assertIn("cannot start gh", stderr.getvalue())
 
     def test_rejects_a_malformed_repo_before_fetching(self) -> None:
-        for repo in ("ownerrepo", "/repo", "owner/"):
+        for repo in (
+            "ownerrepo",
+            "/repo",
+            "owner/",
+            "owner/repo/extra",
+            "owner/../repo",
+            "owner/repo?token=secret",
+        ):
             with self.subTest(repo=repo):
                 with patch.object(collector, "fetch_prs") as fetch:
                     exit_code, stdout, stderr = run_cli(
@@ -105,32 +112,106 @@ class CliFailureTests(unittest.TestCase):
                 self.assertIn("--repo must use OWNER/REPO format", stderr)
                 fetch.assert_not_called()
 
-
-class CliContractTests(unittest.TestCase):
-    def collect_json(
-        self, pull_requests: list[dict[str, object]], timezone_name: str = "UTC"
-    ) -> dict[str, object]:
-        with (
-            patch.object(collector, "resolve_author", return_value="alice"),
-            patch.object(collector, "fetch_prs", return_value=pull_requests),
-        ):
+    def test_accepts_repository_names_starting_with_dot(self) -> None:
+        with patch.object(collector, "fetch_prs", return_value=[]) as fetch:
             exit_code, stdout, stderr = run_cli(
                 [
                     "--repo",
-                    "owner/repo",
+                    "github/.github",
                     "--author",
                     "alice",
                     "--start-date",
                     "2024-01-01",
                     "--end-date",
-                    "2024-12-31",
+                    "2024-01-01",
                     "--timezone",
-                    timezone_name,
+                    "UTC",
                 ]
             )
 
         self.assertEqual(exit_code, 0, stderr)
+        self.assertEqual(json.loads(stdout)["repository"], "github/.github")
+        fetch.assert_called_once_with("github/.github", "alice")
+
+    def test_rejects_repo_credentials_without_echoing_them(self) -> None:
+        exit_code, stdout, stderr = run_cli(
+            [
+                "--repo",
+                "owner/super-secret@host",
+                "--author",
+                "alice",
+                "--start-date",
+                "2024-01-01",
+                "--end-date",
+                "2024-01-01",
+                "--timezone",
+                "UTC",
+            ]
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("--repo must use OWNER/REPO format", stderr)
+        self.assertNotIn("super-secret", stderr)
+
+
+class CliContractTests(unittest.TestCase):
+    def collect_json(
+        self,
+        pull_requests: list[dict[str, object]],
+        timezone_name: str = "UTC",
+        include_all_commit_authors: bool = False,
+    ) -> dict[str, object]:
+        arguments = [
+            "--repo",
+            "owner/repo",
+            "--author",
+            "alice",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-12-31",
+            "--timezone",
+            timezone_name,
+        ]
+        if include_all_commit_authors:
+            arguments.append("--include-all-commit-authors")
+
+        with (
+            patch.object(collector, "resolve_author", return_value="alice"),
+            patch.object(collector, "fetch_prs", return_value=pull_requests),
+        ):
+            exit_code, stdout, stderr = run_cli(arguments)
+
+        self.assertEqual(exit_code, 0, stderr)
         return json.loads(stdout)
+
+    def run_with_api_payloads(
+        self,
+        pull_requests: list[dict[str, object]],
+        graphql_pages: list[dict[str, object]],
+        author: str = "alice",
+    ) -> tuple[int, str, str]:
+        def mocked_run(command: list[str], context: str | None = None) -> str:
+            if "graphql" in command:
+                return json.dumps(graphql_pages)
+            return json.dumps([pull_requests])
+
+        with patch.object(collector, "run", side_effect=mocked_run):
+            return run_cli(
+                [
+                    "--repo",
+                    "owner/repo",
+                    "--author",
+                    author,
+                    "--start-date",
+                    "2024-01-01",
+                    "--end-date",
+                    "2024-01-02",
+                    "--timezone",
+                    "UTC",
+                ]
+            )
 
     def test_rejects_empty_explicit_cli_values(self) -> None:
         base_arguments = [
@@ -164,6 +245,66 @@ class CliContractTests(unittest.TestCase):
             self.assertEqual(exit_code, 1)
             self.assertEqual(stdout, "")
             self.assertIn(f"{option} must not be empty", stderr)
+
+    def test_prefers_commit_ticket_over_pull_request_ticket(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "DEF-456 add report",
+                "headRefName": "DEF-456-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "commit-ticket",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "ABC-123 add report",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            }
+        ]
+
+        result = self.collect_json(pull_requests)
+
+        self.assertEqual(result["activities"][0]["ticket"], "ABC-123")
+
+    def test_cli_include_all_commit_authors_includes_other_and_unknown(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "headRefName": "ABC-123-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "own",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "ABC-123 own work",
+                        "authors": [{"login": "alice"}],
+                    },
+                    {
+                        "oid": "other",
+                        "committedDate": "2024-01-02T10:00:00Z",
+                        "messageHeadline": "ABC-123 other work",
+                        "authors": [{"login": "bob"}],
+                    },
+                    {
+                        "oid": "unknown",
+                        "committedDate": "2024-01-02T11:00:00Z",
+                        "messageHeadline": "ABC-123 unknown work",
+                        "authors": [],
+                    },
+                ],
+            }
+        ]
+
+        result = self.collect_json(
+            pull_requests, include_all_commit_authors=True
+        )
+
+        self.assertEqual(result["activities"][0]["commit_count"], 3)
+        self.assertEqual(result["commits_by_other_authors"], 0)
+        self.assertEqual(result["commits_by_unknown_authors"], 0)
 
     def test_rejects_invalid_committed_date_with_cli_context(self) -> None:
         for committed_date in ("2024-01-02T09:00:00", "not-a-timestamp"):
@@ -317,6 +458,163 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertIn("pull request #7", stderr)
         self.assertIn("GitHub GraphQL error: partial failure", stderr)
+
+    def test_rejects_empty_graphql_commit_oid_through_cli(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "head": {"ref": "ABC-123-report"},
+                "html_url": "https://github.com/owner/repo/pull/7",
+                "user": {"login": "alice"},
+            }
+        ]
+        graphql_pages = [
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "commits": {
+                                "nodes": [
+                                    {
+                                        "commit": {
+                                            "oid": "   ",
+                                            "committedDate": "2024-01-02T09:00:00Z",
+                                            "messageHeadline": "ABC-123 add report",
+                                            "authors": {
+                                                "nodes": [{"user": {"login": "alice"}}]
+                                            },
+                                        }
+                                    }
+                                ],
+                                "pageInfo": {
+                                    "hasNextPage": False,
+                                    "endCursor": None,
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+
+        exit_code, stdout, stderr = self.run_with_api_payloads(
+            pull_requests, graphql_pages
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("pull request #7", stderr)
+        self.assertIn("non-empty identifier", stderr)
+
+    def test_rejects_malformed_graphql_page_info_through_cli(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "head": {"ref": "ABC-123-report"},
+                "html_url": "https://github.com/owner/repo/pull/7",
+                "user": {"login": "alice"},
+            }
+        ]
+        graphql_pages = [
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "commits": {
+                                "nodes": [],
+                                "pageInfo": {
+                                    "hasNextPage": True,
+                                    "endCursor": None,
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+
+        exit_code, stdout, stderr = self.run_with_api_payloads(
+            pull_requests, graphql_pages
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("pull request #7", stderr)
+        self.assertIn("pageInfo", stderr)
+
+    def test_rejects_empty_graphql_payload_through_cli(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "ABC-123 add report",
+                "head": {"ref": "ABC-123-report"},
+                "html_url": "https://github.com/owner/repo/pull/7",
+                "user": {"login": "alice"},
+            }
+        ]
+
+        exit_code, stdout, stderr = self.run_with_api_payloads(
+            pull_requests, []
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("unexpected paginated GitHub GraphQL response", stderr)
+
+    def test_rejects_malformed_rest_page_through_cli(self) -> None:
+        malformed_page = {"number": 7}
+
+        def mocked_run(command: list[str], context: str | None = None) -> str:
+            return json.dumps([malformed_page])
+
+        with patch.object(collector, "run", side_effect=mocked_run):
+            exit_code, stdout, stderr = run_cli(
+                [
+                    "--repo",
+                    "owner/repo",
+                    "--author",
+                    "alice",
+                    "--start-date",
+                    "2024-01-01",
+                    "--end-date",
+                    "2024-01-02",
+                    "--timezone",
+                    "UTC",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("unexpected paginated GitHub API page", stderr)
+
+    def test_rejects_null_current_user_through_cli(self) -> None:
+        def mocked_run(command: list[str], context: str | None = None) -> str:
+            if command[:3] == ["gh", "api", "user"]:
+                return "null"
+            return json.dumps([[]])
+
+        with patch.object(collector, "run", side_effect=mocked_run) as run:
+            exit_code, stdout, stderr = run_cli(
+                [
+                    "--repo",
+                    "owner/repo",
+                    "--author",
+                    "@me",
+                    "--start-date",
+                    "2024-01-01",
+                    "--end-date",
+                    "2024-01-02",
+                    "--timezone",
+                    "UTC",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("empty login", stderr)
+        run.assert_called_once_with(["gh", "api", "user", "--jq", ".login"])
 
     def test_assigns_conflicting_duplicate_oid_to_unassigned_stably(self) -> None:
         pull_requests = [
@@ -472,7 +770,7 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(result["activities"][0]["pr_number"], 8)
         self.assertEqual(result["duplicates_removed"], 1)
 
-    def test_marks_a_shared_commit_unassigned_when_no_pull_request_matches(self) -> None:
+    def test_assigns_a_shared_commit_ticket_without_matching_pull_request(self) -> None:
         pull_requests = [
             {
                 "number": 7,
@@ -504,10 +802,13 @@ class CliContractTests(unittest.TestCase):
             },
         ]
 
-        result = self.collect_json(pull_requests)
+        first = self.collect_json(pull_requests)
+        second = self.collect_json(list(reversed(pull_requests)))
 
-        self.assertEqual(result["activities"][0]["ticket"], "UNASSIGNED")
-        self.assertEqual(result["activities"][0]["pr_number"], 7)
+        self.assertEqual(first["activities"], second["activities"])
+        self.assertEqual(first["activities"][0]["ticket"], "ABC-123")
+        self.assertEqual(first["activities"][0]["pr_number"], 7)
+        self.assertEqual(first["duplicates_removed"], 1)
 
     def test_preserves_dst_fold_order_and_offset_in_json(self) -> None:
         pull_requests = [
@@ -1361,6 +1662,71 @@ class CollectTests(unittest.TestCase):
             result["calendar_days"],
             [{"date": "2024-01-02", "has_activity": True}],
         )
+
+    def test_closes_spring_forward_and_fall_back_local_date_windows(self) -> None:
+        cases = (
+            (
+                "spring-forward",
+                date(2024, 3, 10),
+                (
+                    ("before", "2024-03-10T04:59:00Z"),
+                    ("start", "2024-03-10T05:00:00Z"),
+                    ("end", "2024-03-11T03:59:00Z"),
+                    ("after", "2024-03-11T04:00:00Z"),
+                ),
+            ),
+            (
+                "fall-back",
+                date(2024, 11, 3),
+                (
+                    ("before", "2024-11-03T03:59:00Z"),
+                    ("start", "2024-11-03T04:00:00Z"),
+                    ("end", "2024-11-04T04:59:00Z"),
+                    ("after", "2024-11-04T05:00:00Z"),
+                ),
+            ),
+        )
+
+        for name, target, timestamps in cases:
+            with self.subTest(name=name):
+                prs = [
+                    {
+                        "number": 7,
+                        "title": "ABC-123 add report",
+                        "headRefName": "ABC-123-report",
+                        "url": "https://github.com/owner/repo/pull/7",
+                        "commits": [
+                            {
+                                "oid": f"{name}-{label}",
+                                "committedDate": committed_date,
+                                "messageHeadline": f"ABC-123 {name} {label}",
+                                "authors": [{"login": "alice"}],
+                            }
+                            for label, committed_date in timestamps
+                        ],
+                    }
+                ]
+
+                with (
+                    patch.object(collector, "resolve_author", return_value="alice"),
+                    patch.object(collector, "fetch_prs", return_value=prs),
+                ):
+                    result = collector.collect(
+                        make_config(
+                            start_date=target,
+                            end_date=target,
+                            timezone="America/New_York",
+                        )
+                    )
+
+                self.assertEqual(
+                    result["activities"][0]["headlines"],
+                    [
+                        f"ABC-123 {name} start",
+                        f"ABC-123 {name} end",
+                    ],
+                )
+                self.assertEqual(result["commits_outside_range"], 2)
 
     def test_marks_ambiguous_ticket_evidence_as_unassigned(self) -> None:
         prs = [

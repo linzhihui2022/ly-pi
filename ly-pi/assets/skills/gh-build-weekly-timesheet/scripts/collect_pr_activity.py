@@ -23,6 +23,7 @@ TICKET_PATTERN = re.compile(r"(?i)\b([a-z][a-z0-9]+-\d+)\b")
 SSH_REMOTE_PATTERN = re.compile(
     r"^(?P<user>[^@\s/:]+)@(?P<host>[^:\s/]+):(?P<path>[^?#\s]+)$"
 )
+REPOSITORY_COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 PULL_REQUEST_COMMITS_QUERY = """
 query PullRequestCommits(
   $owner: String!
@@ -223,10 +224,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def split_repo(repo: str) -> tuple[str, str]:
-    owner, separator, name = repo.partition("/")
-    if not separator or not owner or not name:
+    parts = repo.split("/")
+    if len(parts) != 2 or not all(
+        part not in {".", ".."}
+        and REPOSITORY_COMPONENT_PATTERN.fullmatch(part)
+        for part in parts
+    ):
         raise ValueError("--repo must use OWNER/REPO format")
-    return owner, name
+    return parts[0], parts[1]
 
 
 def parse_remote_repository(path: str) -> str | None:
@@ -397,8 +402,8 @@ def resolve_author(author: str) -> str:
     if author != "@me":
         return author
     login = run(["gh", "api", "user", "--jq", ".login"])
-    if not login:
-        raise RuntimeError("gh api user returned an empty login")
+    if not login or login.casefold() == "null":
+        raise RuntimeError("gh api user returned an empty login or null")
     return login
 
 
@@ -452,8 +457,7 @@ def resolve_commit_candidate(
         ]
         if matching_candidates:
             pr, commit = matching_candidates[0]
-            return pr, commit, ticket
-        return pr, commit, UNASSIGNED_TICKET
+        return pr, commit, ticket
 
     fallback_tickets = {
         ticket
@@ -520,7 +524,7 @@ def fetch_graphql_pages(
         command.extend([flag, f"{name}={value}"])
 
     payload = json.loads(run(command))
-    if not isinstance(payload, list) or not all(
+    if not payload or not isinstance(payload, list) or not all(
         isinstance(page, dict) for page in payload
     ):
         raise RuntimeError("unexpected paginated GitHub GraphQL response")
@@ -562,8 +566,12 @@ def normalize_graphql_commit(node: dict[str, Any]) -> Commit:
     oid = commit.get("oid")
     committed_date = commit.get("committedDate")
     headline = commit.get("messageHeadline")
-    if not isinstance(oid, str) or not isinstance(committed_date, str):
-        raise RuntimeError("pull request commit is missing an identifier or date")
+    if not isinstance(oid, str) or not oid.strip() or not isinstance(
+        committed_date, str
+    ):
+        raise RuntimeError(
+            "pull request commit is missing a non-empty identifier or date"
+        )
     if not isinstance(headline, str):
         raise RuntimeError("pull request commit is missing a headline")
 
@@ -597,12 +605,38 @@ def fetch_pull_request_commits(repo: str, number: int) -> list[Commit]:
             raise RuntimeError(
                 f"unexpected commits connection for pull request #{number}"
             )
+        page_info = connection.get("pageInfo")
+        if not isinstance(page_info, dict):
+            raise RuntimeError(
+                f"unexpected commits pageInfo for pull request #{number}"
+            )
+        has_next_page = page_info.get("hasNextPage")
+        end_cursor = page_info.get("endCursor")
+        if (
+            not isinstance(has_next_page, bool)
+            or (end_cursor is not None and not isinstance(end_cursor, str))
+            or (
+                has_next_page
+                and (
+                    not isinstance(end_cursor, str) or not end_cursor.strip()
+                )
+            )
+        ):
+            raise RuntimeError(
+                f"unexpected commits pageInfo for pull request #{number}"
+            )
         nodes = connection.get("nodes")
         if not isinstance(nodes, list) or not all(
             isinstance(node, dict) for node in nodes
         ):
             raise RuntimeError(f"unexpected commit nodes for pull request #{number}")
-        commits.extend(normalize_graphql_commit(node) for node in nodes)
+        for node in nodes:
+            try:
+                commits.append(normalize_graphql_commit(node))
+            except RuntimeError as error:
+                raise RuntimeError(
+                    f"pull request #{number}: {error}"
+                ) from error
     return commits
 
 
@@ -649,8 +683,10 @@ def pull_request_author_login(pull_request: dict[str, Any]) -> str | None:
 
 
 def fetch_prs(repo: str, author: str) -> list[PullRequest]:
+    owner, name = split_repo(repo)
+    repository = f"{owner}/{name}"
     pull_requests = fetch_paginated_items(
-        f"repos/{repo}/pulls?state=all&per_page=100"
+        f"repos/{repository}/pulls?state=all&per_page=100"
     )
     author_key = author.casefold()
     authored_pull_requests = [
@@ -664,7 +700,7 @@ def fetch_prs(repo: str, author: str) -> list[PullRequest]:
     for pull_request in authored_pull_requests:
         normalized = normalize_pull_request(pull_request, [])
         normalized["commits"] = fetch_pull_request_commits(
-            repo, normalized["number"]
+            repository, normalized["number"]
         )
         prs.append(normalized)
     return prs
