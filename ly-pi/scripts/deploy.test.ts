@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -46,6 +47,54 @@ afterEach(() => {
 });
 
 describe("deploy", () => {
+  it("does not deploy the new extension when the legacy renderer cannot be disabled", () => {
+    const stagingDir = createStagingDir();
+    const legacyConfig = join(
+      stagingDir,
+      "agent",
+      "extensions",
+      "pi-tool-display",
+      "config.json",
+    );
+    const extensionBundle = join(
+      stagingDir,
+      "agent",
+      "extensions",
+      "ly-pi",
+      "index.js",
+    );
+    const legacyConfigDir = dirname(legacyConfig);
+    mkdirSync(legacyConfigDir, { recursive: true });
+    writeFileSync(legacyConfig, '{"enabled":true}\n');
+    chmodSync(legacyConfigDir, 0o500);
+
+    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
+    if (bunLookup.status !== 0) {
+      chmodSync(legacyConfigDir, 0o700);
+      throw new Error("Bun executable is required to test deployment.");
+    }
+
+    const cleanupBundle = ensureExtensionBundle();
+    try {
+      const result = spawnSync(
+        bunLookup.stdout.trim(),
+        ["run", "scripts/deploy.ts"],
+        {
+          cwd: projectDir,
+          encoding: "utf8",
+          env: { PATH: "", PI_STAGING_DIR: stagingDir },
+        },
+      );
+
+      expect(result.status).not.toBe(0);
+      expect(readFileSync(legacyConfig, "utf8")).toBe('{"enabled":true}\n');
+      expect(existsSync(extensionBundle)).toBe(false);
+    } finally {
+      chmodSync(legacyConfigDir, 0o700);
+      cleanupBundle();
+    }
+  });
+
   it("disables the legacy renderer while preserving its installed package", () => {
     const stagingDir = createStagingDir();
     const legacyConfigDir = join(

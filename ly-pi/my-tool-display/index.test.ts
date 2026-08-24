@@ -36,6 +36,24 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
   SettingsManager: { create: vi.fn() },
 }));
 
+const fsMocks = vi.hoisted(() => ({
+  openSync: vi.fn(),
+  lstatSync: vi.fn(),
+  realLstatSync: undefined as typeof import("node:fs").lstatSync | undefined,
+}));
+
+vi.mock("node:fs", async () => {
+  const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+  fsMocks.openSync.mockImplementation(actual.openSync);
+  fsMocks.lstatSync.mockImplementation(actual.lstatSync);
+  fsMocks.realLstatSync = actual.lstatSync;
+  return {
+    ...actual,
+    openSync: fsMocks.openSync,
+    lstatSync: fsMocks.lstatSync,
+  };
+});
+
 const loggerMocks = vi.hoisted(() => ({
   toolDisplay: {
     debug: vi.fn(),
@@ -147,7 +165,7 @@ function createNativeEditDefinition(cwd: string) {
     parameters: { type: "object" },
     constrainedSampling: false,
     renderShell: "self" as const,
-    prepareArguments: vi.fn(),
+    prepareArguments: vi.fn((args: unknown) => args as never),
     execute,
     renderCall: () => ({
       render: () => ["native edit preview"],
@@ -601,6 +619,36 @@ describe("my-tool-display", () => {
     ).toContain("no text changes to display");
   });
 
+  it("renders a deletion diff when an existing file is cleared", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "empty.txt"), "old content\n");
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "- 1|old content",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const result = await registered[0]!.execute(
+      "call-clear-existing",
+      { path: "empty.txt", content: "" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(generateDiffString).toHaveBeenCalledWith("old content\n", "");
+    expect(
+      render(
+        registered[0]!.renderResult(
+          result,
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "empty.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("- 1|old content");
+  });
+
   it("collapses completed write diffs using diffCollapsedLines", async () => {
     writeConfig(JSON.stringify({ enabled: true, diffCollapsedLines: 1 }));
     const workspaceDir = createWorkspace();
@@ -721,6 +769,87 @@ describe("my-tool-display", () => {
       3,
       "old name\n",
       "new text\n",
+    );
+  });
+
+  it("renders a diff for a legal workspace path beginning with two dots", async () => {
+    const workspaceDir = createWorkspace();
+    const directory = join(workspaceDir, "..config");
+    mkdirSync(directory);
+    writeFileSync(join(directory, "file.txt"), "old\n");
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "- 1|old\n+ 1|new",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const result = await registered[0]!.execute(
+      "call-dot-prefix",
+      { path: "..config/file.txt", content: "new\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(generateDiffString).toHaveBeenCalledWith("old\n", "new\n");
+    expect(result).toMatchObject({
+      details: { writeDiff: { kind: "diff", diff: "- 1|old\n+ 1|new" } },
+    });
+  });
+
+  it("falls back when a write target changes after previewing", async () => {
+    const workspaceDir = createWorkspace();
+    const path = join(workspaceDir, "file.txt");
+    writeFileSync(path, "old\n");
+    const realLstatSync = fsMocks.realLstatSync!;
+    fsMocks.lstatSync
+      .mockImplementationOnce(realLstatSync)
+      .mockImplementationOnce((targetPath) => {
+        const stats = realLstatSync(targetPath);
+        return { ...stats, mtimeMs: stats.mtimeMs + 1 };
+      });
+
+    const { registered } = setup("builtin", ["write"]);
+    const result = await registered[0]!.execute(
+      "call-stale-preview",
+      { path: "file.txt", content: "new\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(generateDiffString).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      details: {
+        writeDiff: {
+          kind: "summary",
+          summary: expect.stringContaining("target changed"),
+        },
+      },
+    });
+  });
+
+  it("logs unexpected I/O errors while reading a write preview", async () => {
+    fsMocks.openSync.mockImplementationOnce(() => {
+      throw Object.assign(new Error("I/O failure"), { code: "EIO" });
+    });
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "file.txt"), "old\n");
+
+    const { registered } = setup("builtin", ["write"]);
+    await registered[0]!.execute(
+      "call-eio",
+      { path: "file.txt", content: "new\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(loggerMocks.toolDisplay.error).toHaveBeenCalledWith(
+      "Unexpected error while reading write diff preview.",
+      {
+        error: expect.objectContaining({ message: "I/O failure" }),
+      },
     );
   });
 
@@ -955,6 +1084,9 @@ describe("my-tool-display", () => {
       ),
     ).toContain("appears to be binary");
     expect(generateDiffString).not.toHaveBeenCalled();
+    expect(readFileSync(join(workspaceDir, "file.txt"), "utf8")).toBe(
+      "binary\0content",
+    );
   });
 
   it("writes oversized new content when its diff is unavailable", async () => {
@@ -1384,6 +1516,15 @@ describe("my-tool-display", () => {
     );
   });
 
+  it("preserves the native edit argument preparation seam", () => {
+    const { registered } = setup("builtin", ["edit"]);
+    const rawArguments = { path: "file.ts", edits: [] };
+
+    expect(registered[0]!.prepareArguments?.(rawArguments)).toEqual(
+      rawArguments,
+    );
+  });
+
   it("keeps the edit diff within a narrow render width", () => {
     const { registered } = setup("builtin", ["edit"]);
     const edit = registered[0]!;
@@ -1775,6 +1916,56 @@ describe("my-tool-display", () => {
     ).toBe(expected);
   });
 
+  it.each([
+    ["bash", "Bash command failed."],
+    ["edit", "Edit failed."],
+    ["write", "Write failed."],
+    ["read", "Read failed."],
+    ["grep", "Search failed."],
+    ["find", "Find failed."],
+    ["ls", "List failed."],
+  ] as const)("falls back for whitespace-only %s errors", (name, expected) => {
+    const { registered } = setup("builtin", [name]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          {
+            content: [{ type: "text", text: String.fromCharCode(10) }],
+            details: undefined,
+          },
+          { expanded: false, isPartial: true },
+          theme,
+          { isError: true },
+        ),
+      ),
+    ).toBe(expected);
+  });
+
+  it.each([
+    "bash",
+    "edit",
+    "write",
+    "grep",
+    "find",
+    "ls",
+  ] as const)("keeps %s failure diagnostics visible for partial results", (name) => {
+    const { registered } = setup("builtin", [name]);
+    const tool = registered[0]!;
+    const output = `${name} interrupted`;
+
+    expect(
+      render(
+        tool.renderResult(
+          { content: [{ type: "text", text: output }], details: undefined },
+          { expanded: false, isPartial: true },
+          theme,
+          { isError: true },
+        ),
+      ),
+    ).toContain(output);
+  });
+
   it("hides successful ls output until expanded", () => {
     const { registered } = setup("builtin", ["ls"]);
     expect(registered).toHaveLength(1);
@@ -1912,6 +2103,60 @@ describe("my-tool-display", () => {
         ),
       ),
     ).toBe(label);
+  });
+
+  it.each([
+    "read",
+    "grep",
+    "find",
+    "ls",
+    "bash",
+    "edit",
+    "write",
+  ] as const)("forwards the abort signal to the native %s tool", async (name) => {
+    const { registered } = setup("builtin", [name]);
+    const tool = registered[0]!;
+    const signal = new AbortController().signal;
+    const context = {
+      cwd: createWorkspace(),
+      isProjectTrusted: () => true,
+    };
+    const paramsByName = {
+      read: { path: "file.ts" },
+      grep: { pattern: "match" },
+      find: {},
+      ls: {},
+      bash: { command: "printf output" },
+      edit: { path: "file.ts", edits: [] },
+      write: { path: "file.txt", content: "text\n" },
+    };
+    const params = paramsByName[name];
+
+    await tool.execute(
+      "call-signal",
+      params as never,
+      signal,
+      undefined,
+      context as never,
+    );
+
+    const execution =
+      name === "read"
+        ? nativeExecutions.get(context.cwd)
+        : name === "bash"
+          ? nativeBashExecutions.get(context.cwd)
+          : name === "edit"
+            ? nativeEditExecutions.get(context.cwd)
+            : name === "write"
+              ? nativeWriteExecutions.get(context.cwd)
+              : nativeSearchExecutions.get(`${name}:${context.cwd}`);
+    expect(execution).toHaveBeenCalledWith(
+      "call-signal",
+      params,
+      signal,
+      undefined,
+      context,
+    );
   });
 
   it("retains grep metadata, delegates execution, and keeps failures visible", async () => {

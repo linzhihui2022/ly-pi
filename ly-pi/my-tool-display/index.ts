@@ -10,10 +10,12 @@ import {
 } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import {
+  type AgentToolResult,
+  type AgentToolUpdateCallback,
   createBashToolDefinition,
   createEditToolDefinition,
   createFindToolDefinition,
@@ -37,10 +39,7 @@ const MAX_WRITE_DIFF_BYTES = 1_000_000;
 const EXPECTED_PREVIEW_ERROR_CODES = new Set([
   "EACCES",
   "EAGAIN",
-  "EBADF",
   "EINTR",
-  "EINVAL",
-  "EIO",
   "EISDIR",
   "ELOOP",
   "ENAMETOOLONG",
@@ -54,12 +53,55 @@ const EXPECTED_PREVIEW_ERROR_CODES = new Set([
 const log = createDevLogger("my-tool-display");
 
 type WritePreview =
-  | { safe: true; previousContent: string }
+  | { safe: true; previousContent: string; snapshot: WritePreviewSnapshot }
   | { safe: false; reason: string };
 
 type WriteDiffDetails =
   | { kind: "diff"; diff: string }
   | { kind: "summary"; summary: string };
+
+type WritePreviewSnapshot =
+  | {
+      path: string;
+      existed: true;
+      device: number;
+      inode: number;
+      size: number;
+      mtimeMs: number;
+    }
+  | { path: string; existed: false };
+
+type WriteToolDetails = Record<string, unknown> & {
+  writeDiff: WriteDiffDetails;
+};
+
+type NativeWriteDefinition = ReturnType<typeof createWriteToolDefinition>;
+type NativeWriteParameters = Parameters<NativeWriteDefinition["execute"]>;
+type WriteToolResult = AgentToolResult<WriteToolDetails>;
+type ReplaceFirst<
+  Arguments extends readonly unknown[],
+  First,
+> = Arguments extends readonly [unknown, ...infer Rest]
+  ? [First, ...Rest]
+  : never;
+type WriteToolOverride = Omit<
+  NativeWriteDefinition,
+  "execute" | "renderResult"
+> & {
+  execute: (
+    toolCallId: NativeWriteParameters[0],
+    params: NativeWriteParameters[1],
+    signal: NativeWriteParameters[2],
+    onUpdate: AgentToolUpdateCallback<WriteToolDetails> | undefined,
+    ctx: NativeWriteParameters[4],
+  ) => Promise<WriteToolResult>;
+  renderResult: (
+    ...args: ReplaceFirst<
+      Parameters<NonNullable<NativeWriteDefinition["renderResult"]>>,
+      WriteToolResult
+    >
+  ) => ReturnType<NonNullable<NativeWriteDefinition["renderResult"]>>;
+};
 
 type SafeWritePath =
   | { safe: true; path: string; existed: true; device: number; inode: number }
@@ -195,10 +237,9 @@ function textOutput(result: {
 
 function isWithinWorkspace(workspacePath: string, targetPath: string): boolean {
   const relativePath = relative(workspacePath, targetPath);
-  return (
-    relativePath === "" ||
-    (!relativePath.startsWith("..") && !isAbsolute(relativePath))
-  );
+  const isParentPath =
+    relativePath === ".." || relativePath.startsWith(`..${sep}`);
+  return relativePath === "" || (!isParentPath && !isAbsolute(relativePath));
 }
 
 function realpathOrUndefined(path: string): RealpathResult {
@@ -378,14 +419,18 @@ function readWritePreview(
     };
   }
   if (!safePath.existed) {
-    return { safe: true, previousContent: "" };
+    return {
+      safe: true,
+      previousContent: "",
+      snapshot: { path: safePath.path, existed: false },
+    };
   }
 
   let fileDescriptor: number | undefined;
   try {
     fileDescriptor = openSync(
       safePath.path,
-      constants.O_RDONLY | constants.O_NOFOLLOW,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
     const initialStats = fstatSync(fileDescriptor);
     if (
@@ -421,9 +466,10 @@ function readWritePreview(
       }
       bytesRead += read;
     }
+    const finalStats = fstatSync(fileDescriptor);
     if (
       bytesRead > MAX_WRITE_DIFF_BYTES ||
-      fstatSync(fileDescriptor).size > MAX_WRITE_DIFF_BYTES
+      finalStats.size > MAX_WRITE_DIFF_BYTES
     ) {
       return {
         safe: false,
@@ -461,7 +507,18 @@ function readWritePreview(
       };
     }
 
-    return { safe: true, previousContent };
+    return {
+      safe: true,
+      previousContent,
+      snapshot: {
+        path: safePath.path,
+        existed: true,
+        device: finalStats.dev,
+        inode: finalStats.ino,
+        size: finalStats.size,
+        mtimeMs: finalStats.mtimeMs,
+      },
+    };
   } catch (error) {
     logUnexpectedPreviewError(
       "Unexpected error while reading write diff preview.",
@@ -481,6 +538,40 @@ function readWritePreview(
   }
 }
 
+function isWritePreviewCurrent(
+  preview: Extract<WritePreview, { safe: true }>,
+): boolean {
+  try {
+    const stats = lstatSync(preview.snapshot.path);
+    if (!preview.snapshot.existed) {
+      return false;
+    }
+    return (
+      stats.isFile() &&
+      stats.dev === preview.snapshot.device &&
+      stats.ino === preview.snapshot.inode &&
+      stats.size === preview.snapshot.size &&
+      stats.mtimeMs === preview.snapshot.mtimeMs
+    );
+  } catch (error) {
+    const code = getErrorCode(error);
+    if (code === "ENOENT" && !preview.snapshot.existed) {
+      return true;
+    }
+    if (code !== "ENOENT") {
+      logUnexpectedPreviewError(
+        "Unexpected error while checking write diff preview freshness.",
+        error,
+      );
+    }
+    return false;
+  }
+}
+
+function hasVisibleOutput(output: string): boolean {
+  return output.trim().length > 0;
+}
+
 function renderCompactTextResult(
   result: { content: Array<{ type: string; text?: string }> },
   options: { expanded: boolean; isPartial: boolean },
@@ -491,7 +582,11 @@ function renderCompactTextResult(
 ): Text {
   const output = textOutput(result);
   if (context.isError) {
-    return new Text(theme.fg("error", output || failureLabel), 0, 0);
+    return new Text(
+      theme.fg("error", hasVisibleOutput(output) ? output : failureLabel),
+      0,
+      0,
+    );
   }
   if (options.isPartial) {
     return new Text(theme.fg("warning", pendingLabel), 0, 0);
@@ -514,7 +609,9 @@ function renderBashResult(
     return new Text(
       theme.fg(
         "error",
-        output ? `Bash command failed.\n${output}` : "Bash command failed.",
+        hasVisibleOutput(output)
+          ? `Bash command failed.\n${output}`
+          : "Bash command failed.",
       ),
       0,
       0,
@@ -523,7 +620,7 @@ function renderBashResult(
   if (options.expanded) {
     return new Text(theme.fg("toolOutput", output), 0, 0);
   }
-  if (!output) {
+  if (!hasVisibleOutput(output)) {
     return new Text(
       theme.fg("muted", options.isPartial ? "Running..." : "(no output)"),
       0,
@@ -615,7 +712,11 @@ function renderEditResult(
 ): Text {
   const output = textOutput(result);
   if (context.isError) {
-    return new Text(theme.fg("error", output || "Edit failed."), 0, 0);
+    return new Text(
+      theme.fg("error", hasVisibleOutput(output) ? output : "Edit failed."),
+      0,
+      0,
+    );
   }
   if (options.isPartial) {
     return new Text(theme.fg("warning", "Editing..."), 0, 0);
@@ -630,15 +731,15 @@ function renderEditResult(
   );
 }
 
-function addWriteDiffDetails<T extends { details?: unknown }>(
-  result: T,
+function addWriteDiffDetails(
+  result: AgentToolResult<unknown>,
   writeDiff: WriteDiffDetails,
-): T {
+): WriteToolResult {
   const nativeDetails = isRecord(result.details) ? result.details : {};
   return {
     ...result,
     details: { ...nativeDetails, writeDiff },
-  } as T;
+  };
 }
 
 function renderWriteResult(
@@ -654,7 +755,11 @@ function renderWriteResult(
 ): Text {
   const output = textOutput(result);
   if (context.isError) {
-    return new Text(theme.fg("error", output || "Write failed."), 0, 0);
+    return new Text(
+      theme.fg("error", hasVisibleOutput(output) ? output : "Write failed."),
+      0,
+      0,
+    );
   }
   if (options.isPartial) {
     return new Text(theme.fg("warning", "Writing..."), 0, 0);
@@ -745,7 +850,7 @@ function registerToolRenderers(
 
   if (builtinToolNames.has("write")) {
     const nativeWrite = createWriteToolDefinition(process.cwd());
-    const writeOverride: typeof nativeWrite = {
+    const writeOverride: WriteToolOverride = {
       ...nativeWrite,
       renderShell: "default",
       async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -757,10 +862,23 @@ function registerToolRenderers(
             },
             async writeFile(path, content) {
               preview = readWritePreview(ctx.cwd, path, content);
+              if (preview.safe && !isWritePreviewCurrent(preview)) {
+                preview = {
+                  safe: false,
+                  reason:
+                    "Write diff unavailable because the target changed while preparing the write.",
+                };
+              }
               await writeFile(path, content, "utf8");
             },
           },
-        }).execute(toolCallId, params, signal, onUpdate, ctx);
+        }).execute(
+          toolCallId,
+          params,
+          signal,
+          onUpdate as AgentToolUpdateCallback<undefined> | undefined,
+          ctx,
+        );
 
         let details: WriteDiffDetails;
         if (!preview?.safe) {
@@ -924,7 +1042,14 @@ function registerToolRenderers(
       renderResult(result, options, theme, context) {
         const output = textOutput(result);
         if (context.isError) {
-          return new Text(theme.fg("error", output || "Read failed."), 0, 0);
+          return new Text(
+            theme.fg(
+              "error",
+              hasVisibleOutput(output) ? output : "Read failed.",
+            ),
+            0,
+            0,
+          );
         }
         if (options.isPartial) {
           return new Text(theme.fg("warning", "Reading..."), 0, 0);

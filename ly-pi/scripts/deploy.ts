@@ -1,5 +1,5 @@
 import { cpSync, existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { BunFile } from "bun";
@@ -117,6 +117,31 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
   await Bun.write(path, data);
 }
 
+async function writeAtomically(
+  path: string,
+  data: string | Uint8Array | BunFile,
+): Promise<void> {
+  const temporaryPath = `${path}.tmp-${process.pid}`;
+  try {
+    await write(temporaryPath, data);
+    await rename(temporaryPath, path);
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
+}
+
+const configDir = "assets/config";
+
+// ── Legacy renderer cutover ─────────────────────────────────────────────────
+{
+  const path = join(agentDir, "extensions", "pi-tool-display", "config.json");
+  await writeAtomically(
+    path,
+    Bun.file(join(configDir, "pi-tool-display-disabled.json")),
+  );
+  console.log("pi-tool-display compatibility config: deployed");
+}
+
 // ── Extension bundle ────────────────────────────────────────────────────────
 {
   const extDir = join(agentDir, "extensions", "ly-pi");
@@ -155,7 +180,6 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
 
 // ── Other configs ───────────────────────────────────────────────────────────
 {
-  const configDir = "assets/config";
   const extDir = join(agentDir, "extensions", "ly-pi");
 
   const configManifest: Array<{
@@ -199,11 +223,6 @@ async function write(path: string, data: string | Uint8Array | BunFile) {
       dest: "my-back.json",
       base: extDir,
       label: "my-back.json",
-    },
-    {
-      src: "pi-tool-display-disabled.json",
-      dest: "extensions/pi-tool-display/config.json",
-      label: "pi-tool-display compatibility config",
     },
   ];
 
