@@ -270,8 +270,16 @@ function createNativeSearchDefinition(name: string, cwd: string) {
     promptSnippet: `${name} snippet`,
     parameters: { type: "object" },
     execute,
-    renderCall: () => ({
-      render: () => [`native ${name}`],
+    renderCall: (args: { pattern?: unknown; path?: unknown } = {}) => ({
+      render: () => [
+        `native ${name}${
+          typeof args.pattern === "string"
+            ? ` ${args.pattern}`
+            : typeof args.path === "string"
+              ? ` ${args.path}`
+              : ""
+        }`,
+      ],
       invalidate: () => {},
     }),
   };
@@ -338,6 +346,7 @@ beforeEach(() => {
   vi.mocked(generateDiffString).mockReset();
   vi.mocked(getAgentDir).mockReturnValue(agentDir);
   vi.mocked(SettingsManager.create).mockReturnValue({
+    getImageAutoResize: () => true,
     getShellCommandPrefix: () => undefined,
     getShellPath: () => undefined,
   } as never);
@@ -770,6 +779,30 @@ describe("my-tool-display", () => {
       "old name\n",
       "new text\n",
     );
+  });
+
+  it("matches Pi's POSIX handling for backslash tilde write paths", async () => {
+    const workspaceDir = createWorkspace();
+    const path = "~\\file.txt";
+    writeFileSync(join(workspaceDir, path), "old\n");
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "- 1|old\n+ 1|new",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const result = await registered[0]!.execute(
+      "call-posix-tilde",
+      { path, content: "new\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(result).toMatchObject({
+      details: { writeDiff: { kind: "diff" } },
+    });
+    expect(generateDiffString).toHaveBeenCalledWith("old\n", "new\n");
   });
 
   it("renders a diff for a legal workspace path beginning with two dots", async () => {
@@ -1332,6 +1365,29 @@ describe("my-tool-display", () => {
     ).toBe(diff);
   });
 
+  it("renders non-string edit, write, and read paths safely", () => {
+    const { registered: editRegistered } = setup("builtin", ["edit"]);
+    expect(
+      render(
+        editRegistered[0]!.renderCall(
+          { path: 42, edits: [] } as never,
+          theme,
+          {},
+        ),
+      ),
+    ).toBe("edit 42");
+
+    const { registered: writeRegistered } = setup("builtin", ["write"]);
+    expect(
+      render(writeRegistered[0]!.renderCall({ path: 42 } as never, theme, {})),
+    ).toBe("write 42");
+
+    const { registered: readRegistered } = setup("builtin", ["read"]);
+    expect(
+      render(readRegistered[0]!.renderCall({ path: 42 } as never, theme, {})),
+    ).toBe("read 42");
+  });
+
   it("sanitizes edit and write diffs before applying theme colors", () => {
     const { registered: editRegistered } = setup("builtin", ["edit"]);
     const edit = editRegistered[0]!;
@@ -1705,6 +1761,45 @@ describe("my-tool-display", () => {
         ),
       ),
     ).toBe(output);
+  });
+
+  it("shows the running state for expanded bash calls without output", () => {
+    const { registered } = setup("builtin", ["bash"]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [], details: undefined },
+          { expanded: true, isPartial: true },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe("Running...");
+  });
+
+  it.each([
+    "bash",
+    "grep",
+    "find",
+    "ls",
+  ] as const)("sanitizes terminal control characters from %s call headers", (name) => {
+    const { registered } = setup("builtin", [name]);
+    const unsafe = "visible\u001b[31m\u009d\u202e";
+    const argsByName = {
+      bash: { command: unsafe },
+      grep: { pattern: unsafe },
+      find: { pattern: unsafe },
+      ls: { path: unsafe },
+    };
+
+    const rendered = render(
+      registered[0]!.renderCall(argsByName[name], theme, {}),
+    );
+    expect(rendered).toContain("visible");
+    expect(rendered).not.toContain("\u001b");
+    expect(rendered).not.toContain("\u009d");
+    expect(rendered).not.toContain("\u202e");
   });
 
   it.each([
@@ -2389,11 +2484,21 @@ describe("my-tool-display", () => {
     ).toBe("connection interrupted");
   });
 
-  it("delegates execution through Pi's native read definition for the execution cwd", async () => {
+  it("delegates read execution with the effective image resize setting", async () => {
+    const settings = {
+      getImageAutoResize: vi.fn(() => false),
+      getShellCommandPrefix: () => undefined,
+      getShellPath: () => undefined,
+    };
+    vi.mocked(SettingsManager.create).mockReturnValue(settings as never);
+
     const { registered } = setup();
     const read = registered[0]!;
     const onUpdate = vi.fn();
-    const context = { cwd: "/other-project" };
+    const context = {
+      cwd: "/other-project",
+      isProjectTrusted: () => true,
+    };
 
     await expect(
       read.execute(
@@ -2404,7 +2509,16 @@ describe("my-tool-display", () => {
         context,
       ),
     ).resolves.toBe(nativeResult);
-    expect(createReadToolDefinition).toHaveBeenLastCalledWith("/other-project");
+    expect(SettingsManager.create).toHaveBeenCalledWith(
+      "/other-project",
+      agentDir,
+      { projectTrusted: true },
+    );
+    expect(settings.getImageAutoResize).toHaveBeenCalledOnce();
+    expect(createReadToolDefinition).toHaveBeenLastCalledWith(
+      "/other-project",
+      { autoResizeImages: false },
+    );
     expect(nativeExecutions.get("/other-project")).toHaveBeenCalledWith(
       "call-1",
       { path: "src/example.ts" },

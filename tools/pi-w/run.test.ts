@@ -93,7 +93,7 @@ describe("run", () => {
       "/repo/.worktree/feat-x",
       "--",
       "/bin/zsh",
-      "-c",
+      "-ic",
       "pi; exec /bin/zsh",
     ]);
     expect(h.stdout).toEqual(["/repo/.worktree/feat-x"]);

@@ -9,9 +9,7 @@ import {
   realpathSync,
 } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, isAbsolute, relative, sep } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import {
   type AgentToolResult,
@@ -31,6 +29,7 @@ import {
 import { Text } from "@earendil-works/pi-tui";
 import { createDevLogger } from "../my-log/index";
 import { loadToolDisplayConfig } from "./config";
+import { resolveToolPath } from "./path-utils";
 
 const initializedApis = new WeakSet<ExtensionAPI>();
 const registeredToolNames = new WeakMap<ExtensionAPI, Set<string>>();
@@ -200,12 +199,30 @@ function sanitizeToolOutput(output: string): string {
     .replace(/\r/g, "");
 }
 
-function sanitizeToolLabel(label: string): string {
-  return sanitizeToolOutput(label).replace(/[\t\r\n\u2028\u2029]/g, " ");
+function sanitizeToolLabel(label: unknown): string {
+  const text =
+    typeof label === "string"
+      ? label
+      : label === null || label === undefined
+        ? "..."
+        : String(label);
+  return sanitizeToolOutput(text).replace(/[\t\r\n\u2028\u2029]/g, " ");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function sanitizeToolCallArgs<Arguments>(args: Arguments): Arguments {
+  if (!isRecord(args)) {
+    return args;
+  }
+  return Object.fromEntries(
+    Object.entries(args).map(([key, value]) => [
+      key,
+      typeof value === "string" ? sanitizeToolLabel(value) : value,
+    ]),
+  ) as Arguments;
 }
 
 function getWriteDiffDetails(details: unknown): WriteDiffDetails | undefined {
@@ -251,27 +268,8 @@ function realpathOrUndefined(path: string): RealpathResult {
 }
 
 function resolveWritePath(cwd: string, rawPath: string): ResolvedWritePath {
-  let normalized = rawPath.replace(
-    /[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g,
-    " ",
-  );
-  if (normalized.startsWith("@")) {
-    normalized = normalized.slice(1);
-  }
   try {
-    if (normalized === "~") {
-      normalized = homedir();
-    } else if (normalized.startsWith("~/") || normalized.startsWith("~\\")) {
-      normalized = `${homedir()}${normalized.slice(1)}`;
-    } else if (normalized.startsWith("file://")) {
-      normalized = fileURLToPath(normalized);
-    }
-    return {
-      resolved: true,
-      path: isAbsolute(normalized)
-        ? resolve(normalized)
-        : resolve(cwd, normalized),
-    };
+    return { resolved: true, path: resolveToolPath(rawPath, cwd) };
   } catch (error) {
     return {
       resolved: false,
@@ -617,15 +615,15 @@ function renderBashResult(
       0,
     );
   }
-  if (options.expanded) {
-    return new Text(theme.fg("toolOutput", output), 0, 0);
-  }
   if (!hasVisibleOutput(output)) {
     return new Text(
       theme.fg("muted", options.isPartial ? "Running..." : "(no output)"),
       0,
       0,
     );
+  }
+  if (options.expanded) {
+    return new Text(theme.fg("toolOutput", output), 0, 0);
   }
 
   const lines = output.split(/\r?\n/);
@@ -996,6 +994,16 @@ function registerToolRenderers(
     const nativeBash = createBashToolDefinition(process.cwd());
     const bashOverride: typeof nativeBash = {
       ...nativeBash,
+      renderCall(args, theme, context) {
+        if (!nativeBash.renderCall) {
+          return new Text("", 0, 0);
+        }
+        return nativeBash.renderCall(
+          sanitizeToolCallArgs(args),
+          theme,
+          context,
+        );
+      },
       async execute(toolCallId, params, signal, onUpdate, ctx) {
         const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
           projectTrusted: ctx.isProjectTrusted(),
@@ -1028,13 +1036,12 @@ function registerToolRenderers(
     const readOverride: typeof nativeRead = {
       ...nativeRead,
       async execute(toolCallId, params, signal, onUpdate, ctx) {
-        return createReadToolDefinition(ctx.cwd).execute(
-          toolCallId,
-          params,
-          signal,
-          onUpdate,
-          ctx,
-        );
+        const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
+          projectTrusted: ctx.isProjectTrusted(),
+        });
+        return createReadToolDefinition(ctx.cwd, {
+          autoResizeImages: settings.getImageAutoResize(),
+        }).execute(toolCallId, params, signal, onUpdate, ctx);
       },
       renderCall(args, theme) {
         return new Text(formatReadCall(args, theme), 0, 0);
@@ -1078,6 +1085,16 @@ function registerToolRenderers(
     const nativeGrep = createGrepToolDefinition(process.cwd());
     const grepOverride: typeof nativeGrep = {
       ...nativeGrep,
+      renderCall(args, theme, context) {
+        if (!nativeGrep.renderCall) {
+          return new Text("", 0, 0);
+        }
+        return nativeGrep.renderCall(
+          sanitizeToolCallArgs(args),
+          theme,
+          context,
+        );
+      },
       async execute(toolCallId, params, signal, onUpdate, ctx) {
         return createGrepToolDefinition(ctx.cwd).execute(
           toolCallId,
@@ -1110,6 +1127,16 @@ function registerToolRenderers(
     const nativeFind = createFindToolDefinition(process.cwd());
     const findOverride: typeof nativeFind = {
       ...nativeFind,
+      renderCall(args, theme, context) {
+        if (!nativeFind.renderCall) {
+          return new Text("", 0, 0);
+        }
+        return nativeFind.renderCall(
+          sanitizeToolCallArgs(args),
+          theme,
+          context,
+        );
+      },
       async execute(toolCallId, params, signal, onUpdate, ctx) {
         return createFindToolDefinition(ctx.cwd).execute(
           toolCallId,
@@ -1142,6 +1169,12 @@ function registerToolRenderers(
     const nativeLs = createLsToolDefinition(process.cwd());
     const lsOverride: typeof nativeLs = {
       ...nativeLs,
+      renderCall(args, theme, context) {
+        if (!nativeLs.renderCall) {
+          return new Text("", 0, 0);
+        }
+        return nativeLs.renderCall(sanitizeToolCallArgs(args), theme, context);
+      },
       async execute(toolCallId, params, signal, onUpdate, ctx) {
         return createLsToolDefinition(ctx.cwd).execute(
           toolCallId,
