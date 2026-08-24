@@ -14,13 +14,14 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Final, TypedDict
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 UNASSIGNED_TICKET: Final = "UNASSIGNED"
 TICKET_PATTERN = re.compile(r"(?i)\b([a-z][a-z0-9]+-\d+)\b")
-GITHUB_REMOTE_PATTERN = re.compile(
-    r"github\.com(?::|/)(?P<repo>[^/\s]+/[^/\s]+?)(?:\.git)?$"
+SSH_REMOTE_PATTERN = re.compile(
+    r"^(?P<user>[^@\s/:]+)@(?P<host>[^:\s/]+):(?P<path>[^?#\s]+)$"
 )
 PULL_REQUEST_COMMITS_QUERY = """
 query PullRequestCommits(
@@ -228,6 +229,65 @@ def split_repo(repo: str) -> tuple[str, str]:
     return owner, name
 
 
+def parse_remote_repository(path: str) -> str | None:
+    if path.startswith("/"):
+        path = path[1:]
+    if path.endswith("/"):
+        path = path[:-1]
+    parts = path.split("/")
+    if len(parts) != 2 or not all(parts) or any(
+        any(character.isspace() for character in part) for part in parts
+    ):
+        return None
+
+    owner, name = parts
+    if name.endswith(".git"):
+        name = name[:-4]
+    if not name:
+        return None
+    return f"{owner}/{name}"
+
+
+def remote_details(remote: str) -> tuple[str | None, str | None, bool]:
+    value = remote.strip()
+    scp_match = SSH_REMOTE_PATTERN.fullmatch(value)
+    if scp_match:
+        return (
+            scp_match.group("host"),
+            parse_remote_repository(scp_match.group("path")),
+            True,
+        )
+
+    try:
+        parsed = urlsplit(value)
+        host = parsed.hostname
+        _ = parsed.port
+    except ValueError:
+        return None, None, False
+    if host is None:
+        return None, None, False
+    return host, parse_remote_repository(parsed.path), (
+        parsed.scheme.casefold() in {"https", "ssh"}
+        and not parsed.query
+        and not parsed.fragment
+    )
+
+
+def github_repository_from_remote(remote: str) -> str | None:
+    host, repository, supported_scheme = remote_details(remote)
+    if host is None or host.casefold() != "github.com" or not supported_scheme:
+        return None
+    return repository
+
+
+def describe_remote(remote: str) -> str:
+    host, repository, _ = remote_details(remote)
+    return (
+        f"host={host or '<unknown>'}, "
+        f"repository={repository or '<unknown>'}"
+    )
+
+
 def run(command: list[str], context: str | None = None) -> str:
     label = context if context is not None else " ".join(command[:3])
     try:
@@ -247,10 +307,12 @@ def detect_repo() -> str:
     except RuntimeError as error:
         failures.append(str(error))
     else:
-        match = GITHUB_REMOTE_PATTERN.search(remote)
-        if match:
-            return match.group("repo")
-        failures.append(f"origin remote {remote!r} is not a GitHub URL")
+        repository = github_repository_from_remote(remote)
+        if repository is not None:
+            return repository
+        failures.append(
+            f"origin remote {describe_remote(remote)} is not a GitHub URL"
+        )
 
     try:
         return run(
@@ -334,7 +396,10 @@ def resolve_date_window(config: CollectorConfig, today: date) -> tuple[date, dat
 def resolve_author(author: str) -> str:
     if author != "@me":
         return author
-    return run(["gh", "api", "user", "--jq", ".login"])
+    login = run(["gh", "api", "user", "--jq", ".login"])
+    if not login:
+        raise RuntimeError("gh api user returned an empty login")
+    return login
 
 
 def find_tickets(*values: str) -> list[str]:
@@ -348,7 +413,10 @@ def find_tickets(*values: str) -> list[str]:
 
 
 def parse_github_time(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("timestamp must include a timezone offset")
+    return parsed
 
 
 def is_merge_commit(headline: str) -> bool:
@@ -375,7 +443,17 @@ def resolve_commit_candidate(
 
     commit_tickets = find_tickets(commit["messageHeadline"])
     if len(commit_tickets) == 1:
-        return pr, commit, commit_tickets[0]
+        ticket = commit_tickets[0]
+        matching_candidates = [
+            candidate
+            for candidate in ordered
+            if ticket
+            in find_tickets(candidate[0]["title"], candidate[0]["headRefName"])
+        ]
+        if matching_candidates:
+            pr, commit = matching_candidates[0]
+            return pr, commit, ticket
+        return pr, commit, UNASSIGNED_TICKET
 
     fallback_tickets = {
         ticket
@@ -384,12 +462,16 @@ def resolve_commit_candidate(
     }
     ticket = fallback_tickets.pop() if len(fallback_tickets) == 1 else UNASSIGNED_TICKET
     if ticket != UNASSIGNED_TICKET:
-        pr, commit = next(
+        matching_candidates = [
             candidate
             for candidate in ordered
             if ticket
             in find_tickets(candidate[0]["title"], candidate[0]["headRefName"])
-        )
+        ]
+        if matching_candidates:
+            pr, commit = matching_candidates[0]
+        else:
+            ticket = UNASSIGNED_TICKET
     return pr, commit, ticket
 
 
@@ -524,26 +606,36 @@ def fetch_pull_request_commits(repo: str, number: int) -> list[Commit]:
     return commits
 
 
-def as_str(value: object) -> str:
-    return value if isinstance(value, str) else ""
+def required_pull_request_string(
+    number: int, value: object, field: str
+) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(f"pull request #{number} is missing a valid {field}")
+    return value
 
 
 def normalize_pull_request(
     pull_request: dict[str, Any], commits: list[Commit]
 ) -> PullRequest:
+    number = pull_request.get("number")
+    if not isinstance(number, int) or isinstance(number, bool):
+        raise RuntimeError("pull request is missing a number")
+
     head = pull_request.get("head")
     if not isinstance(head, dict):
-        raise RuntimeError("pull request is missing a head branch")
-
-    number = pull_request.get("number")
-    if not isinstance(number, int):
-        raise RuntimeError("pull request is missing a number")
+        raise RuntimeError(f"pull request #{number} is missing a head branch")
 
     return {
         "number": number,
-        "title": as_str(pull_request.get("title")),
-        "headRefName": as_str(head.get("ref")),
-        "url": as_str(pull_request.get("html_url")),
+        "title": required_pull_request_string(
+            number, pull_request.get("title"), "title"
+        ),
+        "headRefName": required_pull_request_string(
+            number, head.get("ref"), "head branch name"
+        ),
+        "url": required_pull_request_string(
+            number, pull_request.get("html_url"), "URL"
+        ),
         "commits": commits,
     }
 
@@ -570,11 +662,11 @@ def fetch_prs(repo: str, author: str) -> list[PullRequest]:
 
     prs: list[PullRequest] = []
     for pull_request in authored_pull_requests:
-        number = pull_request.get("number")
-        if not isinstance(number, int):
-            raise RuntimeError("pull request is missing a number")
-        commits = fetch_pull_request_commits(repo, number)
-        prs.append(normalize_pull_request(pull_request, commits))
+        normalized = normalize_pull_request(pull_request, [])
+        normalized["commits"] = fetch_pull_request_commits(
+            repo, normalized["number"]
+        )
+        prs.append(normalized)
     return prs
 
 

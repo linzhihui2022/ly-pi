@@ -165,6 +165,49 @@ class CliContractTests(unittest.TestCase):
             self.assertEqual(stdout, "")
             self.assertIn(f"{option} must not be empty", stderr)
 
+    def test_rejects_invalid_committed_date_with_cli_context(self) -> None:
+        for committed_date in ("2024-01-02T09:00:00", "not-a-timestamp"):
+            with self.subTest(committed_date=committed_date):
+                pull_requests = [
+                    {
+                        "number": 7,
+                        "title": "ABC-123 add report",
+                        "headRefName": "ABC-123-report",
+                        "url": "https://github.com/owner/repo/pull/7",
+                        "commits": [
+                            {
+                                "oid": "invalid",
+                                "committedDate": committed_date,
+                                "messageHeadline": "ABC-123 add report",
+                                "authors": [{"login": "alice"}],
+                            }
+                        ],
+                    }
+                ]
+                with (
+                    patch.object(collector, "resolve_author", return_value="alice"),
+                    patch.object(collector, "fetch_prs", return_value=pull_requests),
+                ):
+                    exit_code, stdout, stderr = run_cli(
+                        [
+                            "--repo",
+                            "owner/repo",
+                            "--author",
+                            "alice",
+                            "--start-date",
+                            "2024-01-02",
+                            "--end-date",
+                            "2024-01-02",
+                            "--timezone",
+                            "UTC",
+                        ]
+                    )
+
+                self.assertEqual(exit_code, 1)
+                self.assertEqual(stdout, "")
+                self.assertIn("commit invalid in pull request #7", stderr)
+                self.assertIn("invalid committedDate", stderr)
+
     def test_discovers_ssh_alias_repo_through_gh(self) -> None:
         with (
             patch.object(
@@ -390,6 +433,81 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(first["activities"][0]["ticket"], "ABC-123")
         self.assertEqual(first["activities"][0]["pr_number"], 7)
         self.assertEqual(first["duplicates_removed"], 1)
+
+    def test_matches_a_commit_ticket_to_the_matching_duplicate_pull_request(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "DEF-456 unrelated work",
+                "headRefName": "DEF-456-work",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "shared",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "ABC-123 shared work",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+            {
+                "number": 8,
+                "title": "ABC-123 target work",
+                "headRefName": "ABC-123-work",
+                "url": "https://github.com/owner/repo/pull/8",
+                "commits": [
+                    {
+                        "oid": "shared",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "ABC-123 shared work",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+        ]
+
+        result = self.collect_json(pull_requests)
+
+        self.assertEqual(result["activities"][0]["ticket"], "ABC-123")
+        self.assertEqual(result["activities"][0]["pr_number"], 8)
+        self.assertEqual(result["duplicates_removed"], 1)
+
+    def test_marks_a_shared_commit_unassigned_when_no_pull_request_matches(self) -> None:
+        pull_requests = [
+            {
+                "number": 7,
+                "title": "DEF-456 unrelated work",
+                "headRefName": "DEF-456-work",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "shared",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "ABC-123 shared work",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+            {
+                "number": 8,
+                "title": "GHI-789 other work",
+                "headRefName": "GHI-789-work",
+                "url": "https://github.com/owner/repo/pull/8",
+                "commits": [
+                    {
+                        "oid": "shared",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "ABC-123 shared work",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+        ]
+
+        result = self.collect_json(pull_requests)
+
+        self.assertEqual(result["activities"][0]["ticket"], "UNASSIGNED")
+        self.assertEqual(result["activities"][0]["pr_number"], 7)
 
     def test_preserves_dst_fold_order_and_offset_in_json(self) -> None:
         pull_requests = [
@@ -678,6 +796,35 @@ class DetectRepoTests(unittest.TestCase):
 
         self.assertEqual(run.call_count, 2)
 
+    def test_rejects_a_github_like_path_on_another_host(self) -> None:
+        with patch.object(
+            collector,
+            "run",
+            side_effect=[
+                "https://gitlab.com/github.com/owner/repo.git",
+                "fallback/repo",
+            ],
+        ) as run:
+            self.assertEqual(collector.detect_repo(), "fallback/repo")
+
+        self.assertEqual(run.call_count, 2)
+
+    def test_does_not_echo_remote_credentials_when_detection_fails(self) -> None:
+        remote = "https://token:super-secret@notgithub.example/owner/repo.git"
+        with patch.object(
+            collector,
+            "run",
+            side_effect=[remote, RuntimeError("gh repo view: not logged in")],
+        ):
+            with self.assertRaises(RuntimeError) as raised:
+                collector.detect_repo()
+
+        message = str(raised.exception)
+        self.assertNotIn("super-secret", message)
+        self.assertNotIn(remote, message)
+        self.assertIn("notgithub.example", message)
+        self.assertIn("owner/repo", message)
+
     def test_chains_detection_failures_into_the_final_error(self) -> None:
         with patch.object(
             collector,
@@ -702,6 +849,11 @@ class ResolveAuthorTests(unittest.TestCase):
             self.assertEqual(collector.resolve_author("@me"), "alice")
 
         run.assert_called_once_with(["gh", "api", "user", "--jq", ".login"])
+
+    def test_rejects_an_empty_login_from_gh_api(self) -> None:
+        with patch.object(collector, "run", return_value=""):
+            with self.assertRaisesRegex(RuntimeError, "empty login"):
+                collector.resolve_author("@me")
 
     def test_passes_through_an_explicit_login(self) -> None:
         with patch.object(collector, "run") as run:
@@ -976,6 +1128,43 @@ class FetchPullRequestsTests(unittest.TestCase):
 
         self.assertEqual([pr["number"] for pr in result], [9])
 
+    def test_rejects_malformed_required_pull_request_fields(self) -> None:
+        invalid_fields = (
+            ("title", {"title": None}, "title"),
+            ("title", {"title": ""}, "title"),
+            ("head ref", {"head": {"ref": None}}, "head branch"),
+            ("head ref", {"head": {"ref": ""}}, "head branch"),
+            ("url", {"html_url": None}, "URL"),
+            ("url", {"html_url": ""}, "URL"),
+        )
+        for label, override, expected in invalid_fields:
+            with self.subTest(field=label, value=override):
+                pull_request: dict[str, object] = {
+                    "number": 7,
+                    "title": "ABC-123 add report",
+                    "head": {"ref": "ABC-123-report"},
+                    "html_url": "https://github.com/owner/repo/pull/7",
+                    "user": {"login": "alice"},
+                }
+                pull_request.update(override)
+
+                with (
+                    patch.object(
+                        collector,
+                        "fetch_paginated_items",
+                        return_value=[pull_request],
+                    ),
+                    patch.object(
+                        collector, "fetch_pull_request_commits", return_value=[]
+                    ),
+                ):
+                    with self.assertRaises(RuntimeError) as raised:
+                        collector.fetch_prs("owner/repo", "alice")
+
+                message = str(raised.exception)
+                self.assertIn("pull request #7", message)
+                self.assertIn(expected.lower(), message.lower())
+
 
 class CollectTests(unittest.TestCase):
     def test_emits_date_window_and_calendar_days_without_no_activity_ticket(self) -> None:
@@ -1215,6 +1404,73 @@ class CollectTests(unittest.TestCase):
                 ("UNASSIGNED", ["ABC-123 DEF-456 combined work"]),
             ],
         )
+        self.assertEqual(
+            result["daily_ticket_totals"],
+            [
+                {
+                    "date": "2024-01-02",
+                    "ticket": "ABC-123",
+                    "commit_count": 1,
+                    "work_commit_count": 1,
+                    "prs": [7],
+                },
+                {
+                    "date": "2024-01-02",
+                    "ticket": "UNASSIGNED",
+                    "commit_count": 1,
+                    "work_commit_count": 1,
+                    "prs": [7],
+                },
+            ],
+        )
+        self.assertEqual(
+            result["ticket_totals"],
+            [
+                {
+                    "ticket": "ABC-123",
+                    "commit_count": 1,
+                    "work_commit_count": 1,
+                    "dates": ["2024-01-02"],
+                },
+                {
+                    "ticket": "UNASSIGNED",
+                    "commit_count": 1,
+                    "work_commit_count": 1,
+                    "dates": ["2024-01-02"],
+                },
+            ],
+        )
+
+    def test_uses_branch_ticket_as_a_fallback(self) -> None:
+        prs = [
+            {
+                "number": 7,
+                "title": "add report",
+                "headRefName": "ABC-123-report",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "branch-fallback",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "implement report output",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            }
+        ]
+
+        with (
+            patch.object(collector, "resolve_author", return_value="alice"),
+            patch.object(collector, "fetch_prs", return_value=prs),
+        ):
+            result = collector.collect(
+                make_config(
+                    start_date=date(2024, 1, 2),
+                    end_date=date(2024, 1, 2),
+                )
+            )
+
+        self.assertEqual(result["activities"][0]["ticket"], "ABC-123")
 
     def test_uses_single_pull_request_ticket_as_a_fallback(self) -> None:
         prs = [
@@ -1246,6 +1502,75 @@ class CollectTests(unittest.TestCase):
             )
 
         self.assertEqual(result["activities"][0]["ticket"], "GHI-789")
+
+    def test_aggregates_same_day_activity_for_the_same_ticket_across_pull_requests(
+        self,
+    ) -> None:
+        prs = [
+            {
+                "number": 7,
+                "title": "ABC-123 first change",
+                "headRefName": "ABC-123-first",
+                "url": "https://github.com/owner/repo/pull/7",
+                "commits": [
+                    {
+                        "oid": "first",
+                        "committedDate": "2024-01-02T09:00:00Z",
+                        "messageHeadline": "ABC-123 first change",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+            {
+                "number": 8,
+                "title": "ABC-123 follow-up",
+                "headRefName": "ABC-123-follow-up",
+                "url": "https://github.com/owner/repo/pull/8",
+                "commits": [
+                    {
+                        "oid": "second",
+                        "committedDate": "2024-01-02T10:00:00Z",
+                        "messageHeadline": "ABC-123 follow-up",
+                        "authors": [{"login": "alice"}],
+                    }
+                ],
+            },
+        ]
+
+        with (
+            patch.object(collector, "resolve_author", return_value="alice"),
+            patch.object(collector, "fetch_prs", return_value=prs),
+        ):
+            result = collector.collect(
+                make_config(
+                    start_date=date(2024, 1, 2),
+                    end_date=date(2024, 1, 2),
+                )
+            )
+
+        self.assertEqual(
+            result["daily_ticket_totals"],
+            [
+                {
+                    "date": "2024-01-02",
+                    "ticket": "ABC-123",
+                    "commit_count": 2,
+                    "work_commit_count": 2,
+                    "prs": [7, 8],
+                }
+            ],
+        )
+        self.assertEqual(
+            result["ticket_totals"],
+            [
+                {
+                    "ticket": "ABC-123",
+                    "commit_count": 2,
+                    "work_commit_count": 2,
+                    "dates": ["2024-01-02"],
+                }
+            ],
+        )
 
     def test_deduplicates_shared_commits_and_excludes_merge_work_counts(self) -> None:
         prs = [
