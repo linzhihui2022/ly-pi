@@ -70,6 +70,10 @@ function filesMatching(pattern: RegExp, root = LY_PI_DIR): string[] {
   );
 }
 
+function isTestFixtureModelReference(path: string, model: string): boolean {
+  return path.endsWith(".test.ts") && /^(?:local|security|test)\//.test(model);
+}
+
 function unmanagedModelReferences(root = LY_PI_DIR): string[] {
   return sourceFiles(root)
     .flatMap((path) => {
@@ -95,7 +99,7 @@ function unmanagedModelReferences(root = LY_PI_DIR): string[] {
         .filter(
           (model) =>
             !manifestModelReferences.has(model) &&
-            !/^(?:local|security|test)\//.test(model),
+            !isTestFixtureModelReference(path, model),
         )
         .map((model) => `${path}:${model}`);
     })
@@ -148,6 +152,21 @@ describe("model selection migration guard", () => {
         "candidate.mts:split/model",
         "candidate.mts:unlisted/provider",
         "reverse.mts:order/reverse",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not exempt reserved-looking model references in production source", () => {
+    const root = mkdtempSync(join(tmpdir(), "model-policy-guard-"));
+    try {
+      writeFileSync(
+        join(root, "candidate.ts"),
+        'const model = "security/hardcoded";',
+      );
+      expect(unmanagedModelReferences(root)).toEqual([
+        "candidate.ts:security/hardcoded",
       ]);
     } finally {
       rmSync(root, { recursive: true, force: true });

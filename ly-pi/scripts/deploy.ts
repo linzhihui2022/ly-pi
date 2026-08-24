@@ -272,7 +272,7 @@ function collectFileWrites(
 const deploymentWrites: Array<{ path: string; data: WriteData }> = [];
 const deploymentMessages: string[] = [];
 
-// ── Model-policy outputs ────────────────────────────────────────────────────
+// ── Deployment outputs (including compiled model-policy settings) ───────────
 {
   const merged = await Bun.file("assets/config/settings.json").json();
   const settingsPath = join(agentDir, "settings.json");

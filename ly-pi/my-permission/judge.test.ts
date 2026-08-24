@@ -115,7 +115,19 @@ function createSecurityJudgeRunner(candidates: readonly ModelCandidate[]) {
       "security-judge": "security-judge-test",
       "security-audit": "security-judge-test",
     },
-    deployment: { primary: "primary", agents: {} },
+    deployment: {
+      primary: "primary",
+      agents: {
+        scout: "fast",
+        delegate: "standard",
+        "image-reader": "vision",
+        "pr-code-reviewer": "standard",
+        "pr-comment-analyzer": "standard",
+        "pr-silent-failure-hunter": "standard",
+        "pr-test-analyzer": "standard",
+        "pr-type-design-analyzer": "standard",
+      },
+    },
   };
   return createModelPolicyRegistry(manifest);
 }

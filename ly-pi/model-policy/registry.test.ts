@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createModelPolicyRegistry } from "./registry";
 
 const manifest = {
@@ -71,7 +71,16 @@ const manifest = {
   },
   deployment: {
     primary: "primary",
-    agents: { scout: "fast" },
+    agents: {
+      scout: "fast",
+      delegate: "standard",
+      "image-reader": "vision",
+      "pr-code-reviewer": "standard",
+      "pr-comment-analyzer": "standard",
+      "pr-silent-failure-hunter": "standard",
+      "pr-test-analyzer": "standard",
+      "pr-type-design-analyzer": "standard",
+    },
   },
 } as const;
 
@@ -339,10 +348,52 @@ describe("createModelPolicyRegistry", () => {
         ...manifest,
         deployment: {
           ...manifest.deployment,
-          agents: { "image-reader": "fast" },
+          agents: {
+            ...manifest.deployment.agents,
+            "image-reader": "fast",
+          },
         },
       }),
     ).toThrow("agent 'image-reader' must deploy the 'vision' role");
+  });
+
+  it("does not run a vision operation with a text-only candidate", async () => {
+    const registry = createModelPolicyRegistry(manifest);
+    const operation = vi.fn(async () => successfulResponse);
+
+    const result = await registry.run(
+      "vision",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      operation,
+    );
+
+    expect(result).toEqual({
+      status: "failure",
+      failurePolicy: "error",
+      reason:
+        "no usable candidate for role 'vision': primary (test/vision): missing input: image",
+    });
+    expect(operation).not.toHaveBeenCalled();
+  });
+
+  it("requires every managed agent to have a deployment binding", () => {
+    const { "image-reader": _imageReader, ...agents } =
+      manifest.deployment.agents;
+
+    expect(() =>
+      createModelPolicyRegistry({
+        ...manifest,
+        deployment: { ...manifest.deployment, agents },
+      } as never),
+    ).toThrow("invalid model manifest");
   });
 
   it.each([
@@ -875,6 +926,61 @@ describe("createModelPolicyRegistry", () => {
           return {
             stopReason: "error",
             errorMessage: "Provider finish_reason: network_error",
+          };
+        }
+        return successfulResponse;
+      },
+    );
+
+    expect(attempts).toEqual(["primary", "fallback"]);
+    expect(result).toMatchObject({
+      status: "success",
+      candidate: { slot: "fallback" },
+    });
+  });
+
+  it("falls back after Pi reports a model-not-found response", async () => {
+    const registry = createModelPolicyRegistry({
+      ...manifest,
+      policies: {
+        ...manifest.policies,
+        "fast-policy": {
+          ...manifest.policies["fast-policy"],
+          candidates: [
+            {
+              ...manifest.policies["fast-policy"].candidates[0],
+              model: "test/primary",
+            },
+            {
+              slot: "fallback",
+              model: "test/fallback",
+              label: "Fallback test model",
+              thinking: "off",
+            },
+          ],
+        },
+      },
+    });
+    const attempts: string[] = [];
+
+    const result = await registry.run(
+      "fast",
+      {
+        find: (provider, id) => ({
+          provider,
+          id,
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 128000,
+        }),
+      },
+      async (model) => {
+        attempts.push(model.id);
+        if (model.id === "primary") {
+          return {
+            stopReason: "error",
+            status: 404,
+            errorMessage: "HTTP 404 Not Found: model not found",
           };
         }
         return successfulResponse;
@@ -1455,7 +1561,7 @@ describe("createModelPolicyRegistry", () => {
   it("compiles the primary and subagent settings from policy roles", () => {
     const registry = createModelPolicyRegistry(manifest);
 
-    expect(registry.compilePiSettings()).toEqual({
+    expect(registry.compilePiSettings()).toMatchObject({
       settings: {
         defaultProvider: "test",
         defaultModel: "fast",

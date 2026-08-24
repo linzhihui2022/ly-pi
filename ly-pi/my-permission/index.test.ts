@@ -480,6 +480,45 @@ describe("security audit tools", () => {
     expect(writeFileSync).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      "merger error",
+      { error: "rate limit exceeded" },
+      "融合失败: rate limit exceeded",
+    ],
+    ["empty merger output", { mergedText: "" }, "融合失败: 空内容"],
+  ] as const)("does not write JUDGE.md when Advocate merge returns %s", async (_label, mergeResult, expectedText) => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    vi.mocked(createAdvocate).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        suggestion: {
+          add: [{ rule: "允许 git status", reason: "false positive" }],
+          remove: [],
+        },
+      }) as never,
+    );
+    vi.mocked(createPipelineMerger).mockReturnValue(
+      vi.fn().mockResolvedValue(mergeResult) as never,
+    );
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const ctx = createSecurityAuditCtx();
+    const result = await api
+      .getTool("permission_advocate")
+      .execute("call-1", {}, undefined, undefined, ctx);
+
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: expectedText }],
+    });
+    expect(ctx.ui.confirm).toHaveBeenCalledTimes(1);
+    expect(writeFileSync).not.toHaveBeenCalled();
+    expect(appendCost).not.toHaveBeenCalled();
+  });
+
   it("preserves approval and costs when Advocate analysis and merge succeed", async () => {
     const modelRunner = { run: vi.fn() };
     vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);

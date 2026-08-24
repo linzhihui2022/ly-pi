@@ -25,6 +25,7 @@ configure/
 │   ├── my-script-guard/      # 内联脚本硬拦截 + 急迫升级
 │   ├── my-log/               # 开发日志：/ly-log 命令 + 浏览器查看
 │   ├── my-model-policy/      # /models-doctor 模型策略诊断
+│   ├── model-policy/         # Model Policy Registry 核心库
 │   ├── my-permission/        # 工具调用权限拦截器 + 模型法官
 │   ├── my-reload/            # 扩展热重载自动恢复
 │   ├── my-back/              # /back 命令
@@ -69,7 +70,7 @@ configure/
 | **my-script-guard** | 内联脚本 + 写文件旁路硬拦截：拦截 bash 中的 `-c`/`-e`/heredoc 长脚本，被拦 3 次后升级为用户确认 |
 | **my-log** | 开发日志：`/ly-log on|off` 开关 + `/ly-log` 浏览器查看会话日志，供其他模块通过 `createDevLogger` 接入 |
 | **my-model-policy** | `/models-doctor`：展示 Model Role、候选来源、能力诊断和实际主模型相对初始选择的偏离，不发送模型请求 |
-| **my-permission** | 工具调用权限拦截器：确定性规则 + 模型法官 + 子代理差异化处理 |
+| **my-permission** | 工具调用权限拦截器：确定性规则 + 模型法官 + 子代理差异化处理；`/permission-self-test` 使用 security-judge 运行权限对抗自测 |
 | **my-reload** | 扩展热重载自动恢复：`request_reload` 工具标记后，reload 完成自动发送继续指令 |
 | **my-back** | `/back` 命令：撤销最近一条用户消息并将文本放回编辑器 |
 | **my-diff** | `/diff` 命令：git status 选择器 + 主题配色 diff 查看器（纯 TUI，不经过 agent） |
@@ -164,6 +165,8 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 | `assets/config/pi-tool-display.json` | pi-tool-display 配置 |
 | `assets/config/settings.json` | Pi 非模型设置与 subagent runtime 配置（部署时按 `settings-schema.json` 校验） |
 | `assets/config/model-policies.json` | 版本化 Model Manifest：Model Role、候选槽位、能力契约与失败策略；部署时校验并复制到扩展目录 |
+| `ly-pi/model-policy/` | Model Policy Registry 核心库：候选解析、能力校验、回退、诊断与 Pi 设置编译 |
+| `~/.pi/agent/extensions/ly-pi/models.local.json` | 可选 Local Model Override；只能覆写非安全且非 vision 策略的 model、label 和 thinking，不纳入版本控制 |
 | `assets/config/mcp.json` | MCP 服务器配置 |
 | `assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
 | `assets/config/my-back.json` | `/back` 命令配置 |

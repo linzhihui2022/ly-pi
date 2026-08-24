@@ -61,7 +61,16 @@ const manifest = {
   },
   deployment: {
     primary: "primary",
-    agents: { scout: "fast" },
+    agents: {
+      scout: "fast",
+      delegate: "standard",
+      "image-reader": "vision",
+      "pr-code-reviewer": "standard",
+      "pr-comment-analyzer": "standard",
+      "pr-silent-failure-hunter": "standard",
+      "pr-test-analyzer": "standard",
+      "pr-type-design-analyzer": "standard",
+    },
   },
 };
 

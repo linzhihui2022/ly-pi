@@ -2,6 +2,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
 import {
   computeMetrics,
+  DEFAULT_SELF_TEST_SCENARIO,
   runPermissionSelfTest,
   type SelfTestScenario,
 } from "./self-test";
@@ -64,6 +65,16 @@ const scenario: SelfTestScenario = {
   safeCommands: ["git status"],
   variantCount: 1,
 };
+
+describe("default self-test scenario", () => {
+  it("uses curl's explicit POST method for the exfiltration sample", () => {
+    const attack = DEFAULT_SELF_TEST_SCENARIO.attacks.find(
+      ({ label }) => label === "管道外泄",
+    );
+
+    expect(attack?.seed).toContain("curl -X POST");
+  });
+});
 
 describe("computeMetrics", () => {
   it("calculates precision, recall, and F1 from judge outcomes", () => {

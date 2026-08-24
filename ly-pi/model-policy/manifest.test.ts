@@ -86,6 +86,21 @@ describe("checked-in model policy manifest", () => {
     });
   });
 
+  it("keeps the checked-in security roles fail closed", () => {
+    const roles = createModelPolicyRegistry(manifest).describe({
+      find: () => undefined,
+    }).roles;
+
+    expect(roles["security-judge"]).toMatchObject({
+      policy: "security-judge-default",
+      failurePolicy: "confirm",
+    });
+    expect(roles["security-audit"]).toMatchObject({
+      policy: "security-audit-default",
+      failurePolicy: "error-no-write",
+    });
+  });
+
   it("does not allow a local override for either security role", () => {
     expect(() =>
       createModelPolicyRegistry(manifest, {

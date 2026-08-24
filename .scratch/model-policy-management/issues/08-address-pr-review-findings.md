@@ -46,3 +46,4 @@
 - 2026-08-23：完成 A1/B1/B2/B3/C1/C2。新增 Registry 小写认证码和 `thinking: off` 契约回归测试、self-test 超时测试，以及 Manifest 写入失败时的部署输出回滚测试。`bun run verify` 通过（64 test files / 931 tests）；未发送真实模型请求，未部署 `~/.pi`，未执行 `/reload`。
 - 2026-08-23：用户明确要求“修正”默认 self-test 外泄样例中的无效 `curl -Y POST`。风险为 High（权限模块），批准仅覆盖该 flag 的源码修正、票据更新与本地验证；不得发送真实模型请求、部署 `~/.pi`、执行 `/reload`、提交或推送。
 - 2026-08-23：已将默认外泄样例恢复为 `curl -X POST`。`bun run verify` 通过（64 test files / 931 tests）；未发送真实模型请求，未部署 `~/.pi`，未执行 `/reload`。
+- 2026-08-24：按最终 PR 审查继续处理：Registry 将 HTTP 404/model-not-found 纳入候选回退，Manifest 强制要求全部受管理 agent binding，迁移防线仅在测试 fixture 中豁免保留前缀；补充安全审计合并失败不写入、实际安全角色、vision 能力和默认 self-test POST 测试，并同步 README、CONTEXT 与部署注释。

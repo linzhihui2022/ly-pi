@@ -16,6 +16,20 @@ export type DeployableModelRole = Exclude<
   "security-judge" | "security-audit"
 >;
 
+export type ManagedAgentName =
+  | "scout"
+  | "delegate"
+  | "image-reader"
+  | "pr-code-reviewer"
+  | "pr-comment-analyzer"
+  | "pr-silent-failure-hunter"
+  | "pr-test-analyzer"
+  | "pr-type-design-analyzer";
+
+export type ManagedAgentBindings = Readonly<
+  Record<ManagedAgentName, DeployableModelRole>
+>;
+
 export type ModelThinkingLevel =
   | "off"
   | "minimal"
@@ -51,7 +65,7 @@ export interface ModelPolicyManifest {
   readonly roles: Readonly<Record<ModelRole, string>>;
   readonly deployment: {
     readonly primary: DeployableModelRole;
-    readonly agents: Readonly<Record<string, DeployableModelRole>>;
+    readonly agents: ManagedAgentBindings;
   };
 }
 
@@ -89,6 +103,20 @@ const DeployableModelRoleSchema = Type.Union([
   Type.Literal("deep"),
   Type.Literal("vision"),
 ]);
+
+const ManagedAgentBindingsSchema = Type.Object(
+  {
+    scout: DeployableModelRoleSchema,
+    delegate: DeployableModelRoleSchema,
+    "image-reader": DeployableModelRoleSchema,
+    "pr-code-reviewer": DeployableModelRoleSchema,
+    "pr-comment-analyzer": DeployableModelRoleSchema,
+    "pr-silent-failure-hunter": DeployableModelRoleSchema,
+    "pr-test-analyzer": DeployableModelRoleSchema,
+    "pr-type-design-analyzer": DeployableModelRoleSchema,
+  },
+  { additionalProperties: false },
+);
 
 const RoleFailurePolicySchema = Type.Union([
   Type.Literal("skip"),
@@ -155,10 +183,7 @@ const ModelPolicyManifestSchema = Type.Object(
     deployment: Type.Object(
       {
         primary: DeployableModelRoleSchema,
-        agents: Type.Record(
-          Type.String({ minLength: 1 }),
-          DeployableModelRoleSchema,
-        ),
+        agents: ManagedAgentBindingsSchema,
       },
       { additionalProperties: false },
     ),
@@ -482,7 +507,13 @@ function isRetryableInfrastructureFailure(error: unknown): boolean {
       : typeof details.statusCode === "number"
         ? details.statusCode
         : undefined;
-  if (status === 401 || status === 403 || status === 408 || status === 429) {
+  if (
+    status === 401 ||
+    status === 403 ||
+    status === 404 ||
+    status === 408 ||
+    status === 429
+  ) {
     return true;
   }
   if (status !== undefined && status >= 500 && status <= 599) return true;
@@ -511,7 +542,7 @@ function isRetryableInfrastructureFailure(error: unknown): boolean {
 
   const message =
     typeof details.message === "string" ? details.message.toLowerCase() : "";
-  return /\b(?:401|403|408|429|5\d\d)\b|api key|authentication|auth failed|forbidden|provider (?:is )?not configured|oauth (?:refresh|auth derivation) (?:failed|returned)|rate limit|too many requests|request (?:was )?aborted|timed? out|timeout|fetch failed|connection (?:error|failed|failure)|bad gateway|internal server error|network[_ ](?:error|unavailable|failure)|service unavailable|(?:provider|server|service) (?:is )?overload(?:ed)?/.test(
+  return /\b(?:401|403|404|408|429|5\d\d)\b|api key|authentication|auth failed|forbidden|model (?:does not exist|not found)|provider (?:is )?not configured|oauth (?:refresh|auth derivation) (?:failed|returned)|rate limit|too many requests|request (?:was )?aborted|timed? out|timeout|fetch failed|connection (?:error|failed|failure)|bad gateway|internal server error|network[_ ](?:error|unavailable|failure)|service unavailable|(?:provider|server|service) (?:is )?overload(?:ed)?/.test(
     message,
   );
 }
