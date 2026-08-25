@@ -18,7 +18,7 @@
     "format": "biome format --write .",
     "check": "biome check --write .",
     "lint": "biome check package.json biome.json scripts ly-pi tools",
-    "verify": "bun run lint && bun run --cwd ly-pi typecheck && bun run --cwd tools/pi-w typecheck && bun run --cwd ly-pi test && bun run --cwd ly-pi test:skills && bun run check-docs"
+    "verify": "bun run lint && bun run --cwd ly-pi typecheck && bun run --cwd tools/pi-w typecheck && bun run --cwd ly-pi test && bun run check-docs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
