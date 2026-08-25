@@ -8,7 +8,7 @@
 |-----------|------|
 | `MY-AGENTS.md` | 全局偏好（软链接到 `~/.pi/agent/AGENTS.md`、`~/.claude/CLAUDE.md` 和 `~/.dsh/AGENTS.md`） |
 | `ly-pi/` | 统一扩展入口（单包，含全部 12 个子模块） |
-| `ly-pi/assets/skills/` | 仓库自有技能（review-pr） |
+| `ly-pi/assets/skills/` | 仓库自有技能（review-pr、gh-build-weekly-timesheet） |
 | `ly-pi/assets/themes/` | 自定义主题（Catppuccin Mocha） |
 | `scripts/deploy-all.ts` | 统一部署流水线（build → test → deploy all） |
 | `install.sh` | 一键部署（`bun run deploy`） |
@@ -64,7 +64,7 @@ bun run --cwd ly-pi test -- my-hud
 - 纯配置统一放在 `ly-pi/assets/config/`
 - 扩展运行时使用 TypeBox 做类型校验
 - 格式与 lint 使用 Biome：`bun run format` / `bun run check`
-- `ly-pi/assets/skills/` 仅维护仓库自有技能（review-pr），不镜像或迁移外部技能副本；部署为快照式，会清除本机已删除的旧副本
+- `ly-pi/assets/skills/` 仅维护仓库自有技能，不镜像或迁移外部技能副本；部署为快照式，会清除本机已删除的旧副本
 - 子代理运行时为 `npm:pi-subagents`，不得与 `npm:@gotgenes/pi-subagents` 并装；`ly-pi/assets/agents/` 仅保留 5 个 PR 审查角色（另有 image-reader 供 my-vision 委托），通用角色由官方包提供
 - 主题部署（`ly-pi/scripts/deploy.ts`）只拷贝 `assets/themes/` 下的 `*.json` 主题文件，排除其他文件（Pi 会把目录下所有 `.json` 当主题加载，非主题文件会导致校验错误）
 

@@ -103,3 +103,21 @@ _Avoid_: 通用 Git 客户端、Worktree Widget 本身
 **Worktree Widget（worktree 组件）**:
 `my-worktree` 模块中的只读 Pi widget，仅在拥有至少两个 Visible Worktree 的 Multi-worktree Repository 中能唯一确认 Current Worktree 时，于编辑器上方以两行树呈现其分支与 worktree 根路径，而不枚举其他 Visible Worktree。accent 的 `● Worktrees (N)` 标题只给出可见成员的聚合数量，唯一条目以中性的 `•` 呈现；主仓库内路径缩写为 `<REPO>`，窄屏从路径开头截断以保留末尾，若路径完全无可用宽度则隐藏整个组件。发现失败时安静隐藏。它是当前会话位置的补充定位信息，不是 worktree 清单。
 _Avoid_: worktree 列表、my-hud worktree 字段、Git 状态栏
+
+## Weekly Timesheet
+
+**Evidence Window（证据窗口）**:
+用于工时表、终点不晚于当前本地日期的闭合本地日历区间；其中 GitHub 活动可作为记工时证据。
+_Avoid_: 预测周期、未来周期
+
+**No Activity（无活动）**:
+某个日历日没有任何 GitHub 活动证据的状态，以 `NO_ACTIVITY` 和 `0h` 表示，且不是票据。
+_Avoid_: UNASSIGNED、未归属活动
+
+**Unassigned Activity（未归属活动）**:
+已有 GitHub 活动证据但无法确定唯一票据编号的状态；其估算工时单列，等待人工记账决定。
+_Avoid_: No Activity、无活动
+
+**Allocation Rule（分配规则）**:
+调用者指定的每日目标工时与最小增量，用于在有证据的日期估算各票据的工时；不代表实际耗时。
+_Avoid_: 计时记录、实际工时
