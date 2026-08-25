@@ -126,7 +126,6 @@ async function evaluateCommands(
   commands: string[],
   toolName: string,
 ): Promise<JudgeResult[]> {
-  const model = resolveModel();
   const judge = createJudge(config, {
     judgePrompt: JUDGE_PROMPT,
     modelClient,
@@ -139,7 +138,7 @@ async function evaluateCommands(
       value: cmd,
       paths: [],
     };
-    const result = await judge(input, "/test-project", model);
+    const result = await judge(input, "/test-project");
     results.push(result);
   }
   return results;
