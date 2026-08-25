@@ -429,7 +429,6 @@ describe("deploy", () => {
       subagents: {
         agentOverrides: {
           reviewer: { model: "other/reviewer" },
-          "image-reader": { model: "other/image" },
           scout: {
             model: "deepseek/deepseek-v4-flash",
             thinking: "off",
@@ -443,6 +442,98 @@ describe("deploy", () => {
         },
       },
     });
+  });
+
+  it("deploys policy-generated specialist overrides without frontmatter model pins", () => {
+    const stagingDir = createStagingDir();
+    const agentDir = join(stagingDir, "agent");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(
+      join(agentDir, "settings.json"),
+      JSON.stringify({
+        subagents: {
+          agentOverrides: {
+            "image-reader": { model: "other/image" },
+            "pr-comment-analyzer": { model: "other/comment" },
+          },
+        },
+      }),
+    );
+
+    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
+    if (bunLookup.status !== 0) {
+      throw new Error("Bun executable is required to test deployment.");
+    }
+
+    const cleanupBundle = ensureExtensionBundle();
+    try {
+      const result = spawnSync(
+        bunLookup.stdout.trim(),
+        ["run", "scripts/deploy.ts"],
+        {
+          cwd: projectDir,
+          encoding: "utf8",
+          env: { PATH: "", PI_STAGING_DIR: stagingDir },
+        },
+      );
+
+      expect(result.status, result.stderr).toBe(0);
+    } finally {
+      cleanupBundle();
+    }
+
+    const settings = JSON.parse(
+      readFileSync(join(agentDir, "settings.json"), "utf8"),
+    );
+    const manifest = JSON.parse(
+      readFileSync(
+        join(projectDir, "assets", "config", "model-policies.json"),
+        "utf8",
+      ),
+    ) as {
+      roles: Record<string, string>;
+      policies: Record<
+        string,
+        { candidates: Array<{ model: string; thinking: string }> }
+      >;
+    };
+    const expectedOverride = (role: string) => {
+      const [primary, ...fallbacks] =
+        manifest.policies[manifest.roles[role]].candidates;
+      return {
+        model: primary.model,
+        thinking: primary.thinking,
+        fallbackModels: fallbacks.map((candidate) => candidate.model),
+      };
+    };
+    expect(settings.subagents.agentOverrides).toMatchObject({
+      "image-reader": expectedOverride("vision"),
+      "pr-comment-analyzer": expectedOverride("standard"),
+    });
+
+    const requiredFrontmatter = {
+      "image-reader": [
+        "tools: read, grep, find",
+        "acceptanceRole: read-only",
+        "你是一名视觉分析专家",
+      ],
+      "pr-comment-analyzer": [
+        "tools: read, bash, grep, find, ls",
+        "acceptanceRole: read-only",
+        "你是一名严谨的代码注释分析师",
+      ],
+    };
+    for (const [agent, requiredFields] of Object.entries(requiredFrontmatter)) {
+      const frontmatter = readFileSync(
+        join(stagingDir, "agent", "agents", `${agent}.md`),
+        "utf8",
+      );
+      expect(frontmatter).not.toMatch(/^model:/m);
+      expect(frontmatter).not.toMatch(/^thinking:/m);
+      for (const field of requiredFields) {
+        expect(frontmatter).toContain(field);
+      }
+    }
   });
 
   it("compiles legal local overrides into primary, scout, and delegate", () => {
@@ -576,6 +667,12 @@ describe("deploy", () => {
     expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty("scout");
     expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
       "delegate",
+    );
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
+      "image-reader",
+    );
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
+      "pr-comment-analyzer",
     );
   });
 });

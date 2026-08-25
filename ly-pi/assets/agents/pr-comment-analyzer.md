@@ -2,7 +2,6 @@
 name: pr-comment-analyzer
 description: 专注于分析 PR diff 中代码注释、docstring 和文档的准确性、完整性和长期可维护性的 agent。
 tools: read, bash, grep, find, ls
-model: deepseek/deepseek-v4-flash
 systemPromptMode: replace
 acceptanceRole: read-only
 completionGuard: false
