@@ -8,12 +8,7 @@ import {
   hyperlink,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
-import {
-  formatCacheRate,
-  formatPermissionStats,
-  formatTokens,
-  shortModelName,
-} from "./format";
+import { formatCacheRate, formatPermissionStats, formatTokens } from "./format";
 import { icon } from "./icons";
 import type { GitStatus, StatusLineData } from "./types";
 
@@ -49,11 +44,10 @@ export function buildStatusLine(
     parts.push(theme.fg("mdCode", `${icon("project")}${project}`));
   }
   if (show("model")) {
-    const modelLabel = shortModelName(modelName.trim());
     parts.push(
       theme.fg(
         "mdHeading",
-        `${icon("model")}${modelLabel}${thinkingLevel ? `·${thinkingLevel}` : ""}`,
+        `${icon("model")}${modelName.trim()}${thinkingLevel ? `·${thinkingLevel}` : ""}`,
       ),
     );
   }

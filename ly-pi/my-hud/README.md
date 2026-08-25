@@ -7,7 +7,7 @@ Replaces the built-in footer with a compact, always-on status bar showing:
 | Field | Icon | Description |
 |-------|------|-------------|
 | Project |  | Current directory basename |
-| Model |  | Active LLM model ID |
+| Model |  | Active model's effective Candidate Model Label; unknown or recovered models retain their provider-qualified ID |
 | Branch |  | Git branch (hidden if not in a repo), PR number linked when found |
 | Git Status | — | Dirty counts in starship style: `++staged`, `~unstaged`, `?untracked`, `*stashed`, `!!conflicted`, `⇡ahead⇣behind` |
 | Context |  /  /  | Context window usage % with color-coded thresholds |
@@ -38,12 +38,10 @@ Optional `my-hud.json` inside the extension directory (reloaded via `/reload`):
 
 ```json
 {
-  "modelShortNames": { "openai-codex/gpt-5.6-terra": "terra" },
   "hiddenFields": ["cost", "cacheRate"]
 }
 ```
 
-- `modelShortNames` — map full model IDs to short display names (overrides builtins)
 - `hiddenFields` — hide status line fields; valid keys: `project`, `model`, `branch`, `gitStatus`, `context`, `input`, `output`, `cacheRead`, `cost`, `cacheRate`, `permission`, `hideThinking`
 
 Missing or invalid config falls back to defaults silently.

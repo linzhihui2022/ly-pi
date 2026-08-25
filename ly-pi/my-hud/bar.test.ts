@@ -48,9 +48,12 @@ function createMockTheme(): any {
 
 const mockTui = { requestRender: vi.fn() };
 
-const createCtx = (overrides?: { branch?: string }) => ({
+const createCtx = (overrides?: {
+  branch?: string;
+  model?: { provider: string; id: string };
+}) => ({
   cwd: "/x",
-  model: { id: "m" },
+  model: { provider: "test", id: "m" },
   sessionManager: { getEntries: () => [] },
   getContextUsage: () => ({ percent: 0, contextWindow: 128000 }),
   ...overrides,
@@ -285,6 +288,43 @@ describe("Bar PR caching", () => {
     const component = factory(mockTui, theme);
 
     expect(component.render(200)[0]).toContain("1/1/0.49");
+  });
+
+  it("uses the effective candidate's Model Label for a known active model", () => {
+    const labelForModel = vi.fn(({ provider, id }) =>
+      provider === "test" && id === "m" ? "Fast label" : undefined,
+    );
+    const bar = new Bar(undefined, labelForModel);
+    const setWidget = vi.fn();
+    const theme = createMockTheme();
+
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(createCtx() as unknown as ExtensionContext);
+    bar.update();
+
+    const component = setWidget.mock.calls[0][1](mockTui, theme);
+    const line = component.render(200)[0];
+
+    expect(labelForModel).toHaveBeenCalledWith({ provider: "test", id: "m" });
+    expect(line).toContain("Fast label");
+    expect(line).not.toContain("test/m");
+  });
+
+  it("keeps an unknown active model's provider-qualified identifier", () => {
+    const bar = new Bar(undefined, () => undefined);
+    const setWidget = vi.fn();
+    const theme = createMockTheme();
+    const ctx = createCtx({
+      model: { provider: "recovered", id: "fallback" },
+    });
+
+    bar.setUICtx({ setWidget } as unknown as ExtensionUIContext);
+    bar.setContext(ctx as unknown as ExtensionContext);
+    bar.update();
+
+    const component = setWidget.mock.calls[0][1](mockTui, theme);
+
+    expect(component.render(200)[0]).toContain("recovered/fallback");
   });
 
   it("shows the hideThinking indicator when settings enable it", () => {
