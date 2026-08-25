@@ -378,4 +378,204 @@ describe("deploy", () => {
     expect(readFileSync(manifestPath, "utf8")).toBe('{"version":"previous"}\n');
     expect(existsSync(extensionPath)).toBe(false);
   });
+
+  it("compiles primary, scout, and delegate while preserving unrelated settings", () => {
+    const stagingDir = createStagingDir();
+    const agentDir = join(stagingDir, "agent");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(
+      join(agentDir, "settings.json"),
+      JSON.stringify({
+        customSetting: true,
+        subagents: {
+          agentOverrides: {
+            reviewer: { model: "other/reviewer" },
+            "image-reader": { model: "other/image" },
+          },
+        },
+      }),
+    );
+
+    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
+    if (bunLookup.status !== 0) {
+      throw new Error("Bun executable is required to test deployment.");
+    }
+
+    const cleanupBundle = ensureExtensionBundle();
+    try {
+      const result = spawnSync(
+        bunLookup.stdout.trim(),
+        ["run", "scripts/deploy.ts"],
+        {
+          cwd: projectDir,
+          encoding: "utf8",
+          env: { PATH: "", PI_STAGING_DIR: stagingDir },
+        },
+      );
+
+      expect(result.status, result.stderr).toBe(0);
+    } finally {
+      cleanupBundle();
+    }
+
+    const settings = JSON.parse(
+      readFileSync(join(agentDir, "settings.json"), "utf8"),
+    );
+    expect(settings).toMatchObject({
+      customSetting: true,
+      defaultProvider: "openai-codex",
+      defaultModel: "gpt-5.6-terra",
+      defaultThinkingLevel: "max",
+      subagents: {
+        agentOverrides: {
+          reviewer: { model: "other/reviewer" },
+          "image-reader": { model: "other/image" },
+          scout: {
+            model: "deepseek/deepseek-v4-flash",
+            thinking: "off",
+            fallbackModels: [],
+          },
+          delegate: {
+            model: "deepseek/deepseek-v4-flash",
+            thinking: "max",
+            fallbackModels: [],
+          },
+        },
+      },
+    });
+  });
+
+  it("compiles legal local overrides into primary, scout, and delegate", () => {
+    const stagingDir = createStagingDir();
+    const extensionDir = join(stagingDir, "agent", "extensions", "ly-pi");
+    mkdirSync(extensionDir, { recursive: true });
+    writeFileSync(
+      join(extensionDir, "models.local.json"),
+      JSON.stringify({
+        version: 1,
+        policies: {
+          "primary-default": {
+            slots: { primary: { model: "local/primary", thinking: "high" } },
+          },
+          "fast-default": {
+            slots: { primary: { model: "local/scout", thinking: "low" } },
+          },
+          "standard-default": {
+            slots: {
+              primary: { model: "local/delegate", thinking: "medium" },
+            },
+          },
+        },
+      }),
+    );
+
+    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
+    if (bunLookup.status !== 0) {
+      throw new Error("Bun executable is required to test deployment.");
+    }
+
+    const cleanupBundle = ensureExtensionBundle();
+    try {
+      const result = spawnSync(
+        bunLookup.stdout.trim(),
+        ["run", "scripts/deploy.ts"],
+        {
+          cwd: projectDir,
+          encoding: "utf8",
+          env: { PATH: "", PI_STAGING_DIR: stagingDir },
+        },
+      );
+
+      expect(result.status, result.stderr).toBe(0);
+    } finally {
+      cleanupBundle();
+    }
+
+    const settings = JSON.parse(
+      readFileSync(join(stagingDir, "agent", "settings.json"), "utf8"),
+    );
+    expect(settings).toMatchObject({
+      defaultProvider: "local",
+      defaultModel: "primary",
+      defaultThinkingLevel: "high",
+      subagents: {
+        agentOverrides: {
+          scout: {
+            model: "local/scout",
+            thinking: "low",
+            fallbackModels: [],
+          },
+          delegate: {
+            model: "local/delegate",
+            thinking: "medium",
+            fallbackModels: [],
+          },
+        },
+      },
+    });
+  });
+
+  it("rejects a security local override before writing settings", () => {
+    const stagingDir = createStagingDir();
+    const extensionDir = join(stagingDir, "agent", "extensions", "ly-pi");
+    const settingsPath = join(stagingDir, "agent", "settings.json");
+    mkdirSync(extensionDir, { recursive: true });
+    mkdirSync(dirname(settingsPath), { recursive: true });
+    writeFileSync(settingsPath, '{"existing":true}\n');
+    writeFileSync(
+      join(extensionDir, "models.local.json"),
+      JSON.stringify({
+        version: 1,
+        policies: {
+          "security-judge-default": {
+            slots: { primary: { model: "local/security" } },
+          },
+        },
+      }),
+    );
+
+    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
+    if (bunLookup.status !== 0) {
+      throw new Error("Bun executable is required to test deployment.");
+    }
+
+    const cleanupBundle = ensureExtensionBundle();
+    try {
+      const result = spawnSync(
+        bunLookup.stdout.trim(),
+        ["run", "scripts/deploy.ts"],
+        {
+          cwd: projectDir,
+          encoding: "utf8",
+          env: { PATH: "", PI_STAGING_DIR: stagingDir },
+        },
+      );
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain(
+        "cannot override security policy 'security-judge-default'",
+      );
+    } finally {
+      cleanupBundle();
+    }
+
+    expect(readFileSync(settingsPath, "utf8")).toBe('{"existing":true}\n');
+  });
+
+  it("does not duplicate managed model choices in source settings", () => {
+    const source = JSON.parse(
+      readFileSync(
+        join(projectDir, "assets", "config", "settings.json"),
+        "utf8",
+      ),
+    );
+
+    expect(source.settings).not.toHaveProperty("defaultProvider");
+    expect(source.settings).not.toHaveProperty("defaultModel");
+    expect(source.settings).not.toHaveProperty("defaultThinkingLevel");
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty("scout");
+    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
+      "delegate",
+    );
+  });
 });
