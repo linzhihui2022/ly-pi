@@ -297,10 +297,19 @@ const configDir = "assets/config";
     (target.subagents as Record<string, unknown>) ?? {},
     merged.subagents,
   );
-  const { scout, delegate } =
-    compiledModelPolicySettings.subagents.agentOverrides;
+  const {
+    scout,
+    delegate,
+    "image-reader": imageReader,
+    "pr-comment-analyzer": prCommentAnalyzer,
+  } = compiledModelPolicySettings.subagents.agentOverrides;
   target.subagents = deepMerge(target.subagents as Record<string, unknown>, {
-    agentOverrides: { scout, delegate },
+    agentOverrides: {
+      scout,
+      delegate,
+      "image-reader": imageReader,
+      "pr-comment-analyzer": prCommentAnalyzer,
+    },
   });
   await write(settingsPath, `${JSON.stringify(target, null, 2)}\n`);
   console.log("Settings: deployed");
