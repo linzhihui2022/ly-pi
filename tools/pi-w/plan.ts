@@ -57,7 +57,7 @@ export function planWorktree(input: PlanInput): Plan {
         dir,
         "--",
         "/bin/zsh",
-        "-c",
+        "-ic",
         "pi; exec /bin/zsh",
       ]
     : null;
