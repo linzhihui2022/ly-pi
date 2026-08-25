@@ -16,9 +16,9 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { Bar } from "./bar";
+import { loadModelPolicyRegistry } from "../model-policy/config";
+import { Bar, type ModelLabelResolver } from "./bar";
 import { loadHudConfig } from "./config";
-import { setModelShortNames } from "./format";
 import { icon } from "./icons";
 import { checkMemoryPressure } from "./memory";
 import { buildMemoryWarningLines } from "./memory-widget";
@@ -30,12 +30,7 @@ import { pickRandomMessage } from "./working";
 const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
 
 export { Bar } from "./bar";
-export {
-  contextColored,
-  formatCacheRate,
-  formatTokens,
-  shortModelName,
-} from "./format";
+export { contextColored, formatCacheRate, formatTokens } from "./format";
 // Re-export pure helpers for consumers / tests
 export { icon } from "./icons";
 export { checkMemoryPressure } from "./memory";
@@ -51,15 +46,29 @@ export type { StatusLineData, TokenUsage } from "./types";
 export { pickRandomMessage, WORKING_MESSAGES } from "./working";
 
 const MEMORY_WIDGET_KEY = "my-hud-memory-warning";
+type HudModelPolicyRegistry = Pick<
+  ReturnType<typeof loadModelPolicyRegistry>,
+  "getModelLabel"
+>;
 
 // ── Extension ──
 
-export default function myHud(pi: ExtensionAPI): void {
+export default function myHud(
+  pi: ExtensionAPI,
+  loadRegistry: () => HudModelPolicyRegistry = () =>
+    loadModelPolicyRegistry(EXT_DIR),
+): void {
   let currentTui: { requestRender(): void } | null = null;
   let bar: Bar | undefined;
+  let getModelLabel: ModelLabelResolver = () => undefined;
+  let modelPolicyError: string | undefined;
+  try {
+    getModelLabel = loadRegistry().getModelLabel;
+  } catch (error) {
+    modelPolicyError = error instanceof Error ? error.message : String(error);
+  }
 
   const hudConfig = loadHudConfig(EXT_DIR);
-  setModelShortNames(hudConfig.modelShortNames);
   setHiddenFields(hudConfig.hiddenFields);
 
   // Refresh both footer and widget on lifecycle events
@@ -157,7 +166,10 @@ export default function myHud(pi: ExtensionAPI): void {
     if (!ctx.hasUI) {
       return;
     }
-    bar ??= new Bar();
+    if (modelPolicyError) {
+      ctx.ui.notify(`模型策略加载失败: ${modelPolicyError}`, "error");
+    }
+    bar ??= new Bar(undefined, getModelLabel);
     bar.setUICtx(ctx.ui);
     bar.setContext(ctx);
     bar.setThinkingLevelSource(() => pi.getThinkingLevel());

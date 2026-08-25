@@ -38,27 +38,6 @@ export function contextColored(
   return theme.fg("accent", `${icon("context_0")}${display}`);
 }
 
-// ── Model name shortening ──
-
-const SHORT_NAMES: Record<string, string> = {
-  "kimi-k2-thinking": "k-thinking",
-  "kimi-for-coding": "k-coding",
-  "deepseek-v4-flash": "ds-fls",
-  "deepseek-v4-pro": "ds-pro",
-  "kimi-for-coding-highspeed": "k-coding-h",
-};
-
-let userShortNames: Record<string, string> = {};
-
-/** Install user-configured short names (from my-hud.json); they override builtins. */
-export function setModelShortNames(map: Record<string, string>): void {
-  userShortNames = { ...map };
-}
-
-export function shortModelName(modelName: string): string {
-  return userShortNames[modelName] ?? SHORT_NAMES[modelName] ?? modelName;
-}
-
 /**
  * Format judge permission stats as `allowed/denied`.
  * Returns empty string when no stats.

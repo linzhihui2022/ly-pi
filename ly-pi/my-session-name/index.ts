@@ -84,7 +84,14 @@ export default function mySessionName(pi: ExtensionAPI): void {
     fork: boolean,
     generation: number,
   ): Promise<void> => {
-    const title = await requestSessionTitle(prompt, ctx);
+    let title: string | null;
+    try {
+      title = await requestSessionTitle(prompt, ctx);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      ctx.ui.notify(`会话标题模型策略加载失败: ${message}`, "error");
+      return;
+    }
     if (!title || generation !== sessionGeneration) return;
 
     try {

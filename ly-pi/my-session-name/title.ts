@@ -1,8 +1,14 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { loadModelPolicyRegistry } from "../model-policy/config";
 import { normalizeSessionTitle } from "./session-name";
 
-const TITLE_PROVIDER = "deepseek";
-const TITLE_MODEL = "deepseek-v4-flash";
+const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
+type TitleModelPolicyRegistry = Pick<
+  ReturnType<typeof loadModelPolicyRegistry>,
+  "run"
+>;
 const TITLE_SYSTEM_PROMPT =
   "Generate a concise session display name from the user request. " +
   "Use the request's language. Return only one short line, at most 20 characters, with no explanation.";
@@ -18,36 +24,49 @@ function getAssistantText(content: unknown): string {
     .join("");
 }
 
-/** Request and validate one title from the configured lightweight model. */
+/** Request and validate one title through the fast Model Role. */
 export async function requestSessionTitle(
   prompt: string,
   ctx: ExtensionContext,
+  registry?: TitleModelPolicyRegistry,
 ): Promise<string | null> {
-  try {
-    const model = ctx.modelRegistry.find(TITLE_PROVIDER, TITLE_MODEL);
-    if (!model) return null;
+  const policyRegistry = registry ?? loadModelPolicyRegistry(EXT_DIR);
 
-    const response = await ctx.modelRegistry.complete(
-      model,
-      {
-        systemPrompt: TITLE_SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-            timestamp: Date.now(),
-          },
-        ],
-      },
-      {
-        maxRetries: 0,
-        maxTokens: 32,
-        timeoutMs: 10_000,
-      },
-    );
-
-    return normalizeSessionTitle(getAssistantText(response.content));
-  } catch {
+  const result = await policyRegistry.run(
+    "fast",
+    ctx.modelRegistry,
+    async (model, candidate) =>
+      ctx.modelRegistry.complete(
+        model,
+        {
+          systemPrompt: TITLE_SYSTEM_PROMPT,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+              timestamp: Date.now(),
+            },
+          ],
+        },
+        {
+          maxRetries: 0,
+          maxTokens: 32,
+          timeoutMs: 10_000,
+          ...(candidate.thinking === "off"
+            ? {}
+            : { reasoningEffort: candidate.thinking }),
+        },
+      ),
+  );
+  if (!result) return null;
+  if (result.status !== "success") {
+    if (result.failurePolicy !== "skip") {
+      throw new Error(
+        `fast Role requires 'skip' failure policy, received '${result.failurePolicy}'`,
+      );
+    }
     return null;
   }
+
+  return normalizeSessionTitle(getAssistantText(result.value.content));
 }
