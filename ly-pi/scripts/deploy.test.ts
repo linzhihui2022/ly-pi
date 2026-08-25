@@ -293,4 +293,89 @@ describe("deploy", () => {
     expect(worker.status).toBe(1);
     expect(worker.stderr).not.toContain("MODULE_TYPELESS_PACKAGE_JSON");
   });
+
+  it("copies the validated model policy manifest into the extension", () => {
+    const stagingDir = createStagingDir();
+    const manifestPath = join(
+      stagingDir,
+      "agent",
+      "extensions",
+      "ly-pi",
+      "model-policies.json",
+    );
+    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
+    if (bunLookup.status !== 0) {
+      throw new Error("Bun executable is required to test deployment.");
+    }
+
+    const cleanupBundle = ensureExtensionBundle();
+    try {
+      const result = spawnSync(
+        bunLookup.stdout.trim(),
+        ["run", "scripts/deploy.ts"],
+        {
+          cwd: projectDir,
+          encoding: "utf8",
+          env: { PATH: "", PI_STAGING_DIR: stagingDir },
+        },
+      );
+
+      expect(result.status, result.stderr).toBe(0);
+    } finally {
+      cleanupBundle();
+    }
+
+    expect(readFileSync(manifestPath, "utf8")).toBe(
+      readFileSync(
+        join(projectDir, "assets", "config", "model-policies.json"),
+        "utf8",
+      ),
+    );
+  });
+
+  it("does not write the extension when the local model override is invalid", () => {
+    const stagingDir = createStagingDir();
+    const extensionDir = join(stagingDir, "agent", "extensions", "ly-pi");
+    const manifestPath = join(extensionDir, "model-policies.json");
+    const extensionPath = join(extensionDir, "index.js");
+    mkdirSync(extensionDir, { recursive: true });
+    writeFileSync(manifestPath, '{"version":"previous"}\n');
+    writeFileSync(
+      join(extensionDir, "models.local.json"),
+      JSON.stringify({
+        version: 1,
+        policies: {
+          "fast-default": {
+            slots: { primary: { failurePolicy: "error" } },
+          },
+        },
+      }),
+    );
+
+    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
+    if (bunLookup.status !== 0) {
+      throw new Error("Bun executable is required to test deployment.");
+    }
+
+    const cleanupBundle = ensureExtensionBundle();
+    try {
+      const result = spawnSync(
+        bunLookup.stdout.trim(),
+        ["run", "scripts/deploy.ts"],
+        {
+          cwd: projectDir,
+          encoding: "utf8",
+          env: { PATH: "", PI_STAGING_DIR: stagingDir },
+        },
+      );
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("invalid local model override");
+    } finally {
+      cleanupBundle();
+    }
+
+    expect(readFileSync(manifestPath, "utf8")).toBe('{"version":"previous"}\n');
+    expect(existsSync(extensionPath)).toBe(false);
+  });
 });

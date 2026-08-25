@@ -3,10 +3,16 @@ import { mkdir, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { BunFile } from "bun";
+import {
+  createModelPolicyRegistry,
+  type LocalModelOverride,
+  type ModelPolicyManifest,
+} from "../model-policy/registry";
 
 // ── Staging ────────────────────────────────────────────────────────────────
 const STAGING = process.env.PI_STAGING_DIR ?? join(homedir(), ".pi");
 const agentDir = join(STAGING, "agent");
+const extensionDir = join(agentDir, "extensions", "ly-pi");
 
 // ── Schema validation ──────────────────────────────────────────────────────
 {
@@ -91,6 +97,16 @@ const agentDir = join(STAGING, "agent");
     process.exit(1);
   }
   console.log("Schema validation: OK");
+
+  const modelManifest = (await Bun.file(
+    "assets/config/model-policies.json",
+  ).json()) as ModelPolicyManifest;
+  const localOverridePath = join(extensionDir, "models.local.json");
+  const localOverride = existsSync(localOverridePath)
+    ? ((await Bun.file(localOverridePath).json()) as LocalModelOverride)
+    : undefined;
+  createModelPolicyRegistry(modelManifest, localOverride);
+  console.log("Model policy schema validation: OK");
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -190,9 +206,14 @@ const configDir = "assets/config";
     "ly-pi",
     "my-tool-display.json",
   );
+  const modelPoliciesPath = join(extensionDir, "model-policies.json");
   const files = [
     { path: legacyConfigPath, snapshot: await snapshotFile(legacyConfigPath) },
     { path: extensionPath, snapshot: await snapshotFile(extensionPath) },
+    {
+      path: modelPoliciesPath,
+      snapshot: await snapshotFile(modelPoliciesPath),
+    },
     {
       path: toolDisplayConfigPath,
       snapshot: await snapshotFile(toolDisplayConfigPath),
@@ -226,6 +247,10 @@ const configDir = "assets/config";
     );
     await writeAtomically(extensionPath, Bun.file("dist/index.js"));
     await writeAtomically(
+      modelPoliciesPath,
+      Bun.file(join(configDir, "model-policies.json")),
+    );
+    await writeAtomically(
       closeWorkerPath,
       Bun.file("dist/my-worktree/close-worker-main.js"),
     );
@@ -241,6 +266,7 @@ const configDir = "assets/config";
 
   console.log("pi-tool-display compatibility config: deployed");
   console.log("Extension: deployed");
+  console.log("Model policies: deployed");
   console.log("my-tool-display config: deployed");
 }
 
