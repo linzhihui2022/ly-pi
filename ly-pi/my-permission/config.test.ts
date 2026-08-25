@@ -4,9 +4,9 @@ import { config } from "./config";
 describe("config", () => {
   it("has sensible defaults", () => {
     expect(config.defaultPolicy).toBe("allow");
-    expect(config.judgeModel).toBe("deepseek/deepseek-v4-flash");
-    expect(config.professorModel).toBe("deepseek/deepseek-v4-pro");
-    expect(config.professorThinking).toBe("max");
+    expect(config.judgeModel).toBe("openai-codex/gpt-5.6-luna");
+    expect(config.professorModel).toBe("openai-codex/gpt-5.6-sol");
+    expect(config.professorThinking).toBe("high");
     expect(config.judgeTimeoutMs).toBe(8000);
     expect(config.childPolicy).toBe("deny-on-unsafe");
   });
