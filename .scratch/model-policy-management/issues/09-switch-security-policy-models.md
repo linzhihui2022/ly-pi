@@ -25,3 +25,4 @@
 - 2026-08-26：先将 checked-in Manifest 的 security role candidate 断言改为目标 Codex 模型；`bun run --cwd ly-pi test -- --coverage.enabled=false model-policy/manifest.test.ts` 如预期失败，显示旧值仍为 DeepSeek Flash。更新 Manifest 与 label 后，同一命令通过（4 tests）。
 - 2026-08-26：`bun run verify` 通过：Biome、两个 tsgo typecheck、72 个 Vitest 文件 / 1,229 项测试和 check-docs 均通过。未部署、未 reload、未发送真实模型请求。
 - 2026-08-26：用户明确授权提交并普通推送当前已验收改动至 `model-change`。该授权不包含部署、`/reload` 或真实模型请求。
+- 2026-08-26：用户明确授权通过 `bun run deploy` 将当前 `model-change` worktree 部署到 `~/.pi`。本次授权不包含 `/reload` 或真实模型请求；验收标准为部署流水线 build、test、deploy 全部成功。
