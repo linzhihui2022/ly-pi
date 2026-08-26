@@ -647,11 +647,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     const cacheKey = `${toolName}:${value}`;
     if (cache.isApproved(cacheKey)) return undefined;
 
-    const judgeResult = await judge(
-      { toolName, value, paths },
-      ctx.cwd,
-      ctx.model,
-    );
+    const judgeResult = await judge({ toolName, value, paths }, ctx.cwd);
     recordJudgeStats(pi, { toolName, value }, judgeResult);
     if (judgeResult.cost !== undefined && judgeResult.modelUsed) {
       appendCost(
