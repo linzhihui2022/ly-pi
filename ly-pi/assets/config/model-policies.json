@@ -89,8 +89,8 @@
       "candidates": [
         {
           "slot": "primary",
-          "model": "deepseek/deepseek-v4-flash",
-          "label": "ds-fls",
+          "model": "openai-codex/gpt-5.6-luna",
+          "label": "codex-luna",
           "thinking": "off"
         }
       ],
@@ -105,8 +105,8 @@
       "candidates": [
         {
           "slot": "primary",
-          "model": "deepseek/deepseek-v4-pro",
-          "label": "ds-pro",
+          "model": "openai-codex/gpt-5.6-sol",
+          "label": "codex-sol",
           "thinking": "max"
         }
       ],

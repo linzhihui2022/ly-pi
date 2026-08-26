@@ -94,10 +94,24 @@ describe("checked-in model policy manifest", () => {
     expect(roles["security-judge"]).toMatchObject({
       policy: "security-judge-default",
       failurePolicy: "confirm",
+      candidates: [
+        {
+          model: "openai-codex/gpt-5.6-luna",
+          thinking: "off",
+          source: "manifest",
+        },
+      ],
     });
     expect(roles["security-audit"]).toMatchObject({
       policy: "security-audit-default",
       failurePolicy: "error-no-write",
+      candidates: [
+        {
+          model: "openai-codex/gpt-5.6-sol",
+          thinking: "max",
+          source: "manifest",
+        },
+      ],
     });
   });
 
