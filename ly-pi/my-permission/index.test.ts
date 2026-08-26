@@ -519,6 +519,44 @@ describe("security audit tools", () => {
     expect(appendCost).not.toHaveBeenCalled();
   });
 
+  it("does not create a merger or write JUDGE.md when security-audit reload fails", async () => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry)
+      .mockReturnValueOnce(modelRunner as never)
+      .mockImplementationOnce(() => {
+        throw new Error("invalid manifest");
+      });
+    vi.mocked(createAdvocate).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        suggestion: {
+          add: [{ rule: "允许 git status", reason: "false positive" }],
+          remove: [],
+        },
+      }) as never,
+    );
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const ctx = createSecurityAuditCtx();
+    const result = await api
+      .getTool("permission_advocate")
+      .execute("call-1", {}, undefined, undefined, ctx);
+
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: "text",
+          text: "融合失败: security-audit 模型策略不可用: invalid manifest",
+        },
+      ],
+    });
+    expect(ctx.ui.confirm).toHaveBeenCalledTimes(1);
+    expect(createPipelineMerger).not.toHaveBeenCalled();
+    expect(writeFileSync).not.toHaveBeenCalled();
+  });
+
   it("preserves approval and costs when Advocate analysis and merge succeed", async () => {
     const modelRunner = { run: vi.fn() };
     vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);

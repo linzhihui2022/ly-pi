@@ -151,8 +151,7 @@ type WriteData = string | Uint8Array | BunFile;
 
 type FileSnapshot =
   | { path: string; state: "absent" }
-  | { path: string; state: "file"; data: Uint8Array }
-  | { path: string; state: "other" };
+  | { path: string; state: "file"; data: Uint8Array };
 
 let temporaryWriteId = 0;
 
@@ -184,7 +183,9 @@ async function snapshot(path: string): Promise<FileSnapshot> {
   const targetPath = await resolveWritePath(path);
   try {
     const stat = await lstat(targetPath);
-    if (!stat.isFile()) return { path: targetPath, state: "other" };
+    if (!stat.isFile()) {
+      throw new Error(`unsupported deployment target: ${targetPath}`);
+    }
     return {
       path: targetPath,
       state: "file",

@@ -288,6 +288,25 @@ describe("deploy model policy settings", () => {
     expect(existsSync(manifestPath)).toBe(true);
   });
 
+  it("rejects a FIFO deployment target before writing any output", () => {
+    const staging = stagingDir();
+    const agentDir = join(staging, "agent");
+    const extensionDir = join(agentDir, "extensions", "ly-pi");
+    const bundlePath = join(extensionDir, "index.js");
+    mkdirSync(extensionDir, { recursive: true });
+
+    const fifo = spawnSync("mkfifo", [bundlePath]);
+
+    expect(fifo.status).toBe(0);
+
+    const result = deploy(staging);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("unsupported deployment target");
+    expect(lstatSync(bundlePath).isFIFO()).toBe(true);
+    expect(existsSync(join(agentDir, "settings.json"))).toBe(false);
+  });
+
   it("fails and restores the previous output when temporary cleanup fails", () => {
     const staging = stagingDir();
     const extensionDir = join(staging, "agent", "extensions", "ly-pi");
