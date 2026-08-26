@@ -1,0 +1,2702 @@
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import {
+  createBashToolDefinition,
+  createEditToolDefinition,
+  createFindToolDefinition,
+  createGrepToolDefinition,
+  createLsToolDefinition,
+  createReadToolDefinition,
+  createWriteToolDefinition,
+  generateDiffString,
+  getAgentDir,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@earendil-works/pi-coding-agent", () => ({
+  createBashToolDefinition: vi.fn(),
+  createEditToolDefinition: vi.fn(),
+  createFindToolDefinition: vi.fn(),
+  createGrepToolDefinition: vi.fn(),
+  createLsToolDefinition: vi.fn(),
+  createReadToolDefinition: vi.fn(),
+  createWriteToolDefinition: vi.fn(),
+  generateDiffString: vi.fn(),
+  getAgentDir: vi.fn(),
+  SettingsManager: { create: vi.fn() },
+}));
+
+const fsMocks = vi.hoisted(() => ({
+  openSync: vi.fn(),
+  lstatSync: vi.fn(),
+  realLstatSync: undefined as typeof import("node:fs").lstatSync | undefined,
+}));
+
+vi.mock("node:fs", async () => {
+  const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+  fsMocks.openSync.mockImplementation(actual.openSync);
+  fsMocks.lstatSync.mockImplementation(actual.lstatSync);
+  fsMocks.realLstatSync = actual.lstatSync;
+  return {
+    ...actual,
+    openSync: fsMocks.openSync,
+    lstatSync: fsMocks.lstatSync,
+  };
+});
+
+const loggerMocks = vi.hoisted(() => ({
+  toolDisplay: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+  config: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+vi.mock("../my-log/index", () => ({
+  createDevLogger: vi.fn((source: string) =>
+    source === "my-tool-display" ? loggerMocks.toolDisplay : loggerMocks.config,
+  ),
+}));
+
+import { createDevLogger } from "../my-log/index";
+import { DEFAULT_TOOL_DISPLAY_CONFIG, loadToolDisplayConfig } from "./config";
+import myToolDisplay from "./index";
+
+let agentDir: string;
+let workspaceDirs: string[];
+let nextNativeWriteResult: unknown;
+const nativeBashExecutions = new Map<string, ReturnType<typeof vi.fn>>();
+const nativeEditExecutions = new Map<string, ReturnType<typeof vi.fn>>();
+const nativeWriteExecutions = new Map<string, ReturnType<typeof vi.fn>>();
+const nativeWriteQueues = new Map<string, Promise<void>>();
+const nativeExecutions = new Map<string, ReturnType<typeof vi.fn>>();
+const nativeSearchExecutions = new Map<string, ReturnType<typeof vi.fn>>();
+const nativeBashResult = {
+  content: [{ type: "text", text: "native bash result" }],
+  details: undefined,
+};
+const nativeWriteResult = {
+  content: [{ type: "text", text: "Successfully wrote 12 bytes to file.ts" }],
+  details: undefined,
+};
+const nativeEditResult = {
+  content: [
+    { type: "text", text: "Successfully replaced 1 block(s) in file.ts." },
+  ],
+  details: {
+    diff: "  1|const value = 1;\n- 2|const oldValue = true;\n+ 2|const newValue = false;",
+    patch: "@@ -1,2 +1,2 @@",
+    firstChangedLine: 2,
+  },
+};
+const nativeResult = {
+  content: [{ type: "text", text: "native result" }],
+  details: undefined,
+};
+const nativeSearchResult = {
+  content: [{ type: "text", text: "native search result" }],
+  details: { truncation: { truncated: true } },
+};
+const nativeRenderResult = vi.fn(() => ({
+  render: () => ["native image"],
+  invalidate: () => {},
+}));
+
+const theme = {
+  fg: (_color: string, text: string) => text,
+  bold: (text: string) => text,
+};
+
+function render(
+  component: { render(width: number): string[] },
+  width = 120,
+): string {
+  return component
+    .render(width)
+    .map((line) => line.trimEnd())
+    .join("\n");
+}
+
+function createNativeBashDefinition(cwd: string) {
+  const execute = vi.fn().mockResolvedValue(nativeBashResult);
+  nativeBashExecutions.set(cwd, execute);
+  return {
+    name: "bash",
+    label: "bash",
+    description: `Bash from ${cwd}`,
+    promptSnippet: "Run bash commands",
+    promptGuidelines: ["Use bash for shell commands."],
+    parameters: { type: "object" },
+    constrainedSampling: false,
+    execute,
+    renderCall: (args: { command?: string }) => ({
+      render: () => [`$ ${args.command ?? "..."}`],
+      invalidate: () => {},
+    }),
+  };
+}
+
+function createNativeEditDefinition(cwd: string) {
+  const execute = vi.fn().mockResolvedValue(nativeEditResult);
+  nativeEditExecutions.set(cwd, execute);
+  return {
+    name: "edit",
+    label: "edit",
+    description: `Edit from ${cwd}`,
+    promptSnippet: "Make precise edits",
+    promptGuidelines: ["Use edit for precise changes."],
+    parameters: { type: "object" },
+    constrainedSampling: false,
+    renderShell: "self" as const,
+    prepareArguments: vi.fn((args: unknown) => args as never),
+    execute,
+    renderCall: () => ({
+      render: () => ["native edit preview"],
+      invalidate: () => {},
+    }),
+  };
+}
+
+function createNativeWriteDefinition(
+  cwd: string,
+  options?: {
+    operations?: {
+      mkdir(path: string): Promise<void>;
+      writeFile(path: string, content: string): Promise<void>;
+    };
+  },
+) {
+  const execute = vi.fn(
+    async (
+      _toolCallId,
+      params: {
+        path: string;
+        content: string;
+      },
+    ) => {
+      if (!options?.operations) {
+        return nextNativeWriteResult;
+      }
+
+      const path = resolve(cwd, params.path);
+      const current = nativeWriteQueues.get(path) ?? Promise.resolve();
+      let release!: () => void;
+      const next = new Promise<void>((resolveQueue) => {
+        release = resolveQueue;
+      });
+      const queued = current.then(() => next);
+      nativeWriteQueues.set(path, queued);
+
+      await current;
+      try {
+        await options.operations.mkdir(dirname(path));
+        await options.operations.writeFile(path, params.content);
+        const result = nextNativeWriteResult as {
+          content: Array<{ type: string; text?: string }>;
+          details?: unknown;
+        };
+        return {
+          ...result,
+          content: result.content.map((content) => ({ ...content })),
+        };
+      } finally {
+        release();
+        if (nativeWriteQueues.get(path) === queued) {
+          nativeWriteQueues.delete(path);
+        }
+      }
+    },
+  );
+  nativeWriteExecutions.set(cwd, execute);
+  return {
+    name: "write",
+    label: "write",
+    description: `Write from ${cwd}`,
+    promptSnippet: "Create or overwrite files",
+    promptGuidelines: ["Use write for complete files."],
+    parameters: { type: "object" },
+    constrainedSampling: false,
+    renderShell: "self" as const,
+    prepareArguments: vi.fn(),
+    execute,
+    renderCall: () => ({
+      render: () => ["native write preview"],
+      invalidate: () => {},
+    }),
+  };
+}
+
+function createNativeReadDefinition(cwd: string) {
+  const execute = vi.fn().mockResolvedValue(nativeResult);
+  nativeExecutions.set(cwd, execute);
+  return {
+    name: "read",
+    label: "read",
+    description: `Read from ${cwd}`,
+    promptSnippet: "Read file contents",
+    promptGuidelines: ["Use read to examine files instead of cat or sed."],
+    parameters: { type: "object" },
+    constrainedSampling: false,
+    prepareArguments: vi.fn(),
+    execute,
+    renderResult: nativeRenderResult,
+  };
+}
+
+function createNativeSearchDefinition(name: string, cwd: string) {
+  const execute = vi.fn().mockResolvedValue(nativeSearchResult);
+  nativeSearchExecutions.set(`${name}:${cwd}`, execute);
+  return {
+    name,
+    label: name,
+    description: `${name} from ${cwd}`,
+    promptSnippet: `${name} snippet`,
+    parameters: { type: "object" },
+    execute,
+    renderCall: (args: { pattern?: unknown; path?: unknown } = {}) => ({
+      render: () => [
+        `native ${name}${
+          typeof args.pattern === "string"
+            ? ` ${args.pattern}`
+            : typeof args.path === "string"
+              ? ` ${args.path}`
+              : ""
+        }`,
+      ],
+      invalidate: () => {},
+    }),
+  };
+}
+
+function writeConfig(contents: string): void {
+  const configDir = join(agentDir, "extensions", "ly-pi");
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, "my-tool-display.json"), contents);
+}
+
+function createWorkspace(): string {
+  const workspaceDir = mkdtempSync(join(tmpdir(), "my-tool-display-write-"));
+  workspaceDirs.push(workspaceDir);
+  return workspaceDir;
+}
+
+function setup(source = "builtin", toolNames = ["read"]) {
+  const tools = toolNames.map((name) => ({
+    name,
+    sourceInfo: { source },
+  }));
+  const registered: any[] = [];
+  const sessionStartHandlers: Array<() => unknown> = [];
+  const pi = {
+    getAllTools: vi.fn(() => tools),
+    on: vi.fn((event: string, handler: () => unknown) => {
+      if (event === "session_start") {
+        sessionStartHandlers.push(handler);
+      }
+    }),
+    registerTool: vi.fn((tool: any) => {
+      registered.push(tool);
+      const index = tools.findIndex(
+        (candidate) => candidate.name === tool.name,
+      );
+      if (index >= 0) {
+        tools[index] = {
+          name: tool.name,
+          sourceInfo: { source: "extension" },
+        };
+      }
+    }),
+  };
+
+  myToolDisplay(pi as never);
+  for (const handler of sessionStartHandlers) {
+    handler();
+  }
+
+  return { pi, registered };
+}
+
+beforeEach(() => {
+  nativeBashExecutions.clear();
+  nativeEditExecutions.clear();
+  nativeWriteExecutions.clear();
+  nativeWriteQueues.clear();
+  nativeExecutions.clear();
+  nativeSearchExecutions.clear();
+  agentDir = mkdtempSync(join(tmpdir(), "my-tool-display-"));
+  workspaceDirs = [];
+  nextNativeWriteResult = nativeWriteResult;
+  vi.mocked(generateDiffString).mockReset();
+  vi.mocked(getAgentDir).mockReturnValue(agentDir);
+  vi.mocked(SettingsManager.create).mockReturnValue({
+    getImageAutoResize: () => true,
+    getShellCommandPrefix: () => undefined,
+    getShellPath: () => undefined,
+  } as never);
+  vi.mocked(createBashToolDefinition).mockImplementation(
+    (cwd) => createNativeBashDefinition(cwd) as never,
+  );
+  vi.mocked(createEditToolDefinition).mockImplementation(
+    (cwd) => createNativeEditDefinition(cwd) as never,
+  );
+  vi.mocked(createWriteToolDefinition).mockImplementation(
+    (cwd, options) => createNativeWriteDefinition(cwd, options) as never,
+  );
+  vi.mocked(createFindToolDefinition).mockImplementation(
+    (cwd) => createNativeSearchDefinition("find", cwd) as never,
+  );
+  vi.mocked(createGrepToolDefinition).mockImplementation(
+    (cwd) => createNativeSearchDefinition("grep", cwd) as never,
+  );
+  vi.mocked(createLsToolDefinition).mockImplementation(
+    (cwd) => createNativeSearchDefinition("ls", cwd) as never,
+  );
+  vi.mocked(createReadToolDefinition).mockImplementation(
+    (cwd) => createNativeReadDefinition(cwd) as never,
+  );
+});
+
+afterEach(() => {
+  rmSync(agentDir, { recursive: true, force: true });
+  for (const workspaceDir of workspaceDirs) {
+    rmSync(workspaceDir, { recursive: true, force: true });
+  }
+  vi.clearAllMocks();
+});
+
+describe("my-tool-display", () => {
+  it("logs when builtin tool discovery fails before degrading", () => {
+    const sessionStartHandlers: Array<() => unknown> = [];
+    const pi = {
+      getAllTools: vi.fn(() => {
+        throw new Error("registry unavailable");
+      }),
+      on: vi.fn((event: string, handler: () => unknown) => {
+        if (event === "session_start") {
+          sessionStartHandlers.push(handler);
+        }
+      }),
+      registerTool: vi.fn(),
+    };
+
+    myToolDisplay(pi as never);
+    for (const handler of sessionStartHandlers) {
+      handler();
+    }
+
+    const loggerMock = vi.mocked(createDevLogger);
+    const loggerIndex = loggerMock.mock.calls.findIndex(
+      ([source]) => source === "my-tool-display",
+    );
+    const loggerResult = loggerMock.mock.results[loggerIndex];
+    expect(loggerResult?.type).toBe("return");
+    if (loggerResult?.type === "return") {
+      expect(loggerResult.value.warn).toHaveBeenCalledWith(
+        "Unable to discover builtin tools; custom tool renderers are disabled.",
+        { error: "registry unavailable" },
+      );
+    }
+    expect(pi.registerTool).not.toHaveBeenCalled();
+  });
+
+  it("renders a completed write overwrite diff after native execution", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "file.ts"), "const oldValue = true;\n");
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "- 1|const oldValue = true;\n+ 1|const newValue = false;",
+      firstChangedLine: 1,
+    });
+
+    nextNativeWriteResult = {
+      content: nativeWriteResult.content,
+      details: { native: "metadata" },
+    };
+    const { registered } = setup("builtin", ["write"]);
+    expect(registered).toHaveLength(1);
+    const write = registered[0]!;
+    const onUpdate = vi.fn();
+
+    expect(write).toMatchObject({
+      name: "write",
+      label: "write",
+      description: `Write from ${process.cwd()}`,
+      promptSnippet: "Create or overwrite files",
+      promptGuidelines: ["Use write for complete files."],
+      parameters: { type: "object" },
+      constrainedSampling: false,
+    });
+    expect(write.renderShell).toBe("default");
+    expect(
+      render(
+        write.renderCall({ path: "file.ts", content: "new" }, theme, {
+          argsComplete: true,
+          isPartial: true,
+          state: {},
+        }),
+      ),
+    ).toBe("write file.ts");
+
+    const result = await write.execute(
+      "call-1",
+      { path: "file.ts", content: "const newValue = false;\n" },
+      undefined,
+      onUpdate,
+      { cwd: workspaceDir },
+    );
+
+    expect(nativeWriteExecutions.get(workspaceDir)).toHaveBeenCalledWith(
+      "call-1",
+      { path: "file.ts", content: "const newValue = false;\n" },
+      undefined,
+      onUpdate,
+      { cwd: workspaceDir },
+    );
+    expect(result).toMatchObject({
+      details: {
+        native: "metadata",
+        writeDiff: {
+          kind: "diff",
+          diff: "- 1|const oldValue = true;\n+ 1|const newValue = false;",
+        },
+      },
+    });
+    expect(generateDiffString).toHaveBeenCalledWith(
+      "const oldValue = true;\n",
+      "const newValue = false;\n",
+    );
+    const rendererResult = {
+      content: [...result.content],
+      details: structuredClone(result.details),
+    };
+    expect(
+      render(
+        write.renderResult(
+          rendererResult,
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toContain("+ 1|const newValue = false;");
+    expect(
+      render(
+        write.renderResult(
+          rendererResult,
+          { expanded: false, isPartial: true },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("Writing...");
+  });
+
+  it("captures each concurrent write baseline inside the native mutation queue", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "file.txt"), "original\n");
+    vi.mocked(generateDiffString).mockImplementation(
+      (previousContent, nextContent) => ({
+        diff: `from ${previousContent} to ${nextContent}`,
+        firstChangedLine: 1,
+      }),
+    );
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+
+    const [firstResult, secondResult] = await Promise.all([
+      write.execute(
+        "call-first",
+        { path: "file.txt", content: "first\n" },
+        undefined,
+        undefined,
+        { cwd: workspaceDir },
+      ),
+      write.execute(
+        "call-second",
+        { path: "file.txt", content: "second\n" },
+        undefined,
+        undefined,
+        { cwd: workspaceDir },
+      ),
+    ]);
+
+    expect(generateDiffString).toHaveBeenNthCalledWith(
+      1,
+      "original\n",
+      "first\n",
+    );
+    expect(generateDiffString).toHaveBeenNthCalledWith(
+      2,
+      "first\n",
+      "second\n",
+    );
+    expect(
+      render(
+        write.renderResult(
+          firstResult,
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toBe("from original\n to first");
+    expect(
+      render(
+        write.renderResult(
+          secondResult,
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toBe("from first\n to second");
+  });
+
+  it("renders a completed write diff for a new file", async () => {
+    const workspaceDir = createWorkspace();
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "+ 1|new file",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-new",
+      { path: "new.txt", content: "new file\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(generateDiffString).toHaveBeenCalledWith("", "new file\n");
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "new.txt" }, state: {} },
+        ),
+      ),
+    ).toBe("+ 1|new file");
+  });
+
+  it("renders an explicit summary for an empty write", async () => {
+    const workspaceDir = createWorkspace();
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "",
+      firstChangedLine: undefined,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-empty",
+      { path: "empty.txt", content: "" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "empty.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("no text changes to display");
+  });
+
+  it("renders a deletion diff when an existing file is cleared", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "empty.txt"), "old content\n");
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "- 1|old content",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const result = await registered[0]!.execute(
+      "call-clear-existing",
+      { path: "empty.txt", content: "" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(generateDiffString).toHaveBeenCalledWith("old content\n", "");
+    expect(
+      render(
+        registered[0]!.renderResult(
+          result,
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "empty.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("- 1|old content");
+  });
+
+  it("collapses completed write diffs using diffCollapsedLines", async () => {
+    writeConfig(JSON.stringify({ enabled: true, diffCollapsedLines: 1 }));
+    const workspaceDir = createWorkspace();
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "  1|context\n- 2|old\n+ 2|new",
+      firstChangedLine: 2,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-collapse",
+      { path: "file.ts", content: "new\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toContain("... (2 more lines, expand to view)");
+  });
+
+  it.each([
+    "binary",
+    "oversized",
+    "outside the current workspace",
+  ])("shows a safe summary for a %s write diff", async (kind) => {
+    const workspaceDir = createWorkspace();
+    let path = "file.bin";
+    if (kind === "binary") {
+      writeFileSync(join(workspaceDir, path), Buffer.from([0, 1, 2]));
+    } else if (kind === "oversized") {
+      writeFileSync(join(workspaceDir, path), Buffer.alloc(1_000_001, "a"));
+    } else {
+      const outsideDir = createWorkspace();
+      path = join(outsideDir, "outside.txt");
+    }
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      `call-${kind}`,
+      { path, content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    const rendered = render(
+      write.renderResult(result, { expanded: false, isPartial: false }, theme, {
+        isError: false,
+        args: { path },
+        state: {},
+      }),
+    );
+    expect(rendered).toContain("Write diff unavailable");
+    expect(generateDiffString).not.toHaveBeenCalled();
+    expect(nativeWriteExecutions.get(workspaceDir)).toHaveBeenCalledWith(
+      `call-${kind}`,
+      { path, content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+    const targetPath =
+      kind === "outside the current workspace"
+        ? path
+        : join(workspaceDir, path);
+    expect(readFileSync(targetPath, "utf8")).toBe("safe text\n");
+  });
+
+  it("normalizes supported write target path forms before previewing", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "file.txt"), "old file\n");
+    writeFileSync(join(workspaceDir, "file name.txt"), "old name\n");
+    vi.mocked(generateDiffString).mockReturnValue({
+      diff: "diff",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const paths = [
+      join(workspaceDir, "file\u00a0name.txt"),
+      join(workspaceDir, "file.txt"),
+      join(workspaceDir, "file\u00a0name.txt"),
+    ];
+
+    for (const path of paths) {
+      await write.execute(
+        `call-${path}`,
+        { path, content: "new text\n" },
+        undefined,
+        undefined,
+        { cwd: workspaceDir },
+      );
+    }
+
+    expect(generateDiffString).toHaveBeenNthCalledWith(
+      1,
+      "old name\n",
+      "new text\n",
+    );
+    expect(generateDiffString).toHaveBeenNthCalledWith(
+      2,
+      "old file\n",
+      "new text\n",
+    );
+    expect(generateDiffString).toHaveBeenNthCalledWith(
+      3,
+      "old name\n",
+      "new text\n",
+    );
+  });
+
+  it("matches Pi's POSIX handling for backslash tilde write paths", async () => {
+    const workspaceDir = createWorkspace();
+    const path = "~\\file.txt";
+    writeFileSync(join(workspaceDir, path), "old\n");
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "- 1|old\n+ 1|new",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const result = await registered[0]!.execute(
+      "call-posix-tilde",
+      { path, content: "new\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(result).toMatchObject({
+      details: { writeDiff: { kind: "diff" } },
+    });
+    expect(generateDiffString).toHaveBeenCalledWith("old\n", "new\n");
+  });
+
+  it("renders a diff for a legal workspace path beginning with two dots", async () => {
+    const workspaceDir = createWorkspace();
+    const directory = join(workspaceDir, "..config");
+    mkdirSync(directory);
+    writeFileSync(join(directory, "file.txt"), "old\n");
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "- 1|old\n+ 1|new",
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const result = await registered[0]!.execute(
+      "call-dot-prefix",
+      { path: "..config/file.txt", content: "new\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(generateDiffString).toHaveBeenCalledWith("old\n", "new\n");
+    expect(result).toMatchObject({
+      details: { writeDiff: { kind: "diff", diff: "- 1|old\n+ 1|new" } },
+    });
+  });
+
+  it("falls back when a write target changes after previewing", async () => {
+    const workspaceDir = createWorkspace();
+    const path = join(workspaceDir, "file.txt");
+    writeFileSync(path, "old\n");
+    const realLstatSync = fsMocks.realLstatSync!;
+    fsMocks.lstatSync
+      .mockImplementationOnce(realLstatSync)
+      .mockImplementationOnce((targetPath) => {
+        const stats = realLstatSync(targetPath);
+        return { ...stats, mtimeMs: stats.mtimeMs + 1 };
+      });
+
+    const { registered } = setup("builtin", ["write"]);
+    const result = await registered[0]!.execute(
+      "call-stale-preview",
+      { path: "file.txt", content: "new\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(generateDiffString).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      details: {
+        writeDiff: {
+          kind: "summary",
+          summary: expect.stringContaining("target changed"),
+        },
+      },
+    });
+  });
+
+  it("logs unexpected I/O errors while reading a write preview", async () => {
+    fsMocks.openSync.mockImplementationOnce(() => {
+      throw Object.assign(new Error("I/O failure"), { code: "EIO" });
+    });
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "file.txt"), "old\n");
+
+    const { registered } = setup("builtin", ["write"]);
+    await registered[0]!.execute(
+      "call-eio",
+      { path: "file.txt", content: "new\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(loggerMocks.toolDisplay.error).toHaveBeenCalledWith(
+      "Unexpected error while reading write diff preview.",
+      {
+        error: expect.objectContaining({ message: "I/O failure" }),
+      },
+    );
+  });
+
+  it("shows errno details when an existing file cannot be read", async () => {
+    const workspaceDir = createWorkspace();
+    const path = join(workspaceDir, "protected.txt");
+    writeFileSync(path, "protected\n");
+    chmodSync(path, 0o200);
+
+    try {
+      const { registered } = setup("builtin", ["write"]);
+      const write = registered[0]!;
+      const result = await write.execute(
+        "call-protected",
+        { path: "protected.txt", content: "safe text\n" },
+        undefined,
+        undefined,
+        { cwd: workspaceDir },
+      );
+
+      expect(
+        render(
+          write.renderResult(
+            result,
+            { expanded: false, isPartial: false },
+            theme,
+            { isError: false, args: { path: "protected.txt" }, state: {} },
+          ),
+        ),
+      ).toContain("EACCES");
+    } finally {
+      chmodSync(path, 0o644);
+    }
+  });
+
+  it("shows a safe summary for invalid UTF-8 existing content", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "invalid.txt"), Buffer.from([0xff, 0xfe]));
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-invalid-utf8",
+      { path: "invalid.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "invalid.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("could not be read safely");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("shows a safe summary for content that cannot round-trip through UTF-8", async () => {
+    const workspaceDir = createWorkspace();
+    const content = `safe${String.fromCharCode(0xd800)}text\n`;
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-unpaired-surrogate",
+      { path: "file.txt", content },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(readFileSync(join(workspaceDir, "file.txt"), "utf8")).toBe(
+      "safe\ufffdtext\n",
+    );
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("cannot be represented faithfully as UTF-8");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("does not read through a symlink outside the workspace", async () => {
+    const workspaceDir = createWorkspace();
+    const outsideDir = createWorkspace();
+    writeFileSync(join(outsideDir, "outside.txt"), "outside-secret\n");
+    symlinkSync(
+      join(outsideDir, "outside.txt"),
+      join(workspaceDir, "link.txt"),
+    );
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-symlink",
+      { path: "link.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    const rendered = render(
+      write.renderResult(result, { expanded: false, isPartial: false }, theme, {
+        isError: false,
+        args: { path: "link.txt" },
+        state: {},
+      }),
+    );
+    expect(rendered).toContain("resolves outside the current workspace");
+    expect(rendered).not.toContain("outside-secret");
+    expect(generateDiffString).not.toHaveBeenCalled();
+    expect(generateDiffString).not.toHaveBeenCalledWith(
+      "outside-secret\n",
+      "safe text\n",
+    );
+  });
+
+  it("does not read through an in-workspace symlink", async () => {
+    const workspaceDir = createWorkspace();
+    writeFileSync(join(workspaceDir, "target.txt"), "inside\n");
+    symlinkSync(
+      join(workspaceDir, "target.txt"),
+      join(workspaceDir, "link.txt"),
+    );
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-in-workspace-symlink",
+      { path: "link.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "link.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("target path is a symbolic link");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("does not read through an external symlink parent directory", async () => {
+    const workspaceDir = createWorkspace();
+    const outsideDir = createWorkspace();
+    const outsideTarget = join(outsideDir, "existing.txt");
+    const linkedDirectory = join(workspaceDir, "link-dir");
+    writeFileSync(outsideTarget, "outside\n");
+    symlinkSync(outsideDir, linkedDirectory);
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-symlink-parent",
+      { path: "link-dir/existing.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          {
+            isError: false,
+            args: { path: "link-dir/existing.txt" },
+            state: {},
+          },
+        ),
+      ),
+    ).toContain("target path resolves outside the current workspace");
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("does not compute a diff for a non-regular file target", async () => {
+    const workspaceDir = createWorkspace();
+    mkdirSync(join(workspaceDir, "directory"));
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+
+    await expect(
+      write.execute(
+        "call-directory",
+        { path: "directory", content: "safe text\n" },
+        undefined,
+        undefined,
+        { cwd: workspaceDir },
+      ),
+    ).rejects.toMatchObject({ code: "EISDIR" });
+    expect(nativeWriteExecutions.get(workspaceDir)).toHaveBeenCalled();
+    expect(generateDiffString).not.toHaveBeenCalled();
+  });
+
+  it("shows a safe summary for binary new content", async () => {
+    const workspaceDir = createWorkspace();
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-binary-content",
+      { path: "file.txt", content: "binary\0content" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("appears to be binary");
+    expect(generateDiffString).not.toHaveBeenCalled();
+    expect(readFileSync(join(workspaceDir, "file.txt"), "utf8")).toBe(
+      "binary\0content",
+    );
+  });
+
+  it("writes oversized new content when its diff is unavailable", async () => {
+    const workspaceDir = createWorkspace();
+    const content = "a".repeat(1_000_001);
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+
+    const result = await write.execute(
+      "call-oversized-content",
+      { path: "large.txt", content },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(nativeWriteExecutions.get(workspaceDir)).toHaveBeenCalledWith(
+      "call-oversized-content",
+      { path: "large.txt", content },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+    expect(readFileSync(join(workspaceDir, "large.txt"), "utf8")).toBe(content);
+    expect(generateDiffString).not.toHaveBeenCalled();
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "large.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("new content exceeds");
+  });
+
+  it("shows a safe summary when the generated diff exceeds the budget", async () => {
+    const workspaceDir = createWorkspace();
+    vi.mocked(generateDiffString).mockReturnValueOnce({
+      diff: "x".repeat(1_000_001),
+      firstChangedLine: 1,
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-large-diff",
+      { path: "file.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("generated diff exceeds");
+  });
+
+  it("shows a safe summary when diff generation has no result", async () => {
+    const workspaceDir = createWorkspace();
+    writeConfig(JSON.stringify({ enabled: true }));
+    vi.mocked(generateDiffString).mockReturnValueOnce(undefined as never);
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-missing-diff",
+      { path: "file.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("could not be computed safely");
+  });
+
+  it("keeps diff generation errors in the safe summary", async () => {
+    const workspaceDir = createWorkspace();
+    vi.mocked(generateDiffString).mockImplementationOnce(() => {
+      throw new Error("diff engine failed");
+    });
+
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+    const result = await write.execute(
+      "call-diff-error",
+      { path: "file.txt", content: "safe text\n" },
+      undefined,
+      undefined,
+      { cwd: workspaceDir },
+    );
+
+    expect(
+      render(
+        write.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.txt" }, state: {} },
+        ),
+      ),
+    ).toContain("diff engine failed");
+
+    expect(loggerMocks.toolDisplay.error).toHaveBeenCalledWith(
+      "Unexpected error while computing write diff.",
+      {
+        error: {
+          name: "Error",
+          message: "diff engine failed",
+          stack: expect.any(String),
+        },
+      },
+    );
+  });
+
+  it("keeps write failures diagnostic and does not render a success diff", () => {
+    const { registered } = setup("builtin", ["write"]);
+    const write = registered[0]!;
+
+    const rendered = render(
+      write.renderResult(
+        { content: [{ type: "text", text: "permission denied" }] },
+        { expanded: false, isPartial: false },
+        theme,
+        { isError: true, args: { path: "file.txt" }, state: {} },
+      ),
+    );
+
+    expect(rendered).toBe("permission denied");
+    expect(rendered).not.toContain("Write completed");
+  });
+
+  it("does not take over a write tool owned by another extension", () => {
+    const { pi, registered } = setup("extension", ["write"]);
+
+    expect(registered).toEqual([]);
+    expect(pi.registerTool).not.toHaveBeenCalled();
+  });
+
+  it("renders a completed edit with the native diff colors and no pending preview", () => {
+    const { registered } = setup("builtin", ["edit"]);
+    expect(registered).toHaveLength(1);
+    const edit = registered[0]!;
+    const colors: string[] = [];
+    const diffTheme = {
+      ...theme,
+      fg: (color: string, text: string) => {
+        colors.push(color);
+        return text;
+      },
+    };
+
+    expect(edit.renderShell).toBe("default");
+    expect(
+      render(
+        edit.renderCall({ path: "file.ts", edits: [] }, diffTheme, {
+          argsComplete: true,
+          isPartial: true,
+          state: {},
+        }),
+      ),
+    ).toBe("edit file.ts");
+    expect(
+      render(
+        edit.renderResult(
+          nativeEditResult,
+          { expanded: false, isPartial: false },
+          diffTheme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toContain("const oldValue = true;");
+    expect(colors).toEqual(
+      expect.arrayContaining([
+        "toolDiffContext",
+        "toolDiffRemoved",
+        "toolDiffAdded",
+      ]),
+    );
+    expect(
+      render(
+        edit.renderCall({ path: "file.ts", edits: [] }, diffTheme, {
+          argsComplete: true,
+          isPartial: true,
+          state: {},
+        }),
+      ),
+    ).not.toContain("native edit preview");
+    expect(
+      render(
+        edit.renderResult(
+          nativeEditResult,
+          { expanded: false, isPartial: true },
+          diffTheme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("Editing...");
+  });
+
+  it("collapses long edit diffs and expands to the complete returned diff", () => {
+    writeConfig(JSON.stringify({ enabled: true, diffCollapsedLines: 2 }));
+    const { registered } = setup("builtin", ["edit"]);
+    const edit = registered[0]!;
+    const diff = "  1|one\n- 2|old\n+ 2|new\n  3|three";
+    const result = { content: [], details: { diff } };
+
+    expect(
+      render(
+        edit.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toContain("... (2 more lines, expand to view)");
+    expect(
+      render(
+        edit.renderResult(result, { expanded: true, isPartial: false }, theme, {
+          isError: false,
+          args: { path: "file.ts" },
+          state: {},
+        }),
+      ),
+    ).toBe(diff);
+  });
+
+  it("renders non-string edit, write, and read paths safely", () => {
+    const { registered: editRegistered } = setup("builtin", ["edit"]);
+    expect(
+      render(
+        editRegistered[0]!.renderCall(
+          { path: 42, edits: [] } as never,
+          theme,
+          {},
+        ),
+      ),
+    ).toBe("edit 42");
+
+    const { registered: writeRegistered } = setup("builtin", ["write"]);
+    expect(
+      render(writeRegistered[0]!.renderCall({ path: 42 } as never, theme, {})),
+    ).toBe("write 42");
+
+    const { registered: readRegistered } = setup("builtin", ["read"]);
+    expect(
+      render(readRegistered[0]!.renderCall({ path: 42 } as never, theme, {})),
+    ).toBe("read 42");
+  });
+
+  it("sanitizes edit and write diffs before applying theme colors", () => {
+    const { registered: editRegistered } = setup("builtin", ["edit"]);
+    const edit = editRegistered[0]!;
+    const unsafeDiff = "+ 1|\u001b[31mvisible\u001b[0m\u0000\u0007\u009d\u202e";
+
+    expect(
+      render(
+        edit.renderResult(
+          { content: [], details: { diff: unsafeDiff } },
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("+ 1|visible");
+
+    const { registered: writeRegistered } = setup("builtin", ["write"]);
+    const write = writeRegistered[0]!;
+    expect(
+      render(
+        write.renderResult(
+          {
+            content: [],
+            details: {
+              writeDiff: { kind: "diff", diff: unsafeDiff },
+            },
+          },
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("+ 1|visible");
+  });
+
+  it.each([
+    { label: "missing", config: { enabled: true } },
+    {
+      label: "non-numeric",
+      config: { enabled: true, diffCollapsedLines: "2" },
+    },
+    {
+      label: "fractional",
+      config: { enabled: true, diffCollapsedLines: 1.5 },
+    },
+    { label: "negative", config: { enabled: true, diffCollapsedLines: -1 } },
+  ])("falls back to 24 for a $label diffCollapsedLines setting", ({
+    config,
+  }) => {
+    writeConfig(JSON.stringify(config));
+
+    expect(loadToolDisplayConfig()).toEqual({
+      enabled: true,
+      bashCollapsedLines: 10,
+      diffCollapsedLines: 24,
+    });
+  });
+
+  it("keeps edit failures diagnostic and does not render a success diff", () => {
+    const { registered } = setup("builtin", ["edit"]);
+    const edit = registered[0]!;
+    const output = "Could not edit file: file.ts. Permission denied.";
+    const colors: string[] = [];
+    const failureTheme = {
+      ...theme,
+      fg: (color: string, text: string) => {
+        colors.push(color);
+        return text;
+      },
+    };
+
+    expect(
+      render(
+        edit.renderResult(
+          {
+            content: [{ type: "text", text: output }],
+            details: nativeEditResult.details,
+          },
+          { expanded: false, isPartial: false },
+          failureTheme,
+          { isError: true, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe(output);
+    expect(colors).toContain("error");
+    expect(colors).not.toContain("toolDiffAdded");
+    expect(colors).not.toContain("toolDiffRemoved");
+  });
+
+  it("uses explicit fallbacks when completed diff details are missing", () => {
+    const { registered: editRegistered } = setup("builtin", ["edit"]);
+    const edit = editRegistered[0]!;
+    expect(
+      render(
+        edit.renderResult(
+          {
+            content: [
+              { type: "text", text: "Successfully replaced 1 block(s)." },
+            ],
+            details: undefined,
+          },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("Edit completed (diff unavailable).");
+
+    const { registered: writeRegistered } = setup("builtin", ["write"]);
+    const write = writeRegistered[0]!;
+    expect(
+      render(
+        write.renderResult(
+          {
+            content: [{ type: "text", text: "Successfully wrote 12 bytes." }],
+            details: undefined,
+          },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false, args: { path: "file.ts" }, state: {} },
+        ),
+      ),
+    ).toBe("Write completed (diff unavailable).");
+  });
+
+  it("sanitizes edit, write, and read call paths", () => {
+    const unsafePath = "file\u001b[31m\u009d\u202e.txt\nspoof";
+    const expectedPath = "file.txt spoof";
+
+    const { registered: editRegistered } = setup("builtin", ["edit"]);
+    expect(
+      render(
+        editRegistered[0]!.renderCall(
+          { path: unsafePath, edits: [] },
+          theme,
+          {},
+        ),
+      ),
+    ).toBe(`edit ${expectedPath}`);
+
+    const { registered: writeRegistered } = setup("builtin", ["write"]);
+    expect(
+      render(writeRegistered[0]!.renderCall({ path: unsafePath }, theme, {})),
+    ).toBe(`write ${expectedPath}`);
+
+    const { registered: readRegistered } = setup("builtin", ["read"]);
+    expect(
+      render(readRegistered[0]!.renderCall({ path: unsafePath }, theme, {})),
+    ).toBe(`read ${expectedPath}`);
+  });
+
+  it("delegates edit execution and preserves native metadata for the execution cwd", async () => {
+    const { registered } = setup("builtin", ["edit"]);
+    const edit = registered[0]!;
+    const context = { cwd: "/other-project" };
+    const onUpdate = vi.fn();
+
+    expect(edit).toMatchObject({
+      name: "edit",
+      label: "edit",
+      description: `Edit from ${process.cwd()}`,
+      promptSnippet: "Make precise edits",
+      promptGuidelines: ["Use edit for precise changes."],
+      parameters: { type: "object" },
+      constrainedSampling: false,
+    });
+    await expect(
+      edit.execute(
+        "call-1",
+        { path: "file.ts", edits: [] },
+        undefined,
+        onUpdate,
+        context,
+      ),
+    ).resolves.toBe(nativeEditResult);
+    expect(nativeEditExecutions.get("/other-project")).toHaveBeenCalledWith(
+      "call-1",
+      { path: "file.ts", edits: [] },
+      undefined,
+      onUpdate,
+      context,
+    );
+  });
+
+  it("preserves the native edit argument preparation seam", () => {
+    const { registered } = setup("builtin", ["edit"]);
+    const rawArguments = { path: "file.ts", edits: [] };
+
+    expect(registered[0]!.prepareArguments?.(rawArguments)).toEqual(
+      rawArguments,
+    );
+  });
+
+  it("keeps the edit diff within a narrow render width", () => {
+    const { registered } = setup("builtin", ["edit"]);
+    const edit = registered[0]!;
+    const diff = `+ 1|${"x".repeat(80)}`;
+
+    const lines = edit
+      .renderResult(
+        { content: [], details: { diff } },
+        { expanded: true, isPartial: false },
+        theme,
+        { isError: false, args: { path: "file.ts" }, state: {} },
+      )
+      .render(20);
+
+    expect(lines).not.toEqual([]);
+    expect(lines.every((line: string) => line.length <= 20)).toBe(true);
+  });
+
+  it("does not take over an edit tool owned by another extension", () => {
+    const { pi, registered } = setup("extension", ["edit"]);
+
+    expect(registered).toEqual([]);
+    expect(pi.registerTool).not.toHaveBeenCalled();
+  });
+
+  it("uses the default bash collapsed-line budget and keeps the command header", () => {
+    const { registered } = setup("builtin", ["bash"]);
+    expect(registered).toHaveLength(1);
+    const bash = registered[0]!;
+    const output = Array.from(
+      { length: 12 },
+      (_, index) => `line ${index + 1}`,
+    ).join("\n");
+
+    expect(loadToolDisplayConfig()).toEqual({
+      enabled: true,
+      bashCollapsedLines: 10,
+      diffCollapsedLines: 24,
+    });
+    expect(
+      render(bash.renderCall({ command: "printf output" }, theme, {})),
+    ).toBe("$ printf output");
+    expect(
+      render(
+        bash.renderResult(
+          { content: [{ type: "text", text: output }], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toContain(
+      `${output.split("\n").slice(0, 10).join("\n")}\n... (2 more lines`,
+    );
+  });
+
+  it("keeps the default tool display config immutable", () => {
+    expect(Object.isFrozen(DEFAULT_TOOL_DISPLAY_CONFIG)).toBe(true);
+  });
+
+  it("uses a valid bashCollapsedLines setting", () => {
+    writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 2 }));
+
+    const { registered } = setup("builtin", ["bash"]);
+    const bash = registered[0]!;
+    const output = "one\ntwo\nthree";
+
+    expect(loadToolDisplayConfig()).toEqual({
+      enabled: true,
+      bashCollapsedLines: 2,
+      diffCollapsedLines: 24,
+    });
+    expect(
+      render(
+        bash.renderResult(
+          { content: [{ type: "text", text: output }], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toContain("one\ntwo\n... (1 more line");
+  });
+
+  it("hides all successful bash output when bashCollapsedLines is zero", () => {
+    writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 0 }));
+    const { registered } = setup("builtin", ["bash"]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [{ type: "text", text: "one\ntwo" }], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe("Output hidden (2 lines; expand to view)");
+  });
+
+  it.each([
+    { label: "missing", config: { enabled: true } },
+    {
+      label: "non-numeric",
+      config: { enabled: true, bashCollapsedLines: "2" },
+    },
+    {
+      label: "fractional",
+      config: { enabled: true, bashCollapsedLines: 1.5 },
+    },
+    { label: "negative", config: { enabled: true, bashCollapsedLines: -1 } },
+  ])("falls back to 10 for a $label bashCollapsedLines setting", ({
+    config,
+  }) => {
+    writeConfig(JSON.stringify(config));
+
+    expect(loadToolDisplayConfig().bashCollapsedLines).toBe(10);
+  });
+
+  it.each([
+    {
+      config: {
+        enabled: false,
+        bashCollapsedLines: -1,
+        diffCollapsedLines: 3,
+      },
+      expected: {
+        enabled: false,
+        bashCollapsedLines: 10,
+        diffCollapsedLines: 3,
+      },
+    },
+    {
+      config: {
+        enabled: false,
+        bashCollapsedLines: 3,
+        diffCollapsedLines: -1,
+      },
+      expected: {
+        enabled: false,
+        bashCollapsedLines: 3,
+        diffCollapsedLines: 24,
+      },
+    },
+  ])("preserves valid settings when one collapsed-line setting is invalid", ({
+    config,
+    expected,
+  }) => {
+    writeConfig(JSON.stringify(config));
+
+    expect(loadToolDisplayConfig()).toEqual(expected);
+  });
+
+  it("shows expanded bash output without applying the collapsed budget", () => {
+    writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 1 }));
+    const { registered } = setup("builtin", ["bash"]);
+    const bash = registered[0]!;
+    const output = "first\nsecond\nthird";
+
+    expect(
+      render(
+        bash.renderResult(
+          {
+            content: [{ type: "text", text: output }],
+            details: {
+              truncation: {
+                truncated: true,
+                truncatedBy: "lines",
+                outputLines: 3,
+                totalLines: 10,
+              },
+              fullOutputPath: "/tmp/pi-bash-output",
+            },
+          },
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe(output);
+  });
+
+  it("shows the running state for expanded bash calls without output", () => {
+    const { registered } = setup("builtin", ["bash"]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [], details: undefined },
+          { expanded: true, isPartial: true },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe("Running...");
+  });
+
+  it.each([
+    "bash",
+    "grep",
+    "find",
+    "ls",
+  ] as const)("sanitizes terminal control characters from %s call headers", (name) => {
+    const { registered } = setup("builtin", [name]);
+    const unsafe = "visible\u001b[31m\u009d\u202e";
+    const argsByName = {
+      bash: { command: unsafe },
+      grep: { pattern: unsafe },
+      find: { pattern: unsafe },
+      ls: { path: unsafe },
+    };
+
+    const rendered = render(
+      registered[0]!.renderCall(argsByName[name], theme, {}),
+    );
+    expect(rendered).toContain("visible");
+    expect(rendered).not.toContain("\u001b");
+    expect(rendered).not.toContain("\u009d");
+    expect(rendered).not.toContain("\u202e");
+  });
+
+  it.each([
+    "bash",
+    "grep",
+    "find",
+    "ls",
+    "read",
+  ] as const)("removes terminal control characters from %s output", (name) => {
+    const { registered } = setup("builtin", [name]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          {
+            content: [
+              { type: "text", text: "\u001b[31mvisible\u001b[0m\u0000\u0007" },
+            ],
+            details: undefined,
+          },
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe("visible");
+  });
+
+  it("keeps bash failure status and all available output visible", () => {
+    writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 1 }));
+    const { registered } = setup("builtin", ["bash"]);
+    const bash = registered[0]!;
+    const output = "stderr line\nstdout line\nexit code: 1";
+
+    const rendered = render(
+      bash.renderResult(
+        { content: [{ type: "text", text: output }], details: undefined },
+        { expanded: false, isPartial: false },
+        theme,
+        { isError: true },
+      ),
+    );
+
+    expect(rendered).toContain("Bash command failed.");
+    expect(rendered).toContain(output);
+    expect(rendered).not.toContain("more lines");
+  });
+
+  it("delegates bash execution with effective shell settings for the execution cwd", async () => {
+    const settings = {
+      getShellCommandPrefix: vi.fn(() => "source ~/.zshrc"),
+      getShellPath: vi.fn(() => "/bin/zsh"),
+    };
+    vi.mocked(SettingsManager.create).mockReturnValue(settings as never);
+
+    const { registered } = setup("builtin", ["bash"]);
+    const bash = registered[0]!;
+    expect(bash).toMatchObject({
+      name: "bash",
+      label: "bash",
+      description: `Bash from ${process.cwd()}`,
+      promptSnippet: "Run bash commands",
+      promptGuidelines: ["Use bash for shell commands."],
+      parameters: { type: "object" },
+      constrainedSampling: false,
+    });
+    const context = {
+      cwd: "/other-project",
+      isProjectTrusted: () => true,
+    };
+    const onUpdate = vi.fn();
+
+    await expect(
+      bash.execute(
+        "call-1",
+        { command: "printf output" },
+        undefined,
+        onUpdate,
+        context,
+      ),
+    ).resolves.toBe(nativeBashResult);
+    expect(SettingsManager.create).toHaveBeenCalledWith(
+      "/other-project",
+      agentDir,
+      { projectTrusted: true },
+    );
+    expect(settings.getShellCommandPrefix).toHaveBeenCalledOnce();
+    expect(settings.getShellPath).toHaveBeenCalledOnce();
+    expect(createBashToolDefinition).toHaveBeenLastCalledWith(
+      "/other-project",
+      { commandPrefix: "source ~/.zshrc", shellPath: "/bin/zsh" },
+    );
+    expect(nativeBashExecutions.get("/other-project")).toHaveBeenCalledWith(
+      "call-1",
+      { command: "printf output" },
+      undefined,
+      onUpdate,
+      context,
+    );
+  });
+
+  it("does not load project shell settings for an untrusted execution cwd", async () => {
+    vi.mocked(SettingsManager.create).mockImplementation(
+      (_cwd, _agentDir, options) =>
+        ({
+          getShellCommandPrefix: vi.fn(() =>
+            options?.projectTrusted ? "project-prefix" : undefined,
+          ),
+          getShellPath: vi.fn(() =>
+            options?.projectTrusted ? "/project-shell" : undefined,
+          ),
+        }) as never,
+    );
+
+    const { registered } = setup("builtin", ["bash"]);
+    const context = {
+      cwd: "/untrusted-project",
+      isProjectTrusted: () => false,
+    };
+
+    await registered[0]!.execute(
+      "call-1",
+      { command: "printf output" },
+      undefined,
+      undefined,
+      context,
+    );
+
+    expect(SettingsManager.create).toHaveBeenCalledWith(
+      "/untrusted-project",
+      agentDir,
+      { projectTrusted: false },
+    );
+    expect(createBashToolDefinition).toHaveBeenLastCalledWith(
+      "/untrusted-project",
+      { commandPrefix: undefined, shellPath: undefined },
+    );
+  });
+
+  it("does not take over a bash tool owned by another extension", () => {
+    const { pi, registered } = setup("extension", ["bash"]);
+
+    expect(registered).toEqual([]);
+    expect(pi.registerTool).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { isPartial: false, expected: "(no output)" },
+    { isPartial: true, expected: "Running..." },
+  ])("uses a visible fallback for empty bash output", ({
+    isPartial,
+    expected,
+  }) => {
+    const { registered } = setup("builtin", ["bash"]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [], details: undefined },
+          { expanded: false, isPartial },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe(expected);
+  });
+
+  it.each([
+    { output: "\n", expected: "(no output)" },
+    { output: "\n\n", expected: "(no output)" },
+  ])("does not render newline-only bash output as blank", ({
+    output,
+    expected,
+  }) => {
+    const { registered } = setup("builtin", ["bash"]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [{ type: "text", text: output }], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe(expected);
+  });
+
+  it.each([
+    ["bash", "Bash command failed."],
+    ["edit", "Edit failed."],
+    ["write", "Write failed."],
+    ["read", "Read failed."],
+    ["grep", "Search failed."],
+    ["find", "Find failed."],
+    ["ls", "List failed."],
+  ] as const)("uses an explicit fallback for empty %s errors", (name, expected) => {
+    const { registered } = setup("builtin", [name]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: true },
+        ),
+      ),
+    ).toBe(expected);
+  });
+
+  it.each([
+    ["bash", "Bash command failed."],
+    ["edit", "Edit failed."],
+    ["write", "Write failed."],
+    ["read", "Read failed."],
+    ["grep", "Search failed."],
+    ["find", "Find failed."],
+    ["ls", "List failed."],
+  ] as const)("falls back for whitespace-only %s errors", (name, expected) => {
+    const { registered } = setup("builtin", [name]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          {
+            content: [{ type: "text", text: String.fromCharCode(10) }],
+            details: undefined,
+          },
+          { expanded: false, isPartial: true },
+          theme,
+          { isError: true },
+        ),
+      ),
+    ).toBe(expected);
+  });
+
+  it.each([
+    "bash",
+    "edit",
+    "write",
+    "grep",
+    "find",
+    "ls",
+  ] as const)("keeps %s failure diagnostics visible for partial results", (name) => {
+    const { registered } = setup("builtin", [name]);
+    const tool = registered[0]!;
+    const output = `${name} interrupted`;
+
+    expect(
+      render(
+        tool.renderResult(
+          { content: [{ type: "text", text: output }], details: undefined },
+          { expanded: false, isPartial: true },
+          theme,
+          { isError: true },
+        ),
+      ),
+    ).toContain(output);
+  });
+
+  it("hides successful ls output until expanded", () => {
+    const { registered } = setup("builtin", ["ls"]);
+    expect(registered).toHaveLength(1);
+    const ls = registered[0]!;
+    const result = {
+      content: [{ type: "text", text: "src/\nREADME.md" }],
+      details: undefined,
+    };
+
+    expect(
+      render(
+        ls.renderResult(result, { expanded: false, isPartial: false }, theme, {
+          isError: false,
+        }),
+      ),
+    ).toBe("");
+    expect(
+      render(
+        ls.renderResult(result, { expanded: true, isPartial: false }, theme, {
+          isError: false,
+        }),
+      ),
+    ).toBe("src/\nREADME.md");
+  });
+
+  it("hides successful grep output until expanded", () => {
+    const { registered } = setup("builtin", ["grep"]);
+    expect(registered).toHaveLength(1);
+    const grep = registered[0]!;
+    const result = {
+      content: [{ type: "text", text: "src/example.ts:1: match" }],
+      details: undefined,
+    };
+
+    expect(
+      render(
+        grep.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe("");
+    expect(
+      render(
+        grep.renderResult(result, { expanded: true, isPartial: false }, theme, {
+          isError: false,
+        }),
+      ),
+    ).toBe("src/example.ts:1: match");
+  });
+
+  it("hides successful find output until expanded", () => {
+    const { registered } = setup("builtin", ["find"]);
+    expect(registered).toHaveLength(1);
+    const find = registered[0]!;
+    const result = {
+      content: [{ type: "text", text: "src/example.ts\nsrc/other.ts" }],
+      details: undefined,
+    };
+
+    expect(
+      render(
+        find.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe("");
+    expect(
+      render(
+        find.renderResult(result, { expanded: true, isPartial: false }, theme, {
+          isError: false,
+        }),
+      ),
+    ).toBe("src/example.ts\nsrc/other.ts");
+  });
+
+  it.each([
+    "grep",
+    "find",
+    "ls",
+  ] as const)("retains native %s metadata", (name) => {
+    const { registered } = setup("builtin", [name]);
+
+    expect(registered[0]).toMatchObject({
+      name,
+      label: name,
+      description: `${name} from ${process.cwd()}`,
+      promptSnippet: `${name} snippet`,
+      parameters: { type: "object" },
+    });
+  });
+
+  it.each([
+    "grep",
+    "find",
+    "ls",
+  ] as const)("shows only native %s text when expanded", (name) => {
+    const { registered } = setup("builtin", [name]);
+    const output = `${name} output`;
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          {
+            content: [{ type: "text", text: output }],
+            details: { truncation: { truncated: true } },
+          },
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe(output);
+  });
+
+  it.each([
+    ["grep", "Searching..."],
+    ["find", "Finding files..."],
+    ["ls", "Listing files..."],
+  ] as const)("shows a pending label for %s", (name, label) => {
+    const { registered } = setup("builtin", [name]);
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [], details: undefined },
+          { expanded: false, isPartial: true },
+          theme,
+          { isError: false },
+        ),
+      ),
+    ).toBe(label);
+  });
+
+  it.each([
+    "read",
+    "grep",
+    "find",
+    "ls",
+    "bash",
+    "edit",
+    "write",
+  ] as const)("forwards the abort signal to the native %s tool", async (name) => {
+    const { registered } = setup("builtin", [name]);
+    const tool = registered[0]!;
+    const signal = new AbortController().signal;
+    const context = {
+      cwd: createWorkspace(),
+      isProjectTrusted: () => true,
+    };
+    const paramsByName = {
+      read: { path: "file.ts" },
+      grep: { pattern: "match" },
+      find: {},
+      ls: {},
+      bash: { command: "printf output" },
+      edit: { path: "file.ts", edits: [] },
+      write: { path: "file.txt", content: "text\n" },
+    };
+    const params = paramsByName[name];
+
+    await tool.execute(
+      "call-signal",
+      params as never,
+      signal,
+      undefined,
+      context as never,
+    );
+
+    const execution =
+      name === "read"
+        ? nativeExecutions.get(context.cwd)
+        : name === "bash"
+          ? nativeBashExecutions.get(context.cwd)
+          : name === "edit"
+            ? nativeEditExecutions.get(context.cwd)
+            : name === "write"
+              ? nativeWriteExecutions.get(context.cwd)
+              : nativeSearchExecutions.get(`${name}:${context.cwd}`);
+    expect(execution).toHaveBeenCalledWith(
+      "call-signal",
+      params,
+      signal,
+      undefined,
+      context,
+    );
+  });
+
+  it("retains grep metadata, delegates execution, and keeps failures visible", async () => {
+    const { registered } = setup("builtin", ["grep"]);
+    const grep = registered[0]!;
+
+    expect(grep).toMatchObject({
+      name: "grep",
+      label: "grep",
+      description: `grep from ${process.cwd()}`,
+      promptSnippet: "grep snippet",
+      parameters: { type: "object" },
+    });
+
+    const context = { cwd: "/other-project" };
+    await expect(
+      grep.execute(
+        "call-1",
+        { pattern: "match" },
+        undefined,
+        undefined,
+        context,
+      ),
+    ).resolves.toBe(nativeSearchResult);
+    expect(
+      nativeSearchExecutions.get("grep:/other-project"),
+    ).toHaveBeenCalledWith(
+      "call-1",
+      { pattern: "match" },
+      undefined,
+      undefined,
+      context,
+    );
+
+    expect(
+      render(
+        grep.renderResult(
+          {
+            content: [{ type: "text", text: "permission denied" }],
+            details: undefined,
+          },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: true },
+        ),
+      ),
+    ).toBe("permission denied");
+  });
+
+  it.each([
+    "grep",
+    "find",
+    "ls",
+  ] as const)("keeps the native %s call header", (name) => {
+    const { registered } = setup("builtin", [name]);
+    expect(render(registered[0]!.renderCall({}, theme, {}))).toBe(
+      `native ${name}`,
+    );
+  });
+
+  it.each([
+    "grep",
+    "find",
+    "ls",
+  ] as const)("shows %s failure diagnostics even when collapsed", (name) => {
+    const { registered } = setup("builtin", [name]);
+    const tool = registered[0]!;
+
+    expect(
+      render(
+        tool.renderResult(
+          {
+            content: [{ type: "text", text: `${name} permission denied` }],
+            details: undefined,
+          },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: true },
+        ),
+      ),
+    ).toBe(`${name} permission denied`);
+  });
+
+  it.each([
+    "find",
+    "ls",
+  ] as const)("delegates %s execution using the active working directory", async (name) => {
+    const { registered } = setup("builtin", [name]);
+    const tool = registered[0]!;
+    const context = { cwd: "/other-project" };
+
+    await expect(
+      tool.execute("call-1", {}, undefined, undefined, context),
+    ).resolves.toBe(nativeSearchResult);
+    expect(
+      nativeSearchExecutions.get(`${name}:/other-project`),
+    ).toHaveBeenCalledWith("call-1", {}, undefined, undefined, context);
+  });
+
+  it("does not take over search tools owned by another extension", () => {
+    const { pi, registered } = setup("extension", ["grep", "find", "ls"]);
+
+    expect(registered).toEqual([]);
+    expect(pi.registerTool).not.toHaveBeenCalled();
+  });
+
+  it("hides successful read output until expanded while retaining native metadata", () => {
+    const { registered } = setup();
+
+    expect(registered).toHaveLength(1);
+    const read = registered[0]!;
+    expect(read).toMatchObject({
+      name: "read",
+      label: "read",
+      description: `Read from ${process.cwd()}`,
+      promptSnippet: "Read file contents",
+      promptGuidelines: ["Use read to examine files instead of cat or sed."],
+      parameters: { type: "object" },
+      constrainedSampling: false,
+    });
+
+    expect(
+      render(
+        read.renderCall(
+          { path: "src/example.ts", offset: 3, limit: 2 },
+          theme,
+          {},
+        ),
+      ),
+    ).toBe("read src/example.ts:3-4");
+
+    const result = {
+      content: [{ type: "text", text: "first line\nsecond line" }],
+      details: undefined,
+    };
+    const context = { isError: false };
+
+    const collapsed = read.renderResult(
+      result,
+      { expanded: false, isPartial: false },
+      theme,
+      context,
+    );
+    expect(collapsed.render(120)).toEqual([]);
+    expect(render(collapsed)).toBe("");
+    expect(
+      render(
+        read.renderResult(
+          result,
+          { expanded: true, isPartial: false },
+          theme,
+          context,
+        ),
+      ),
+    ).toBe("first line\nsecond line");
+  });
+
+  it("renders a legacy file_path call without losing its line range", () => {
+    const { registered } = setup();
+    const read = registered[0]!;
+
+    expect(
+      render(
+        read.renderCall({ file_path: "src/legacy.ts", offset: 5 }, theme, {}),
+      ),
+    ).toBe("read src/legacy.ts:5");
+  });
+
+  it("delegates expanded image results to Pi's native renderer", () => {
+    const { registered } = setup();
+    const read = registered[0]!;
+    const result = {
+      content: [
+        { type: "text", text: "Read image file [image/png]" },
+        { type: "image", data: "base64", mimeType: "image/png" },
+      ],
+      details: undefined,
+    };
+    const options = { expanded: true, isPartial: false };
+    const context = { isError: false, showImages: true };
+
+    expect(render(read.renderResult(result, options, theme, context))).toBe(
+      "native image",
+    );
+    expect(nativeRenderResult).toHaveBeenCalledWith(
+      result,
+      options,
+      theme,
+      context,
+    );
+  });
+
+  it("shows failure diagnostics even when collapsed", () => {
+    const { registered } = setup();
+    const read = registered[0]!;
+    const result = {
+      content: [
+        { type: "text", text: "cannot read file" },
+        { type: "text", text: "permission denied" },
+      ],
+      details: undefined,
+    };
+
+    expect(
+      render(
+        read.renderResult(
+          result,
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: true },
+        ),
+      ),
+    ).toBe("cannot read file\npermission denied");
+  });
+
+  it("shows failure diagnostics when an error arrives as a partial result", () => {
+    const { registered } = setup();
+    const read = registered[0]!;
+    const result = {
+      content: [{ type: "text", text: "connection interrupted" }],
+      details: undefined,
+    };
+
+    expect(
+      render(
+        read.renderResult(result, { expanded: false, isPartial: true }, theme, {
+          isError: true,
+        }),
+      ),
+    ).toBe("connection interrupted");
+  });
+
+  it("delegates read execution with the effective image resize setting", async () => {
+    const settings = {
+      getImageAutoResize: vi.fn(() => false),
+      getShellCommandPrefix: () => undefined,
+      getShellPath: () => undefined,
+    };
+    vi.mocked(SettingsManager.create).mockReturnValue(settings as never);
+
+    const { registered } = setup();
+    const read = registered[0]!;
+    const onUpdate = vi.fn();
+    const context = {
+      cwd: "/other-project",
+      isProjectTrusted: () => true,
+    };
+
+    await expect(
+      read.execute(
+        "call-1",
+        { path: "src/example.ts" },
+        undefined,
+        onUpdate,
+        context,
+      ),
+    ).resolves.toBe(nativeResult);
+    expect(SettingsManager.create).toHaveBeenCalledWith(
+      "/other-project",
+      agentDir,
+      { projectTrusted: true },
+    );
+    expect(settings.getImageAutoResize).toHaveBeenCalledOnce();
+    expect(createReadToolDefinition).toHaveBeenLastCalledWith(
+      "/other-project",
+      { autoResizeImages: false },
+    );
+    expect(nativeExecutions.get("/other-project")).toHaveBeenCalledWith(
+      "call-1",
+      { path: "src/example.ts" },
+      undefined,
+      onUpdate,
+      context,
+    );
+  });
+
+  it("does not take over a read renderer owned by another extension", () => {
+    const { pi, registered } = setup("extension");
+
+    expect(registered).toEqual([]);
+    expect(pi.registerTool).not.toHaveBeenCalled();
+  });
+
+  it("registers at most one renderer for the same Pi instance", () => {
+    const { pi, registered } = setup();
+
+    myToolDisplay(pi as never);
+
+    expect(registered).toHaveLength(1);
+  });
+
+  it("retries failed registrations without duplicating successful renderers", () => {
+    const tools = [
+      { name: "read", sourceInfo: { source: "builtin" } },
+      { name: "bash", sourceInfo: { source: "builtin" } },
+    ];
+    const registered: Array<{ name: string }> = [];
+    const sessionStartHandlers: Array<() => unknown> = [];
+    let failBash = true;
+    const pi = {
+      getAllTools: vi.fn(() => tools),
+      on: vi.fn((event: string, handler: () => unknown) => {
+        if (event === "session_start") {
+          sessionStartHandlers.push(handler);
+        }
+      }),
+      registerTool: vi.fn((tool: { name: string }) => {
+        if (tool.name === "bash" && failBash) {
+          failBash = false;
+          throw new Error("temporary registration failure");
+        }
+        registered.push(tool);
+      }),
+    };
+
+    myToolDisplay(pi as never);
+    sessionStartHandlers[0]!();
+    sessionStartHandlers[0]!();
+
+    expect(registered.map((tool) => tool.name)).toEqual(["read", "bash"]);
+    expect(pi.registerTool).toHaveBeenCalledTimes(3);
+  });
+
+  it("only overrides builtin tools when ownership is mixed", () => {
+    const tools = [
+      { name: "read", sourceInfo: { source: "builtin" } },
+      { name: "bash", sourceInfo: { source: "extension" } },
+    ];
+    const registered: Array<{ name: string }> = [];
+    const sessionStartHandlers: Array<() => unknown> = [];
+    const pi = {
+      getAllTools: vi.fn(() => tools),
+      on: vi.fn((event: string, handler: () => unknown) => {
+        if (event === "session_start") {
+          sessionStartHandlers.push(handler);
+        }
+      }),
+      registerTool: vi.fn((tool: { name: string }) => {
+        registered.push(tool);
+      }),
+    };
+
+    myToolDisplay(pi as never);
+    sessionStartHandlers[0]!();
+
+    expect(registered.map((tool) => tool.name)).toEqual(["read"]);
+  });
+
+  it("defers tool discovery until the runtime session starts", () => {
+    const tools = [{ name: "read", sourceInfo: { source: "builtin" } }];
+    const registered: unknown[] = [];
+    const sessionStartHandlers: Array<() => unknown> = [];
+    let runtimeBound = false;
+    const pi = {
+      getAllTools: vi.fn(() => {
+        if (!runtimeBound) {
+          throw new Error(
+            "tool registry is not bound during extension loading",
+          );
+        }
+        return tools;
+      }),
+      on: vi.fn((event: string, handler: () => unknown) => {
+        if (event === "session_start") {
+          sessionStartHandlers.push(handler);
+        }
+      }),
+      registerTool: vi.fn((tool: unknown) => {
+        registered.push(tool);
+      }),
+    };
+
+    myToolDisplay(pi as never);
+
+    expect(pi.getAllTools).not.toHaveBeenCalled();
+    expect(pi.registerTool).not.toHaveBeenCalled();
+    expect(pi.on).toHaveBeenCalledWith("session_start", expect.any(Function));
+
+    runtimeBound = true;
+    for (const handler of sessionStartHandlers) {
+      handler();
+    }
+
+    expect(pi.registerTool).toHaveBeenCalledTimes(1);
+    expect(registered).toHaveLength(1);
+  });
+
+  it("safely degrades when tool discovery is unavailable", () => {
+    const sessionStartHandlers: Array<() => unknown> = [];
+    const pi = {
+      getAllTools: vi.fn(() => {
+        throw new Error("no interactive tool registry");
+      }),
+      on: vi.fn((event: string, handler: () => unknown) => {
+        if (event === "session_start") {
+          sessionStartHandlers.push(handler);
+        }
+      }),
+      registerTool: vi.fn(),
+    };
+
+    expect(() => {
+      myToolDisplay(pi as never);
+      for (const handler of sessionStartHandlers) {
+        handler();
+      }
+    }).not.toThrow();
+    expect(pi.registerTool).not.toHaveBeenCalled();
+  });
+
+  it("leaves the native read renderer untouched when disabled", () => {
+    writeConfig(JSON.stringify({ enabled: false }));
+
+    const { pi, registered } = setup();
+
+    expect(registered).toEqual([]);
+    expect(pi.getAllTools).not.toHaveBeenCalled();
+  });
+
+  it("falls back to enabled defaults when the config is invalid", () => {
+    writeConfig(JSON.stringify({ enabled: "yes" }));
+
+    const { registered } = setup();
+
+    expect(registered).toHaveLength(1);
+  });
+
+  it("falls back to enabled defaults when enabled is missing", () => {
+    writeConfig(JSON.stringify({ bashCollapsedLines: 2 }));
+
+    const { registered } = setup();
+
+    expect(registered).toHaveLength(1);
+    expect(loadToolDisplayConfig()).toEqual({
+      enabled: true,
+      bashCollapsedLines: 10,
+      diffCollapsedLines: 24,
+    });
+  });
+
+  it("falls back to enabled defaults when the config is malformed", () => {
+    writeConfig("{ not json");
+
+    const { registered } = setup();
+
+    expect(registered).toHaveLength(1);
+  });
+});

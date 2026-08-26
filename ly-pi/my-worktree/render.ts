@@ -4,8 +4,8 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { VisibleWorktree } from "./worktrees";
 
 const HEADING = "Worktrees";
-const CURRENT_GLYPH = "●";
-const OTHER_GLYPH = "○";
+const HEADING_GLYPH = "●";
+const CURRENT_GLYPH = "•";
 const REPOSITORY_TOKEN = "<REPO>";
 
 function abbreviateRepositoryPath(
@@ -37,37 +37,40 @@ function truncatePathStart(path: string, width: number): string {
   return `…${suffix}`;
 }
 
-/** Render visible worktrees as a Todo-style tree above the editor. */
+/** Render the current visible worktree as a Todo-style tree above the editor. */
 export function renderWorktreeLines(
   theme: Theme,
   worktrees: VisibleWorktree[],
   width: number,
   repositoryRoot: string,
 ): string[] {
-  if (width <= 0 || worktrees.length === 0) return [];
+  const currentWorktrees = worktrees.filter((worktree) => worktree.isCurrent);
+  const [worktree] = currentWorktrees;
+  if (
+    width <= 0 ||
+    worktrees.length < 2 ||
+    !worktree ||
+    currentWorktrees.length !== 1
+  ) {
+    return [];
+  }
+  const branch = "└─ ";
+  const label = `${CURRENT_GLYPH} ${worktree.label}`;
+  const displayPath = abbreviateRepositoryPath(worktree.path, repositoryRoot);
+  const pathWidth = width - visibleWidth(`${branch}${label} `);
+  const path = truncatePathStart(displayPath, pathWidth);
+  if (path === "" || path === "…") return [];
 
   const truncate = (line: string): string => truncateToWidth(line, width);
-  const heading = `${theme.fg("accent", CURRENT_GLYPH)} ${theme.fg(
+  const heading = `${theme.fg("accent", HEADING_GLYPH)} ${theme.fg(
     "accent",
     `${HEADING} (${worktrees.length})`,
   )}`;
-  const lines = [truncate(heading)];
 
-  for (const [index, worktree] of worktrees.entries()) {
-    const branch = index === worktrees.length - 1 ? "└─ " : "├─ ";
-    const glyph = worktree.isCurrent ? CURRENT_GLYPH : OTHER_GLYPH;
-    const label = `${glyph} ${worktree.label}`;
-    const displayPath = abbreviateRepositoryPath(worktree.path, repositoryRoot);
-    const pathWidth = Math.max(0, width - visibleWidth(`${branch}${label} `));
-    const path = truncatePathStart(displayPath, pathWidth);
-    const styledLabel = theme.fg(worktree.isCurrent ? "accent" : "dim", label);
-
-    lines.push(
-      truncate(
-        `${theme.fg("dim", branch)}${styledLabel}${theme.fg("dim", ` ${path}`)}`,
-      ),
-    );
-  }
-
-  return lines;
+  return [
+    truncate(heading),
+    truncate(
+      `${theme.fg("dim", branch)}${theme.fg("text", label)}${theme.fg("dim", ` ${path}`)}`,
+    ),
+  ];
 }

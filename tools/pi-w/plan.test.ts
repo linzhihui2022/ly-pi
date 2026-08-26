@@ -108,7 +108,7 @@ describe("planWorktree", () => {
       "/repo/.worktree/b",
       "--",
       "/bin/zsh",
-      "-c",
+      "-ic",
       "pi; exec /bin/zsh",
     ]);
   });

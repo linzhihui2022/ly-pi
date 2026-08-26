@@ -3,11 +3,11 @@
 [![verify](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml/badge.svg)](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：14 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
+围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：15 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
 
 ## 特性
 
-- **统一扩展入口 `ly-pi`**：单一 `index.ts` 按序注册 14 个子模块，部署到 `~/.pi/agent/extensions/ly-pi/` 由 Pi 自动发现加载
+- **统一扩展入口 `ly-pi`**：单一 `index.ts` 按序注册 15 个子模块，部署到 `~/.pi/agent/extensions/ly-pi/` 由 Pi 自动发现加载
 - **权限拦截器**：确定性规则 + 模型法官二审工具调用，可逐项目定制
 - **开发体验**：自定义 HUD 状态栏、`/diff` 查看器、`/html` 渲染、事件音效、`/back` 撤销消息、热重载自动恢复
 - **行为护栏**：冗余 `cd` 前缀自动纠正、内联长脚本硬拦截
@@ -19,7 +19,7 @@
 
 ```
 configure/
-├── ly-pi/                    # 统一扩展入口（单包，含全部 14 个子模块）
+├── ly-pi/                    # 统一扩展入口（单包，含全部 15 个子模块）
 │   ├── index.ts              # 入口：按序注册所有子模块
 │   ├── my-cd-guard/          # 冗余 cd 前缀自动纠正
 │   ├── my-script-guard/      # 内联脚本硬拦截 + 急迫升级
@@ -34,13 +34,14 @@ configure/
 │   ├── my-sound/             # 音效反馈 + 语音包管理
 │   ├── my-session-name/      # 自动生成 Session Display Name
 │   ├── my-hud/               # 自定义 HUD 状态栏
-│   ├── my-worktree/          # 多 Git worktree 状态组件
+│   ├── my-tool-display/      # 原生工具紧凑呈现
+│   ├── my-worktree/          # 只读 worktree 组件 + /close-worktree 安全关闭命令
 │   ├── my-vision/            # 按模型视觉能力注入图片处理规则
 │   ├── web-preview/          # 内部工具库：HTML 预览 server + 文档骨架
 │   ├── shared/               # 跨模块共享（guard-harness 等）
 │   ├── assets/               # 部署资产（随 bun run deploy 分发到 ~/.pi/agent/）
 │   │   ├── config/           # 纯配置源文件：settings、mcp、tool-display、sound 等
-│   │   ├── skills/           # 仓库自有技能（review-pr）
+│   │   ├── skills/           # 仓库自有技能（review-pr、daily-timesheet）
 │   │   ├── themes/           # Catppuccin Mocha 主题
 │   │   └── agents/           # 子代理定义（PR 审查角色 + image-reader）
 │   └── settings-schema.json  # settings.json 的运行时校验 schema（部署时校验）
@@ -78,14 +79,17 @@ configure/
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-session-name** | 自动生成 Session Display Name：首条 prompt 后异步摘要，支持旧 session 补命名与 fork 短 hash |
 | **my-hud** | 自定义单行状态栏：项目名、模型（含思考级别）、Git 分支与状态、PR 链接、上下文百分比（颜色阈值）、Token 与成本、权限统计、Hide thinking 状态 |
-| **my-worktree** | 多 Git worktree 时在编辑器上方显示可访问工作树的分支和绝对路径，并标记当前项 |
+| **my-tool-display** | Pi 原生工具的紧凑呈现；当前覆盖 `read`、`grep`、`find`、`ls`、`bash`、`edit`、`write`：读/搜索成功正文默认隐藏，bash 成功输出默认显示最多 10 行，edit/write 完成后显示主题化统一 diff；write 对二进制、过大、不可读或工作区外路径安全降级，失败始终显示诊断 |
+| **my-worktree** | 只读 Worktree Widget 在多 Git worktree 时显示可访问工作树；`/close-worktree` 经确认后安全关闭 Current Worktree，保留本地分支，并通过用户配置的终端 hook 收尾 |
 | **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |
 
 ---
 
 ## 🎯 技能
 
-- **仓库自有**（`ly-pi/assets/skills/`，随 deploy 快照式部署）：`review-pr` — 并行调度专职 reviewer 子代理做多维度 PR 审查
+- **仓库自有**（`ly-pi/assets/skills/`，随 deploy 快照式部署）：
+  - `review-pr` — 并行调度专职 reviewer 子代理做多维度 PR 审查
+  - `daily-timesheet` — 汇总最近 N 天的 GitHub PR 提交，按天分配工时并输出填报清单
 - **由 [mattpocock/skills](https://github.com/mattpocock/skills) 工作流提供**（外部安装，不镜像到本仓库），驱动「需求与规格」流程
 
 ---
@@ -140,6 +144,16 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 "$REPO/install.sh"
 ```
 
+### 从 pi-tool-display 迁移
+
+`my-tool-display` 验证完成并由用户在 TUI 中确认后，手动卸载旧的第三方扩展：
+
+```bash
+pi uninstall npm:pi-tool-display
+```
+
+部署流程不会自动卸载用户级 npm 包；在手动卸载前，会部署 `enabled: false` 的兼容配置，前提是旧扩展支持该字段。完成 TUI 验证后再执行上述命令。
+
 ### API key（可选）
 
 以下功能按需配置环境变量，不配置则对应功能不可用，其余不受影响：
@@ -162,23 +176,25 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 | 配置 | 说明 |
 |------|------|
 | `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
-| `assets/config/pi-tool-display.json` | pi-tool-display 配置 |
-| `assets/config/settings.json` | Pi 非模型设置与 subagent runtime 配置（部署时按 `settings-schema.json` 校验） |
-| `assets/config/model-policies.json` | 版本化 Model Manifest：Model Role、候选槽位、能力契约与失败策略；部署时校验并复制到扩展目录 |
+| `ly-pi/assets/config/my-tool-display.json` | `my-tool-display` 启用开关、Bash 折叠行数（`bashCollapsedLines`，默认 10）与 diff 折叠行数（`diffCollapsedLines`，默认 24） |
+| `ly-pi/assets/config/pi-tool-display-disabled.json` | 旧版 `pi-tool-display` 的禁用兼容配置（效果取决于旧 renderer 是否支持 `enabled` 字段） |
+| `ly-pi/assets/config/settings.json` | Pi 非模型设置与 subagent runtime 配置（部署时按 `settings-schema.json` 校验） |
+| `ly-pi/assets/config/model-policies.json` | 版本化 Model Manifest：Model Role、候选槽位、能力契约与失败策略；部署时校验并复制到扩展目录 |
 | `ly-pi/model-policy/` | Model Policy Registry 核心库：候选解析、能力校验、回退、诊断与 Pi 设置编译 |
 | `~/.pi/agent/extensions/ly-pi/models.local.json` | 可选 Local Model Override；只能覆写非安全且非 vision 策略的 model、label 和 thinking，不纳入版本控制 |
-| `assets/config/mcp.json` | MCP 服务器配置 |
-| `assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
-| `assets/config/my-back.json` | `/back` 命令配置 |
-| `assets/config/append-system.md` | 追加到系统提示的全局指令 |
-| `assets/config/web-search.json` / `rpiv-todo.json` | 第三方扩展配置 |
+| `ly-pi/assets/config/mcp.json` | MCP 服务器配置 |
+| `ly-pi/assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
+| `ly-pi/assets/config/my-back.json` | `/back` 命令配置 |
+| `ly-pi/assets/config/append-system.md` | 追加到系统提示的全局指令 |
+| `ly-pi/assets/config/web-search.json` / `rpiv-todo.json` | 第三方扩展配置 |
 
 ### 作者个人化内容（使用前请自行调整）
 
 本仓库是作者的个人配置开源，以下内容带有强烈的个人偏好，**作示例用途，按需修改**：
 
-- **`assets/config/model-policies.json`** 中的 provider/model 引用（如 `openai-codex/gpt-5.6-terra`、`deepseek/deepseek-v4-flash`）是作者的个人配置，你需要替换为自己的 provider 与模型
-- **`assets/config/append-system.md`** 中的语言偏好（中文回复等）为作者个人设定
+- **`ly-pi/assets/config/model-policies.json`** 中的 provider/model 引用（如 `openai-codex/gpt-5.6-terra`、`deepseek/deepseek-v4-flash`）是作者的个人配置，你需要替换为自己的 provider 与模型
+- **`ly-pi/assets/config/mcp.json`** 中的 `productive` 是可选的 Productive MCP；它需要 Ultimate 套餐和已启用的 Productive AI，每位用户都需自行通过 OAuth 授权，不使用时可删除该条目
+- **`ly-pi/assets/config/append-system.md`** 中的语言偏好（中文回复等）为作者个人设定
 - **`JUDGE.md`、`CONTEXT.md`** 是作者个人项目的权限法官规则与领域术语表
 - **`docs/agents/`** 是作者按 Matt Pocock skills 工作流配置的本地 issue tracker 约定
 - **`.scratch/`** 是作者本仓库的本地票据，可作为该工作流的实例参考

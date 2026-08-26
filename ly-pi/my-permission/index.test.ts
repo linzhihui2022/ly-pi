@@ -323,6 +323,7 @@ describe("my-permission extension entry", () => {
         score: 3,
         reason: "potentially destructive",
         toolFor: "delete files",
+        modelUsed: "test/security-judge",
       }),
     );
     vi.mocked(confirmToolCall).mockResolvedValue(false);
@@ -338,6 +339,12 @@ describe("my-permission extension entry", () => {
       block: true,
       reason: "User denied: potentially destructive",
     });
+    expect(confirmToolCall).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        modelUsed: "test/security-judge",
+      }),
+    );
     expect(api.appendEntry).toHaveBeenCalledWith("my-permission-judge", {
       decision: "denied",
       toolName: "bash",

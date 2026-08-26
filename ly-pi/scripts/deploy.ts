@@ -329,7 +329,23 @@ const deploymentMessages: string[] = [];
   );
 
   deploymentWrites.push(
+    {
+      path: join(agentDir, "extensions", "pi-tool-display", "config.json"),
+      data: Bun.file("assets/config/pi-tool-display-disabled.json"),
+    },
     { path: join(extensionDir, "index.js"), data: Bun.file("dist/index.js") },
+    {
+      path: join(extensionDir, "close-worktree-worker.js"),
+      data: Bun.file("dist/my-worktree/close-worker-main.js"),
+    },
+    {
+      path: join(extensionDir, "package.json"),
+      data: '{\n  "type": "module"\n}\n',
+    },
+    {
+      path: join(extensionDir, "my-tool-display.json"),
+      data: Bun.file("assets/config/my-tool-display.json"),
+    },
     { path: settingsPath, data: `${JSON.stringify(target, null, 2)}\n` },
     {
       path: join(agentDir, "extensions", "subagent", "config.json"),
@@ -341,7 +357,11 @@ const deploymentMessages: string[] = [];
     },
   );
   deploymentMessages.push(
+    "pi-tool-display compatibility config: deployed",
     "Extension: deployed",
+    "close-worktree worker: deployed",
+    "extension package: deployed",
+    "my-tool-display config: deployed",
     "Settings: deployed",
     "subagentRuntime: deployed",
     "model-policies.json: deployed",
@@ -364,11 +384,7 @@ const deploymentMessages: string[] = [];
       dest: "APPEND_SYSTEM.md",
       label: "append-system.md",
     },
-    {
-      src: "pi-tool-display.json",
-      dest: "extensions/pi-tool-display/config.json",
-      label: "pi-tool-display",
-    },
+
     {
       src: "web-search.json",
       dest: "web-search.json",

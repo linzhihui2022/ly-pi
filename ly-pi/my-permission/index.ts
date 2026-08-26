@@ -766,6 +766,7 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
 
     const approved = await confirmToolCall(ctx, {
       toolName,
+      modelUsed: judgeResult.modelUsed,
       toolFor: judgeResult.toolFor,
       reason: judgeResult.reason,
       score: judgeResult.score,

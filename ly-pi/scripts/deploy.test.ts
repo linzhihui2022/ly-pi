@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readFileSync,
   readlinkSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -63,18 +64,7 @@ describe("deploy model policy settings", () => {
       cpSync(DIST_DIR, join(distSnapshotDir, "dist"), { recursive: true });
     }
 
-    const build = runBun([
-      "build",
-      "./index.ts",
-      "--outdir",
-      "dist",
-      "--target",
-      "node",
-      "--format",
-      "esm",
-      "--external",
-      "@earendil-works/*",
-    ]);
+    const build = runBun(["run", "build"]);
     expect(build.status).toBe(0);
   });
 
@@ -90,6 +80,150 @@ describe("deploy model policy settings", () => {
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("does not deploy the new extension when the legacy renderer cannot be disabled", () => {
+    const staging = stagingDir();
+    const legacyConfig = join(
+      staging,
+      "agent",
+      "extensions",
+      "pi-tool-display",
+      "config.json",
+    );
+    const extensionBundle = join(
+      staging,
+      "agent",
+      "extensions",
+      "ly-pi",
+      "index.js",
+    );
+    const legacyConfigDir = dirname(legacyConfig);
+    mkdirSync(legacyConfigDir, { recursive: true });
+    writeFileSync(legacyConfig, '{"enabled":true}\n');
+    chmodSync(legacyConfigDir, 0o500);
+
+    try {
+      const result = deploy(staging);
+
+      expect(result.status).not.toBe(0);
+      expect(readFileSync(legacyConfig, "utf-8")).toBe('{"enabled":true}\n');
+      expect(existsSync(extensionBundle)).toBe(false);
+    } finally {
+      chmodSync(legacyConfigDir, 0o700);
+    }
+  });
+
+  it("leaves the legacy renderer enabled when the extension cannot be staged", () => {
+    const staging = stagingDir();
+    const legacyConfig = join(
+      staging,
+      "agent",
+      "extensions",
+      "pi-tool-display",
+      "config.json",
+    );
+    const extensionDir = join(staging, "agent", "extensions", "ly-pi");
+    mkdirSync(dirname(legacyConfig), { recursive: true });
+    mkdirSync(dirname(extensionDir), { recursive: true });
+    writeFileSync(legacyConfig, '{"enabled":true}\n');
+    writeFileSync(extensionDir, "not a directory\n");
+
+    const result = deploy(staging);
+
+    expect(result.status).not.toBe(0);
+    expect(readFileSync(legacyConfig, "utf-8")).toBe('{"enabled":true}\n');
+    expect(readFileSync(extensionDir, "utf-8")).toBe("not a directory\n");
+  });
+
+  it("disables the legacy renderer while preserving its installed package", () => {
+    const staging = stagingDir();
+    const legacyConfigDir = join(
+      staging,
+      "agent",
+      "extensions",
+      "pi-tool-display",
+    );
+    const legacyConfig = join(legacyConfigDir, "config.json");
+    const packageFile = join(
+      staging,
+      "agent",
+      "npm",
+      "node_modules",
+      "pi-tool-display",
+      "package.json",
+    );
+    const toolDisplayConfig = join(
+      staging,
+      "agent",
+      "extensions",
+      "ly-pi",
+      "my-tool-display.json",
+    );
+    mkdirSync(legacyConfigDir, { recursive: true });
+    mkdirSync(dirname(packageFile), { recursive: true });
+    writeFileSync(legacyConfig, '{"enabled":true}\n');
+    writeFileSync(packageFile, '{"name":"pi-tool-display"}\n');
+
+    const result = deploy(staging);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(legacyConfig, "utf-8")).toBe(
+      '{\n  "enabled": false\n}\n',
+    );
+    expect(readFileSync(packageFile, "utf-8")).toBe(
+      '{"name":"pi-tool-display"}\n',
+    );
+    expect(readFileSync(toolDisplayConfig, "utf-8")).toBe(
+      '{\n  "enabled": true,\n  "bashCollapsedLines": 10,\n  "diffCollapsedLines": 24\n}\n',
+    );
+  });
+
+  it("creates the disabled legacy config on the first deployment", () => {
+    const staging = stagingDir();
+    const legacyConfig = join(
+      staging,
+      "agent",
+      "extensions",
+      "pi-tool-display",
+      "config.json",
+    );
+    const packageFile = join(
+      staging,
+      "agent",
+      "npm",
+      "node_modules",
+      "pi-tool-display",
+      "package.json",
+    );
+
+    const result = deploy(staging);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(legacyConfig, "utf-8")).toBe(
+      '{\n  "enabled": false\n}\n',
+    );
+    expect(existsSync(packageFile)).toBe(false);
+  });
+
+  it("marks the deployed close-worktree worker as an ES module", () => {
+    const staging = stagingDir();
+
+    const result = deploy(staging);
+
+    expect(result.status, result.stderr).toBe(0);
+    const extensionDir = join(staging, "agent", "extensions", "ly-pi");
+    const workerPath = join(extensionDir, "close-worktree-worker.js");
+    expect(existsSync(workerPath)).toBe(true);
+    expect(
+      JSON.parse(readFileSync(join(extensionDir, "package.json"), "utf-8")),
+    ).toEqual({ type: "module" });
+
+    const worker = spawnSync("node", [realpathSync(workerPath)], {
+      encoding: "utf-8",
+    });
+    expect(worker.status).toBe(1);
+    expect(worker.stderr).not.toContain("MODULE_TYPELESS_PACKAGE_JSON");
   });
 
   it("copies the validated manifest into the extension directory", () => {

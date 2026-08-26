@@ -55,6 +55,38 @@ describe("parseWorktreeList", () => {
     ]);
   });
 
+  it("retains a worktree lock from porcelain output", () => {
+    expect(
+      parseWorktreeList(
+        [
+          "worktree /repo/main",
+          "HEAD 1111111111111111111111111111111111111111",
+          "branch refs/heads/main",
+          "",
+          "worktree /repo/feature",
+          "HEAD 2222222222222222222222222222222222222222",
+          "branch refs/heads/feature",
+          "locked keep this worktree",
+          "",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      {
+        path: "/repo/main",
+        branch: "main",
+        head: "1111111111111111111111111111111111111111",
+        prunable: false,
+      },
+      {
+        path: "/repo/feature",
+        branch: "feature",
+        head: "2222222222222222222222222222222222222222",
+        prunable: false,
+        locked: true,
+      },
+    ]);
+  });
+
   it("ignores lines that appear before the first worktree record", () => {
     expect(
       parseWorktreeList(
@@ -147,6 +179,109 @@ describe("parseWorktreeList", () => {
     ]);
   });
 
+  it("reselects an enclosing worktree after the nested current worktree becomes inaccessible", () => {
+    const entries = [
+      {
+        path: "/repo/main",
+        branch: "main",
+        head: "1111111111111111111111111111111111111111",
+        prunable: false,
+      },
+      {
+        path: "/repo/main/.worktree/feature",
+        branch: "feature",
+        head: "2222222222222222222222222222222222222222",
+        prunable: false,
+      },
+      {
+        path: "/repo/peer",
+        branch: "peer",
+        head: "3333333333333333333333333333333333333333",
+        prunable: false,
+      },
+    ];
+
+    expect(
+      selectVisibleWorktrees(
+        entries,
+        "/repo/main/.worktree/feature/src",
+        (path) => path !== "/repo/main/.worktree/feature",
+      ),
+    ).toEqual([
+      { path: "/repo/main", label: "main", isCurrent: true },
+      { path: "/repo/peer", label: "peer", isCurrent: false },
+    ]);
+  });
+
+  it("leaves Current Worktree unresolved when its accessible record has no label", () => {
+    const entries = [
+      {
+        path: "/repo/main",
+        branch: "main",
+        head: "1111111111111111111111111111111111111111",
+        prunable: false,
+      },
+      {
+        path: "/repo/main/.worktree/feature",
+        branch: null,
+        head: null,
+        prunable: false,
+      },
+      {
+        path: "/repo/peer",
+        branch: "peer",
+        head: "3333333333333333333333333333333333333333",
+        prunable: false,
+      },
+    ];
+
+    expect(
+      selectVisibleWorktrees(
+        entries,
+        "/repo/main/.worktree/feature/src",
+        () => true,
+      ),
+    ).toEqual([
+      { path: "/repo/main", label: "main", isCurrent: false },
+      { path: "/repo/peer", label: "peer", isCurrent: false },
+    ]);
+  });
+
+  it("leaves Current Worktree unresolved when deepest entries are ambiguous", () => {
+    const entries = [
+      {
+        path: "/repo/main",
+        branch: "main",
+        head: "1111111111111111111111111111111111111111",
+        prunable: false,
+      },
+      {
+        path: "/repo/main",
+        branch: "duplicate-main",
+        head: "2222222222222222222222222222222222222222",
+        prunable: false,
+      },
+      {
+        path: "/repo/peer",
+        branch: "peer",
+        head: "3333333333333333333333333333333333333333",
+        prunable: false,
+      },
+    ];
+
+    expect(
+      selectVisibleWorktrees(entries, "/repo/main/src", () => true),
+    ).toEqual([
+      { path: "/repo/main", label: "main", isCurrent: false },
+      {
+        path: "/repo/main",
+        label: "duplicate-main",
+        isCurrent: false,
+      },
+      { path: "/repo/peer", label: "peer", isCurrent: false },
+    ]);
+  });
+
   it("discovers a nested worktree as the only current worktree", async () => {
     const repository = mkdtempSync(join(tmpdir(), "my-worktree-"));
     const featureWorktree = join(repository, ".worktree", "feature-x");
@@ -192,6 +327,72 @@ describe("parseWorktreeList", () => {
       });
     } finally {
       rmSync(featureWorktree, { recursive: true, force: true });
+      rmSync(repository, { recursive: true, force: true });
+    }
+  });
+
+  it("rediscovers from an existing ancestor after nested Current Worktree removal", async () => {
+    const repository = mkdtempSync(join(tmpdir(), "my-worktree-"));
+    const featureWorktree = join(repository, ".worktree", "feature-x");
+    const peerWorktree = join(repository, ".worktree", "peer-x");
+
+    try {
+      execFileSync("git", ["init", "-b", "main", repository]);
+      writeFileSync(join(repository, "README.md"), "fixture\n");
+      execFileSync("git", ["-C", repository, "add", "README.md"]);
+      execFileSync("git", [
+        "-C",
+        repository,
+        "-c",
+        "user.name=Test User",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "initial",
+      ]);
+      mkdirSync(join(repository, ".worktree"));
+      execFileSync("git", [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "feature-x",
+        featureWorktree,
+      ]);
+      execFileSync("git", [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "peer-x",
+        peerWorktree,
+      ]);
+      const nestedDirectory = join(featureWorktree, "nested");
+      mkdirSync(nestedDirectory);
+      execFileSync("git", [
+        "-C",
+        repository,
+        "worktree",
+        "remove",
+        "--force",
+        featureWorktree,
+      ]);
+
+      await expect(getVisibleWorktrees(nestedDirectory)).resolves.toEqual({
+        repositoryRoot: realpathSync(repository),
+        worktrees: [
+          { path: realpathSync(repository), label: "main", isCurrent: true },
+          {
+            path: realpathSync(peerWorktree),
+            label: "peer-x",
+            isCurrent: false,
+          },
+        ],
+      });
+    } finally {
       rmSync(repository, { recursive: true, force: true });
     }
   });

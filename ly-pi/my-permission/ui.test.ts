@@ -43,6 +43,7 @@ describe("formatConfirmMessage", () => {
   it("formats a Chinese confirmation with score and paths", () => {
     const { title, body } = formatConfirmMessage({
       toolName: "bash",
+      modelUsed: "test/security-judge",
       toolFor: "列出当前目录文件",
       reason: "只读取目录内容，相对安全",
       score: 8,
@@ -52,6 +53,7 @@ describe("formatConfirmMessage", () => {
     });
     expect(stripAnsi(title)).toBe("确认工具调用：bash");
     expect(stripAnsi(body)).toContain("工具：bash");
+    expect(stripAnsi(body)).toContain("法官模型：test/security-judge");
     expect(stripAnsi(body)).toContain("操作：列出当前目录文件");
     expect(stripAnsi(body)).toContain("输入：ls -la");
     expect(stripAnsi(body)).toContain("工作目录：/repo");
@@ -102,6 +104,7 @@ describe("formatConfirmMessage", () => {
     });
     expect(stripAnsi(body)).not.toContain("涉及路径");
     expect(stripAnsi(body)).not.toContain("安全评分");
+    expect(stripAnsi(body)).toContain("法官模型：未知");
     expect(stripAnsi(body)).toContain("理由：模型返回格式不正确，请手动确认");
     expect(stripAnsi(title)).toBe("确认工具调用：read");
   });
@@ -112,6 +115,7 @@ describe("confirmToolCall", () => {
     const ctx = mockCtx(true);
     const ok = await confirmToolCall(ctx, {
       toolName: "read",
+      modelUsed: "test/security-judge",
       toolFor: "read src/main.ts",
       reason: "routine read",
       score: 8,
@@ -126,6 +130,7 @@ describe("confirmToolCall", () => {
     ][];
     expect(stripAnsi(calls[0][0])).toBe("确认工具调用：read");
     expect(calls[0][1]).toContain("\x1b[32m");
+    expect(stripAnsi(calls[0][1])).toContain("法官模型：test/security-judge");
     expect(stripAnsi(calls[0][1])).toContain(
       "理由：routine read（安全评分：8/10）",
     );
