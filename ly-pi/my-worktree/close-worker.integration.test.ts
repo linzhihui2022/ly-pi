@@ -1,268 +1,182 @@
-import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { runPostExitWorktreeClosure } from "./close-worker";
+import {
+  runPostExitWorktreeClosure,
+  type WorkerCommandResult,
+} from "./close-worker";
 import { createPostExitWorktreeClosureDeps } from "./close-worker-runtime";
 import type { WorktreeClosePlan } from "./closure";
 
-function git(cwd: string, args: string[]): string {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
+const repositoryRoot = "/repo";
+const worktreePath = "/repo/.worktree/feature";
+
+const plan: WorktreeClosePlan = Object.freeze({
+  repositoryRoot,
+  worktreePath,
+  branch: "feature",
+  expectedSafetyState: Object.freeze({
+    isCurrent: true,
+    isLinked: true,
+    isPrimary: false,
+    isLocked: false,
+    isPrunable: false,
+    gitOperation: null,
+    hasTrackedChanges: false,
+    untrackedFiles: "none",
+    hasInitializedSubmodules: false,
+  }),
+  hookArgv: Object.freeze(["/bin/true", "pane-150"]),
+});
+
+const worktreeList = [
+  `worktree ${repositoryRoot}`,
+  "HEAD 1111111111111111111111111111111111111111",
+  "branch refs/heads/main",
+  "",
+  `worktree ${worktreePath}`,
+  "HEAD 2222222222222222222222222222222222222222",
+  "branch refs/heads/feature",
+  "",
+].join("\n");
+
+const ok = (output = ""): WorkerCommandResult => ({ code: 0, output });
+
+interface MockRuntimeOptions {
+  exited?: boolean;
+  dirty?: boolean;
+  removal?: WorkerCommandResult;
+  hook?: WorkerCommandResult;
 }
 
-function createFixture(): { repositoryRoot: string; worktreePath: string } {
-  const repositoryRoot = mkdtempSync(join(tmpdir(), "close-worktree-"));
-  const worktreePath = join(repositoryRoot, ".worktree", "feature");
-  execFileSync("git", ["init", "-b", "main", repositoryRoot]);
-  writeFileSync(join(repositoryRoot, "README.md"), "fixture\n");
-  writeFileSync(join(repositoryRoot, ".gitignore"), "ignored.txt\n");
-  git(repositoryRoot, ["add", "README.md", ".gitignore"]);
-  execFileSync("git", [
-    "-C",
-    repositoryRoot,
-    "-c",
-    "user.name=Test User",
-    "-c",
-    "user.email=test@example.com",
-    "commit",
-    "-m",
-    "initial",
-  ]);
-  execFileSync("git", [
-    "-C",
-    repositoryRoot,
-    "worktree",
-    "add",
-    "-b",
-    "feature",
-    worktreePath,
-  ]);
+function createMockRuntime(options: MockRuntimeOptions = {}) {
+  let linked = true;
+  const removal = options.removal ?? ok();
+  const hook = options.hook ?? ok();
+  const reports: string[] = [];
+  const exec = vi.fn(
+    async (argv: readonly string[]): Promise<WorkerCommandResult> => {
+      if (argv[0] === "git" && argv.includes("list")) {
+        return ok(worktreeList);
+      }
+      if (argv[0] === "git" && argv.includes("status")) {
+        return ok(options.dirty ? " M README.md\n" : "");
+      }
+      if (argv[0] === "git" && argv.includes("submodule")) return ok();
+      if (argv[0] === "git" && argv.includes("rev-parse")) {
+        return ok(`/git/${argv.at(-1)}\n`);
+      }
+      if (argv[0] === "git" && argv.includes("remove")) {
+        if (removal.code === 0) linked = false;
+        return removal;
+      }
+      if (argv[0] === "/bin/true") return hook;
+
+      throw new Error(`unexpected command: ${argv.join(" ")}`);
+    },
+  );
+  const deps = createPostExitWorktreeClosureDeps({
+    exec,
+    waitForPidExit: async () => options.exited ?? true,
+    exists: () => false,
+    platform: "darwin",
+    isExecutable: () => true,
+    report: (message) => reports.push(message),
+  });
+
   return {
-    repositoryRoot: realpathSync(repositoryRoot),
-    worktreePath: realpathSync(worktreePath),
+    deps,
+    exec,
+    reports,
+    get linked() {
+      return linked;
+    },
   };
 }
 
-function createPlan(
-  repositoryRoot: string,
-  worktreePath: string,
-): WorktreeClosePlan {
-  return Object.freeze({
-    repositoryRoot,
-    worktreePath,
-    branch: "feature",
-    expectedSafetyState: Object.freeze({
-      isCurrent: true,
-      isLinked: true,
-      isPrimary: false,
-      isLocked: false,
-      isPrunable: false,
-      gitOperation: null,
-      hasTrackedChanges: false,
-      untrackedFiles: "none",
-      hasInitializedSubmodules: false,
-    }),
-    hookArgv: Object.freeze(["/bin/true", "pane-150"]),
+describe("post-exit worktree closure runtime adapter", () => {
+  it("removes a clean linked worktree through mocked Git, then runs the hook", async () => {
+    const runtime = createMockRuntime();
+
+    await expect(
+      runPostExitWorktreeClosure({ piPid: 123, plan }, runtime.deps),
+    ).resolves.toBe("completed");
+
+    expect(runtime.linked).toBe(false);
+    expect(runtime.exec).toHaveBeenCalledWith([
+      "git",
+      "-C",
+      repositoryRoot,
+      "worktree",
+      "remove",
+      worktreePath,
+    ]);
+    expect(runtime.exec).toHaveBeenCalledWith(["/bin/true", "pane-150"]);
+    expect(runtime.reports).toEqual([]);
   });
-}
 
-async function executeFixtureCommand(argv: readonly string[]) {
-  const [command, ...args] = argv;
-  try {
-    return {
-      code: 0,
-      output: execFileSync(command, args, { encoding: "utf8" }),
-    };
-  } catch (error) {
-    const result = error as { status?: number | null; stderr?: string };
-    return {
-      code: result.status ?? 1,
-      output: result.stderr ?? "",
-    };
-  }
-}
+  it("leaves the mocked worktree and hook untouched when Pi exit times out", async () => {
+    const runtime = createMockRuntime({ exited: false });
 
-function createRuntime(waitForPidExit: (pid: number) => Promise<boolean>) {
-  return createPostExitWorktreeClosureDeps({
-    exec: executeFixtureCommand,
-    waitForPidExit: async (pid) => waitForPidExit(pid),
-    exists: existsSync,
-    platform: "darwin",
-    isExecutable: () => true,
+    await expect(
+      runPostExitWorktreeClosure({ piPid: 123, plan }, runtime.deps),
+    ).resolves.toBe("timed-out");
+
+    expect(runtime.linked).toBe(true);
+    expect(runtime.exec).not.toHaveBeenCalled();
+    expect(runtime.reports).toEqual([
+      "close-worktree: Pi did not exit within 30 seconds. Worktree left at /repo/.worktree/feature. Recover with: cd '/repo'",
+    ]);
   });
-}
 
-// Temporary Git fixture setup can exceed Vitest's 5-second default under coverage.
-describe("post-exit worktree closure integration", () => {
-  it("removes a linked worktree with ignored files without force, retains its branch, then runs the hook", async () => {
-    const { repositoryRoot, worktreePath } = createFixture();
-    const plan = createPlan(repositoryRoot, worktreePath);
-    const ignoredFile = join(worktreePath, "ignored.txt");
-    writeFileSync(ignoredFile, "ignored\n");
-    const hook = vi.fn(async () => {
-      expect(existsSync(worktreePath)).toBe(false);
-      return { code: 0, output: "" };
+  it("leaves the mocked worktree and skips the hook when Git removal fails", async () => {
+    const runtime = createMockRuntime({
+      removal: { code: 23, output: "fake Git removal failure" },
     });
-    const reports: string[] = [];
 
-    try {
-      const runtime = createRuntime(async () => true);
+    await expect(
+      runPostExitWorktreeClosure({ piPid: 123, plan }, runtime.deps),
+    ).resolves.toBe("removal-failed");
 
-      await expect(
-        runPostExitWorktreeClosure(
-          { piPid: 123, plan },
-          {
-            ...runtime,
-            runHook: hook,
-            report: (message) => reports.push(message),
-          },
-        ),
-      ).resolves.toBe("completed");
-
-      expect(existsSync(worktreePath)).toBe(false);
-      expect(existsSync(ignoredFile)).toBe(false);
-      expect(
-        git(repositoryRoot, [
-          "show-ref",
-          "--verify",
-          "--quiet",
-          "refs/heads/feature",
-        ]),
-      ).toBe("");
-      expect(hook).toHaveBeenCalledWith(["/bin/true", "pane-150"]);
-      expect(reports).toEqual([]);
-    } finally {
-      rmSync(repositoryRoot, { recursive: true, force: true });
-    }
+    expect(runtime.linked).toBe(true);
+    expect(runtime.exec).not.toHaveBeenCalledWith(["/bin/true", "pane-150"]);
+    expect(runtime.reports).toEqual([
+      "close-worktree: worktree removal failed (exit 23): fake Git removal failure. Worktree left at /repo/.worktree/feature. Recover with: cd '/repo'",
+    ]);
   });
 
-  it("leaves the fixture and its hook untouched when Pi exit times out", async () => {
-    const { repositoryRoot, worktreePath } = createFixture();
-    const plan = createPlan(repositoryRoot, worktreePath);
-    const hook = vi.fn(async () => ({ code: 0, output: "" }));
-    const reports: string[] = [];
+  it("reports hook failure after mocked Git removes the worktree", async () => {
+    const runtime = createMockRuntime({
+      hook: { code: 7, output: "fake hook failure" },
+    });
 
-    try {
-      await expect(
-        runPostExitWorktreeClosure(
-          { piPid: 123, plan },
-          {
-            ...createRuntime(async () => false),
-            runHook: hook,
-            report: (message) => reports.push(message),
-          },
-        ),
-      ).resolves.toBe("timed-out");
+    await expect(
+      runPostExitWorktreeClosure({ piPid: 123, plan }, runtime.deps),
+    ).resolves.toBe("hook-failed");
 
-      expect(existsSync(worktreePath)).toBe(true);
-      expect(hook).not.toHaveBeenCalled();
-      expect(reports).toEqual([
-        `close-worktree: Pi did not exit within 30 seconds. Worktree left at ${worktreePath}. Recover with: cd '${repositoryRoot}'`,
-      ]);
-    } finally {
-      rmSync(repositoryRoot, { recursive: true, force: true });
-    }
+    expect(runtime.linked).toBe(false);
+    expect(runtime.reports).toEqual([
+      'close-worktree: worktree was removed, but terminal hook failed (exit 7): ["/bin/true","pane-150"]. Recover with: cd \'/repo\'',
+    ]);
   });
 
-  it("retains the fixture and skips the hook when normal Git removal fails", async () => {
-    const { repositoryRoot, worktreePath } = createFixture();
-    const plan = createPlan(repositoryRoot, worktreePath);
-    const hook = vi.fn(async () => ({ code: 0, output: "" }));
-    const reports: string[] = [];
+  it("retains a dirty mocked worktree and skips its hook after revalidation", async () => {
+    const runtime = createMockRuntime({ dirty: true });
 
-    try {
-      await expect(
-        runPostExitWorktreeClosure(
-          { piPid: 123, plan },
-          {
-            ...createRuntime(async () => true),
-            removeWorktree: async () => ({
-              code: 23,
-              output: "fake Git removal failure",
-            }),
-            runHook: hook,
-            report: (message) => reports.push(message),
-          },
-        ),
-      ).resolves.toBe("removal-failed");
+    await expect(
+      runPostExitWorktreeClosure({ piPid: 123, plan }, runtime.deps),
+    ).resolves.toBe("revalidation-failed");
 
-      expect(existsSync(worktreePath)).toBe(true);
-      expect(hook).not.toHaveBeenCalled();
-      expect(reports).toEqual([
-        `close-worktree: worktree removal failed (exit 23): fake Git removal failure. Worktree left at ${worktreePath}. Recover with: cd '${repositoryRoot}'`,
-      ]);
-    } finally {
-      rmSync(repositoryRoot, { recursive: true, force: true });
-    }
+    expect(runtime.linked).toBe(true);
+    expect(runtime.exec).not.toHaveBeenCalledWith([
+      "git",
+      "-C",
+      repositoryRoot,
+      "worktree",
+      "remove",
+      worktreePath,
+    ]);
+    expect(runtime.exec).not.toHaveBeenCalledWith(["/bin/true", "pane-150"]);
+    expect(runtime.reports).toEqual([
+      "close-worktree: revalidation failed: The current worktree has tracked changes. Worktree left at /repo/.worktree/feature. Recover with: cd '/repo'",
+    ]);
   });
-
-  it("retains the terminal with recovery guidance when the post-removal hook fails", async () => {
-    const { repositoryRoot, worktreePath } = createFixture();
-    const plan = createPlan(repositoryRoot, worktreePath);
-    const reports: string[] = [];
-
-    try {
-      await expect(
-        runPostExitWorktreeClosure(
-          { piPid: 123, plan },
-          {
-            ...createRuntime(async () => true),
-            runHook: async () => ({ code: 7, output: "fake hook failure" }),
-            report: (message) => reports.push(message),
-          },
-        ),
-      ).resolves.toBe("hook-failed");
-
-      expect(existsSync(worktreePath)).toBe(false);
-      expect(
-        git(repositoryRoot, [
-          "show-ref",
-          "--verify",
-          "--quiet",
-          "refs/heads/feature",
-        ]),
-      ).toBe("");
-      expect(reports).toEqual([
-        `close-worktree: worktree was removed, but terminal hook failed (exit 7): ["/bin/true","pane-150"]. Recover with: cd '${repositoryRoot}'`,
-      ]);
-    } finally {
-      rmSync(repositoryRoot, { recursive: true, force: true });
-    }
-  });
-
-  it("retains a dirty worktree and skips the hook after revalidation", async () => {
-    const { repositoryRoot, worktreePath } = createFixture();
-    const plan = createPlan(repositoryRoot, worktreePath);
-    const hook = vi.fn(async () => ({ code: 0, output: "" }));
-    const reports: string[] = [];
-    writeFileSync(join(worktreePath, "README.md"), "dirty\n");
-
-    try {
-      await expect(
-        runPostExitWorktreeClosure(
-          { piPid: 123, plan },
-          {
-            ...createRuntime(async () => true),
-            runHook: hook,
-            report: (message) => reports.push(message),
-          },
-        ),
-      ).resolves.toBe("revalidation-failed");
-
-      expect(existsSync(worktreePath)).toBe(true);
-      expect(hook).not.toHaveBeenCalled();
-      expect(reports).toEqual([
-        `close-worktree: revalidation failed: The current worktree has tracked changes. Worktree left at ${worktreePath}. Recover with: cd '${repositoryRoot}'`,
-      ]);
-    } finally {
-      rmSync(repositoryRoot, { recursive: true, force: true });
-    }
-  });
-}, 15_000);
+});

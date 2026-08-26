@@ -1,19 +1,58 @@
-import { execFileSync } from "node:child_process";
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { execFileMock, execFileAsyncMock, realpathSyncMock, statSyncMock } =
+  vi.hoisted(() => {
+    const execFileMock = vi.fn();
+    const execFileAsyncMock = vi.fn();
+    Object.defineProperty(
+      execFileMock,
+      Symbol.for("nodejs.util.promisify.custom"),
+      { value: execFileAsyncMock },
+    );
+    return {
+      execFileMock,
+      execFileAsyncMock,
+      realpathSyncMock: vi.fn(),
+      statSyncMock: vi.fn(),
+    };
+  });
+
+vi.mock("node:child_process", () => ({ execFile: execFileMock }));
+vi.mock("node:fs", () => ({
+  realpathSync: realpathSyncMock,
+  statSync: statSyncMock,
+}));
+
 import {
   getVisibleWorktrees,
   parseWorktreeList,
   selectVisibleWorktrees,
 } from "./worktrees";
+
+function mockDirectories(paths: readonly string[]) {
+  const directories = new Set(paths);
+  statSyncMock.mockImplementation((path: string) => {
+    if (directories.has(path)) return { isDirectory: () => true };
+    throw new Error(`missing directory: ${path}`);
+  });
+}
+
+function mockGitWorktrees(output: string) {
+  execFileAsyncMock.mockResolvedValue({ stdout: output, stderr: "" });
+}
+
+function mockGitFailure(message: string) {
+  execFileAsyncMock.mockRejectedValue(new Error(message));
+}
+
+beforeEach(() => {
+  execFileMock.mockReset();
+  execFileAsyncMock.mockReset();
+  realpathSyncMock.mockReset();
+  statSyncMock.mockReset();
+  realpathSyncMock.mockImplementation((path: string) => path);
+  mockDirectories([]);
+});
 
 describe("parseWorktreeList", () => {
   it("preserves Git order and represents branch, detached, and prunable entries", () => {
@@ -282,122 +321,79 @@ describe("parseWorktreeList", () => {
     ]);
   });
 
-  it("discovers a nested worktree as the only current worktree", async () => {
-    const repository = mkdtempSync(join(tmpdir(), "my-worktree-"));
-    const featureWorktree = join(repository, ".worktree", "feature-x");
+  it("discovers a nested mocked worktree as the only current worktree", async () => {
+    const repository = "/repo";
+    const featureWorktree = "/repo/.worktree/feature-x";
+    const nestedDirectory = `${featureWorktree}/nested`;
+    mockDirectories([repository, featureWorktree, nestedDirectory]);
+    mockGitWorktrees(
+      [
+        `worktree ${repository}`,
+        "HEAD 1111111111111111111111111111111111111111",
+        "branch refs/heads/main",
+        "",
+        `worktree ${featureWorktree}`,
+        "HEAD 2222222222222222222222222222222222222222",
+        "branch refs/heads/feature-x",
+        "",
+      ].join("\n"),
+    );
 
-    try {
-      execFileSync("git", ["init", "-b", "main", repository]);
-      writeFileSync(join(repository, "README.md"), "fixture\n");
-      execFileSync("git", ["-C", repository, "add", "README.md"]);
-      execFileSync("git", [
-        "-C",
-        repository,
-        "-c",
-        "user.name=Test User",
-        "-c",
-        "user.email=test@example.com",
-        "commit",
-        "-m",
-        "initial",
-      ]);
-      mkdirSync(join(repository, ".worktree"));
-      execFileSync("git", [
-        "-C",
-        repository,
-        "worktree",
-        "add",
-        "-b",
-        "feature-x",
-        featureWorktree,
-      ]);
-      const nestedDirectory = join(featureWorktree, "nested");
-      mkdirSync(nestedDirectory);
+    const snapshot = await getVisibleWorktrees(nestedDirectory);
 
-      await expect(getVisibleWorktrees(nestedDirectory)).resolves.toEqual({
-        repositoryRoot: realpathSync(repository),
-        worktrees: [
-          { path: realpathSync(repository), label: "main", isCurrent: false },
-          {
-            path: realpathSync(featureWorktree),
-            label: "feature-x",
-            isCurrent: true,
-          },
-        ],
-      });
-    } finally {
-      rmSync(featureWorktree, { recursive: true, force: true });
-      rmSync(repository, { recursive: true, force: true });
-    }
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      "git",
+      ["worktree", "list", "--porcelain"],
+      { cwd: nestedDirectory, timeout: 3000 },
+    );
+    expect(snapshot).toEqual({
+      repositoryRoot: repository,
+      worktrees: [
+        { path: repository, label: "main", isCurrent: false },
+        { path: featureWorktree, label: "feature-x", isCurrent: true },
+      ],
+    });
   });
 
-  it("rediscovers from an existing ancestor after nested Current Worktree removal", async () => {
-    const repository = mkdtempSync(join(tmpdir(), "my-worktree-"));
-    const featureWorktree = join(repository, ".worktree", "feature-x");
-    const peerWorktree = join(repository, ".worktree", "peer-x");
+  it("rediscovers from a mocked existing ancestor after nested worktree removal", async () => {
+    const repository = "/repo";
+    const worktreeDirectory = "/repo/.worktree";
+    const featureWorktree = `${worktreeDirectory}/feature-x`;
+    const peerWorktree = `${worktreeDirectory}/peer-x`;
+    const nestedDirectory = `${featureWorktree}/nested`;
+    mockDirectories([repository, worktreeDirectory, peerWorktree]);
+    mockGitWorktrees(
+      [
+        `worktree ${repository}`,
+        "HEAD 1111111111111111111111111111111111111111",
+        "branch refs/heads/main",
+        "",
+        `worktree ${peerWorktree}`,
+        "HEAD 3333333333333333333333333333333333333333",
+        "branch refs/heads/peer-x",
+        "",
+      ].join("\n"),
+    );
 
-    try {
-      execFileSync("git", ["init", "-b", "main", repository]);
-      writeFileSync(join(repository, "README.md"), "fixture\n");
-      execFileSync("git", ["-C", repository, "add", "README.md"]);
-      execFileSync("git", [
-        "-C",
-        repository,
-        "-c",
-        "user.name=Test User",
-        "-c",
-        "user.email=test@example.com",
-        "commit",
-        "-m",
-        "initial",
-      ]);
-      mkdirSync(join(repository, ".worktree"));
-      execFileSync("git", [
-        "-C",
-        repository,
-        "worktree",
-        "add",
-        "-b",
-        "feature-x",
-        featureWorktree,
-      ]);
-      execFileSync("git", [
-        "-C",
-        repository,
-        "worktree",
-        "add",
-        "-b",
-        "peer-x",
-        peerWorktree,
-      ]);
-      const nestedDirectory = join(featureWorktree, "nested");
-      mkdirSync(nestedDirectory);
-      execFileSync("git", [
-        "-C",
-        repository,
-        "worktree",
-        "remove",
-        "--force",
-        featureWorktree,
-      ]);
+    const snapshot = await getVisibleWorktrees(nestedDirectory);
 
-      await expect(getVisibleWorktrees(nestedDirectory)).resolves.toEqual({
-        repositoryRoot: realpathSync(repository),
-        worktrees: [
-          { path: realpathSync(repository), label: "main", isCurrent: true },
-          {
-            path: realpathSync(peerWorktree),
-            label: "peer-x",
-            isCurrent: false,
-          },
-        ],
-      });
-    } finally {
-      rmSync(repository, { recursive: true, force: true });
-    }
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      "git",
+      ["worktree", "list", "--porcelain"],
+      { cwd: worktreeDirectory, timeout: 3000 },
+    );
+    expect(snapshot).toEqual({
+      repositoryRoot: repository,
+      worktrees: [
+        { path: repository, label: "main", isCurrent: true },
+        { path: peerWorktree, label: "peer-x", isCurrent: false },
+      ],
+    });
   });
 
-  it("returns null when Git worktree discovery cannot run", async () => {
+  it("returns null when mocked Git worktree discovery cannot run", async () => {
+    mockGitFailure("git unavailable");
+
     await expect(
       getVisibleWorktrees("/tmp/my-worktree-not-a-repository-99999"),
     ).resolves.toBeNull();
