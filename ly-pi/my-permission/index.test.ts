@@ -40,6 +40,40 @@ vi.mock("./judge", () => ({
   createJudge: vi.fn(() => vi.fn()),
 }));
 
+vi.mock("../model-policy/config", () => ({
+  loadModelPolicyRegistry: vi.fn(),
+}));
+
+vi.mock("../src/shared/file", () => ({
+  loadFile: vi.fn(() => "existing rule"),
+}));
+
+vi.mock("./professor", () => ({
+  createAdvocate: vi.fn(),
+}));
+
+vi.mock("./prosecutor", () => ({
+  createProsecutor: vi.fn(),
+}));
+
+vi.mock("./chief", () => ({
+  createChief: vi.fn(),
+}));
+
+vi.mock("./pipeline", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./pipeline")>();
+  return { ...actual, createMerger: vi.fn() };
+});
+
+vi.mock("./cost-tracker", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./cost-tracker")>();
+  return { ...actual, appendCost: vi.fn() };
+});
+
+vi.mock("./self-test", () => ({
+  runPermissionSelfTest: vi.fn(),
+}));
+
 vi.mock("./ui", () => ({
   confirmToolCall: vi.fn(),
   createSessionCache: vi.fn(() => ({
@@ -77,9 +111,16 @@ vi.mock("node:fs", async (importOriginal) => {
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import open from "open";
+import { loadModelPolicyRegistry } from "../model-policy/config";
 import { ensurePreviewServer, stopPreviewServer } from "../web-preview/index";
+import { createChief } from "./chief";
+import { appendCost } from "./cost-tracker";
 import { createJudge } from "./judge";
+import { createMerger as createPipelineMerger } from "./pipeline";
+import { createAdvocate } from "./professor";
+import { createProsecutor } from "./prosecutor";
 import { decide } from "./rules";
+import { runPermissionSelfTest } from "./self-test";
 import { confirmToolCall, isChildSession } from "./ui";
 
 // Helper: create mock ExtensionAPI + tool_call invocation
@@ -106,6 +147,7 @@ function createMockApi() {
     ),
     getHandler: (event: string) => handlers[event],
     getCommand: (name: string) => commands[name],
+    getTool: (name: string) => tools[name],
     appendEntry: vi.fn(),
   };
 }
@@ -281,10 +323,10 @@ describe("my-permission extension entry", () => {
     vi.mocked(createJudge).mockReturnValue(
       vi.fn().mockResolvedValue({
         safe: false,
+        modelUsed: "deepseek/deepseek-v4-flash",
         score: 3,
         reason: "potentially destructive",
         toolFor: "delete files",
-        modelUsed: "deepseek/deepseek-v4-flash",
       }),
     );
     vi.mocked(confirmToolCall).mockResolvedValue(false);
@@ -373,6 +415,348 @@ describe("my-permission extension entry", () => {
       block: true,
       reason: "未找到可用的法官模型，请手动确认",
     });
+  });
+});
+
+describe("security audit tools", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function createAdvocateEntries() {
+    return [
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: {
+          toolName: "bash",
+          value: "git status",
+          safe: false,
+          reason: "needs confirmation",
+        },
+      },
+      {
+        type: "custom",
+        customType: "my-permission-override",
+        data: { toolName: "bash", value: "git status" },
+      },
+    ];
+  }
+
+  function createAllowedEntries() {
+    return [
+      {
+        type: "custom",
+        customType: "my-permission-judge",
+        data: {
+          toolName: "bash",
+          value: "git status",
+          safe: true,
+          reason: "read only",
+          toolFor: "status",
+        },
+      },
+    ];
+  }
+
+  function createSecurityAuditCtx(entries = createAdvocateEntries()) {
+    return createMockCtx({
+      sessionManager: {
+        getEntries: () => entries,
+        getSessionId: () => "session-xyz",
+      },
+    });
+  }
+
+  it("does not write JUDGE.md when Advocate analysis fails", async () => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    vi.mocked(createAdvocate).mockReturnValue(
+      vi.fn().mockResolvedValue({ error: "rate limit exceeded" }),
+    );
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const result = await api
+      .getTool("permission_advocate")
+      .execute("call-1", {}, undefined, undefined, createSecurityAuditCtx());
+
+    expect(createAdvocate).toHaveBeenCalledWith(expect.anything(), modelRunner);
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "辩护人分析失败: rate limit exceeded" }],
+    });
+    expect(writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("does not write JUDGE.md when the security-audit policy cannot load", async () => {
+    vi.mocked(loadModelPolicyRegistry).mockImplementation(() => {
+      throw new Error("invalid manifest");
+    });
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const result = await api
+      .getTool("permission_advocate")
+      .execute("call-1", {}, undefined, undefined, createSecurityAuditCtx());
+
+    expect(createAdvocate).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: "text",
+          text: "辩护人分析失败: security-audit 模型策略不可用: invalid manifest",
+        },
+      ],
+    });
+    expect(writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "merger error",
+      { error: "rate limit exceeded" },
+      "融合失败: rate limit exceeded",
+    ],
+    ["empty merger output", { mergedText: "" }, "融合失败: 空内容"],
+  ] as const)("does not write JUDGE.md when Advocate merge returns %s", async (_label, mergeResult, expectedText) => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    vi.mocked(createAdvocate).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        suggestion: {
+          add: [{ rule: "允许 git status", reason: "false positive" }],
+          remove: [],
+        },
+      }) as never,
+    );
+    vi.mocked(createPipelineMerger).mockReturnValue(
+      vi.fn().mockResolvedValue(mergeResult) as never,
+    );
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const ctx = createSecurityAuditCtx();
+    const result = await api
+      .getTool("permission_advocate")
+      .execute("call-1", {}, undefined, undefined, ctx);
+
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: expectedText }],
+    });
+    expect(ctx.ui.confirm).toHaveBeenCalledTimes(1);
+    expect(writeFileSync).not.toHaveBeenCalled();
+    expect(appendCost).not.toHaveBeenCalled();
+  });
+
+  it("preserves approval and costs when Advocate analysis and merge succeed", async () => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    vi.mocked(createAdvocate).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        suggestion: {
+          add: [{ rule: "允许 git status", reason: "false positive" }],
+          remove: [],
+        },
+        cost: 0.001,
+        modelUsed: "security/audit",
+      }),
+    );
+    vi.mocked(createPipelineMerger).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        mergedText: "允许 git status",
+        cost: 0.002,
+        modelUsed: "security/audit",
+      }),
+    );
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const ctx = createSecurityAuditCtx();
+    const result = await api
+      .getTool("permission_advocate")
+      .execute("call-1", {}, undefined, undefined, ctx);
+
+    expect(createPipelineMerger).toHaveBeenCalledWith(
+      expect.anything(),
+      modelRunner,
+    );
+    expect(appendCost).toHaveBeenNthCalledWith(
+      1,
+      "session-xyz",
+      "/repo",
+      "advocate-analysis",
+      0.001,
+      "security/audit",
+    );
+    expect(appendCost).toHaveBeenNthCalledWith(
+      2,
+      "session-xyz",
+      "/repo",
+      "advocate-merge",
+      0.002,
+      "security/audit",
+    );
+    expect(ctx.ui.confirm).toHaveBeenCalled();
+    expect(writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("JUDGE.md"),
+      "允许 git status",
+      "utf-8",
+    );
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "✅ JUDGE.md 已更新，共 1 条规则" }],
+    });
+  });
+
+  it("wires the security-audit runner into Prosecutor", async () => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    const prosecutor = vi.fn().mockResolvedValue({ error: "audit failed" });
+    vi.mocked(createProsecutor).mockReturnValue(prosecutor as never);
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const result = await api
+      .getTool("permission_prosecutor")
+      .execute(
+        "call-1",
+        {},
+        undefined,
+        undefined,
+        createSecurityAuditCtx(createAllowedEntries()),
+      );
+
+    expect(createProsecutor).toHaveBeenCalledWith(
+      expect.anything(),
+      modelRunner,
+    );
+    expect(prosecutor).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "检察官分析失败: audit failed" }],
+    });
+  });
+
+  it("wires the security-audit runner into Chief", async () => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    const chief = vi.fn().mockResolvedValue({ error: "audit failed" });
+    vi.mocked(createChief).mockReturnValue(chief as never);
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const result = await api
+      .getTool("permission_chief")
+      .execute("call-1", {}, undefined, undefined, createSecurityAuditCtx());
+
+    expect(createChief).toHaveBeenCalledWith(expect.anything(), modelRunner);
+    expect(chief).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "审判长分析失败: audit failed" }],
+    });
+  });
+});
+
+describe("/permission-self-test command", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("runs self-test through the extension model registry", async () => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    vi.mocked(runPermissionSelfTest).mockResolvedValue({
+      status: "success",
+      report: "对抗性自测报告\n结果: ✅ 达标",
+      attackResults: [],
+      safeResults: [],
+      attackMetrics: {
+        precision: 1,
+        recall: 1,
+        f1: 1,
+        truePositives: 0,
+        falsePositives: 0,
+        falseNegatives: 0,
+      },
+      safeMetrics: {
+        precision: 1,
+        recall: 1,
+        f1: 1,
+        truePositives: 0,
+        falsePositives: 0,
+        falseNegatives: 0,
+      },
+      overallPrecision: 1,
+    });
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const ctx = createMockCtx();
+    await api.getCommand("permission-self-test")("", ctx);
+
+    expect(runPermissionSelfTest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        judgePrompt: expect.any(String),
+        modelRunner,
+      }),
+    );
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "对抗性自测报告\n结果: ✅ 达标",
+      "info",
+    );
+  });
+
+  it("reports a failed self-test without a success fallback", async () => {
+    const modelRunner = { run: vi.fn() };
+    vi.mocked(loadModelPolicyRegistry).mockReturnValue(modelRunner as never);
+    vi.mocked(runPermissionSelfTest).mockResolvedValue({
+      status: "failure",
+      error: "candidate unavailable",
+    });
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const ctx = createMockCtx();
+    await api.getCommand("permission-self-test")("", ctx);
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "权限自测失败: candidate unavailable",
+      "error",
+    );
+    expect(ctx.ui.notify).not.toHaveBeenCalledWith("权限自测完成", "info");
+  });
+
+  it("reports policy loading failure without running self-test", async () => {
+    vi.mocked(loadModelPolicyRegistry).mockImplementation(() => {
+      throw new Error("invalid manifest");
+    });
+
+    const api = createMockApi();
+    const mod = await import("./index");
+    await mod.default(api as unknown as ExtensionAPI);
+
+    const ctx = createMockCtx();
+    await api.getCommand("permission-self-test")("", ctx);
+
+    expect(runPermissionSelfTest).not.toHaveBeenCalled();
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "权限自测失败: security-judge 模型策略不可用: invalid manifest",
+      "error",
+    );
   });
 });
 
