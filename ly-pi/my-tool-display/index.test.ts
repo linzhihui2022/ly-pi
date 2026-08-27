@@ -1828,11 +1828,11 @@ describe("my-tool-display", () => {
     ).toBe("visible");
   });
 
-  it("keeps bash failure status and all available output visible", () => {
-    writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 1 }));
+  it("shows the last configured lines for collapsed bash failures", () => {
+    writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 2 }));
     const { registered } = setup("builtin", ["bash"]);
     const bash = registered[0]!;
-    const output = "stderr line\nstdout line\nexit code: 1";
+    const output = "first line\nsecond line\nthird line\nfourth line";
 
     const rendered = render(
       bash.renderResult(
@@ -1844,8 +1844,44 @@ describe("my-tool-display", () => {
     );
 
     expect(rendered).toContain("Bash command failed.");
-    expect(rendered).toContain(output);
-    expect(rendered).not.toContain("more lines");
+    expect(rendered).toContain("... (2 earlier lines hidden, expand to view)");
+    expect(rendered).toContain("third line\nfourth line");
+    expect(rendered).not.toContain("first line");
+    expect(rendered).not.toContain("second line");
+  });
+
+  it("shows complete bash failure output when expanded", () => {
+    writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 1 }));
+    const { registered } = setup("builtin", ["bash"]);
+    const output = "first line\nsecond line\nthird line";
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [{ type: "text", text: output }], details: undefined },
+          { expanded: true, isPartial: false },
+          theme,
+          { isError: true },
+        ),
+      ),
+    ).toBe(`Bash command failed.\n${output}`);
+  });
+
+  it("hides bash failure output when the collapsed budget is zero", () => {
+    writeConfig(JSON.stringify({ enabled: true, bashCollapsedLines: 0 }));
+    const { registered } = setup("builtin", ["bash"]);
+    const output = "first line\nsecond line";
+
+    expect(
+      render(
+        registered[0]!.renderResult(
+          { content: [{ type: "text", text: output }], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: true },
+        ),
+      ),
+    ).toBe("Bash command failed.\nOutput hidden (2 lines; expand to view)");
   });
 
   it("delegates bash execution with effective shell settings for the execution cwd", async () => {

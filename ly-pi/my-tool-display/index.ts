@@ -604,16 +604,39 @@ function renderBashResult(
 ): Text {
   const output = textOutput(result);
   if (context.isError) {
-    return new Text(
-      theme.fg(
-        "error",
-        hasVisibleOutput(output)
-          ? `Bash command failed.\n${output}`
-          : "Bash command failed.",
-      ),
-      0,
-      0,
-    );
+    if (!hasVisibleOutput(output)) {
+      return new Text(theme.fg("error", "Bash command failed."), 0, 0);
+    }
+    if (options.expanded) {
+      return new Text(
+        theme.fg("error", `Bash command failed.\n${output}`),
+        0,
+        0,
+      );
+    }
+
+    const lines = output.split(/\r?\n/);
+    while (lines.at(-1) === "") {
+      lines.pop();
+    }
+    if (collapsedLines === 0) {
+      return new Text(
+        theme.fg(
+          "error",
+          `Bash command failed.\nOutput hidden (${lines.length} lines; expand to view)`,
+        ),
+        0,
+        0,
+      );
+    }
+
+    const visible = lines.slice(-collapsedLines);
+    const hidden = lines.length - visible.length;
+    let text = visible.join("\n");
+    if (hidden > 0) {
+      text = `${theme.fg("muted", `... (${hidden} earlier lines hidden, expand to view)`)}\n${text}`;
+    }
+    return new Text(theme.fg("error", `Bash command failed.\n${text}`), 0, 0);
   }
   if (!hasVisibleOutput(output)) {
     return new Text(
