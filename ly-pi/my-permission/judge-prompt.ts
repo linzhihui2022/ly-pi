@@ -30,6 +30,7 @@ export const JUDGE_PROMPT = `你是一名编码助手的安全门禁。评估以
 - 构建与测试：bun test、tsc、vitest、项目构建命令
 - 安装项目声明的依赖：bun install、npm ci
 - 修改项目内文件：write/edit 项目源码
+- gh切换账号
 
 保持简洁。不要包含 markdown 格式。
 `;
