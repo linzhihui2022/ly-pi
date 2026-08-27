@@ -7,7 +7,7 @@ describe("config", () => {
     expect(config).not.toHaveProperty("judgeModel");
     expect(config).not.toHaveProperty("professorModel");
     expect(config).not.toHaveProperty("professorThinking");
-    expect(config.judgeTimeoutMs).toBe(8000);
+    expect(config.judgeTimeoutMs).toBe(15000);
     expect(config.childPolicy).toBe("deny-on-unsafe");
   });
 

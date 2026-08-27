@@ -2,7 +2,7 @@ import type { Config } from "./types";
 
 export const config = {
   defaultPolicy: "allow",
-  judgeTimeoutMs: 8000,
+  judgeTimeoutMs: 15000,
   childPolicy: "deny-on-unsafe",
   permission: {
     ask_user_question: "allow",
