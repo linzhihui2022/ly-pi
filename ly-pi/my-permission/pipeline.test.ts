@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChiefSuggestionItem } from "./chief";
 import type { AnalyzerConfig } from "./pipeline";
 import { createMerger, createRoleAnalyzer } from "./pipeline";
-import type { Config, ModelClient } from "./types";
+import type { ModelClient } from "./types";
 
 function makeModel(
   overrides: Partial<{ id: string; provider: string }> = {},
 ): Model<Api> {
   return {
-    id: overrides.id ?? "deepseek-v4-pro",
-    provider: overrides.provider ?? "deepseek",
+    id: overrides.id ?? "audit-model",
+    provider: overrides.provider ?? "test",
     name: "Test Model",
     api: "openai-completions",
     input: ["text"],
@@ -21,18 +21,7 @@ function makeModel(
   } as Model<Api>;
 }
 
-const config: Config = {
-  defaultPolicy: "ask",
-  judgeModel: "deepseek/deepseek-v4-flash",
-  professorModel: "deepseek/deepseek-v4-pro",
-  professorThinking: "max",
-  judgeTimeoutMs: 5000,
-  childPolicy: "deny-on-unsafe",
-  permission: {},
-};
-
 const resolveModelOk = vi.fn(() => makeModel());
-const resolveModelNotFound = vi.fn(() => undefined);
 const completeModel = vi.fn<ModelClient["complete"]>();
 const modelClient: ModelClient = {
   find: resolveModelOk,
@@ -42,7 +31,6 @@ const modelClient: ModelClient = {
 beforeEach(() => {
   completeModel.mockReset();
   resolveModelOk.mockClear();
-  resolveModelNotFound.mockClear();
 });
 
 async function mockComplete(value: unknown): Promise<void> {
@@ -52,6 +40,70 @@ async function mockComplete(value: unknown): Promise<void> {
 interface TestResult {
   suggestions: Array<{ rule: string; reason: string }>;
   summary: string;
+}
+
+function createSuccessfulSecurityAuditRunner(thinking: "off" | "max") {
+  const candidate = {
+    slot: "primary",
+    model: "security/audit",
+    label: "Security audit",
+    thinking,
+    source: "manifest" as const,
+  };
+  const run = vi.fn(
+    async (
+      _role: string,
+      _models: ModelClient,
+      operation: (
+        model: Model<Api>,
+        resolvedCandidate: typeof candidate,
+      ) => Promise<unknown>,
+    ) => {
+      const value = await operation(makeModel(), candidate);
+      return {
+        status: "success" as const,
+        value:
+          value && typeof value === "object"
+            ? { stopReason: "stop", ...value }
+            : value,
+        candidate,
+      };
+    },
+  );
+  return { modelRunner: { run } as never, run };
+}
+
+function createFailedSecurityAuditRunner(
+  reason: string,
+  failurePolicy: "error-no-write" | "skip" = "error-no-write",
+) {
+  const run = vi.fn(async () => ({
+    status: "failure" as const,
+    failurePolicy,
+    reason,
+  }));
+  return { modelRunner: { run } as never, run };
+}
+
+const defaultSecurityAuditRunner = createSuccessfulSecurityAuditRunner("max");
+
+beforeEach(() => {
+  defaultSecurityAuditRunner.run.mockClear();
+});
+
+function createTestAnalyzer(
+  roleConfig = makeAnalyzerConfig(),
+  modelClientOverride = modelClient,
+  modelRunner = defaultSecurityAuditRunner.modelRunner,
+) {
+  return createRoleAnalyzer(roleConfig, modelClientOverride, modelRunner);
+}
+
+function createTestMerger(
+  modelClientOverride = modelClient,
+  modelRunner = defaultSecurityAuditRunner.modelRunner,
+) {
+  return createMerger(modelClientOverride, modelRunner);
 }
 
 function makeAnalyzerConfig(
@@ -77,34 +129,98 @@ function makeAnalyzerConfig(
 
 describe("createRoleAnalyzer", () => {
   it("returns error when input is empty", async () => {
-    const analyzer = createRoleAnalyzer(
-      config,
-      makeAnalyzerConfig(),
-      modelClient,
-    );
+    const analyzer = createTestAnalyzer();
     const result = await analyzer([], "/repo", "", "");
     expect(result.error).toBe("没有输入数据");
     expect(result.result).toBeUndefined();
   });
 
-  it("returns error when model format is invalid", async () => {
-    const badConfig = { ...config, professorModel: "invalid" };
-    const analyzer = createRoleAnalyzer(
-      badConfig,
+  it("returns a clear error when security-audit candidates are unavailable", async () => {
+    const { modelRunner, run } = createFailedSecurityAuditRunner(
+      "no usable candidate for role 'security-audit'",
+    );
+    const analyzer = createTestAnalyzer(
       makeAnalyzerConfig(),
       modelClient,
+      modelRunner,
     );
+
     const result = await analyzer(["item"], "/repo", "", "");
-    expect(result.error).toContain("professorModel 格式无效");
+
+    expect(run).toHaveBeenCalledWith(
+      "security-audit",
+      modelClient,
+      expect.any(Function),
+    );
+    expect(result.error).toContain("no usable candidate");
+    expect(completeModel).not.toHaveBeenCalled();
   });
 
-  it("returns error when model is unavailable", async () => {
-    const analyzer = createRoleAnalyzer(config, makeAnalyzerConfig(), {
-      ...modelClient,
-      find: resolveModelNotFound,
+  it("reports an unexpected security-audit failure policy", async () => {
+    const { modelRunner } = createFailedSecurityAuditRunner(
+      "no usable candidate",
+      "skip",
+    );
+    const result = await createTestAnalyzer(
+      makeAnalyzerConfig(),
+      modelClient,
+      modelRunner,
+    )(["item"], "/repo", "", "");
+
+    expect(result.error).toBe(
+      "test-analyzer 模型策略配置错误：security-audit 需要 error-no-write，实际为 skip",
+    );
+  });
+
+  it("uses security-audit Model Runner and its candidate thinking", async () => {
+    await mockComplete({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ suggestions: [], summary: "ok" }),
+        },
+      ],
     });
-    const result = await analyzer(["item"], "/repo", "", "");
-    expect(result.error).toContain("未找到 test-analyzer 模型");
+    const { modelRunner, run } = createSuccessfulSecurityAuditRunner("off");
+    const analyzer = createRoleAnalyzer(
+      makeAnalyzerConfig(),
+      modelClient,
+      modelRunner,
+    );
+
+    await analyzer(["item"], "/repo", "", "");
+
+    expect(run).toHaveBeenCalledWith(
+      "security-audit",
+      modelClient,
+      expect.any(Function),
+    );
+    expect(completeModel.mock.calls.at(-1)?.[2]).toEqual({});
+  });
+
+  it.each([
+    "length",
+    "toolUse",
+  ] as const)("rejects a non-stop analyzer response: %s", async (stopReason) => {
+    await mockComplete({
+      stopReason,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ suggestions: [], summary: "ok" }),
+        },
+      ],
+    });
+    const { modelRunner } = createSuccessfulSecurityAuditRunner("off");
+    const analyzer = createTestAnalyzer(
+      makeAnalyzerConfig(),
+      modelClient,
+      modelRunner,
+    );
+
+    await expect(analyzer(["item"], "/repo", "", "")).resolves.toEqual({
+      error: `test-analyzer 模型返回了非完整响应（${stopReason}）`,
+    });
   });
 
   it("returns parsed result on successful model call", async () => {
@@ -120,11 +236,7 @@ describe("createRoleAnalyzer", () => {
       ],
     });
 
-    const analyzer = createRoleAnalyzer(
-      config,
-      makeAnalyzerConfig(),
-      modelClient,
-    );
+    const analyzer = createTestAnalyzer();
     const result = await analyzer(
       ["item1"],
       "/repo",
@@ -154,13 +266,11 @@ describe("createRoleAnalyzer", () => {
       } as never);
     });
 
-    const analyzer = createRoleAnalyzer(
-      config,
+    const analyzer = createTestAnalyzer(
       makeAnalyzerConfig({
         buildUserPrompt: (input, cwd, judgeMd, judgePrompt) =>
           `cases:${input.length} cwd:${cwd} md:${judgeMd} jp:${judgePrompt}`,
       }),
-      modelClient,
     );
     await analyzer(
       ["a", "b"],
@@ -182,53 +292,35 @@ describe("createRoleAnalyzer", () => {
 
   it("returns error on invalid JSON response", async () => {
     await mockComplete({ content: [{ type: "text", text: "not json" }] });
-    const analyzer = createRoleAnalyzer(
-      config,
-      makeAnalyzerConfig(),
-      modelClient,
-    );
-    const result = await analyzer(["item"], "/repo", "", "");
+    const result = await createTestAnalyzer()(["item"], "/repo", "", "");
     expect(result.error).toContain("无法解析");
   });
 
   it("returns error on empty response content", async () => {
     await mockComplete({ content: [] });
-    const analyzer = createRoleAnalyzer(
-      config,
-      makeAnalyzerConfig(),
-      modelClient,
-    );
-    const result = await analyzer(["item"], "/repo", "", "");
+    const result = await createTestAnalyzer()(["item"], "/repo", "", "");
     expect(result.error).toContain("空内容");
   });
 
   it("returns error when the model call throws", async () => {
     completeModel.mockRejectedValue(new Error("network error"));
-    const analyzer = createRoleAnalyzer(
-      config,
-      makeAnalyzerConfig(),
-      modelClient,
-    );
-    const result = await analyzer(["item"], "/repo", "", "");
+    const result = await createTestAnalyzer()(["item"], "/repo", "", "");
     expect(result.error).toContain("调用失败");
   });
 
-  it("handles model error responses", async () => {
-    await mockComplete({
-      content: [],
-      stopReason: "error",
-      errorMessage: "rate limit exceeded",
-    });
-    const analyzer = createRoleAnalyzer(
-      config,
+  it("surfaces security-audit API failures", async () => {
+    const { modelRunner } = createFailedSecurityAuditRunner(
+      "rate limit exceeded",
+    );
+    const result = await createTestAnalyzer(
       makeAnalyzerConfig(),
       modelClient,
-    );
-    const result = await analyzer(["item"], "/repo", "", "");
+      modelRunner,
+    )(["item"], "/repo", "", "");
     expect(result.error).toContain("rate limit exceeded");
   });
 
-  it("captures cost from response usage", async () => {
+  it("captures cost and the selected security-audit model", async () => {
     await mockComplete({
       content: [
         {
@@ -238,13 +330,9 @@ describe("createRoleAnalyzer", () => {
       ],
       usage: { cost: { total: 0.005 } },
     });
-    const analyzer = createRoleAnalyzer(
-      config,
-      makeAnalyzerConfig(),
-      modelClient,
-    );
-    const result = await analyzer(["item"], "/repo", "", "");
+    const result = await createTestAnalyzer()(["item"], "/repo", "", "");
     expect(result.cost).toBe(0.005);
+    expect(result.modelUsed).toBe("security/audit");
   });
 
   it("extracts text from non-text content types", async () => {
@@ -259,16 +347,11 @@ describe("createRoleAnalyzer", () => {
         },
       ],
     });
-    const analyzer = createRoleAnalyzer(
-      config,
-      makeAnalyzerConfig(),
-      modelClient,
-    );
-    const result = await analyzer(["item"], "/repo", "", "");
+    const result = await createTestAnalyzer()(["item"], "/repo", "", "");
     expect(result.result?.suggestions).toHaveLength(1);
   });
 
-  it("maps config.professorThinking to reasoningEffort", async () => {
+  it("uses the selected security-audit candidate thinking", async () => {
     await mockComplete({
       content: [
         {
@@ -277,63 +360,85 @@ describe("createRoleAnalyzer", () => {
         },
       ],
     });
-    const analyzer = createRoleAnalyzer(
-      config,
-      makeAnalyzerConfig(),
-      modelClient,
-    );
-    await analyzer(["item"], "/repo", "", "");
+    await createTestAnalyzer()(["item"], "/repo", "", "");
 
-    const options = completeModel.mock.calls.at(-1)?.[2] as {
-      reasoningEffort?: string;
-    };
-    expect(options.reasoningEffort).toBe("max");
-  });
-
-  it("omits reasoningEffort when roleConfig disables thinking", async () => {
-    await mockComplete({
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({ suggestions: [], summary: "ok" }),
-        },
-      ],
+    expect(completeModel.mock.calls.at(-1)?.[2]).toEqual({
+      reasoningEffort: "max",
     });
-    const analyzer = createRoleAnalyzer(
-      config,
-      makeAnalyzerConfig({ thinking: "off" }),
-      modelClient,
-    );
-    await analyzer(["item"], "/repo", "", "");
-
-    const options = completeModel.mock.calls.at(-1)?.[2] as {
-      reasoningEffort?: string;
-    };
-    expect(options.reasoningEffort).toBeUndefined();
   });
 });
 
 describe("createMerger", () => {
-  it("returns error when model format is invalid", async () => {
-    const badConfig = { ...config, professorModel: "invalid" };
-    const merger = createMerger(badConfig, modelClient);
-    const result = await merger({
+  it("returns a clear error without calling a model when security-audit fails", async () => {
+    const { modelRunner, run } = createFailedSecurityAuditRunner(
+      "no usable candidate for role 'security-audit'",
+    );
+    const result = await createTestMerger(
+      modelClient,
+      modelRunner,
+    )({
       current: "规则1",
       operations: ["新规则"],
     });
-    expect(result.error).toContain("professorModel 格式无效");
+
+    expect(run).toHaveBeenCalledWith(
+      "security-audit",
+      modelClient,
+      expect.any(Function),
+    );
+    expect(result.error).toContain("no usable candidate");
+    expect(completeModel).not.toHaveBeenCalled();
   });
 
-  it("returns error when model is unavailable", async () => {
-    const merger = createMerger(config, {
-      ...modelClient,
-      find: resolveModelNotFound,
-    });
-    const result = await merger({
+  it("reports an unexpected security-audit failure policy", async () => {
+    const { modelRunner } = createFailedSecurityAuditRunner(
+      "no usable candidate",
+      "skip",
+    );
+    const result = await createTestMerger(
+      modelClient,
+      modelRunner,
+    )({
       current: "规则1",
       operations: ["新规则"],
     });
-    expect(result.error).toContain("未找到合并模型");
+
+    expect(result.error).toBe(
+      "合并模型策略错误：security-audit 需要 error-no-write，实际为 skip",
+    );
+  });
+
+  it("uses the selected security-audit candidate thinking", async () => {
+    await mockComplete({ content: [{ type: "text", text: "merged" }] });
+    const { modelRunner } = createSuccessfulSecurityAuditRunner("off");
+    const result = await createTestMerger(
+      modelClient,
+      modelRunner,
+    )({
+      current: "规则1",
+      operations: ["新规则"],
+    });
+
+    expect(result.mergedText).toBe("merged");
+    expect(completeModel.mock.calls.at(-1)?.[2]).toEqual({});
+  });
+
+  it.each([
+    "length",
+    "toolUse",
+  ] as const)("rejects a non-stop merger response: %s", async (stopReason) => {
+    await mockComplete({
+      stopReason,
+      content: [{ type: "text", text: "merged" }],
+    });
+    const { modelRunner } = createSuccessfulSecurityAuditRunner("off");
+    const merger = createTestMerger(modelClient, modelRunner);
+
+    await expect(
+      merger({ current: "规则1", operations: ["新规则"] }),
+    ).resolves.toEqual({
+      error: `合并模型返回了非完整响应（${stopReason}）`,
+    });
   });
 
   it("merges string operations", async () => {
@@ -345,8 +450,7 @@ describe("createMerger", () => {
       } as never);
     });
 
-    const merger = createMerger(config, modelClient);
-    const result = await merger({
+    const result = await createTestMerger()({
       current: "规则1\n规则2",
       operations: ["新增规则"],
     });
@@ -383,8 +487,7 @@ describe("createMerger", () => {
       },
     ];
 
-    const merger = createMerger(config, modelClient);
-    const result = await merger({
+    const result = await createTestMerger()({
       current: "规则A\n规则B\n规则C",
       operations: suggestions,
     });
@@ -404,29 +507,9 @@ describe("createMerger", () => {
     );
   });
 
-  it("auto-detects the chief path", async () => {
-    let capturedContext: unknown;
-    completeModel.mockImplementation((_model, context) => {
-      capturedContext = context;
-      return Promise.resolve({
-        content: [{ type: "text", text: "merged" }],
-      } as never);
-    });
-
-    const merger = createMerger(config, modelClient);
-    await merger({
-      current: "rule",
-      operations: [{ type: "add", rule: "x", reason: "r" }],
-    });
-
-    const context = capturedContext as { systemPrompt: string };
-    expect(context.systemPrompt).toContain("审判长");
-  });
-
   it("returns error on empty response", async () => {
     await mockComplete({ content: [] });
-    const merger = createMerger(config, modelClient);
-    const result = await merger({
+    const result = await createTestMerger()({
       current: "规则1",
       operations: ["新规则"],
     });
@@ -435,8 +518,7 @@ describe("createMerger", () => {
 
   it("returns error when the model call throws", async () => {
     completeModel.mockRejectedValue(new Error("timeout"));
-    const merger = createMerger(config, modelClient);
-    const result = await merger({
+    const result = await createTestMerger()({
       current: "规则1",
       operations: ["新规则"],
     });
@@ -457,8 +539,7 @@ describe("createMerger", () => {
       { type: "unknown_type" } as unknown as ChiefSuggestionItem,
     ];
 
-    const merger = createMerger(config, modelClient);
-    await merger({ current: "规则1", operations: suggestions });
+    await createTestMerger()({ current: "规则1", operations: suggestions });
 
     const context = capturedContext as {
       messages: Array<{ content: string }>;
@@ -468,17 +549,17 @@ describe("createMerger", () => {
     expect(message).toContain("[未知]");
   });
 
-  it("captures cost from merge response", async () => {
+  it("captures cost and the selected security-audit model", async () => {
     await mockComplete({
       content: [{ type: "text", text: "merged" }],
       usage: { cost: { total: 0.003 } },
     });
-    const merger = createMerger(config, modelClient);
-    const result = await merger({
+    const result = await createTestMerger()({
       current: "规则1",
       operations: ["新规则"],
     });
     expect(result.cost).toBe(0.003);
+    expect(result.modelUsed).toBe("security/audit");
     expect(result.mergedText).toBe("merged");
   });
 });

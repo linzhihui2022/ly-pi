@@ -1,9 +1,9 @@
-import type { AnalyzerConfig } from "./pipeline";
+import type { AnalyzerConfig, SecurityAuditModelRunner } from "./pipeline";
 import {
   createRoleAnalyzer,
   createMerger as createSharedMerger,
 } from "./pipeline";
-import type { Config, ModelClient } from "./types";
+import type { ModelClient } from "./types";
 
 // ---- types ----
 
@@ -25,12 +25,14 @@ export interface ChiefResult {
   suggestion?: ChiefSuggestion;
   error?: string;
   cost?: number;
+  modelUsed?: string;
 }
 
 export interface ChiefMergeResult {
   mergedText?: string;
   error?: string;
   cost?: number;
+  modelUsed?: string;
 }
 
 export type ChiefFn = (
@@ -104,8 +106,15 @@ export const chiefAnalyzerConfig: AnalyzerConfig<
 
 // ---- createChief (thin wrapper) ----
 
-export function createChief(config: Config, modelClient: ModelClient): ChiefFn {
-  const analyzer = createRoleAnalyzer(config, chiefAnalyzerConfig, modelClient);
+export function createChief(
+  modelClient: ModelClient,
+  modelRunner: SecurityAuditModelRunner,
+): ChiefFn {
+  const analyzer = createRoleAnalyzer(
+    chiefAnalyzerConfig,
+    modelClient,
+    modelRunner,
+  );
 
   return async function analyze(
     currentJudgeMd: string,
@@ -128,6 +137,7 @@ export function createChief(config: Config, modelClient: ModelClient): ChiefFn {
       suggestion: result.result,
       error: result.error,
       cost: result.cost,
+      modelUsed: result.modelUsed,
     };
   };
 }
@@ -135,10 +145,10 @@ export function createChief(config: Config, modelClient: ModelClient): ChiefFn {
 // ---- createChiefMerger (thin wrapper) ----
 
 export function createChiefMerger(
-  config: Config,
   modelClient: ModelClient,
+  modelRunner: SecurityAuditModelRunner,
 ): ChiefMergerFn {
-  const sharedMerger = createSharedMerger(config, modelClient);
+  const sharedMerger = createSharedMerger(modelClient, modelRunner);
 
   return async function merge(
     currentJudgeMd: string,
@@ -152,6 +162,7 @@ export function createChiefMerger(
       mergedText: result.mergedText,
       error: result.error,
       cost: result.cost,
+      modelUsed: result.modelUsed,
     };
   };
 }
