@@ -1,22 +1,21 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildAdvocatePrompt, createAdvocate } from "./professor";
+import type { DirectModelBinding } from "./direct-model";
+import { buildAdvocatePrompt, createAdvocate, createMerger } from "./professor";
 import type { DeniedThenApproved } from "./stats";
 import type { ModelClient } from "./types";
 
-function makeModel(
-  overrides: Partial<{ id: string; provider: string }> = {},
-): Model<Api> {
+function makeModel(): Model<Api> {
   return {
-    id: overrides.id ?? "audit-model",
-    provider: overrides.provider ?? "test",
-    name: "Test Model",
+    id: "gpt-5.6-sol",
+    provider: "openai-codex",
+    name: "Sol",
     api: "openai-completions",
     input: ["text"],
     contextWindow: 128000,
     maxTokens: 4096,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    reasoning: false,
+    reasoning: true,
   } as Model<Api>;
 }
 
@@ -33,258 +32,146 @@ function makeCase(
 }
 
 const JUDGE_PROMPT = "你是一名编码助手的安全门禁。评估以下工具调用。";
-
-const resolveModelOk = vi.fn(() => makeModel());
-const completeModel = vi.fn<ModelClient["complete"]>();
-const modelClient: ModelClient = {
-  find: resolveModelOk,
-  complete: completeModel,
+const auditBinding: DirectModelBinding = {
+  model: "openai-codex/gpt-5.6-sol",
+  thinking: "high",
 };
-const securityAuditCandidate = {
-  slot: "primary",
-  model: "security/audit",
-  label: "Security audit",
-  thinking: "max" as const,
-  source: "manifest" as const,
-};
-const run = vi.fn(
-  async (
-    _role: string,
-    _models: ModelClient,
-    operation: (
-      model: Model<Api>,
-      candidate: typeof securityAuditCandidate,
-    ) => Promise<unknown>,
-  ) => {
-    const value = await operation(makeModel(), securityAuditCandidate);
-    return {
-      status: "success" as const,
-      value:
-        value && typeof value === "object"
-          ? { stopReason: "stop", ...value }
-          : value,
-      candidate: securityAuditCandidate,
-    };
-  },
-);
-const modelRunner = { run } as never;
-
-function createFailedSecurityAuditRunner(reason: string) {
-  return {
-    run: vi.fn(async () => ({
-      status: "failure" as const,
-      failurePolicy: "error-no-write" as const,
-      reason,
-    })),
-  } as never;
-}
+const complete = vi.fn<ModelClient["complete"]>();
+const find = vi.fn<ModelClient["find"]>(() => makeModel());
+const modelClient: ModelClient = { find, complete };
 
 beforeEach(() => {
-  completeModel.mockReset();
-  resolveModelOk.mockClear();
-  run.mockClear();
+  complete.mockReset();
+  find.mockReset();
+  find.mockReturnValue(makeModel());
 });
 
-async function mockComplete(value: unknown): Promise<void> {
-  completeModel.mockResolvedValue(value as never);
+function response(text: string) {
+  return { stopReason: "stop", content: [{ type: "text", text }] } as never;
 }
 
 describe("buildAdvocatePrompt", () => {
-  it("includes all cases with their details", () => {
-    const cases: DeniedThenApproved[] = [
-      {
-        toolName: "bash",
-        value: "git commit -m 'feat: add x'",
-        judgeReason: "may modify repo",
-        context: [{ role: "assistant", content: "let me commit the changes" }],
-      },
-      {
-        toolName: "bash",
-        value: "ls /tmp",
-        judgeReason: "accessing outside project dir",
-        context: [],
-      },
-    ];
-
-    const prompt = buildAdvocatePrompt(cases, "", JUDGE_PROMPT, "/my-project");
+  it("includes cases, context, prompt, and numbered current rules", () => {
+    const prompt = buildAdvocatePrompt(
+      [
+        makeCase({
+          context: [
+            { role: "assistant", content: "let me commit the changes" },
+          ],
+        }),
+        makeCase({ value: "ls /tmp", context: [] }),
+      ],
+      "规则一\n规则二",
+      JUDGE_PROMPT,
+      "/my-project",
+    );
 
     expect(prompt).toContain("### 案例 1");
-    expect(prompt).toContain("git commit");
-    expect(prompt).toContain("may modify repo");
     expect(prompt).toContain("let me commit the changes");
     expect(prompt).toContain("### 案例 2");
-    expect(prompt).toContain("ls /tmp");
-    expect(prompt).toContain("accessing outside project dir");
     expect(prompt).toContain("（无上下文）");
+    expect(prompt).toContain("1. 规则一");
+    expect(prompt).toContain("2. 规则二");
+    expect(prompt).toContain(JUDGE_PROMPT);
     expect(prompt).toContain("/my-project");
   });
 
-  it("includes judge prompt in the output", () => {
-    const cases = [makeCase()];
-    const prompt = buildAdvocatePrompt(cases, "", JUDGE_PROMPT, "/repo");
-    expect(prompt).toContain("## 法官的原始判断提示词");
-    expect(prompt).toContain(JUDGE_PROMPT);
-  });
-
-  it("shows empty placeholder when no current judgeMd", () => {
-    const cases = [makeCase()];
-    const prompt = buildAdvocatePrompt(cases, "", JUDGE_PROMPT, "/repo");
-    expect(prompt).toContain("（空，尚未编写项目级判断规则）");
-  });
-
-  it("includes current JUDGE.md content with line numbers", () => {
-    const cases = [makeCase()];
+  it("truncates long context messages", () => {
     const prompt = buildAdvocatePrompt(
-      cases,
-      "规则一\n规则二",
+      [makeCase({ context: [{ role: "user", content: "a".repeat(300) }] })],
+      "",
       JUDGE_PROMPT,
       "/repo",
     );
-    expect(prompt).toContain("1. 规则一");
-    expect(prompt).toContain("2. 规则二");
-  });
 
-  it("truncates long context messages to 200 chars", () => {
-    const longContent = "a".repeat(300);
-    const cases: DeniedThenApproved[] = [
-      {
-        toolName: "bash",
-        value: "echo test",
-        judgeReason: "unknown",
-        context: [{ role: "user", content: longContent }],
-      },
-    ];
-    const prompt = buildAdvocatePrompt(cases, "", JUDGE_PROMPT, "/repo");
-    const lines = prompt.split("\n");
-    const contextLine = lines.find((l) => l.includes("a".repeat(200)));
-    expect(contextLine).toBeDefined();
-    expect(contextLine?.length).toBeLessThanOrEqual(209);
+    expect(prompt).toContain("a".repeat(200));
+    expect(prompt).not.toContain("a".repeat(201));
   });
 });
 
 describe("createAdvocate", () => {
-  it("returns error when no cases", async () => {
-    const advocate = createAdvocate(modelClient, modelRunner);
-    const result = await advocate([], "/repo", "", JUDGE_PROMPT);
-    expect(result.suggestion).toBeUndefined();
-    expect(result.error).toBe("当前会话没有法官误判案例");
-    expect(run).not.toHaveBeenCalled();
-  });
+  it("returns the empty-case error without calling Sol", async () => {
+    const advocate = createAdvocate(modelClient, auditBinding);
 
-  it("requests security-audit and returns parsed add/remove suggestion", async () => {
-    await mockComplete({
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            add: [{ rule: "git 操作应判定为安全", reason: "被误判 5 次" }],
-            remove: ["过时规则"],
-          }),
-        },
-      ],
+    await expect(advocate([], "/repo", "", JUDGE_PROMPT)).resolves.toEqual({
+      error: "当前会话没有法官误判案例",
     });
+    expect(find).not.toHaveBeenCalled();
+  });
 
-    const advocate = createAdvocate(modelClient, modelRunner);
-    const result = await advocate([makeCase()], "/repo", "", JUDGE_PROMPT);
-
-    expect(run).toHaveBeenCalledWith(
-      "security-audit",
-      modelClient,
-      expect.any(Function),
+  it("returns parsed suggestions from the Sol Direct Model Binding", async () => {
+    complete.mockResolvedValue(
+      response(
+        JSON.stringify({
+          add: [{ rule: "允许 git status", reason: "被误判" }],
+          remove: ["过时规则"],
+        }),
+      ),
     );
-    expect(result.error).toBeUndefined();
-    expect(result.suggestion).toEqual({
-      add: [{ rule: "git 操作应判定为安全", reason: "被误判 5 次" }],
-      remove: ["过时规则"],
+
+    await expect(
+      createAdvocate(modelClient, auditBinding)(
+        [makeCase()],
+        "/repo",
+        "",
+        JUDGE_PROMPT,
+      ),
+    ).resolves.toEqual({
+      suggestion: {
+        add: [{ rule: "允许 git status", reason: "被误判" }],
+        remove: ["过时规则"],
+      },
+      error: undefined,
+      cost: undefined,
+      modelUsed: "openai-codex/gpt-5.6-sol",
     });
-    expect(result.modelUsed).toBe("security/audit");
+    expect(complete.mock.calls[0]?.[2]).toEqual({ reasoningEffort: "high" });
   });
 
-  it("returns error on invalid JSON response", async () => {
-    await mockComplete({ content: [{ type: "text", text: "not json" }] });
-    const result = await createAdvocate(modelClient, modelRunner)(
-      [makeCase()],
-      "/repo",
-      "",
-      JUDGE_PROMPT,
-    );
-    expect(result.suggestion).toBeUndefined();
-    expect(result.error).toContain("无法解析");
+  it.each([
+    ["invalid JSON", "not json", "无法解析"],
+    ["incomplete JSON", JSON.stringify({ add: [] }), "无法解析"],
+  ])("returns an error for %s", async (_label, text, expected) => {
+    complete.mockResolvedValue(response(text));
+
+    await expect(
+      createAdvocate(modelClient, auditBinding)(
+        [makeCase()],
+        "/repo",
+        "",
+        JUDGE_PROMPT,
+      ),
+    ).resolves.toMatchObject({ error: expect.stringContaining(expected) });
   });
 
-  it("returns error on JSON with missing fields", async () => {
-    await mockComplete({
-      content: [{ type: "text", text: JSON.stringify({ add: [] }) }],
+  it("does not produce a suggestion when Sol is unavailable", async () => {
+    find.mockReturnValue(undefined);
+
+    await expect(
+      createAdvocate(modelClient, auditBinding)(
+        [makeCase()],
+        "/repo",
+        "",
+        JUDGE_PROMPT,
+      ),
+    ).resolves.toEqual({
+      suggestion: undefined,
+      error: "advocate 模型调用失败: 未找到可用的审计模型",
+      cost: undefined,
+      modelUsed: undefined,
     });
-    const result = await createAdvocate(modelClient, modelRunner)(
-      [makeCase()],
-      "/repo",
-      "",
-      JUDGE_PROMPT,
-    );
-    expect(result.suggestion).toBeUndefined();
-    expect(result.error).toContain("无法解析");
   });
 
-  it("returns a clear error when security-audit is unavailable", async () => {
-    const result = await createAdvocate(
-      modelClient,
-      createFailedSecurityAuditRunner("no usable candidate"),
-    )([makeCase()], "/repo", "", JUDGE_PROMPT);
+  it("keeps merger failures from producing merged text", async () => {
+    find.mockReturnValue(undefined);
 
-    expect(result.suggestion).toBeUndefined();
-    expect(result.error).toContain("no usable candidate");
-    expect(completeModel).not.toHaveBeenCalled();
-  });
-
-  it("returns error when the model call fails", async () => {
-    completeModel.mockRejectedValue(new Error("network error"));
-    const result = await createAdvocate(modelClient, modelRunner)(
-      [makeCase()],
-      "/repo",
-      "",
-      JUDGE_PROMPT,
-    );
-    expect(result.suggestion).toBeUndefined();
-    expect(result.error).toContain("advocate 模型调用失败");
-  });
-
-  it("returns error when the model response has no text", async () => {
-    await mockComplete({ content: [] });
-    const result = await createAdvocate(modelClient, modelRunner)(
-      [makeCase()],
-      "/repo",
-      "",
-      JUDGE_PROMPT,
-    );
-    expect(result.suggestion).toBeUndefined();
-    expect(result.error).toContain("空内容");
-  });
-
-  it("parses JSON wrapped in a markdown code fence", async () => {
-    await mockComplete({
-      content: [
-        {
-          type: "text",
-          text:
-            "```json\n" +
-            JSON.stringify({
-              add: [{ rule: "规则", reason: "原因" }],
-              remove: [],
-            }) +
-            "\n```",
-        },
-      ],
-    });
-    const result = await createAdvocate(modelClient, modelRunner)(
-      [makeCase()],
-      "/repo",
-      "",
-      JUDGE_PROMPT,
-    );
-    expect(result.suggestion).toEqual({
-      add: [{ rule: "规则", reason: "原因" }],
-      remove: [],
+    await expect(
+      createMerger(modelClient, auditBinding)("规则", ["新规则"]),
+    ).resolves.toEqual({
+      mergedText: undefined,
+      error: "合并模型调用失败: 未找到可用的审计模型",
+      cost: undefined,
+      modelUsed: undefined,
     });
   });
 });

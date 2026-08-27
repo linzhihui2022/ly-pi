@@ -3,17 +3,6 @@ import { mkdir, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { BunFile } from "bun";
-import {
-  createModelPolicyRegistry,
-  type LocalModelOverride,
-  type ModelPolicyManifest,
-} from "../model-policy/registry";
-
-type CompiledModelPolicySettings = ReturnType<
-  ReturnType<typeof createModelPolicyRegistry>["compilePiSettings"]
->;
-
-let compiledModelPolicySettings: CompiledModelPolicySettings;
 
 // ── Staging ────────────────────────────────────────────────────────────────
 const STAGING = process.env.PI_STAGING_DIR ?? join(homedir(), ".pi");
@@ -103,19 +92,6 @@ const extensionDir = join(agentDir, "extensions", "ly-pi");
     process.exit(1);
   }
   console.log("Schema validation: OK");
-
-  const modelManifest = (await Bun.file(
-    "assets/config/model-policies.json",
-  ).json()) as ModelPolicyManifest;
-  const localOverridePath = join(extensionDir, "models.local.json");
-  const localOverride = existsSync(localOverridePath)
-    ? ((await Bun.file(localOverridePath).json()) as LocalModelOverride)
-    : undefined;
-  compiledModelPolicySettings = createModelPolicyRegistry(
-    modelManifest,
-    localOverride,
-  ).compilePiSettings();
-  console.log("Model policy schema validation: OK");
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -209,12 +185,12 @@ const configDir = "assets/config";
     "ly-pi",
     "my-tool-display.json",
   );
-  const modelPoliciesPath = join(extensionDir, "model-policies.json");
+  const retiredManifestPath = join(extensionDir, "model-policies.json");
   const files = [
     { path: extensionPath, snapshot: await snapshotFile(extensionPath) },
     {
-      path: modelPoliciesPath,
-      snapshot: await snapshotFile(modelPoliciesPath),
+      path: retiredManifestPath,
+      snapshot: await snapshotFile(retiredManifestPath),
     },
     {
       path: toolDisplayConfigPath,
@@ -244,10 +220,7 @@ const configDir = "assets/config";
 
   try {
     await writeAtomically(extensionPath, Bun.file("dist/index.js"));
-    await writeAtomically(
-      modelPoliciesPath,
-      Bun.file(join(configDir, "model-policies.json")),
-    );
+    await rm(retiredManifestPath, { force: true });
     await writeAtomically(
       closeWorkerPath,
       Bun.file("dist/my-worktree/close-worker-main.js"),
@@ -263,7 +236,7 @@ const configDir = "assets/config";
   }
 
   console.log("Extension: deployed");
-  console.log("Model policies: deployed");
+  console.log("Retired model manifest: removed");
   console.log("my-tool-display config: deployed");
 }
 
@@ -279,26 +252,19 @@ const configDir = "assets/config";
   } catch {
     /* first deploy */
   }
-  target = deepMerge(target, merged.settings);
-  target = deepMerge(target, compiledModelPolicySettings.settings);
+  const {
+    defaultModel: _defaultModel,
+    defaultProvider: _defaultProvider,
+    defaultThinkingLevel: _defaultThinkingLevel,
+    ...managedSettings
+  } = merged.settings as Record<string, unknown>;
+  const { agentOverrides: _agentOverrides, ...managedSubagents } =
+    merged.subagents as Record<string, unknown>;
+  target = deepMerge(target, managedSettings);
   target.subagents = deepMerge(
     (target.subagents as Record<string, unknown>) ?? {},
-    merged.subagents,
+    managedSubagents,
   );
-  const {
-    scout,
-    delegate,
-    "image-reader": imageReader,
-    "pr-comment-analyzer": prCommentAnalyzer,
-  } = compiledModelPolicySettings.subagents.agentOverrides;
-  target.subagents = deepMerge(target.subagents as Record<string, unknown>, {
-    agentOverrides: {
-      scout,
-      delegate,
-      "image-reader": imageReader,
-      "pr-comment-analyzer": prCommentAnalyzer,
-    },
-  });
   await write(settingsPath, `${JSON.stringify(target, null, 2)}\n`);
   console.log("Settings: deployed");
 

@@ -5,7 +5,6 @@ import myDiff from "./my-diff/index";
 import myHtml from "./my-html/index";
 import myHud from "./my-hud/index";
 import myLog from "./my-log/index";
-import myModelPolicy from "./my-model-policy/index";
 import myPermission from "./my-permission/index";
 import myReload from "./my-reload/index";
 import { scriptGuard } from "./my-script-guard/index";
@@ -20,7 +19,6 @@ export default async function (pi: ExtensionAPI): Promise<void> {
   createGuardHarness(pi, [cdGuard, scriptGuard]);
   myToolDisplay(pi);
   myLog(pi);
-  myModelPolicy(pi);
   await myPermission(pi);
   myReload(pi);
   myBack(pi);

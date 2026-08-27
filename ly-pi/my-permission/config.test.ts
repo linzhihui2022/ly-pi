@@ -5,8 +5,10 @@ describe("config", () => {
   it("has sensible defaults", () => {
     expect(config.defaultPolicy).toBe("allow");
     expect(config.judgeModel).toBe("openai-codex/gpt-5.6-luna");
-    expect(config.professorModel).toBe("openai-codex/gpt-5.6-sol");
-    expect(config.professorThinking).toBe("high");
+    expect(config.auditModel).toBe("openai-codex/gpt-5.6-sol");
+    expect(config.auditThinking).toBe("high");
+    expect(config).not.toHaveProperty("professorModel");
+    expect(config).not.toHaveProperty("professorThinking");
     expect(config.judgeTimeoutMs).toBe(8000);
     expect(config.childPolicy).toBe("deny-on-unsafe");
   });

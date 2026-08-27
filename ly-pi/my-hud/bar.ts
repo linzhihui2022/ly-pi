@@ -27,16 +27,8 @@ const GIT_STATUS_CACHE_TTL = 5000;
 const PR_CACHE_TTL = 5000;
 const DEFAULT_SETTINGS_PATH = join(homedir(), ".pi", "agent", "settings.json");
 
-export type ModelLabelResolver = (model: {
-  provider: string;
-  id: string;
-}) => string | undefined;
-
 export class Bar {
-  constructor(
-    private readonly settingsPath = DEFAULT_SETTINGS_PATH,
-    private readonly getModelLabel: ModelLabelResolver = () => undefined,
-  ) {}
+  constructor(private readonly settingsPath = DEFAULT_SETTINGS_PATH) {}
   private uiCtx: ExtensionUIContext | undefined;
   private ctx: ExtensionContext | undefined;
   private thinkingLevelFn: (() => string) | undefined;
@@ -227,8 +219,7 @@ export class Bar {
 
     const activeModel = this.ctx.model;
     const modelName = activeModel
-      ? (this.getModelLabel(activeModel) ??
-        `${activeModel.provider}/${activeModel.id}`)
+      ? `${activeModel.provider}/${activeModel.id}`
       : "no-model";
     const project = basename(this.ctx.cwd);
 

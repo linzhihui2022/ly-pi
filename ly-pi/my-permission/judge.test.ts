@@ -1,25 +1,15 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadModelPolicyRegistry } from "../model-policy/config";
-import {
-  createModelPolicyRegistry,
-  type ModelCandidate,
-  type ModelPolicyManifest,
-} from "../model-policy/registry";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createJudge } from "./judge";
-import type { Config, ModelClient } from "./types";
-
-vi.mock("../model-policy/config", () => ({
-  loadModelPolicyRegistry: vi.fn(),
-}));
+import type { Config, ModelClient, ToolInput } from "./types";
 
 function makeModel(
   overrides: Partial<{ id: string; provider: string }> = {},
 ): Model<Api> {
   return {
-    id: overrides.id ?? "test-model",
-    provider: overrides.provider ?? "test",
-    name: "Test Model",
+    id: overrides.id ?? "gpt-5.6-luna",
+    provider: overrides.provider ?? "openai-codex",
+    name: "Luna",
     api: "openai-completions",
     input: ["text"],
     contextWindow: 128000,
@@ -29,748 +19,254 @@ function makeModel(
   } as Model<Api>;
 }
 
-const resolvedModel = makeModel();
-
 const config: Config = {
   defaultPolicy: "ask",
-  judgeModel: "test/security-judge",
-  professorModel: "test/professor",
-  professorThinking: "off",
+  judgeModel: "openai-codex/gpt-5.6-luna",
+  auditModel: "openai-codex/gpt-5.6-sol",
+  auditThinking: "high",
   judgeTimeoutMs: 5000,
   childPolicy: "deny-on-unsafe",
   permission: {},
 };
+const prompt =
+  '工作目录：{{cwd}}\n工具：{{toolName}}\n输入：{{toolInput}}\n\n只回复 JSON：{\n  "safe": boolean,\n  "score": number,\n  "reason": "...",\n  "toolFor": "..."\n}';
+const input: ToolInput = { toolName: "read", value: "src/main.ts", paths: [] };
 
-const JUDGE_PROMPT =
-  '工作目录：{{cwd}}\n工具：{{toolName}}\n输入：{{toolInput}}\n\n只回复 JSON：{\n  "safe": boolean,\n  "score": number,\n  "reason": "...",\n  "toolFor": "..."\n}\n\n判断标准：只读操作安全，破坏性操作不安全。';
+function failure(reason: string) {
+  return { safe: false, reason, toolFor: "read src/main.ts" };
+}
 
-const input = { toolName: "read", value: "src/main.ts", paths: [] };
-const resolveModelOk = () => resolvedModel;
-const resolveFnOk = vi.fn(resolveModelOk);
-const completeModel = vi.fn<ModelClient["complete"]>();
-const modelClient: ModelClient = { find: resolveFnOk, complete: completeModel };
+function createClient(model = makeModel()) {
+  const find = vi.fn(() => model);
+  const complete = vi.fn<ModelClient["complete"]>();
+  return {
+    client: { find, complete } as ModelClient,
+    find,
+    complete,
+  };
+}
 
-function createSuccessfulModelRunner(
-  model = resolvedModel,
-  candidateModel: ModelCandidate["model"] = `${model.provider}/${model.id}` as ModelCandidate["model"],
-  candidateThinking: ModelCandidate["thinking"] = "off",
+function createTestJudge(
+  client: ModelClient,
+  overrides: Partial<Config> = {},
+  localJudge?: string,
 ) {
-  const run = vi.fn(
-    async (
-      _role: string,
-      _models: ModelClient,
-      operation: (
-        model: Model<Api>,
-        candidate: ModelCandidate,
-      ) => Promise<unknown>,
-    ) => {
-      const candidate = {
-        slot: "primary",
-        model: candidateModel,
-        label: "Security judge",
-        thinking: candidateThinking,
-        source: "manifest" as const,
-      };
-      const value = await operation(model, candidate);
-      return {
-        status: "success" as const,
-        value:
-          value && typeof value === "object"
-            ? { stopReason: "stop", ...value }
-            : value,
-        candidate,
-      };
+  return createJudge(
+    { ...config, ...overrides },
+    {
+      judgePrompt: prompt,
+      localJudge,
+      modelClient: client,
     },
   );
-  return { modelRunner: { run } as never, run };
 }
 
-function createSecurityJudgeRunner(candidates: readonly ModelCandidate[]) {
-  const manifest: ModelPolicyManifest = {
-    version: 1,
-    policies: {
-      "vision-test": {
-        candidates: [
-          {
-            slot: "primary",
-            model: "test/vision",
-            label: "Vision test model",
-            thinking: "off",
-          },
-        ],
-        capabilities: { input: ["text", "image"], minContextWindow: 128000 },
-        failurePolicy: "error",
-        security: false,
+function successfulResponse(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    stopReason: "stop",
+    content: [
+      {
+        type: "text",
+        text: '{"safe":true,"score":8,"reason":"read only","toolFor":"read file"}',
       },
-      "security-judge-test": {
-        candidates,
-        capabilities: { input: ["text"], minContextWindow: 128000 },
-        failurePolicy: "confirm",
-        security: true,
-      },
-    },
-    roles: {
-      primary: "security-judge-test",
-      fast: "security-judge-test",
-      standard: "security-judge-test",
-      deep: "security-judge-test",
-      vision: "vision-test",
-      "security-judge": "security-judge-test",
-      "security-audit": "security-judge-test",
-    },
-    deployment: {
-      primary: "primary",
-      agents: {
-        scout: "fast",
-        delegate: "standard",
-        "image-reader": "vision",
-        "pr-code-reviewer": "standard",
-        "pr-comment-analyzer": "standard",
-        "pr-silent-failure-hunter": "standard",
-        "pr-test-analyzer": "standard",
-        "pr-type-design-analyzer": "standard",
-      },
-    },
+    ],
+    ...overrides,
   };
-  return createModelPolicyRegistry(manifest);
 }
 
-const defaultModelRunner = createSuccessfulModelRunner();
-const judgeDeps = {
-  judgePrompt: JUDGE_PROMPT,
-  modelClient,
-  modelRunner: defaultModelRunner.modelRunner,
-};
-
-beforeEach(() => {
-  completeModel.mockReset();
-  defaultModelRunner.run.mockClear();
-  resolveFnOk.mockClear();
-  vi.mocked(loadModelPolicyRegistry).mockReset();
+afterEach(() => {
+  vi.useRealTimers();
 });
 
-function failureReason(
-  input: { toolName: string; value: string },
-  reason: string,
-) {
-  return {
-    safe: false,
-    reason,
-    toolFor: `${input.toolName} ${input.value}`,
-  };
-}
-
-async function mockComplete(value: unknown): Promise<void> {
-  completeModel.mockResolvedValue(value as never);
-}
-
 describe("createJudge", () => {
-  it("returns safe result when model says safe", async () => {
-    completeModel.mockResolvedValue({
-      content: [
-        {
-          type: "text",
-          text: '{"safe":true,"score":8,"reason":"read only","toolFor":"read file"}',
-        },
-      ],
-    } as never);
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
+  it("uses the configured Luna Direct Model Binding without reasoning effort", async () => {
+    const luna = makeModel();
+    const { client, find, complete } = createClient(luna);
+    complete.mockResolvedValue(successfulResponse() as never);
+
+    const result = await createTestJudge(client)(input, "/repo");
+
     expect(result).toEqual({
       safe: true,
       score: 8,
       reason: "read only",
       toolFor: "read file",
-      modelUsed: "test/test-model",
+      modelUsed: "openai-codex/gpt-5.6-luna",
     });
+    expect(find).toHaveBeenCalledWith("openai-codex", "gpt-5.6-luna");
+    expect(complete).toHaveBeenCalledWith(
+      luna,
+      expect.any(Object),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(complete.mock.calls[0]?.[2]).not.toHaveProperty("reasoningEffort");
   });
 
-  it("requests security-judge through the model runner", async () => {
-    completeModel.mockResolvedValue({
-      content: [
-        {
-          type: "text",
-          text: '{"safe":true,"score":8,"reason":"read only","toolFor":"read file"}',
-        },
-      ],
-    } as never);
-    const { modelRunner, run } = createSuccessfulModelRunner(
-      resolvedModel,
-      "test/security-judge",
-    );
-    const judge = createJudge(config, { ...judgeDeps, modelRunner });
+  it("fails closed when the Luna binding is unavailable", async () => {
+    const { client, complete } = createClient();
+    client.find = vi.fn(() => undefined);
 
-    await judge(input, "/repo");
-
-    expect(run).toHaveBeenCalledWith(
-      "security-judge",
-      modelClient,
-      expect.any(Function),
+    await expect(createTestJudge(client)(input, "/repo")).resolves.toEqual(
+      failure("未找到可用的法官模型，请手动确认"),
     );
+    expect(complete).not.toHaveBeenCalled();
   });
 
-  it("fails closed when security-judge candidates are exhausted", async () => {
-    const judge = createJudge(config, {
-      ...judgeDeps,
-      modelClient: { ...modelClient, find: () => undefined },
-      modelRunner: createSecurityJudgeRunner([
-        {
-          slot: "primary",
-          model: "test/security-judge",
-          label: "Security judge",
-          thinking: "off",
-        },
-      ]),
-    });
+  it("fails closed when the judge prompt is unavailable", async () => {
+    const { client, find } = createClient();
+    const judge = createJudge(config, { modelClient: client });
 
     await expect(judge(input, "/repo")).resolves.toEqual(
-      failureReason(input, "未找到可用的法官模型，请手动确认"),
+      failure("法官提示词未加载，请手动确认"),
     );
-    expect(completeModel).not.toHaveBeenCalled();
+    expect(find).not.toHaveBeenCalled();
   });
 
-  it("reports an unexpected security-judge failure policy", async () => {
-    const modelRunner = {
-      run: vi.fn(async () => ({
-        status: "failure" as const,
-        failurePolicy: "error" as const,
-        reason: "no usable candidate",
-      })),
-    } as never;
-    const judge = createJudge(config, { ...judgeDeps, modelRunner });
-
-    await expect(judge(input, "/repo")).resolves.toEqual(
-      failureReason(
-        input,
-        "法官模型策略配置错误：security-judge 需要 confirm，实际为 error",
-      ),
-    );
-  });
-
-  it("reports a security-judge policy loading failure", async () => {
-    vi.mocked(loadModelPolicyRegistry).mockImplementation(() => {
-      throw new Error("invalid manifest");
-    });
-    const judge = createJudge(config, {
-      judgePrompt: JUDGE_PROMPT,
-      modelClient,
-    });
-
-    await expect(judge(input, "/repo")).resolves.toEqual(
-      failureReason(input, "法官模型策略不可用: invalid manifest，请手动确认"),
-    );
-    expect(completeModel).not.toHaveBeenCalled();
-  });
-
-  it("uses the next security-judge candidate after rate limiting", async () => {
-    const primary = makeModel({ id: "primary", provider: "test" });
-    const fallback = makeModel({ id: "fallback", provider: "test" });
-    const complete = vi
-      .fn<ModelClient["complete"]>()
-      .mockResolvedValueOnce({
-        content: [],
-        stopReason: "error",
-        errorMessage: "rate limited",
-      } as never)
-      .mockResolvedValueOnce({
-        content: [
-          {
-            type: "text",
-            text: '{"safe":true,"score":9,"reason":"fallback ok","toolFor":"read"}',
-          },
-        ],
-        stopReason: "stop",
-      } as never);
-    const securityModelClient: ModelClient = {
-      find: (_provider, id) =>
-        id === "primary" ? primary : id === "fallback" ? fallback : undefined,
-      complete,
-    };
-    const judge = createJudge(config, {
-      judgePrompt: JUDGE_PROMPT,
-      modelClient: securityModelClient,
-      modelRunner: createSecurityJudgeRunner([
-        {
-          slot: "primary",
-          model: "test/primary",
-          label: "Primary security judge",
-          thinking: "off",
-        },
-        {
-          slot: "fallback",
-          model: "test/fallback",
-          label: "Fallback security judge",
-          thinking: "off",
-        },
-      ]),
-    });
-
-    await expect(judge(input, "/repo")).resolves.toEqual({
-      safe: true,
-      score: 9,
-      reason: "fallback ok",
-      toolFor: "read",
-      modelUsed: "test/fallback",
-    });
-    expect(complete.mock.calls.map(([model]) => model.id)).toEqual([
-      "primary",
-      "fallback",
-    ]);
-  });
-
-  it("reports the final failure after a timed-out candidate", async () => {
-    const primary = makeModel({ id: "primary", provider: "test" });
-    const fallback = makeModel({ id: "fallback", provider: "test" });
-    const complete = vi
-      .fn<ModelClient["complete"]>()
-      .mockImplementation((model, _context, options) => {
-        if (model.id === "primary") {
-          return new Promise<never>((_resolve, reject) => {
-            options?.signal?.addEventListener(
-              "abort",
-              () => reject(new Error("aborted")),
-              { once: true },
-            );
-          });
-        }
-        return Promise.reject(new Error("fallback unavailable"));
-      });
-    const securityModelClient: ModelClient = {
-      find: (_provider, id) =>
-        id === "primary" ? primary : id === "fallback" ? fallback : undefined,
-      complete,
-    };
-    const judge = createJudge(
-      { ...config, judgeTimeoutMs: 1 },
-      {
-        judgePrompt: JUDGE_PROMPT,
-        modelClient: securityModelClient,
-        modelRunner: createSecurityJudgeRunner([
-          {
-            slot: "primary",
-            model: "test/primary",
-            label: "Primary security judge",
-            thinking: "off",
-          },
-          {
-            slot: "fallback",
-            model: "test/fallback",
-            label: "Fallback security judge",
-            thinking: "off",
-          },
-        ]),
-      },
-    );
-
-    await expect(judge(input, "/repo")).resolves.toEqual(
-      failureReason(input, "法官模型调用失败: fallback unavailable"),
-    );
-  });
-
-  it("rejects a judge response that resolves after the configured timeout", async () => {
-    vi.useFakeTimers();
-    try {
-      let lateResponseProduced = false;
-      const complete = vi.fn<ModelClient["complete"]>(
-        () =>
-          new Promise((resolve) => {
-            setTimeout(() => {
-              lateResponseProduced = true;
-              resolve({
-                stopReason: "stop",
-                content: [
-                  {
-                    type: "text",
-                    text: '{"safe":true,"score":8,"reason":"read only","toolFor":"read"}',
-                  },
-                ],
-              } as never);
-            }, config.judgeTimeoutMs + 1);
-          }),
-      );
-      const judge = createJudge(
-        { ...config, judgeTimeoutMs: 1 },
-        {
-          ...judgeDeps,
-          modelClient: { ...modelClient, complete },
-        },
-      );
-      const resultPromise = judge(input, "/repo");
-
-      await vi.advanceTimersByTimeAsync(1);
-      await expect(resultPromise).resolves.toEqual(
-        failureReason(input, "法官模型调用超时（1ms），请手动确认"),
-      );
-      expect(lateResponseProduced).toBe(false);
-
-      await vi.advanceTimersByTimeAsync(config.judgeTimeoutMs);
-      expect(lateResponseProduced).toBe(true);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("fails closed when the judge returns an aborted response", async () => {
-    completeModel.mockResolvedValue({
-      stopReason: "aborted",
-      content: [
-        {
-          type: "text",
-          text: '{"safe":true,"score":8,"reason":"read only","toolFor":"read"}',
-        },
-      ],
-    } as never);
-    const judge = createJudge(config, judgeDeps);
-
-    await expect(judge(input, "/repo")).resolves.toEqual(
-      failureReason(input, "法官模型调用超时（5000ms），请手动确认"),
-    );
-  });
-
-  it("fails closed when the judge response is truncated", async () => {
-    completeModel.mockResolvedValue({
-      stopReason: "length",
-      content: [
-        {
-          type: "text",
-          text: '{"safe":true,"score":8,"reason":"read only","toolFor":"read"}',
-        },
-      ],
-    } as never);
-    const judge = createJudge(config, judgeDeps);
-
-    await expect(judge(input, "/repo")).resolves.toEqual(
-      failureReason(input, "法官模型返回了非完整响应（length），请手动确认"),
-    );
-  });
-
-  it("does not retry after a malformed judge protocol response", async () => {
-    const primary = makeModel({ id: "primary", provider: "test" });
-    const fallback = makeModel({ id: "fallback", provider: "test" });
-    const complete = vi.fn<ModelClient["complete"]>().mockResolvedValue({
-      content: [{ type: "text", text: "not json" }],
+  it("returns an unsafe model verdict with the directly bound model", async () => {
+    const { client, complete } = createClient();
+    complete.mockResolvedValue({
       stopReason: "stop",
-    } as never);
-    const securityModelClient: ModelClient = {
-      find: (_provider, id) =>
-        id === "primary" ? primary : id === "fallback" ? fallback : undefined,
-      complete,
-    };
-    const judge = createJudge(config, {
-      judgePrompt: JUDGE_PROMPT,
-      modelClient: securityModelClient,
-      modelRunner: createSecurityJudgeRunner([
-        {
-          slot: "primary",
-          model: "test/primary",
-          label: "Primary security judge",
-          thinking: "off",
-        },
-        {
-          slot: "fallback",
-          model: "test/fallback",
-          label: "Fallback security judge",
-          thinking: "off",
-        },
-      ]),
-    });
-
-    await expect(judge(input, "/repo")).resolves.toEqual(
-      failureReason(input, "法官模型返回格式不正确，请手动确认"),
-    );
-    expect(complete.mock.calls.map(([model]) => model.id)).toEqual(["primary"]);
-  });
-
-  it("returns unsafe result when model says unsafe", async () => {
-    await mockComplete({
       content: [
         {
           type: "text",
           text: '{"safe":false,"score":3,"reason":"destructive","toolFor":"delete files"}',
         },
       ],
-    });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(
-      { toolName: "bash", value: "rm -rf /", paths: [] },
-      "/repo",
-    );
-    expect(result).toEqual({
+    } as never);
+
+    await expect(createTestJudge(client)(input, "/repo")).resolves.toEqual({
       safe: false,
       score: 3,
       reason: "destructive",
       toolFor: "delete files",
-      modelUsed: "test/test-model",
+      modelUsed: "openai-codex/gpt-5.6-luna",
     });
   });
 
-  it("returns failure result on invalid JSON", async () => {
-    await mockComplete({ content: [{ type: "text", text: "not json" }] });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型返回格式不正确，请手动确认"),
+  it.each([
+    ["invalid JSON", "not json"],
+    ["missing safe", '{"score":8,"reason":"ok","toolFor":"read"}'],
+    [
+      "invalid score",
+      '{"safe":true,"score":11,"reason":"ok","toolFor":"read"}',
+    ],
+  ])("fails closed for %s judge output", async (_label, text) => {
+    const { client, complete } = createClient();
+    complete.mockResolvedValue({
+      stopReason: "stop",
+      content: [{ type: "text", text }],
+    } as never);
+
+    await expect(createTestJudge(client)(input, "/repo")).resolves.toEqual(
+      failure("法官模型返回格式不正确，请手动确认"),
     );
   });
 
-  it("returns failure result when model response has no text content", async () => {
-    await mockComplete({ content: [] });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型返回格式不正确，请手动确认"),
-    );
-  });
-
-  it("returns failure result when response has stopReason: error", async () => {
-    await mockComplete({
-      content: [],
-      stopReason: "error",
-      errorMessage: "No API key for provider: test",
-    });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型调用失败: No API key for provider: test"),
-    );
-  });
-
-  it("returns failure result when response has errorMessage but no stopReason", async () => {
-    await mockComplete({
-      content: [],
-      errorMessage: "rate limited",
-    });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型调用失败: rate limited"),
-    );
-  });
-
-  it("does not enable reasoning for judge calls", async () => {
-    completeModel.mockResolvedValue({
+  it("parses JSON wrapped in a markdown code fence", async () => {
+    const { client, complete } = createClient();
+    complete.mockResolvedValue({
+      stopReason: "stop",
       content: [
         {
-          type: "text" as const,
-          text: '{"safe":true,"score":8,"reason":"ok","toolFor":"read"}',
+          type: "text",
+          text: '```json\n{"safe":true,"score":7,"reason":"ok","toolFor":"read"}\n```',
         },
       ],
     } as never);
-    const judge = createJudge(config, judgeDeps);
-    await judge(input, "/repo");
-    const options = completeModel.mock.calls.at(-1)?.[2] as Record<
-      string,
-      unknown
-    >;
-    expect(options.thinking).toBeUndefined();
-    expect(options.reasoningEffort).toBeUndefined();
-  });
 
-  it("uses the selected security-judge candidate thinking", async () => {
-    completeModel.mockResolvedValue({
-      content: [
-        {
-          type: "text" as const,
-          text: '{"safe":true,"score":8,"reason":"ok","toolFor":"read"}',
-        },
-      ],
-    } as never);
-    const { modelRunner } = createSuccessfulModelRunner(
-      resolvedModel,
-      "test/security-judge",
-      "max",
-    );
-    const judge = createJudge(config, { ...judgeDeps, modelRunner });
-
-    await judge(input, "/repo");
-
-    expect(completeModel).toHaveBeenCalledWith(
-      resolvedModel,
-      expect.any(Object),
-      expect.objectContaining({ reasoningEffort: "max" }),
-    );
-  });
-
-  it("returns failure result when JSON is missing 'safe' field", async () => {
-    await mockComplete({
-      content: [
-        {
-          type: "text",
-          text: '{"score":5,"reason":"ok","toolFor":"do stuff"}',
-        },
-      ],
-    });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型返回格式不正确，请手动确认"),
-    );
-  });
-
-  it("returns failure result when 'reason' is not a string", async () => {
-    await mockComplete({
-      content: [
-        {
-          type: "text",
-          text: '{"safe":true,"score":5,"reason":42,"toolFor":"do stuff"}',
-        },
-      ],
-    });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型返回格式不正确，请手动确认"),
-    );
-  });
-
-  it("returns failure result when 'score' is missing", async () => {
-    await mockComplete({
-      content: [
-        {
-          type: "text",
-          text: '{"safe":false,"reason":"ok","toolFor":"do stuff"}',
-        },
-      ],
-    });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型返回格式不正确，请手动确认"),
-    );
-  });
-
-  it("returns failure result when 'score' is out of range", async () => {
-    await mockComplete({
-      content: [
-        {
-          type: "text",
-          text: '{"safe":false,"score":11,"reason":"ok","toolFor":"do stuff"}',
-        },
-      ],
-    });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型返回格式不正确，请手动确认"),
-    );
-  });
-
-  it("returns failure result on model call throwing", async () => {
-    completeModel.mockRejectedValue(new Error("network error"));
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型调用失败，请手动确认"),
-    );
-  });
-
-  it("parses JSON wrapped in markdown code fence", async () => {
-    await mockComplete({
-      content: [
-        {
-          type: "text",
-          text: '```json\n{"safe":true,"score":7,"reason":"ok","toolFor":"do stuff"}\n```',
-        },
-      ],
-    });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual({
+    await expect(
+      createTestJudge(client)(input, "/repo"),
+    ).resolves.toMatchObject({
       safe: true,
       score: 7,
       reason: "ok",
-      toolFor: "do stuff",
-      modelUsed: "test/test-model",
+      toolFor: "read",
     });
   });
 
-  it("builds prompt with correct context", async () => {
+  it.each([
+    ["error", undefined, "法官模型调用失败: error"],
+    ["stop", "missing key", "法官模型调用失败: missing key"],
+    ["length", undefined, "法官模型返回了非完整响应（length），请手动确认"],
+  ] as const)("fails closed for a %s model response", async (stopReason, errorMessage, expectedReason) => {
+    const { client, complete } = createClient();
+    complete.mockResolvedValue({
+      stopReason,
+      errorMessage,
+      content: [],
+    } as never);
+
+    await expect(createTestJudge(client)(input, "/repo")).resolves.toEqual(
+      failure(expectedReason),
+    );
+  });
+
+  it("fails closed when the model request throws", async () => {
+    const { client, complete } = createClient();
+    complete.mockRejectedValue(new Error("network error"));
+
+    await expect(createTestJudge(client)(input, "/repo")).resolves.toEqual(
+      failure("法官模型调用失败，请手动确认"),
+    );
+  });
+
+  it("fails closed when the model reports an aborted response", async () => {
+    const { client, complete } = createClient();
+    complete.mockResolvedValue({ stopReason: "aborted", content: [] } as never);
+
+    await expect(createTestJudge(client)(input, "/repo")).resolves.toEqual(
+      failure("法官模型调用超时（5000ms），请手动确认"),
+    );
+  });
+
+  it("aborts and fails closed at the configured timeout", async () => {
+    vi.useFakeTimers();
+    const { client, complete } = createClient();
+    let signal: AbortSignal | undefined;
+    complete.mockImplementation((_model, _context, options) => {
+      signal = options?.signal;
+      return new Promise(() => {});
+    });
+
+    const result = createTestJudge(client)(input, "/repo");
+    await vi.advanceTimersByTimeAsync(config.judgeTimeoutMs);
+
+    await expect(result).resolves.toEqual(
+      failure("法官模型调用超时（5000ms），请手动确认"),
+    );
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it("adds project rules to the direct judge prompt", async () => {
+    const { client, complete } = createClient();
     let capturedContext: unknown;
-    completeModel.mockImplementation((_model, context) => {
+    complete.mockImplementation((_model, context) => {
       capturedContext = context;
-      return Promise.resolve({
-        content: [
-          {
-            type: "text" as const,
-            text: '{"safe":true,"score":6,"reason":"ok","toolFor":"do"}',
-          },
-        ],
-      } as never);
+      return Promise.resolve(successfulResponse() as never);
     });
-    const judge = createJudge(config, judgeDeps);
-    await judge(
-      { toolName: "bash", value: "rm file", paths: [] },
-      "/my-project",
+
+    await createTestJudge(client, {}, "允许读取项目配置")(input, "/repo");
+
+    const context = capturedContext as {
+      messages: Array<{ content: string }>;
+    };
+    expect(context.messages[0].content).toContain("工作目录：/repo");
+    expect(context.messages[0].content).toContain("工具：read");
+    expect(context.messages[0].content).toContain("允许读取项目配置");
+  });
+
+  it("records response cost", async () => {
+    const { client, complete } = createClient();
+    complete.mockResolvedValue(
+      successfulResponse({ usage: { cost: { total: 0.000085 } } }) as never,
     );
-    const ctx = capturedContext as { messages: Array<{ content: string }> };
-    const msg = ctx.messages[0].content as string;
-    expect(msg).toContain("/my-project");
-    expect(msg).toContain("bash");
-    expect(msg).toContain("rm file");
-    expect(msg).toContain('"score": number');
-    expect(msg).toContain("判断标准");
-  });
 
-  it("returns failure result on malformed JSON with braces", async () => {
-    await mockComplete({
-      content: [{ type: "text", text: "{not valid json}" }],
+    await expect(
+      createTestJudge(client)(input, "/repo"),
+    ).resolves.toMatchObject({
+      cost: 0.000085,
     });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型返回格式不正确，请手动确认"),
-    );
-  });
-
-  it("returns timeout failure result", async () => {
-    let abortSignal: AbortSignal | undefined;
-    completeModel.mockImplementation((_model, _context, options) => {
-      abortSignal = options?.signal;
-      return new Promise((_resolve, reject) => {
-        if (abortSignal?.aborted) {
-          reject(new Error("aborted"));
-          return;
-        }
-        abortSignal?.addEventListener("abort", () => {
-          reject(new Error("aborted"));
-        });
-      });
-    });
-
-    const shortConfig: Config = { ...config, judgeTimeoutMs: 1 };
-    const judge = createJudge(shortConfig, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result).toEqual(
-      failureReason(input, "法官模型调用超时（1ms），请手动确认"),
-    );
-  });
-
-  it("captures cost from response usage", async () => {
-    await mockComplete({
-      content: [
-        {
-          type: "text",
-          text: '{"safe":true,"score":8,"reason":"ok","toolFor":"read"}',
-        },
-      ],
-      usage: { cost: { total: 0.000085 } },
-    });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result.cost).toBe(0.000085);
-  });
-
-  it("handles missing usage gracefully", async () => {
-    await mockComplete({
-      content: [
-        {
-          type: "text",
-          text: '{"safe":true,"score":9,"reason":"ok","toolFor":"read"}',
-        },
-      ],
-    });
-    const judge = createJudge(config, judgeDeps);
-    const result = await judge(input, "/repo");
-    expect(result.cost).toBeUndefined();
   });
 });

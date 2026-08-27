@@ -1,23 +1,14 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
 import type { Api, ModelsApiStreamOptions } from "@earendil-works/pi-ai";
-import { loadModelPolicyRegistry } from "../model-policy/config";
 import { createDevLogger } from "../my-log/index";
+import { resolveDirectModel } from "./direct-model";
 import type { Config, JudgeResult, ModelClient, ToolInput } from "./types";
 
-const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
 const log = createDevLogger("my-permission:judge");
 
-type JudgeModelPolicyRegistry = Pick<
-  ReturnType<typeof loadModelPolicyRegistry>,
-  "run"
->;
-
 export function createJudge(
-  config: Pick<Config, "judgeTimeoutMs">,
+  config: Pick<Config, "judgeModel" | "judgeTimeoutMs">,
   deps: {
     modelClient: ModelClient;
-    modelRunner?: JudgeModelPolicyRegistry;
     judgePrompt?: string;
     localJudge?: string;
   },
@@ -28,6 +19,14 @@ export function createJudge(
   ): Promise<JudgeResult> {
     if (!deps.judgePrompt) {
       return failureResult("法官提示词未加载，请手动确认", input);
+    }
+
+    const resolvedModel = resolveDirectModel(deps.modelClient, {
+      model: config.judgeModel,
+    });
+    if (!resolvedModel) {
+      log.warn("judge model unavailable", { model: config.judgeModel });
+      return failureResult("未找到可用的法官模型，请手动确认", input);
     }
 
     const prompt = buildJudgePrompt(
@@ -42,95 +41,40 @@ export function createJudge(
         { role: "user" as const, content: prompt, timestamp: Date.now() },
       ],
     };
-    let modelRunner: JudgeModelPolicyRegistry;
+
+    let timedOut = false;
+    const controller = new AbortController();
+    const timeoutError = Object.assign(new Error("judge model timed out"), {
+      code: "ETIMEDOUT",
+    });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+        reject(timeoutError);
+      }, config.judgeTimeoutMs);
+    });
+    const completeOpts: ModelsApiStreamOptions<Api> = {
+      signal: controller.signal,
+    };
+
     try {
-      modelRunner = deps.modelRunner ?? loadModelPolicyRegistry(EXT_DIR);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      log.error("judge model policy loading failed", { error: detail });
-      return failureResult(`法官模型策略不可用: ${detail}，请手动确认`, input);
-    }
-
-    let lastAttemptTimedOut = false;
-    try {
-      const result = await modelRunner.run(
-        "security-judge",
-        deps.modelClient,
-        async (model, candidate) => {
-          lastAttemptTimedOut = false;
-          const controller = new AbortController();
-          const timeoutError = Object.assign(
-            new Error("judge model timed out"),
-            { code: "ETIMEDOUT" },
-          );
-          let timeout: ReturnType<typeof setTimeout> | undefined;
-          const deadline = new Promise<never>((_, reject) => {
-            timeout = setTimeout(() => {
-              lastAttemptTimedOut = true;
-              controller.abort();
-              reject(timeoutError);
-            }, config.judgeTimeoutMs);
-          });
-          const completeOpts: ModelsApiStreamOptions<Api> = {
-            signal: controller.signal,
-            ...(candidate.thinking === "off"
-              ? {}
-              : { reasoningEffort: candidate.thinking }),
-          };
-
-          try {
-            const response = await Promise.race([
-              deps.modelClient.complete(model, context, completeOpts),
-              deadline,
-            ]);
-            if (response.stopReason === "aborted") {
-              lastAttemptTimedOut = true;
-              throw timeoutError;
-            }
-            return response;
-          } catch (error) {
-            if (controller.signal.aborted || error === timeoutError) {
-              lastAttemptTimedOut = true;
-              throw timeoutError;
-            }
-            throw error;
-          } finally {
-            if (timeout !== undefined) clearTimeout(timeout);
-          }
-        },
-      );
-
-      if (result.status !== "success") {
-        log.warn("judge model unavailable", { reason: result.reason });
-        if (result.failurePolicy !== "confirm") {
-          return failureResult(
-            `法官模型策略配置错误：security-judge 需要 confirm，实际为 ${result.failurePolicy}`,
-            input,
-          );
-        }
-        if (lastAttemptTimedOut) {
-          return failureResult(
-            `法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`,
-            input,
-          );
-        }
-        if (result.reason.startsWith("no usable candidate")) {
-          return failureResult("未找到可用的法官模型，请手动确认", input);
-        }
-        return failureResult(`法官模型调用失败: ${result.reason}`, input);
+      const response = await Promise.race([
+        deps.modelClient.complete(resolvedModel.model, context, completeOpts),
+        deadline,
+      ]);
+      if (response.stopReason === "aborted") {
+        timedOut = true;
+        throw timeoutError;
       }
-
-      const response = result.value;
       if (response.stopReason === "error" || response.errorMessage) {
         const detail = response.errorMessage ?? response.stopReason;
-        log.error("judge API error", { detail, model: result.candidate.model });
+        log.error("judge API error", {
+          detail,
+          model: resolvedModel.reference,
+        });
         return failureResult(`法官模型调用失败: ${detail}`, input);
-      }
-      if (response.stopReason === "aborted") {
-        return failureResult(
-          `法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`,
-          input,
-        );
       }
       if (response.stopReason !== "stop") {
         return failureResult(
@@ -142,7 +86,7 @@ export function createJudge(
       const parsed = parseJudgeResponse(response);
       if (parsed) {
         parsed.cost = response.usage?.cost?.total;
-        parsed.modelUsed = result.candidate.model;
+        parsed.modelUsed = resolvedModel.reference;
         log.info("judge verdict", {
           safe: parsed.safe,
           score: parsed.score,
@@ -157,13 +101,15 @@ export function createJudge(
       return failureResult("法官模型返回格式不正确，请手动确认", input);
     } catch (error) {
       log.error("judge call failed", { error: (error as Error).message });
-      if (lastAttemptTimedOut) {
+      if (timedOut) {
         return failureResult(
           `法官模型调用超时（${config.judgeTimeoutMs}ms），请手动确认`,
           input,
         );
       }
       return failureResult("法官模型调用失败，请手动确认", input);
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
     }
   };
 }

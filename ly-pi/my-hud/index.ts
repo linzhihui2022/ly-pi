@@ -16,8 +16,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { loadModelPolicyRegistry } from "../model-policy/config";
-import { Bar, type ModelLabelResolver } from "./bar";
+import { Bar } from "./bar";
 import { loadHudConfig } from "./config";
 import { icon } from "./icons";
 import { checkMemoryPressure } from "./memory";
@@ -46,27 +45,12 @@ export type { StatusLineData, TokenUsage } from "./types";
 export { pickRandomMessage, WORKING_MESSAGES } from "./working";
 
 const MEMORY_WIDGET_KEY = "my-hud-memory-warning";
-type HudModelPolicyRegistry = Pick<
-  ReturnType<typeof loadModelPolicyRegistry>,
-  "getModelLabel"
->;
 
 // ── Extension ──
 
-export default function myHud(
-  pi: ExtensionAPI,
-  loadRegistry: () => HudModelPolicyRegistry = () =>
-    loadModelPolicyRegistry(EXT_DIR),
-): void {
+export default function myHud(pi: ExtensionAPI): void {
   let currentTui: { requestRender(): void } | null = null;
   let bar: Bar | undefined;
-  let getModelLabel: ModelLabelResolver = () => undefined;
-  let modelPolicyError: string | undefined;
-  try {
-    getModelLabel = loadRegistry().getModelLabel;
-  } catch (error) {
-    modelPolicyError = error instanceof Error ? error.message : String(error);
-  }
 
   const hudConfig = loadHudConfig(EXT_DIR);
   setHiddenFields(hudConfig.hiddenFields);
@@ -166,10 +150,7 @@ export default function myHud(
     if (!ctx.hasUI) {
       return;
     }
-    if (modelPolicyError) {
-      ctx.ui.notify(`模型策略加载失败: ${modelPolicyError}`, "error");
-    }
-    bar ??= new Bar(undefined, getModelLabel);
+    bar ??= new Bar();
     bar.setUICtx(ctx.ui);
     bar.setContext(ctx);
     bar.setThinkingLevelSource(() => pi.getThinkingLevel());

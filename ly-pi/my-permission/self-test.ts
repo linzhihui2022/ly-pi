@@ -1,12 +1,7 @@
 import type { Api, ModelsApiStreamOptions } from "@earendil-works/pi-ai";
-import type { loadModelPolicyRegistry } from "../model-policy/config";
+import { resolveDirectModel } from "./direct-model";
 import { createJudge } from "./judge";
 import type { Config, JudgeResult, ModelClient, ToolInput } from "./types";
-
-type SecurityJudgeModelRunner = Pick<
-  ReturnType<typeof loadModelPolicyRegistry>,
-  "run"
->;
 
 export interface AttackCategory {
   label: string;
@@ -84,10 +79,9 @@ export const DEFAULT_SELF_TEST_SCENARIO: SelfTestScenario = {
 };
 
 export interface PermissionSelfTestDeps {
-  config: Pick<Config, "judgeTimeoutMs">;
+  config: Pick<Config, "judgeModel" | "judgeTimeoutMs">;
   judgePrompt: string;
   modelClient: ModelClient;
-  modelRunner: SecurityJudgeModelRunner;
   localJudge?: string;
 }
 
@@ -209,72 +203,41 @@ async function generateVariants(
     ],
   };
 
-  const timeoutError = `生成 ${category.label} 变种超时（${deps.config.judgeTimeoutMs}ms）`;
-  let lastAttemptTimedOut = false;
+  const timeoutMessage = `生成 ${category.label} 变种超时（${deps.config.judgeTimeoutMs}ms）`;
+  const resolvedModel = resolveDirectModel(deps.modelClient, {
+    model: deps.config.judgeModel,
+  });
+  if (!resolvedModel) {
+    return {
+      variants: [],
+      error: `生成 ${category.label} 变种失败: 未找到可用的法官模型`,
+    };
+  }
+
+  let timedOut = false;
+  const controller = new AbortController();
+  const timeoutError = Object.assign(
+    new Error("judge variant generation timed out"),
+    { code: "ETIMEDOUT" },
+  );
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(timeoutError);
+    }, deps.config.judgeTimeoutMs);
+  });
+  const options: ModelsApiStreamOptions<Api> = { signal: controller.signal };
 
   try {
-    const runResult = await deps.modelRunner.run(
-      "security-judge",
-      deps.modelClient,
-      async (model, candidate) => {
-        lastAttemptTimedOut = false;
-        const controller = new AbortController();
-        const timeoutError = Object.assign(
-          new Error("security-judge variant generation timed out"),
-          { code: "ETIMEDOUT" },
-        );
-        let timeout: ReturnType<typeof setTimeout> | undefined;
-        const deadline = new Promise<never>((_, reject) => {
-          timeout = setTimeout(() => {
-            lastAttemptTimedOut = true;
-            controller.abort();
-            reject(timeoutError);
-          }, deps.config.judgeTimeoutMs);
-        });
-        const options: ModelsApiStreamOptions<Api> = {
-          signal: controller.signal,
-          ...(candidate.thinking === "off"
-            ? {}
-            : { reasoningEffort: candidate.thinking }),
-        };
-        try {
-          const response = await Promise.race([
-            deps.modelClient.complete(model, context, options),
-            deadline,
-          ]);
-          if (response.stopReason === "aborted") {
-            lastAttemptTimedOut = true;
-            throw timeoutError;
-          }
-          return response;
-        } catch (error) {
-          if (controller.signal.aborted || error === timeoutError) {
-            lastAttemptTimedOut = true;
-            throw timeoutError;
-          }
-          throw error;
-        } finally {
-          if (timeout !== undefined) clearTimeout(timeout);
-        }
-      },
-    );
-    if (runResult.status !== "success") {
-      if (runResult.failurePolicy !== "confirm") {
-        return {
-          variants: [],
-          error: `生成 ${category.label} 变种失败: security-judge 需要 confirm，实际为 ${runResult.failurePolicy}`,
-        };
-      }
-      if (lastAttemptTimedOut) return { variants: [], error: timeoutError };
-      return {
-        variants: [],
-        error: `生成 ${category.label} 变种失败: ${runResult.reason}`,
-      };
-    }
-
-    const response = runResult.value;
+    const response = await Promise.race([
+      deps.modelClient.complete(resolvedModel.model, context, options),
+      deadline,
+    ]);
     if (response.stopReason === "aborted") {
-      return { variants: [], error: timeoutError };
+      timedOut = true;
+      throw timeoutError;
     }
     if (response.stopReason !== "stop") {
       return {
@@ -311,12 +274,14 @@ async function generateVariants(
     }
     return { variants };
   } catch (error) {
-    if (lastAttemptTimedOut) return { variants: [], error: timeoutError };
+    if (timedOut) return { variants: [], error: timeoutMessage };
     const message = error instanceof Error ? error.message : String(error);
     return {
       variants: [],
       error: `生成 ${category.label} 变种发生内部错误: ${message}`,
     };
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
 
@@ -328,7 +293,6 @@ async function evaluateCommands(
     judgePrompt: deps.judgePrompt,
     localJudge: deps.localJudge,
     modelClient: deps.modelClient,
-    modelRunner: deps.modelRunner,
   });
   const results: JudgeResult[] = [];
 

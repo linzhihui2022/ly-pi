@@ -19,8 +19,8 @@ function cfg(
   return {
     defaultPolicy,
     judgeModel: "deepseek/deepseek-v4-flash",
-    professorModel: "deepseek/deepseek-v4-flash",
-    professorThinking: "low",
+    auditModel: "deepseek/deepseek-v4-flash",
+    auditThinking: "low",
     judgeTimeoutMs: 8000,
     childPolicy: "deny-on-unsafe",
     permission,

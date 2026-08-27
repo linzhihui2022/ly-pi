@@ -1,4 +1,5 @@
-import type { AnalyzerConfig, SecurityAuditModelRunner } from "./pipeline";
+import type { DirectModelBinding } from "./direct-model";
+import type { AnalyzerConfig } from "./pipeline";
 import { createRoleAnalyzer } from "./pipeline";
 import type { JudgeLogEntry } from "./stats";
 import type { ModelClient } from "./types";
@@ -79,12 +80,12 @@ export const prosecutorAnalyzerConfig: AnalyzerConfig<
 
 export function createProsecutor(
   modelClient: ModelClient,
-  modelRunner: SecurityAuditModelRunner,
+  binding: DirectModelBinding,
 ): ProsecutorFn {
   const analyzer = createRoleAnalyzer(
     prosecutorAnalyzerConfig,
     modelClient,
-    modelRunner,
+    binding,
   );
 
   return async function analyze(

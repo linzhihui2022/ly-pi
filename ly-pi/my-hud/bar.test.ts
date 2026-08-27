@@ -290,11 +290,8 @@ describe("Bar PR caching", () => {
     expect(component.render(200)[0]).toContain("1/1/0.49");
   });
 
-  it("uses the effective candidate's Model Label for a known active model", () => {
-    const labelForModel = vi.fn(({ provider, id }) =>
-      provider === "test" && id === "m" ? "Fast label" : undefined,
-    );
-    const bar = new Bar(undefined, labelForModel);
+  it("renders an active model's provider-qualified identifier", () => {
+    const bar = new Bar();
     const setWidget = vi.fn();
     const theme = createMockTheme();
 
@@ -305,13 +302,11 @@ describe("Bar PR caching", () => {
     const component = setWidget.mock.calls[0][1](mockTui, theme);
     const line = component.render(200)[0];
 
-    expect(labelForModel).toHaveBeenCalledWith({ provider: "test", id: "m" });
-    expect(line).toContain("Fast label");
-    expect(line).not.toContain("test/m");
+    expect(line).toContain("test/m");
   });
 
   it("keeps an unknown active model's provider-qualified identifier", () => {
-    const bar = new Bar(undefined, () => undefined);
+    const bar = new Bar();
     const setWidget = vi.fn();
     const theme = createMockTheme();
     const ctx = createCtx({

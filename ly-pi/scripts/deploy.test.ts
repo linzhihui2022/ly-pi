@@ -159,366 +159,59 @@ describe("deploy", () => {
     expect(worker.stderr).not.toContain("MODULE_TYPELESS_PACKAGE_JSON");
   });
 
-  it("copies the validated model policy manifest into the extension", () => {
+  it("removes the retired manifest without modifying locally owned model settings", () => {
     const stagingDir = createStagingDir();
-    const manifestPath = join(
-      stagingDir,
-      "agent",
-      "extensions",
-      "ly-pi",
-      "model-policies.json",
-    );
-    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
-    if (bunLookup.status !== 0) {
-      throw new Error("Bun executable is required to test deployment.");
-    }
-
-    const cleanupBundle = ensureExtensionBundle();
-    try {
-      const result = spawnSync(
-        bunLookup.stdout.trim(),
-        ["run", "scripts/deploy.ts"],
-        {
-          cwd: projectDir,
-          encoding: "utf8",
-          env: { PATH: "", PI_STAGING_DIR: stagingDir },
-        },
-      );
-
-      expect(result.status, result.stderr).toBe(0);
-    } finally {
-      cleanupBundle();
-    }
-
-    expect(readFileSync(manifestPath, "utf8")).toBe(
-      readFileSync(
-        join(projectDir, "assets", "config", "model-policies.json"),
-        "utf8",
-      ),
-    );
-  });
-
-  it("does not write the extension when the local model override is invalid", () => {
-    const stagingDir = createStagingDir();
-    const extensionDir = join(stagingDir, "agent", "extensions", "ly-pi");
+    const agentDir = join(stagingDir, "agent");
+    const extensionDir = join(agentDir, "extensions", "ly-pi");
     const manifestPath = join(extensionDir, "model-policies.json");
-    const extensionPath = join(extensionDir, "index.js");
-    mkdirSync(extensionDir, { recursive: true });
-    writeFileSync(manifestPath, '{"version":"previous"}\n');
-    writeFileSync(
-      join(extensionDir, "models.local.json"),
-      JSON.stringify({
-        version: 1,
-        policies: {
-          "fast-default": {
-            slots: { primary: { failurePolicy: "error" } },
-          },
-        },
-      }),
-    );
-
-    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
-    if (bunLookup.status !== 0) {
-      throw new Error("Bun executable is required to test deployment.");
-    }
-
-    const cleanupBundle = ensureExtensionBundle();
-    try {
-      const result = spawnSync(
-        bunLookup.stdout.trim(),
-        ["run", "scripts/deploy.ts"],
-        {
-          cwd: projectDir,
-          encoding: "utf8",
-          env: { PATH: "", PI_STAGING_DIR: stagingDir },
-        },
-      );
-
-      expect(result.status).not.toBe(0);
-      expect(result.stderr).toContain("invalid local model override");
-    } finally {
-      cleanupBundle();
-    }
-
-    expect(readFileSync(manifestPath, "utf8")).toBe('{"version":"previous"}\n');
-    expect(existsSync(extensionPath)).toBe(false);
-  });
-
-  it("compiles primary, scout, and delegate while preserving unrelated settings", () => {
-    const stagingDir = createStagingDir();
-    const agentDir = join(stagingDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
-    writeFileSync(
-      join(agentDir, "settings.json"),
-      JSON.stringify({
-        customSetting: true,
-        subagents: {
-          agentOverrides: {
-            reviewer: { model: "other/reviewer" },
-            "image-reader": { model: "other/image" },
-          },
-        },
-      }),
-    );
-
-    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
-    if (bunLookup.status !== 0) {
-      throw new Error("Bun executable is required to test deployment.");
-    }
-
-    const cleanupBundle = ensureExtensionBundle();
-    try {
-      const result = spawnSync(
-        bunLookup.stdout.trim(),
-        ["run", "scripts/deploy.ts"],
-        {
-          cwd: projectDir,
-          encoding: "utf8",
-          env: { PATH: "", PI_STAGING_DIR: stagingDir },
-        },
-      );
-
-      expect(result.status, result.stderr).toBe(0);
-    } finally {
-      cleanupBundle();
-    }
-
-    const settings = JSON.parse(
-      readFileSync(join(agentDir, "settings.json"), "utf8"),
-    );
-    expect(settings).toMatchObject({
-      customSetting: true,
-      defaultProvider: "openai-codex",
-      defaultModel: "gpt-5.6-terra",
-      defaultThinkingLevel: "max",
-      subagents: {
-        agentOverrides: {
-          reviewer: { model: "other/reviewer" },
-          scout: {
-            model: "deepseek/deepseek-v4-flash",
-            thinking: "off",
-            fallbackModels: [],
-          },
-          delegate: {
-            model: "deepseek/deepseek-v4-flash",
-            thinking: "max",
-            fallbackModels: [],
-          },
-        },
-      },
-    });
-  });
-
-  it("deploys policy-generated specialist overrides without frontmatter model pins", () => {
-    const stagingDir = createStagingDir();
-    const agentDir = join(stagingDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
-    writeFileSync(
-      join(agentDir, "settings.json"),
-      JSON.stringify({
-        subagents: {
-          agentOverrides: {
-            "image-reader": { model: "other/image" },
-            "pr-comment-analyzer": { model: "other/comment" },
-          },
-        },
-      }),
-    );
-
-    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
-    if (bunLookup.status !== 0) {
-      throw new Error("Bun executable is required to test deployment.");
-    }
-
-    const cleanupBundle = ensureExtensionBundle();
-    try {
-      const result = spawnSync(
-        bunLookup.stdout.trim(),
-        ["run", "scripts/deploy.ts"],
-        {
-          cwd: projectDir,
-          encoding: "utf8",
-          env: { PATH: "", PI_STAGING_DIR: stagingDir },
-        },
-      );
-
-      expect(result.status, result.stderr).toBe(0);
-    } finally {
-      cleanupBundle();
-    }
-
-    const settings = JSON.parse(
-      readFileSync(join(agentDir, "settings.json"), "utf8"),
-    );
-    const manifest = JSON.parse(
-      readFileSync(
-        join(projectDir, "assets", "config", "model-policies.json"),
-        "utf8",
-      ),
-    ) as {
-      roles: Record<string, string>;
-      policies: Record<
-        string,
-        { candidates: Array<{ model: string; thinking: string }> }
-      >;
-    };
-    const expectedOverride = (role: string) => {
-      const [primary, ...fallbacks] =
-        manifest.policies[manifest.roles[role]].candidates;
-      return {
-        model: primary.model,
-        thinking: primary.thinking,
-        fallbackModels: fallbacks.map((candidate) => candidate.model),
-      };
-    };
-    expect(settings.subagents.agentOverrides).toMatchObject({
-      "image-reader": expectedOverride("vision"),
-      "pr-comment-analyzer": expectedOverride("standard"),
-    });
-
-    const requiredFrontmatter = {
-      "image-reader": [
-        "tools: read, grep, find",
-        "acceptanceRole: read-only",
-        "你是一名视觉分析专家",
-      ],
-      "pr-comment-analyzer": [
-        "tools: read, bash, grep, find, ls",
-        "acceptanceRole: read-only",
-        "你是一名严谨的代码注释分析师",
-      ],
-    };
-    for (const [agent, requiredFields] of Object.entries(requiredFrontmatter)) {
-      const frontmatter = readFileSync(
-        join(stagingDir, "agent", "agents", `${agent}.md`),
-        "utf8",
-      );
-      expect(frontmatter).not.toMatch(/^model:/m);
-      expect(frontmatter).not.toMatch(/^thinking:/m);
-      for (const field of requiredFields) {
-        expect(frontmatter).toContain(field);
-      }
-    }
-  });
-
-  it("compiles legal local overrides into primary, scout, and delegate", () => {
-    const stagingDir = createStagingDir();
-    const extensionDir = join(stagingDir, "agent", "extensions", "ly-pi");
-    mkdirSync(extensionDir, { recursive: true });
-    writeFileSync(
-      join(extensionDir, "models.local.json"),
-      JSON.stringify({
-        version: 1,
-        policies: {
-          "primary-default": {
-            slots: { primary: { model: "local/primary", thinking: "high" } },
-          },
-          "fast-default": {
-            slots: { primary: { model: "local/scout", thinking: "low" } },
-          },
-          "standard-default": {
-            slots: {
-              primary: { model: "local/delegate", thinking: "medium" },
-            },
-          },
-        },
-      }),
-    );
-
-    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
-    if (bunLookup.status !== 0) {
-      throw new Error("Bun executable is required to test deployment.");
-    }
-
-    const cleanupBundle = ensureExtensionBundle();
-    try {
-      const result = spawnSync(
-        bunLookup.stdout.trim(),
-        ["run", "scripts/deploy.ts"],
-        {
-          cwd: projectDir,
-          encoding: "utf8",
-          env: { PATH: "", PI_STAGING_DIR: stagingDir },
-        },
-      );
-
-      expect(result.status, result.stderr).toBe(0);
-    } finally {
-      cleanupBundle();
-    }
-
-    const settings = JSON.parse(
-      readFileSync(join(stagingDir, "agent", "settings.json"), "utf8"),
-    );
-    expect(settings).toMatchObject({
+    const localModelsPath = join(extensionDir, "models.local.json");
+    const settingsPath = join(agentDir, "settings.json");
+    const locallyOwnedModels = {
       defaultProvider: "local",
       defaultModel: "primary",
       defaultThinkingLevel: "high",
       subagents: {
         agentOverrides: {
-          scout: {
-            model: "local/scout",
-            thinking: "low",
-            fallbackModels: [],
-          },
-          delegate: {
-            model: "local/delegate",
-            thinking: "medium",
-            fallbackModels: [],
-          },
+          scout: { model: "local/scout", thinking: "low" },
+          delegate: { model: "local/delegate", thinking: "medium" },
+          "image-reader": { model: "local/image", thinking: "high" },
         },
       },
-    });
-  });
-
-  it("rejects a security local override before writing settings", () => {
-    const stagingDir = createStagingDir();
-    const extensionDir = join(stagingDir, "agent", "extensions", "ly-pi");
-    const settingsPath = join(stagingDir, "agent", "settings.json");
+    };
     mkdirSync(extensionDir, { recursive: true });
-    mkdirSync(dirname(settingsPath), { recursive: true });
-    writeFileSync(settingsPath, '{"existing":true}\n');
+    writeFileSync(manifestPath, '{"version":"previous"}\n');
+    writeFileSync(localModelsPath, "not valid JSON\n");
     writeFileSync(
-      join(extensionDir, "models.local.json"),
-      JSON.stringify({
-        version: 1,
-        policies: {
-          "security-judge-default": {
-            slots: { primary: { model: "local/security" } },
-          },
-        },
-      }),
+      settingsPath,
+      `${JSON.stringify({ customSetting: true, ...locallyOwnedModels })}\n`,
     );
 
-    const bunLookup = spawnSync("which", ["bun"], { encoding: "utf8" });
-    if (bunLookup.status !== 0) {
+    const bun = spawnSync("which", ["bun"], { encoding: "utf8" }).stdout.trim();
+    if (!bun) {
       throw new Error("Bun executable is required to test deployment.");
     }
 
     const cleanupBundle = ensureExtensionBundle();
     try {
-      const result = spawnSync(
-        bunLookup.stdout.trim(),
-        ["run", "scripts/deploy.ts"],
-        {
-          cwd: projectDir,
-          encoding: "utf8",
-          env: { PATH: "", PI_STAGING_DIR: stagingDir },
-        },
-      );
+      const result = spawnSync(bun, ["run", "scripts/deploy.ts"], {
+        cwd: projectDir,
+        encoding: "utf8",
+        env: { PATH: "", PI_STAGING_DIR: stagingDir },
+      });
 
-      expect(result.status).not.toBe(0);
-      expect(result.stderr).toContain(
-        "cannot override security policy 'security-judge-default'",
-      );
+      expect(result.status, result.stderr).toBe(0);
     } finally {
       cleanupBundle();
     }
 
-    expect(readFileSync(settingsPath, "utf8")).toBe('{"existing":true}\n');
+    expect(existsSync(manifestPath)).toBe(false);
+    expect(readFileSync(localModelsPath, "utf8")).toBe("not valid JSON\n");
+    expect(JSON.parse(readFileSync(settingsPath, "utf8"))).toMatchObject(
+      locallyOwnedModels,
+    );
   });
 
-  it("does not duplicate managed model choices in source settings", () => {
+  it("does not define repository-owned model settings", () => {
     const source = JSON.parse(
       readFileSync(
         join(projectDir, "assets", "config", "settings.json"),
@@ -529,15 +222,6 @@ describe("deploy", () => {
     expect(source.settings).not.toHaveProperty("defaultProvider");
     expect(source.settings).not.toHaveProperty("defaultModel");
     expect(source.settings).not.toHaveProperty("defaultThinkingLevel");
-    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty("scout");
-    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
-      "delegate",
-    );
-    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
-      "image-reader",
-    );
-    expect(source.subagents.agentOverrides ?? {}).not.toHaveProperty(
-      "pr-comment-analyzer",
-    );
+    expect(source.subagents).not.toHaveProperty("agentOverrides");
   });
 });

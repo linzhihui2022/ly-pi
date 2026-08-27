@@ -1,4 +1,5 @@
-import type { AnalyzerConfig, SecurityAuditModelRunner } from "./pipeline";
+import type { DirectModelBinding } from "./direct-model";
+import type { AnalyzerConfig } from "./pipeline";
 import {
   createRoleAnalyzer,
   createMerger as createSharedMerger,
@@ -91,12 +92,12 @@ export const advocateAnalyzerConfig: AnalyzerConfig<
 
 export function createAdvocate(
   modelClient: ModelClient,
-  modelRunner: SecurityAuditModelRunner,
+  binding: DirectModelBinding,
 ): AdvocateFn {
   const analyzer = createRoleAnalyzer(
     advocateAnalyzerConfig,
     modelClient,
-    modelRunner,
+    binding,
   );
 
   return async function analyze(
@@ -124,9 +125,9 @@ export function createAdvocate(
 
 export function createMerger(
   modelClient: ModelClient,
-  modelRunner: SecurityAuditModelRunner,
+  binding: DirectModelBinding,
 ): MergerFn {
-  const sharedMerger = createSharedMerger(modelClient, modelRunner);
+  const sharedMerger = createSharedMerger(modelClient, binding);
 
   return async function merge(
     currentJudgeMd: string,

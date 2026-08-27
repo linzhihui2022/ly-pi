@@ -1,17 +1,10 @@
 import type { Api, ModelsApiStreamOptions } from "@earendil-works/pi-ai";
-import type { loadModelPolicyRegistry } from "../model-policy/config";
 import { createDevLogger } from "../my-log/index";
 import type { ChiefSuggestionItem } from "./chief";
+import { type DirectModelBinding, resolveDirectModel } from "./direct-model";
 import type { ModelClient } from "./types";
 
 const log = createDevLogger("my-permission:pipeline");
-
-export type SecurityAuditModelRunner = Pick<
-  ReturnType<typeof loadModelPolicyRegistry>,
-  "run"
->;
-
-// ---- types ----
 
 export interface AnalyzerConfig<TInput, TResult> {
   systemPrompt: string;
@@ -54,12 +47,18 @@ export interface MergerResult {
 
 export type MergerFn = (input: MergerInput) => Promise<MergerResult>;
 
-// ---- createRoleAnalyzer ----
+function completeOptions(
+  binding: DirectModelBinding,
+): ModelsApiStreamOptions<Api> {
+  return binding.thinking === undefined || binding.thinking === "off"
+    ? {}
+    : { reasoningEffort: binding.thinking };
+}
 
 export function createRoleAnalyzer<TInput, TResult>(
   roleConfig: AnalyzerConfig<TInput, TResult>,
   modelClient: ModelClient,
-  modelRunner: SecurityAuditModelRunner,
+  binding: DirectModelBinding,
 ): AnalyzerFn<TInput, TResult> {
   return async function analyze(
     input: TInput,
@@ -85,32 +84,20 @@ export function createRoleAnalyzer<TInput, TResult>(
     };
 
     try {
-      const runResult = await modelRunner.run(
-        "security-audit",
-        modelClient,
-        async (model, candidate) => {
-          const completeOpts: ModelsApiStreamOptions<Api> =
-            candidate.thinking === "off"
-              ? {}
-              : { reasoningEffort: candidate.thinking };
-          return modelClient.complete(model, context, completeOpts);
-        },
-      );
-      if (runResult.status !== "success") {
+      const resolvedModel = resolveDirectModel(modelClient, binding);
+      if (!resolvedModel) {
         log.error(`${roleConfig.modelLabel} model unavailable`, {
-          reason: runResult.reason,
+          model: binding.model,
         });
-        if (runResult.failurePolicy !== "error-no-write") {
-          return {
-            error: `${roleConfig.modelLabel} 模型策略配置错误：security-audit 需要 error-no-write，实际为 ${runResult.failurePolicy}`,
-          };
-        }
         return {
-          error: `${roleConfig.modelLabel} 模型调用失败: ${runResult.reason}`,
+          error: `${roleConfig.modelLabel} 模型调用失败: 未找到可用的审计模型`,
         };
       }
-
-      const response = runResult.value;
+      const response = await modelClient.complete(
+        resolvedModel.model,
+        context,
+        completeOptions(binding),
+      );
       if (response.stopReason !== "stop") {
         const reason = String(response.stopReason ?? "unknown");
         log.error(`${roleConfig.modelLabel} incomplete response`, { reason });
@@ -133,9 +120,9 @@ export function createRoleAnalyzer<TInput, TResult>(
 
       log.info(`${roleConfig.modelLabel} completed`, {
         cost,
-        model: runResult.candidate.model,
+        model: resolvedModel.reference,
       });
-      return { result: parsed, cost, modelUsed: runResult.candidate.model };
+      return { result: parsed, cost, modelUsed: resolvedModel.reference };
     } catch (err) {
       log.error(`${roleConfig.modelLabel} call failed`, {
         error: (err as Error).message,
@@ -147,11 +134,9 @@ export function createRoleAnalyzer<TInput, TResult>(
   };
 }
 
-// ---- createMerger ----
-
 export function createMerger(
   modelClient: ModelClient,
-  modelRunner: SecurityAuditModelRunner,
+  binding: DirectModelBinding,
 ): MergerFn {
   return async function merge(input: MergerInput): Promise<MergerResult> {
     const isChief = input.operations.some((op) => typeof op !== "string");
@@ -168,28 +153,16 @@ export function createMerger(
     };
 
     try {
-      const runResult = await modelRunner.run(
-        "security-audit",
-        modelClient,
-        async (model, candidate) => {
-          const completeOpts: ModelsApiStreamOptions<Api> =
-            candidate.thinking === "off"
-              ? {}
-              : { reasoningEffort: candidate.thinking };
-          return modelClient.complete(model, context, completeOpts);
-        },
-      );
-      if (runResult.status !== "success") {
-        log.error("merger model unavailable", { reason: runResult.reason });
-        if (runResult.failurePolicy !== "error-no-write") {
-          return {
-            error: `合并模型策略错误：security-audit 需要 error-no-write，实际为 ${runResult.failurePolicy}`,
-          };
-        }
-        return { error: `合并模型调用失败: ${runResult.reason}` };
+      const resolvedModel = resolveDirectModel(modelClient, binding);
+      if (!resolvedModel) {
+        log.error("merger model unavailable", { model: binding.model });
+        return { error: "合并模型调用失败: 未找到可用的审计模型" };
       }
-
-      const response = runResult.value;
+      const response = await modelClient.complete(
+        resolvedModel.model,
+        context,
+        completeOptions(binding),
+      );
       if (response.stopReason !== "stop") {
         const reason = String(response.stopReason ?? "unknown");
         log.error("merger incomplete response", { reason });
@@ -205,12 +178,12 @@ export function createMerger(
       log.info("merger completed", {
         operations: input.operations.length,
         cost,
-        model: runResult.candidate.model,
+        model: resolvedModel.reference,
       });
       return {
         mergedText: text.trim(),
         cost,
-        modelUsed: runResult.candidate.model,
+        modelUsed: resolvedModel.reference,
       };
     } catch (err) {
       log.error("merger call failed", { error: (err as Error).message });
@@ -220,8 +193,6 @@ export function createMerger(
     }
   };
 }
-
-// ---- helpers ----
 
 function extractResponseText(response: {
   content: Array<{ type: string; text?: string }>;
@@ -290,7 +261,6 @@ function buildMergerPrompts(
     };
   }
 
-  // advocate/prosecutor path: string[] rules
   const rulesList = (input.operations as string[])
     .map((r, i) => `${i + 1}. ${r}`)
     .join("\n");

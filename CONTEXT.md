@@ -104,6 +104,16 @@ _Avoid_: 通用 Git 客户端、Worktree Widget 本身
 `my-worktree` 模块中的只读 Pi widget，仅在拥有至少两个 Visible Worktree 的 Multi-worktree Repository 中能唯一确认 Current Worktree 时，于编辑器上方以两行树呈现其分支与 worktree 根路径，而不枚举其他 Visible Worktree。accent 的 `● Worktrees (N)` 标题只给出可见成员的聚合数量，唯一条目以中性的 `•` 呈现；主仓库内路径缩写为 `<REPO>`，窄屏从路径开头截断以保留末尾，若路径完全无可用宽度则隐藏整个组件。发现失败时安静隐藏。它是当前会话位置的补充定位信息，不是 worktree 清单。
 _Avoid_: worktree 列表、my-hud worktree 字段、Git 状态栏
 
+## Model Configuration
+
+**Direct Model Binding（直接模型绑定）**:
+某个功能自行指定并直接调用的单一模型及思考级别；不经过角色选择、候选回退或能力协商。
+_Avoid_: 角色解析、模型候选列表
+
+**Locally Owned Pi Model Settings（本机自有 Pi 模型设置）**:
+由本机 Pi 配置所有者而非本仓库部署流程决定的主模型和子代理模型设置。
+_Avoid_: 仓库默认模型、部署生成的 agent override
+
 ## Weekly Timesheet
 
 **Evidence Window（证据窗口）**:

@@ -3,8 +3,8 @@ import type { Config } from "./types";
 export const config = {
   defaultPolicy: "allow",
   judgeModel: "openai-codex/gpt-5.6-luna",
-  professorModel: "openai-codex/gpt-5.6-sol",
-  professorThinking: "high",
+  auditModel: "openai-codex/gpt-5.6-sol",
+  auditThinking: "high",
   judgeTimeoutMs: 8000,
   childPolicy: "deny-on-unsafe",
   permission: {

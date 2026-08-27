@@ -1,14 +1,10 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { loadModelPolicyRegistry } from "../model-policy/config";
 import { normalizeSessionTitle } from "./session-name";
 
-const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
-type TitleModelPolicyRegistry = Pick<
-  ReturnType<typeof loadModelPolicyRegistry>,
-  "run"
->;
+const TITLE_MODEL = {
+  provider: "openai-codex",
+  id: "gpt-5.6-luna",
+} as const;
 const TITLE_SYSTEM_PROMPT =
   "Generate a concise session display name from the user request. " +
   "Use the request's language. Return only one short line, at most 20 characters, with no explanation.";
@@ -24,49 +20,36 @@ function getAssistantText(content: unknown): string {
     .join("");
 }
 
-/** Request and validate one title through the fast Model Role. */
+/** Request and validate one title through the Luna Direct Model Binding. */
 export async function requestSessionTitle(
   prompt: string,
   ctx: ExtensionContext,
-  registry?: TitleModelPolicyRegistry,
 ): Promise<string | null> {
-  const policyRegistry = registry ?? loadModelPolicyRegistry(EXT_DIR);
+  const model = ctx.modelRegistry.find(TITLE_MODEL.provider, TITLE_MODEL.id);
+  if (!model) return null;
 
-  const result = await policyRegistry.run(
-    "fast",
-    ctx.modelRegistry,
-    async (model, candidate) =>
-      ctx.modelRegistry.complete(
-        model,
-        {
-          systemPrompt: TITLE_SYSTEM_PROMPT,
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-              timestamp: Date.now(),
-            },
-          ],
-        },
-        {
-          maxRetries: 0,
-          maxTokens: 32,
-          timeoutMs: 10_000,
-          ...(candidate.thinking === "off"
-            ? {}
-            : { reasoningEffort: candidate.thinking }),
-        },
-      ),
-  );
-  if (!result) return null;
-  if (result.status !== "success") {
-    if (result.failurePolicy !== "skip") {
-      throw new Error(
-        `fast Role requires 'skip' failure policy, received '${result.failurePolicy}'`,
-      );
-    }
+  try {
+    const response = await ctx.modelRegistry.complete(
+      model,
+      {
+        systemPrompt: TITLE_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+            timestamp: Date.now(),
+          },
+        ],
+      },
+      {
+        maxRetries: 0,
+        maxTokens: 32,
+        timeoutMs: 10_000,
+      },
+    );
+    if (response.stopReason === "error" || response.errorMessage) return null;
+    return normalizeSessionTitle(getAssistantText(response.content));
+  } catch {
     return null;
   }
-
-  return normalizeSessionTitle(getAssistantText(result.value.content));
 }

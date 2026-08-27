@@ -62,23 +62,10 @@
           },
           "additionalProperties": false
         },
-        "defaultModel": {
-          "type": "string",
-          "description": "Default model ID"
-        },
         "defaultProjectTrust": {
           "type": "string",
           "enum": ["ask", "always", "never"],
           "description": "Fallback project trust: 'ask' (default), 'always', or 'never'. Global setting only."
-        },
-        "defaultProvider": {
-          "type": "string",
-          "description": "Default provider (e.g. 'anthropic', 'openai')"
-        },
-        "defaultThinkingLevel": {
-          "type": "string",
-          "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
-          "description": "Default thinking/reasoning level"
         },
         "doubleEscapeAction": {
           "type": "string",
@@ -338,32 +325,6 @@
         "disableThinking": {
           "type": "boolean",
           "description": "Disable thinking for all subagents"
-        },
-        "agentOverrides": {
-          "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/agentOverride" },
-          "description": "Per-agent overrides keyed by agent name"
-        }
-      },
-      "additionalProperties": false
-    },
-
-    "agentOverride": {
-      "type": "object",
-      "properties": {
-        "model": {
-          "type": "string",
-          "description": "Model identifier (e.g. 'deepseek/deepseek-v4-flash')"
-        },
-        "thinking": {
-          "type": "string",
-          "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
-          "description": "Thinking level for this agent"
-        },
-        "fallbackModels": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Ordered fallback model identifiers for provider failures"
         }
       },
       "additionalProperties": false

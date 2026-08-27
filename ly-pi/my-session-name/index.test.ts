@@ -87,7 +87,7 @@ describe("session naming lifecycle", () => {
     expect(mockPi.setSessionName).toHaveBeenCalledWith("修复登录");
   });
 
-  it("reports a model policy loading error without naming the session", async () => {
+  it("reports a title-generation error without naming the session", async () => {
     requestSessionTitleMock.mockRejectedValue(new Error("invalid manifest"));
     const notify = vi.fn();
     const ctx = {
@@ -100,7 +100,7 @@ describe("session naming lifecycle", () => {
     await flushPromises();
 
     expect(notify).toHaveBeenCalledWith(
-      "会话标题模型策略加载失败: invalid manifest",
+      "会话标题生成失败: invalid manifest",
       "error",
     );
     expect(mockPi.setSessionName).not.toHaveBeenCalled();
