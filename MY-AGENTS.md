@@ -11,6 +11,12 @@
 
 - bun 安装包时添加 `--registry https://registry.npmmirror.com`
 
+### 子代理模型路由
+
+- 每次启动原生 Pi `subagent` 前，按任务选择模型，并在 `model` 参数中传入完整的 `provider/id:thinking`；角色 override 与父会话继承仅作漏选兜底。
+- 搜索、定位和简单机械任务使用 `openai-codex/gpt-5.6-luna:low`；常规实现、测试和审查使用 `openai-codex/gpt-5.6-luna:high`；架构决策、复杂排障和高风险审查使用 `openai-codex/gpt-5.6-sol:high`；图片理解使用 `openai-codex/gpt-5.6-terra:max`。
+- 若需升级模型，由父 agent 显式启动新的子代理调用；权限与其他 Direct Model Binding 不受此规则影响。
+
 ## Git 提交规范
 
 - 格式：`feat(scope): title`（约定式提交）
