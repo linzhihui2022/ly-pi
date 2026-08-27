@@ -142,16 +142,6 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 "$REPO/install.sh"
 ```
 
-### 从 pi-tool-display 迁移
-
-`my-tool-display` 验证完成并由用户在 TUI 中确认后，手动卸载旧的第三方扩展：
-
-```bash
-pi uninstall npm:pi-tool-display
-```
-
-部署流程不会自动卸载用户级 npm 包；在手动卸载前，会部署 `enabled: false` 的兼容配置，前提是旧扩展支持该字段。完成 TUI 验证后再执行上述命令。
-
 ### API key（可选）
 
 以下功能按需配置环境变量，不配置则对应功能不可用，其余不受影响：
@@ -175,7 +165,6 @@ pi uninstall npm:pi-tool-display
 |------|------|
 | `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
 | `ly-pi/assets/config/my-tool-display.json` | `my-tool-display` 启用开关、Bash 折叠行数（`bashCollapsedLines`，默认 10）与 diff 折叠行数（`diffCollapsedLines`，默认 24） |
-| `ly-pi/assets/config/pi-tool-display-disabled.json` | 旧版 `pi-tool-display` 的禁用兼容配置（效果取决于旧 renderer 是否支持 `enabled` 字段） |
 | `ly-pi/assets/config/settings.json` | Pi 非模型设置与 subagent runtime 配置（部署时按 `settings-schema.json` 校验） |
 | `ly-pi/assets/config/model-policies.json` | 版本化 Model Manifest：Model Role、候选槽位、能力契约与失败策略；部署时校验并复制到扩展目录 |
 | `ly-pi/assets/config/mcp.json` | MCP 服务器配置 |

@@ -200,14 +200,8 @@ async function rollbackFiles(
 
 const configDir = "assets/config";
 
-// ── Legacy renderer cutover ─────────────────────────────────────────────────
+// ── Extension deployment ───────────────────────────────────────────────────
 {
-  const legacyConfigPath = join(
-    agentDir,
-    "extensions",
-    "pi-tool-display",
-    "config.json",
-  );
   const extensionPath = join(agentDir, "extensions", "ly-pi", "index.js");
   const toolDisplayConfigPath = join(
     agentDir,
@@ -217,7 +211,6 @@ const configDir = "assets/config";
   );
   const modelPoliciesPath = join(extensionDir, "model-policies.json");
   const files = [
-    { path: legacyConfigPath, snapshot: await snapshotFile(legacyConfigPath) },
     { path: extensionPath, snapshot: await snapshotFile(extensionPath) },
     {
       path: modelPoliciesPath,
@@ -250,10 +243,6 @@ const configDir = "assets/config";
   );
 
   try {
-    await writeAtomically(
-      legacyConfigPath,
-      Bun.file(join(configDir, "pi-tool-display-disabled.json")),
-    );
     await writeAtomically(extensionPath, Bun.file("dist/index.js"));
     await writeAtomically(
       modelPoliciesPath,
@@ -273,7 +262,6 @@ const configDir = "assets/config";
     throw error;
   }
 
-  console.log("pi-tool-display compatibility config: deployed");
   console.log("Extension: deployed");
   console.log("Model policies: deployed");
   console.log("my-tool-display config: deployed");
