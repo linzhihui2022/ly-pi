@@ -8,7 +8,9 @@
     },
     "chrome-devtools": {
       "command": "npx",
-      "args": ["chrome-devtools-mcp@latest"],
+      "args": [
+        "chrome-devtools-mcp@latest"
+      ],
       "directTools": true
     },
     "Notion": {
@@ -26,7 +28,7 @@
     "productive": {
       "url": "https://mcp.productive.io/mcp",
       "auth": "oauth",
-      "approveTools": true
+      "approveTools": false
     }
   }
 }
