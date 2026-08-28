@@ -51,7 +51,7 @@ configure/
 │
 ├── starship.toml             # Starship 终端提示符
 ├── wezterm.lua               # WezTerm 终端配置
-├── MY-AGENTS.md              # 全局 Agent 指令 → ~/.pi/agent/AGENTS.md、~/.claude/CLAUDE.md、~/.dsh/AGENTS.md
+├── MY-AGENTS.md              # 全局 Agent 指令 → ~/.pi/agent/AGENTS.md、~/.dsh/AGENTS.md
 ├── AGENTS.md                 # configure 仓库自身的开发指南
 ├── JUDGE.md                  # my-permission 模型法官的项目级规则
 ├── biome.json                # Biome 格式/lint 配置
@@ -134,7 +134,6 @@ pi install npm:pi-subagents
 ln -sf "$REPO/starship.toml" ~/.config/starship.toml
 ln -sf "$REPO/wezterm.lua" ~/.wezterm.lua
 ln -sf "$REPO/MY-AGENTS.md" ~/.pi/agent/AGENTS.md
-ln -sf "$REPO/MY-AGENTS.md" ~/.claude/CLAUDE.md
 ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 
 # 部署扩展、技能、主题、子代理、设置、MCP
