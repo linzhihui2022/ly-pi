@@ -115,7 +115,7 @@ configure/
 
 ### 前置依赖
 
-- [Bun](https://bun.sh) 与 [Pi Coding Agent](https://pi.dev) ≥ 0.84.2
+- [Bun](https://bun.sh) 与 [Pi Coding Agent](https://pi.dev) ≥ 0.84.4
 - 可选：[Starship](https://starship.rs)、[WezTerm](https://wezterm.org)（仅在使用对应终端配置时需要）
 
 ```bash
