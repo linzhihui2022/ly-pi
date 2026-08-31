@@ -83,11 +83,12 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 先用 `productive_describe_resource` 检查 `services` 与 `time_entries` 的字段，并加载 `time-entry-logging` 的 Productive 指引。然后要求用户给出一个非空 service 关键词（一个词）；不要从仓库名、目录名或完整 service 列表推测候选。
 
-以当前 person、`time_tracking_enabled=true` 和该关键词查询 `services`，请求 service name 与 deal name，且 `limit` 固定为 2。绝不分页：
+以当前 person、`time_tracking_enabled=true` 和该关键词查询 `services`，请求 service name 与 deal name，且 `limit` 固定为 2。绝不分页；只依据响应中的 `items` 与 `next_offset`：
 
-- `pagination.total = 0`：告知没有匹配，要求一个更具体或不同的关键词
-- `pagination.total > 1` 或出现下一页：告知关键词不唯一，要求一个更具体的关键词；不展示、枚举或人工选择这些候选
-- 只有一个结果：展示其 `deal > service`，询问用户是否正确；用户拒绝时丢弃结果并重新要求关键词
+- 查询失败、`items` 缺失或不是数组、或响应结构异常：停止本次流程，报告查询失败；未写入任何记录
+- `items.length = 0`：告知没有匹配，要求一个不同或更具体的关键词
+- `items.length ≠ 1` 或 `next_offset` 存在：告知关键词不唯一，要求一个更具体的关键词；不展示、枚举或人工选择这些候选
+- 只有一个 item 且没有 `next_offset`：展示其 `deal > service`，询问用户是否正确；用户拒绝时丢弃结果并重新要求一个不同或更具体的关键词
 
 用户确认的唯一 service 只用于本次运行；不创建持久映射，也不把 GitHub ticket 映射到 Productive task。
 
@@ -101,24 +102,23 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 <ticket-or-label> <content>
 ```
 
-其中 `<content>` 是该总结；不要加入日期、`[daily-timesheet]` marker、隐藏标记或额外前缀。
+其中 `<content>` 是该总结；必须非空且只有一行，不要加入日期、`[daily-timesheet]` marker、隐藏标记或额外前缀。summary LLM 超时、不可用、返回空值、多行或不符合这些约束时，标为 `Blocked`：展示 ticket/标签与原因，阻止整批写入；这不是可由用户覆盖的 `Review`。
 
-在整个 Evidence Window 查询当前 person、已确认 service 的现有 `time_entries`，读取 `date`、`time` 和 `note`；如有分页，取完所有页。对每条候选，仅将同一日历日期的既有 note 与拟写入 note 交给 LLM 做内容判断，输出 `Same`、`Different` 或 `Uncertain` 与简短理由：
+在整个 Evidence Window 查询当前 person、已确认 service 的现有 `time_entries`，读取 `date`、`time` 和 `note`；如有分页，取完所有页。先对整批候选与各自同一日历日期的既有 note 完成所有比较，再归类；不得逐候选独立归类。每一对比较必须返回恰好一个 `Same`、`Different` 或 `Uncertain`，以及非空的简短理由。LLM 超时、不可用、空响应、格式错误、多个分类或缺少理由时，标为 `Blocked`。有效的 `Uncertain` 才进入 `Review`。`ticket-or-label` 是弱身份信号：一致支持 `Same`，不一致或缺失仅降低判断可信度，不单独否决语义匹配。
 
-- 单一 `Same` 且分钟数相同：标为 `Skip`，不改动
-- 单一 `Same` 但分钟数不同：标为 `Conflict`，不改动，列出已有值与拟写入值
+- 候选只有一个 `Same`，且该既有 note 未被其他候选判为 `Same`：分钟数相同标为 `Skip`，分钟数不同标为 `Conflict`；都不改动既有记录
 - 全部为 `Different`：标为 `Create`
-- 有 `Uncertain` 或多个可能的 `Same`：标为 `Review`；预览中展示拟写入 note、相关既有 note 和 LLM 理由，逐项询问用户选择 `Create`、`Skip` 或 `Cancel`（终止本次写入）
+- 有 `Uncertain`、一个候选有多个可能的 `Same`，或同一既有 note 被多个候选判为 `Same`：所有受影响候选标为 `Review`；预览中展示拟写入 note、所有相关既有 note 和 LLM 理由，逐项询问用户选择 `Create`、`Skip` 或 `Cancel`（终止本次写入）
 
-人工记录也参与内容判断，但绝不被覆盖或删除。只有所有 `Review` 均被用户处理后，才生成最终 `Create` 列表。
+人工记录也参与内容判断，但绝不被覆盖或删除。任何 `Blocked` 都要显示预检原因，不展示最终确认，也不得对本次运行的任何候选调用 `productive_create_resource`。只有没有 `Blocked` 且所有 `Review` 均被用户处理后，才生成最终 `Create` 列表。
 
-先输出 Productive 预览：已确认的 `deal > service`，以及每条 `Create`、`Skip`、`Conflict`、`Review` 的日期、ticket/标签、分钟数、note 和理由。然后明确询问是否创建所有最终 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
+先输出 Productive 预览：已确认的 `deal > service`，以及每条 `Create`、`Skip`、`Conflict`、`Review`、`Blocked` 的日期、ticket/标签、分钟数、note 和理由。只有没有 `Blocked` 时才明确询问是否创建所有最终 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
 
-完成标准：所有候选已分类，所有 `Review` 已由用户处理；未得到本次明确确认前，未调用任何写入操作。
+完成标准：所有候选已分类、没有 `Blocked`、所有 `Review` 已由用户处理；未得到本次明确确认前，未调用任何写入操作。
 
 ### 7. 创建 draft time entries
 
-获得明确确认后，使用 `productive_create_resource` 批量创建仅有的 `Create` 项。每项只提供：
+仅在预检没有 `Blocked` 且获得明确确认后，使用 `productive_create_resource` 批量创建仅有的 `Create` 项。每项只提供：
 
 - 当前 Productive person
 - 已确认 service
@@ -163,40 +163,47 @@ Created: <date> <ticket-or-label> <minutes>m
 Skipped: <date> <ticket-or-label> <minutes>m
 Conflict: <date> <ticket-or-label> existing <minutes>m, proposed <minutes>m
 Review: <date> <ticket-or-label> — <reason or user decision>
+Blocked: <ticket-or-label or operation> — <reason>
 Failed: <date> <ticket-or-label> — <reason>
 ```
 
-仅列出实际存在的类别；若用户未确认写入，明确写 `Not written: confirmation not received`。
+仅列出实际存在的类别；若有 `Blocked`，明确写 `Not written: preflight blocked`；若用户在 `Review` 中选择 `Cancel`，明确写 `Not written: review cancelled`；否则若用户未确认写入，明确写 `Not written: confirmation not received`。
 
 ## 盲区提醒（随结果一并告知用户）
 
 - 窗口内 merge/review 的 PR（commits 在窗口之前）不产生当日 commit，不在清单内——这类活动也是工作，提醒用户自行决定是否计入
 - 某天任务数 < 2 时，纯占比分配会把全天工时压到一个任务上，提醒人工核对该天的分配
 - 动态探测达到 100 个 PR 上限仍未覆盖窗口起点时，明确警告哪些日期可能漏报
-- Productive 同步只登记 GitHub commit 推导出的分配；其他工作以及任何 `Conflict` 或 `Review` 都需要用户决定是否手动登记
+- Productive 同步只登记 GitHub commit 推导出的分配；其他工作以及任何 `Conflict`、`Review` 或 `Blocked` 都需要用户决定是否手动登记
 
 ## 示例推演
 
-假设用户先输入关键词 `audit`，查询没有结果；技能要求另一个关键词。输入 `status` 后有多个结果；技能不分页或列出候选，而是要求更具体的词。输入 `status-board` 后唯一结果为 `Status Board > Developer`，但用户指出不正确；技能再次要求关键词。输入 `internal-tools` 后唯一结果为 `Internal Tools > Developer`，用户确认正确；没有任何记录在此之前被创建。
+假设用户先输入关键词 `audit`，响应的 `items` 为空；技能要求一个不同或更具体的关键词。输入 `status` 后 `items` 有两个结果；技能不分页或列出候选，而是要求更具体的词。输入 `status-board` 后只有一个 item 且没有 `next_offset`，结果为 `Status Board > Developer`，但用户指出不正确；技能要求一个不同或更具体的关键词。输入 `internal-tools` 后唯一结果为 `Internal Tools > Developer`，用户确认正确；没有任何记录在此之前被创建。
 
-2026-08-24 的 Allocation Rule 结果为：
+2026-08-24 使用默认每天总工时 8h，Allocation Rule 结果为：
 
-- `JOGG-730` 240m；PR 标题 `support semicolon outfit items`；headlines 为 `accept semicolon delimiters` 与 `add parser regression coverage`
-- `JOGG-731` 240m
-- `JOGG-732` 240m
-- `JOGG-733` 240m
+| ticket | 分配 | PR 标题 | 去重后的命中 headline | LLM content |
+| --- | ---: | --- | --- | --- |
+| `JOGG-730` | 120m | `support semicolon outfit items` | `accept semicolon delimiters`; `add parser regression coverage` | `Support semicolon-delimited outfit items and add parser regression coverage` |
+| `JOGG-731` | 120m | `retain outfit filters` | `keep filters after refresh` | `Keep outfit filters after refresh` |
+| `JOGG-732` | 120m | `add outfit audit view` | `render outfit change events` | `Add an audit view for outfit changes` |
+| `JOGG-733` | 120m | `clarify outfit import recovery` | `document import recovery` | `Clarify recovery for outfit imports` |
 
-LLM 为 `JOGG-730` 生成 content：`Support semicolon-delimited outfit items and add parser regression coverage`，因此拟写入 note 仅为：
+四项合计 480m。拟写入 note、同日既有 entry 和 LLM 理由如下：
 
-```text
-JOGG-730 Support semicolon-delimited outfit items and add parser regression coverage
-```
-
-同日的既有 notes 经 LLM 比较后：
-
-- `JOGG-730` 的内容明确相同且为 240m，归类为 `Skip`
-- `JOGG-731` 的内容明确相同但为 180m，归类为 `Conflict`
-- `JOGG-732` 的内容明确不同，归类为 `Create`
-- `JOGG-733` 的内容无法可靠判断，归类为 `Review`；预览显示理由和既有 note，用户选择 `Create`
+| 拟写入 note | 相关既有 entry | LLM 判断与理由 | 分类/决定 |
+| --- | --- | --- | --- |
+| `JOGG-730 Support semicolon-delimited outfit items and add parser regression coverage` | 同 note，120m | `Same`：ticket 与内容一致 | `Skip` |
+| `JOGG-731 Keep outfit filters after refresh` | 同 note，180m | `Same`：ticket 与内容一致 | `Conflict` |
+| `JOGG-732 Add an audit view for outfit changes` | `JOGG-732 Remove obsolete outfit exports`，120m | `Different`：改动目标不同 | `Create` |
+| `JOGG-733 Clarify recovery for outfit imports` | `JOGG-733 Document outfit import retry handling`，120m | `Uncertain`：内容相近但无法确认是否同一工作 | `Review`，用户选 `Create` |
 
 最终预览包含两个 `Create`、一个 `Skip`、一个 `Conflict` 和一个已处理的 `Review`。用户确认创建后，只有 `JOGG-732` 与 `JOGG-733` 被创建。创建项没有 Productive task、`billable_time` 或 timesheet 操作；既有记录保持不变，回执包含 `Review` 决定。
+
+### Review → Skip
+
+在另一次预检中，`JOGG-734` 与两条既有 entry 都被 LLM 判为 `Same`，因此不能自动复用任一记录而进入 `Review`。预览展示两条既有 note 与理由；用户选择 `Skip` 后，`JOGG-734` 不进入最终 `Create` 列表，既有记录保持不变。
+
+### Review → Cancel
+
+在另一次预检中，同一条既有 entry 被 `JOGG-735` 和 `JOGG-736` 都判为 `Same`，两个候选均进入 `Review`。用户对任一项选择 `Cancel` 后，流程不展示最终确认，也不调用 `productive_create_resource`；回执写 `Not written: review cancelled`。

@@ -25,40 +25,45 @@ Productive 中没有可用于 ticket 映射的 task。工时记录必须关联�
 3. As a Daily Timesheet user, I want the skill to inspect only services I can track time against, so that unavailable services are never proposed.
 4. As a Daily Timesheet user, I want to provide one service keyword, so that the skill can find a target without reading a large service catalog.
 5. As a Daily Timesheet user, I want a unique search result confirmed before any write, so that a keyword cannot misattribute my time.
-6. As a Daily Timesheet user, I want to provide a more specific keyword when the result is absent, ambiguous, or wrong, so that service selection remains fast and deliberate.
+6. As a Daily Timesheet user, I want to provide a different or more specific keyword when the result is absent or wrong, and a more specific keyword when it is ambiguous, so that service selection remains fast and deliberate.
 7. As a Daily Timesheet user, I want each date and ticket allocation represented by its own time entry, so that the Productive note preserves the source allocation's traceability.
 8. As a Daily Timesheet user, I want each note formatted as ticket plus an LLM summary of the PR title and commit headlines, so that it is informative without exposing an implementation marker.
 9. As a Daily Timesheet user, I want a complete create/skip/conflict/review preview before writing, so that I can inspect all financial-impacting changes as a batch.
 10. As a Daily Timesheet user, I want newly created entries to remain draft and unsubmitted, so that I retain the existing Productive submission and approval workflow.
 11. As a Daily Timesheet user, I want an existing generated entry left unchanged, so that rerunning the skill never overwrites a manually corrected record.
-12. As a Daily Timesheet user, I want LLM semantic matching of same-day, same-service notes and a Review state for uncertainty, so that ambiguous content never causes a silent duplicate or omission.
+12. As a Daily Timesheet user, I want one-to-one LLM semantic matching of same-day, same-service notes, a Review state for uncertainty or competing matches, and a blocked pre-write for technical LLM failures, so that ambiguous content never causes a silent duplicate or omission.
 13. As a Daily Timesheet user, I want Productive locks, permission failures, and unavailable services reported clearly, so that I know which records still require manual action.
 14. As a Daily Timesheet user, I want no-activity days and existing blind-spot reminders retained in the final result, so that Productive synchronization does not hide missing evidence or non-commit work.
-15. As a Daily Timesheet user, I want the skill to state which entries were created, skipped, conflicted, or failed, so that the final output is an auditable registration receipt.
+15. As a Daily Timesheet user, I want the skill to state which entries were created, skipped, conflicted, reviewed, blocked, or failed, so that the final output is an auditable registration receipt.
 
 ## Implementation Decisions
 
 - The Daily Timesheet skill remains the single workflow seam. It keeps the current GitHub collection and Allocation Rule steps, then adds a Productive synchronization phase after the allocation is known.
 - Productive connection remains a prerequisite. The synchronization phase resolves the current Productive person and uses that person for all reads and creates; GitHub author identity is not reused as a Productive identity.
-- For each run, the user provides one nonempty service keyword. The skill queries only services the current person can track time against with time tracking enabled, passes that keyword as the service query, and requests at most two records. It never paginates this search.
-- Zero results or more than one result means the keyword is not usable; the skill reports that outcome and asks for a more specific keyword. Exactly one result is presented as `deal > service`.
-- A unique result never authorizes a write. The user must explicitly confirm it. Rejection returns to keyword input rather than listing or selecting from a broad service catalog.
+- For each run, the user provides one nonempty service keyword. The skill queries only services the current person can track time against with time tracking enabled, passes that keyword as the service query, requests at most two records, and never paginates this search.
+- The query response must contain `items`. A failed or malformed response stops the run without writes. Zero items asks for a different or more specific keyword; `items.length !== 1` or a present `next_offset` means the keyword is ambiguous and asks for a more specific keyword.
+- Exactly one item with no `next_offset` is presented as `deal > service`, but never authorizes a write. The user must explicitly confirm it. Rejection returns to a different or more specific keyword rather than listing or selecting from a broad service catalog.
 - The selected service applies to the current run only. This feature does not add a persistent repository-to-service mapping, a task mapping, or a configuration file.
 - Each allocated date and ticket creates one draft Productive time entry with the current person, confirmed service, allocation date, and minutes from the Allocation Rule. Its note is only `<ticket-or-existing-fallback-label> <content>`, where an LLM produces one faithful, source-language summary from the PR title and de-duplicated matching commit headlines.
+- A generated summary must be nonempty, one line, and free of dates, markers, hidden prefixes, or unsupported content. Any failed, unavailable, or malformed summary generation marks the pre-write `Blocked`.
 - The synchronization intentionally omits a Productive task and `billable_time`. Omitting `billable_time` preserves the default behavior of the user's existing web-based time entry flow.
 - The skill does not create a Productive timesheet. A timesheet is a day-level submission marker, so creating one would change the user's submission workflow and may make entries non-editable.
-- Before final confirmation, the skill queries existing time entries for the current person, selected service, and same calendar day. An LLM compares each proposed content with those notes as same/different/uncertain. Same with equal minutes is Skip; same with different minutes is Conflict; different is Create; uncertain is Review and requires a user decision. Other manual entries remain unchanged.
+- Before final confirmation, the skill queries existing time entries for the current person, selected service, and same calendar day. An LLM compares every candidate note with those notes as `Same`/`Different`/`Uncertain`. The ticket-or-label is a weak identity signal: a matching label supports `Same`, while a mismatched or missing label does not alone rule it out.
+- A successful comparison returns exactly one category and a nonempty reason. `Uncertain` is a valid reviewable result; a timeout, unavailable LLM, empty or malformed response, multiple categories, or invalid summary marks the pre-write `Blocked`.
+- Any `Blocked` result prevents final confirmation and every create in the current run. An existing entry can be automatically associated with at most one candidate. A candidate with multiple `Same` results, or an existing entry reported `Same` for multiple candidates, puts every affected candidate into Review.
+- A unique, unclaimed `Same` with equal minutes is Skip; with different minutes Conflict. A candidate whose comparisons are all `Different` is Create; `Uncertain` is Review. Other manual entries remain unchanged.
 - After the user explicitly confirms the preview, the skill bulk-creates only missing entries. It never updates, deletes, submits, approves, or unapproves Productive records.
 - A Productive permission, date-lock, financial-lock, validation, or partial-write failure is reported with affected date and ticket labels. The skill does not retry by weakening safeguards or alter successfully existing entries.
-- The final Daily Timesheet output retains its existing per-day summary and blind-spot reminders, then appends a concise synchronization receipt with created, skipped, conflicted, reviewed, and failed entries.
+- The final Daily Timesheet output retains its existing per-day summary and blind-spot reminders, then appends a concise synchronization receipt with created, skipped, conflicted, reviewed, blocked, and failed entries.
 
 ## Testing Decisions
 
 - Test the workflow at the Daily Timesheet skill seam through a worked example rather than internal Productive implementation details. The example must begin with synthetic GitHub allocations and keyword-query outcomes for zero, ambiguous, and unique results, then show service confirmation, write preview, explicit final confirmation, and the resulting draft entries.
-- The worked example must demonstrate that a broad or rejected keyword requires a new, more specific keyword; no broad service list is paginated or selected from.
-- The example must prove external behavior for one date with multiple tickets: each allocation becomes a separate entry, its minutes equal the Allocation Rule result, and its note contains only ticket plus an LLM summary of PR title and commit headlines.
+- The worked example must demonstrate that zero results and a rejected unique result accept a different or more specific keyword, while multiple items or `next_offset` require a more specific keyword; no broad service list is paginated or selected from.
+- The example must prove external behavior for one date with multiple tickets: each allocation becomes a separate entry, their minutes sum to the configured daily total, and each note contains only ticket plus an LLM summary of its PR title and commit headlines.
 - The example must prove that Productive task, `billable_time`, and timesheet submission are absent from generated entries and operations.
-- The example must cover semantic same-content (skip), semantic same-content with different minutes (conflict), different content (create), uncertain content (Review), and an unavailable or ambiguous service (stop for user choice).
+- The example must cover semantic same-content (skip), semantic same-content with different minutes (conflict), different content (create), uncertain or competing content (Review), and an unavailable or ambiguous service (stop for user choice). It must show Review `Create`, `Skip`, and `Cancel`; cancellation means no final confirmation or create.
+- Validation must prove that an LLM timeout, unavailability, malformed response, invalid summary, or missing comparison reason is `Blocked` and prevents final confirmation and every create.
 - Run the repository-wide verification command after the documentation changes. No new runtime code seam or external Productive write is needed to validate this skill-document update.
 
 ## Out of Scope
@@ -74,7 +79,7 @@ Productive 中没有可用于 ticket 映射的 task。工时记录必须关联�
 ## Further Notes
 
 - Productive time entries require a person, service, date, and time. A Productive timesheet is a separate day-level submission object and is intentionally excluded.
-- The current account exposes a large eligible service catalog. The keyword query intentionally requests at most two records; zero or multiple results trigger another user keyword instead of pagination.
+- The current account exposes a large eligible service catalog. The keyword query intentionally requests at most two records; zero results or a rejected unique result accept a different or more specific keyword, while multiple items or `next_offset` require a more specific keyword instead of pagination.
 - This specification treats the user's existing web entry convention—filling `time` and `note` only—as authoritative for `billable_time` handling.
 - The existing uncommitted Daily Timesheet documentation changes are preserved and must not be overwritten by the implementation.
 - The approved deployment does not include a real Productive write, submission, approval, or any other Productive mutation.
