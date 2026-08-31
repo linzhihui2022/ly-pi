@@ -1,6 +1,6 @@
 # 01 — Sync Daily Timesheet to Productive draft entries
 
-**What to build:** Extend Daily Timesheet from a GitHub-derived allocation receipt into a complete, confirmation-gated Productive synchronization workflow. It must discover a service the current Productive user can track time against, suggest a repository-based match for the user to confirm or replace, preview duplicate-safe draft entries, and create only the missing entries after final confirmation.
+**What to build:** Refine Daily Timesheet so the user selects a Productive service through a unique keyword match, then receives draft entries whose notes are only ticket plus an LLM summary of PR title and commit headlines. Existing same-day, same-service notes are semantically compared by LLM; uncertainty is presented for user review before any write.
 
 **Blocked by:** None — can start immediately.
 
@@ -8,17 +8,17 @@
 
 **Risk:** High
 
-**Approval:** Approved in the parent specification. The user also explicitly approved deployment of the verified assets through `bun run deploy`; the post-deploy runtime reload remains a user action. Each Productive write remains gated by an explicit confirmation during that Daily Timesheet run.
+**Approval:** Approved in the parent specification. The user also explicitly approved a user-keyword unique-match query and `<ticket> <LLM summary>` notes with LLM semantic matching plus Review on uncertainty; these refinements do not authorize deployment. The previously deployed assets remain an earlier completed action. Each Productive write remains gated by an explicit confirmation during that Daily Timesheet run.
 
 - [x] Preserve the existing Evidence Window, GitHub collection, Allocation Rule, ticket fallback, no-activity output, and blind-spot reminders.
-- [x] Resolve the current Productive person and fully paginate only services that person can track time against; derive and present a `deal > service` suggestion from the repository root and GitHub repository name, but require user confirmation or a user-selected fallback.
-- [x] Produce a pre-write receipt that classifies every proposed date-and-ticket entry as create, skip, or conflict; leave all existing Productive records unchanged.
-- [x] After explicit final confirmation, create only missing draft time entries with the confirmed service, allocated minutes, and a stable note carrying ticket-or-fallback label plus summary; do not link a task, set `billable_time`, create a timesheet, submit, approve, update, or delete records.
-- [x] Report created, skipped, conflicted, and failed entries alongside the normal Daily Timesheet result, including clear handling for unavailable services, permissions, and locks.
-- [x] Add a worked example that proves service suggestion and rejection, manual fallback, create/skip/conflict behavior, and the absence of task, explicit billable-time, and submission operations.
+- [x] Resolve the current Productive person, request one nonempty service keyword, and query only that person's time-trackable services with a two-record limit. Accept only one result as `deal > service`; zero, multiple, or rejected results require a new, more specific keyword without pagination.
+- [x] Produce a pre-write receipt that classifies every proposed date-and-ticket entry as create, skip, conflict, or review through same-day, same-service LLM content matching; leave all existing Productive records unchanged.
+- [x] After explicit final confirmation, create only missing draft time entries with the confirmed service, allocated minutes, and a note formatted as `<ticket-or-fallback-label> <LLM summary>`; do not link a task, set `billable_time`, create a timesheet, submit, approve, update, or delete records.
+- [x] Report created, skipped, conflicted, reviewed, and failed entries alongside the normal Daily Timesheet result, including clear handling for unavailable services, permissions, locks, and unresolved Review items.
+- [x] Add a worked example that proves zero, ambiguous, unique, and rejected keyword outcomes; LLM summary content; create/skip/conflict/review behavior; and the absence of task, explicit billable-time, and submission operations.
 - [x] Run the repository-wide verification command successfully.
 - [x] Deploy the verified assets with `bun run deploy` and request the user to run `/reload` after a successful deployment.
 
 ## Answer
 
-Expanded Daily Timesheet with confirmation-gated Productive draft-entry synchronization, duplicate-safe previewing, and a worked example. `bun run verify` and `bun run deploy` passed; the deployed Daily Timesheet snapshot was verified. No real Productive write was performed.
+Replaced full service pagination with unique keyword lookup, and replaced marker notes with `<ticket> <LLM summary>` notes plus same-day semantic duplicate review. `bun run verify` passed. This source-only refinement does not authorize another deployment or any real Productive write.

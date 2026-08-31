@@ -63,7 +63,7 @@ gh pr view <num> --json commits --jq \
   '.commits[] | [.oid[0:8], .committedDate, (.authors[0].login // "-"), (.authors[0].email // "-"), .messageHeadline] | @tsv'
 ```
 
-过滤条件：author login/email 匹配（步骤 1）且 `committedDate` 落在某一天的 UTC 窗口内，归入该天。按 commit author 过滤而非 PR author——别人 PR 里可能有自己的 commit，自己 PR 里也可能有别人的。
+过滤条件：author login/email 匹配（步骤 1）且 `committedDate` 落在某一天的 UTC 窗口内，归入该天。按 commit author 过滤而非 PR author——别人 PR 里可能有自己的 commit，自己 PR 里也可能有别人的。为每个分配任务保留 PR 标题和去重后的命中 `messageHeadline`，供步骤 6 生成内容总结；不能只保留 commit 数。
 
 完成标准：每一天的命中 commit 列表（按 PR 分组）。
 
@@ -81,42 +81,40 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 先调用 `productive_get_current_person_and_organization()`，取得当前 Productive person。GitHub 身份只用于筛 commit，不能作为 Productive person。
 
-读取当前 person 可记工时且已开启 time tracking 的全部 service：先用 `productive_describe_resource` 检查 `services` 与 `time_entries` 的字段，并加载 `time-entry-logging` 的 Productive 指引；再以 `person` 和 `time_tracking_enabled=true` 查询 `services`，请求 service name 与 deal name。每页最多 200 条；有 `next_offset` 时，使用返回的 `query_id` 继续取页，直到没有下一页。不能把第一页当作完整候选集。
+先用 `productive_describe_resource` 检查 `services` 与 `time_entries` 的字段，并加载 `time-entry-logging` 的 Productive 指引。然后要求用户给出一个非空 service 关键词（一个词）；不要从仓库名、目录名或完整 service 列表推测候选。
 
-候选来源：
+以当前 person、`time_tracking_enabled=true` 和该关键词查询 `services`，请求 service name 与 deal name，且 `limit` 固定为 2。绝不分页：
 
-```bash
-basename "$(git rev-parse --show-toplevel)"
-gh repo view --json nameWithOwner --jq .nameWithOwner
-```
+- `pagination.total = 0`：告知没有匹配，要求一个更具体或不同的关键词
+- `pagination.total > 1` 或出现下一页：告知关键词不唯一，要求一个更具体的关键词；不展示、枚举或人工选择这些候选
+- 只有一个结果：展示其 `deal > service`，询问用户是否正确；用户拒绝时丢弃结果并重新要求关键词
 
-将仓库根目录名、仓库全名和仓库短名与 `deal > service` 名称做大小写无关的规范化比较；把常见分隔符视为等价。按完整匹配优先、部分匹配其次排序，只用于提出建议。
-
-- 展示候选时始终显示 `deal > service`，不能只显示 service 名，因为同名 service 可能属于不同 deal
-- 提出最匹配候选后，询问用户是否正确；没有候选、候选错误或仍有歧义时，请用户指定 `deal > service`，直到唯一解析
-- 用户确认的 service 只用于本次运行；不创建持久映射，也不把 GitHub ticket 映射到 Productive task
+用户确认的唯一 service 只用于本次运行；不创建持久映射，也不把 GitHub ticket 映射到 Productive task。
 
 完成标准：当前 Productive person 和唯一、经用户确认的 `deal > service` 已确定；否则停止，未写入任何 Productive 记录。
 
 ### 6. 预检并展示写入计划
 
-每个有 commit 的日期、每个分配出的 ticket（或既有的无 ticket 短语）对应一条候选 time entry。先将标签压缩为单行并替换 `|`，再使用该日期和标签生成稳定 note 首行：
+每个有 commit 的日期、每个分配出的 ticket（或既有的无 ticket 短语）对应一条候选 time entry。针对该任务的 PR 标题和去重后的命中 commit headlines，生成一条具体、忠实且保留源语言的 LLM 总结：说明主要改动及其对象，不虚构未在来源中出现的信息。note 只使用一行：
 
 ```text
-[daily-timesheet] <YYYY-MM-DD> | <ticket-or-label>
-<summary>
+<ticket-or-label> <content>
 ```
 
-在整个 Evidence Window 查询当前 person、已确认 service 的现有 `time_entries`，读取 `date`、`time` 和 `note`；如有分页，取完所有页。按 note 中稳定首行的文本 marker 比对，而非原始 note 字符串（Productive 会以富文本保存 note）：
+其中 `<content>` 是该总结；不要加入日期、`[daily-timesheet]` marker、隐藏标记或额外前缀。
 
-- marker 已存在且分钟数相同：标为 `Skip`，不改动
-- marker 已存在但分钟数不同：标为 `Conflict`，不改动，列出已有值与拟写入值
-- 没有 marker：标为 `Create`
-- 不带该 marker 的人工记录与本流程无关，绝不覆盖或删除
+在整个 Evidence Window 查询当前 person、已确认 service 的现有 `time_entries`，读取 `date`、`time` 和 `note`；如有分页，取完所有页。对每条候选，仅将同一日历日期的既有 note 与拟写入 note 交给 LLM 做内容判断，输出 `Same`、`Different` 或 `Uncertain` 与简短理由：
 
-先输出 Productive 预览：已确认的 `deal > service`，以及每条 `Create`、`Skip`、`Conflict` 的日期、ticket/标签、分钟数和摘要。然后明确询问是否创建所有 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
+- 单一 `Same` 且分钟数相同：标为 `Skip`，不改动
+- 单一 `Same` 但分钟数不同：标为 `Conflict`，不改动，列出已有值与拟写入值
+- 全部为 `Different`：标为 `Create`
+- 有 `Uncertain` 或多个可能的 `Same`：标为 `Review`；预览中展示拟写入 note、相关既有 note 和 LLM 理由，逐项询问用户选择 `Create`、`Skip` 或 `Cancel`（终止本次写入）
 
-完成标准：所有候选已分类并展示；未得到本次明确确认前，未调用任何写入操作。
+人工记录也参与内容判断，但绝不被覆盖或删除。只有所有 `Review` 均被用户处理后，才生成最终 `Create` 列表。
+
+先输出 Productive 预览：已确认的 `deal > service`，以及每条 `Create`、`Skip`、`Conflict`、`Review` 的日期、ticket/标签、分钟数、note 和理由。然后明确询问是否创建所有最终 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
+
+完成标准：所有候选已分类，所有 `Review` 已由用户处理；未得到本次明确确认前，未调用任何写入操作。
 
 ### 7. 创建 draft time entries
 
@@ -126,7 +124,7 @@ gh repo view --json nameWithOwner --jq .nameWithOwner
 - 已确认 service
 - 本地日历日期 `YYYY-MM-DD`
 - `time: { value: <minutes>, unit: "minute" }`
-- 步骤 6 的 note
+- 步骤 6 的 `<ticket-or-label> <content>` note
 
 不要提供 Productive task，也不要提供 `billable_time`——这与用户在网页中只填写 `time` 和 `note` 的方式一致，由 Productive 保持默认行为。不要创建 `timesheets`：它是按日提交标记；本流程只创建 draft time entries，绝不提交、审批、更新或删除记录。
 
@@ -164,6 +162,7 @@ Service: <deal> > <service>
 Created: <date> <ticket-or-label> <minutes>m
 Skipped: <date> <ticket-or-label> <minutes>m
 Conflict: <date> <ticket-or-label> existing <minutes>m, proposed <minutes>m
+Review: <date> <ticket-or-label> — <reason or user decision>
 Failed: <date> <ticket-or-label> — <reason>
 ```
 
@@ -174,29 +173,30 @@ Failed: <date> <ticket-or-label> — <reason>
 - 窗口内 merge/review 的 PR（commits 在窗口之前）不产生当日 commit，不在清单内——这类活动也是工作，提醒用户自行决定是否计入
 - 某天任务数 < 2 时，纯占比分配会把全天工时压到一个任务上，提醒人工核对该天的分配
 - 动态探测达到 100 个 PR 上限仍未覆盖窗口起点时，明确警告哪些日期可能漏报
-- Productive 同步只登记 GitHub commit 推导出的分配；其他工作与任何 `Conflict` 都需要用户决定是否手动登记
+- Productive 同步只登记 GitHub commit 推导出的分配；其他工作以及任何 `Conflict` 或 `Review` 都需要用户决定是否手动登记
 
 ## 示例推演
 
-假设完整分页后的可记工时候选包含 `Status Board > Developer` 与 `Internal Tools > Developer`。仓库根目录为 `status-board`，GitHub 仓库为 `rb2/status-board`，因此技能先建议 `Status Board > Developer`。用户指出不正确并选择 `Internal Tools > Developer`；没有任何记录在此之前被创建。
+假设用户先输入关键词 `audit`，查询没有结果；技能要求另一个关键词。输入 `status` 后有多个结果；技能不分页或列出候选，而是要求更具体的词。输入 `status-board` 后唯一结果为 `Status Board > Developer`，但用户指出不正确；技能再次要求关键词。输入 `internal-tools` 后唯一结果为 `Internal Tools > Developer`，用户确认正确；没有任何记录在此之前被创建。
 
 2026-08-24 的 Allocation Rule 结果为：
 
-- `OPS-101` 240m，摘要 `Add status filter`
-- `OPS-102` 240m，摘要 `Fix refresh state`
-- `OPS-103` 240m，摘要 `Update documentation`
+- `JOGG-730` 240m；PR 标题 `support semicolon outfit items`；headlines 为 `accept semicolon delimiters` 与 `add parser regression coverage`
+- `JOGG-731` 240m
+- `JOGG-732` 240m
+- `JOGG-733` 240m
 
-预检发现：
-
-- `OPS-101` 没有 marker，归类为 `Create`
-- `OPS-102` 的 marker 已存在且为 240m，归类为 `Skip`
-- `OPS-103` 的 marker 已存在但为 180m，归类为 `Conflict`
-
-预览展示这三项。用户确认创建后，只有 `OPS-101` 被创建，字段为已确认 person、`Internal Tools > Developer`、`2026-08-24`、240m 和以下 note：
+LLM 为 `JOGG-730` 生成 content：`Support semicolon-delimited outfit items and add parser regression coverage`，因此拟写入 note 仅为：
 
 ```text
-[daily-timesheet] 2026-08-24 | OPS-101
-Add status filter
+JOGG-730 Support semicolon-delimited outfit items and add parser regression coverage
 ```
 
-创建项没有 Productive task、`billable_time` 或 timesheet 操作；`OPS-102` 与 `OPS-103` 保持不变。最终回执报告一个 `Created`、一个 `Skipped` 和一个 `Conflict`。
+同日的既有 notes 经 LLM 比较后：
+
+- `JOGG-730` 的内容明确相同且为 240m，归类为 `Skip`
+- `JOGG-731` 的内容明确相同但为 180m，归类为 `Conflict`
+- `JOGG-732` 的内容明确不同，归类为 `Create`
+- `JOGG-733` 的内容无法可靠判断，归类为 `Review`；预览显示理由和既有 note，用户选择 `Create`
+
+最终预览包含两个 `Create`、一个 `Skip`、一个 `Conflict` 和一个已处理的 `Review`。用户确认创建后，只有 `JOGG-732` 与 `JOGG-733` 被创建。创建项没有 Productive task、`billable_time` 或 timesheet 操作；既有记录保持不变，回执包含 `Review` 决定。
