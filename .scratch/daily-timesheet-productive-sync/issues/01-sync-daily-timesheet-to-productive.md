@@ -22,3 +22,7 @@
 ## Answer
 
 Replaced full service pagination with unique keyword lookup, and replaced marker notes with `<ticket> <LLM summary>` notes plus same-day semantic duplicate review. `bun run verify` passed. This source-only refinement does not authorize another deployment or any real Productive write.
+
+## Comments
+
+- The user explicitly authorized `gh auth switch --hostname github.com --user linzhihui2022` solely to create the already-pushed feature-branch PR. This does not authorize credential creation, force-push, or unrelated GitHub mutations.
