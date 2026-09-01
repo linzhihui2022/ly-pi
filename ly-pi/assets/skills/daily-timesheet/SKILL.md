@@ -81,18 +81,30 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 先调用 `productive_get_current_person_and_organization()`，取得当前 Productive person。GitHub 身份只用于筛 commit，不能作为 Productive person。
 
-先用 `productive_describe_resource` 检查 `services` 与 `time_entries` 的字段，并加载 `time-entry-logging` 的 Productive 指引。然后要求用户给出一个非空 service 关键词（一个词）；不要从仓库名、目录名或完整 service 列表推测候选。
+先用 `productive_describe_resource` 检查 `services` 与 `time_entries` 的字段，并加载 `time-entry-logging` 的 Productive 指引。当前账号不能读取 Deal，因此候选和回执只显示 service 名，不显示 Deal 名或内部 ID。
 
-以当前 person、`time_tracking_enabled=true` 和该关键词查询 `services`，请求 service name 与 deal name，且 `limit` 固定为 2。绝不分页；只依据响应中的 `items` 与 `next_offset`：
+优先读取当前 person 最近的历史 `time_entries`：按 `date` 倒序、`limit` 固定为 50，仅请求 `date` 与 `service.name`，并从返回的 service relationship 内部保留 service ID；不读取 note 或工时，也不向用户展示 ID。响应的 `items` 缺失、不是数组或结构异常时，跳过历史候选并进入关键词或短语回退；不写入任何记录。
+
+丢弃缺少日期、service 名或 service ID 的历史项；再按返回顺序以 service ID 去重，保留每个 service 的最近日期，只展示至多 10 个候选。候选格式为：
+
+```text
+<service> — 最近使用 <YYYY-MM-DD>
+```
+
+同名 service 用最近日期区分；若名称和最近日期都相同而无法区分，则不接受该组候选的选择。用户必须显式选择一个历史候选；没有候选、拒绝全部候选或候选不可用时，进入关键词或短语回退。
+
+对选中的历史 service，以当前 person、`time_tracking_enabled=true` 和精确 service name 查询 `services`，每页最多 200 条；使用返回的 `query_id` 与 `next_offset` 持续读取该精确名称的后续页，直到找到相同 service ID 或没有更多结果。只有找到相同 ID 才可继续；查询失败、结构异常、结果耗尽或只找到同名不同 ID 时，告知该历史 service 已不可记工时并进入回退。绝不把同名的其他 service 替代为选中项。
+
+回退时要求用户给出一个非空 service 关键词或短语（允许内部空格）；不要从仓库名、目录名或完整 service 列表推测候选。以当前 person、`time_tracking_enabled=true` 和该输入查询 `services`，请求 service name，且 `limit` 固定为 2。绝不分页；只依据响应中的 `items` 与 `next_offset`：
 
 - 查询失败、`items` 缺失或不是数组、或响应结构异常：停止本次流程，报告查询失败；未写入任何记录
-- `items.length = 0`：告知没有匹配，要求一个不同或更具体的关键词
-- `items.length ≠ 1` 或 `next_offset` 存在：告知关键词不唯一，要求一个更具体的关键词；不展示、枚举或人工选择这些候选
-- 只有一个 item 且没有 `next_offset`：展示其 `deal > service`，询问用户是否正确；用户拒绝时丢弃结果并重新要求一个不同或更具体的关键词
+- `items.length = 0`：告知没有匹配，要求一个不同或更具体的关键词或短语
+- `items.length ≠ 1` 或 `next_offset` 存在：告知关键词或短语不唯一，要求一个更具体的关键词或短语
+- 只有一个 item 且没有 `next_offset`：展示其 service 名，询问用户是否正确；用户拒绝时丢弃结果并重新要求一个不同或更具体的关键词或短语
 
-用户确认的唯一 service 只用于本次运行；不创建持久映射，也不把 GitHub ticket 映射到 Productive task。
+历史或回退路径中，经用户确认的唯一 service 只用于本次运行；不创建持久映射，也不把 GitHub ticket 映射到 Productive task。
 
-完成标准：当前 Productive person 和唯一、经用户确认的 `deal > service` 已确定；否则停止，未写入任何 Productive 记录。
+完成标准：当前 Productive person 和唯一、经用户确认且当前可记工时的 service 已确定；否则停止，未写入任何 Productive 记录。
 
 ### 6. 预检并展示写入计划
 
@@ -112,7 +124,7 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 人工记录也参与内容判断，但绝不被覆盖或删除。任何 `Blocked` 都要显示预检原因，不展示最终确认，也不得对本次运行的任何候选调用 `productive_create_resource`。只有没有 `Blocked` 且所有 `Review` 均被用户处理后，才生成最终 `Create` 列表。
 
-先输出 Productive 预览：已确认的 `deal > service`，以及每条 `Create`、`Skip`、`Conflict`、`Review`、`Blocked` 的日期、ticket/标签、分钟数、note 和理由。只有没有 `Blocked` 时才明确询问是否创建所有最终 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
+先输出 Productive 预览：已确认的 service，以及每条 `Create`、`Skip`、`Conflict`、`Review`、`Blocked` 的日期、ticket/标签、分钟数、note 和理由。只有没有 `Blocked` 时才明确询问是否创建所有最终 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
 
 完成标准：所有候选已分类、没有 `Blocked`、所有 `Review` 已由用户处理；未得到本次明确确认前，未调用任何写入操作。
 
@@ -158,7 +170,7 @@ Total: <sum>m (<hours>h)
 ```
 ## Productive
 
-Service: <deal> > <service>
+Service: <service>
 Created: <date> <ticket-or-label> <minutes>m
 Skipped: <date> <ticket-or-label> <minutes>m
 Conflict: <date> <ticket-or-label> existing <minutes>m, proposed <minutes>m
@@ -178,8 +190,6 @@ Failed: <date> <ticket-or-label> — <reason>
 
 ## 示例推演
 
-假设用户先输入关键词 `audit`，响应的 `items` 为空；技能要求一个不同或更具体的关键词。输入 `status` 后 `items` 有两个结果；技能不分页或列出候选，而是要求更具体的词。输入 `status-board` 后只有一个 item 且没有 `next_offset`，结果为 `Status Board > Developer`，但用户指出不正确；技能要求一个不同或更具体的关键词。输入 `internal-tools` 后唯一结果为 `Internal Tools > Developer`，用户确认正确；没有任何记录在此之前被创建。
-
 2026-08-24 使用默认每天总工时 8h，Allocation Rule 结果为：
 
 | ticket | 分配 | PR 标题 | 去重后的命中 headline | LLM content |
@@ -189,7 +199,25 @@ Failed: <date> <ticket-or-label> — <reason>
 | `JOGG-732` | 120m | `add outfit audit view` | `render outfit change events` | `Add an audit view for outfit changes` |
 | `JOGG-733` | 120m | `clarify outfit import recovery` | `document import recovery` | `Clarify recovery for outfit imports` |
 
-四项合计 480m。拟写入 note、同日既有 entry 和 LLM 理由如下：
+四项合计 480m。
+
+### Service selection
+
+假设最近 50 条历史条目中，内部 service `A` 的 `Developer` 分别出现在 2026-08-24 与 2026-08-20，内部 service `B` 的 `Developer` 出现在 2026-08-18，内部 service `C` 的 `Internal Tools` 出现在 2026-08-12。去重后，用户只看到：
+
+```text
+Developer — 最近使用 2026-08-24
+Developer — 最近使用 2026-08-18
+Internal Tools — 最近使用 2026-08-12
+```
+
+用户显式选择第二项。以当前 person、`time_tracking_enabled=true` 和精确名称 `Developer` 查询后，返回的同名 service 中只有 `B` 与选中 ID 相同；技能确认 `B` 仍可记工时。`A` 的重复历史条目没有形成重复候选，且内部 ID 从不展示给用户。
+
+以下每种情况都不使用历史 service，而是进入关键词或短语回退：历史 `items` 为空；用户拒绝全部三个候选；选中的 `B` 未出现在当前可记工时的同名查询中；或两个不同 ID 都是 `Developer` 且最近使用日同为 2026-08-24，导致用户可见标签完全相同。
+
+回退中，输入 `audit` 的 `items` 为空；输入 `status` 后有多个 item 或 `next_offset`；输入 `status board` 后唯一得到 `Developer`，但用户拒绝；这些分支都继续要求不同或更具体的关键词或短语。输入短语 `internal tools` 后只有一个 item 且没有 `next_offset`，展示 `Internal Tools`，用户确认正确。任何记录在此之前都不会被创建。
+
+拟写入 note、同日既有 entry 和 LLM 理由如下：
 
 | 拟写入 note | 相关既有 entry | LLM 判断与理由 | 分类/决定 |
 | --- | --- | --- | --- |
