@@ -63,7 +63,7 @@ gh pr view <num> --json commits --jq \
   '.commits[] | [.oid[0:8], .committedDate, (.authors[0].login // "-"), (.authors[0].email // "-"), .messageHeadline] | @tsv'
 ```
 
-过滤条件：author login/email 匹配（步骤 1）且 `committedDate` 落在某一天的 UTC 窗口内，归入该天。按 commit author 过滤而非 PR author——别人 PR 里可能有自己的 commit，自己 PR 里也可能有别人的。
+过滤条件：author login/email 匹配（步骤 1）且 `committedDate` 落在某一天的 UTC 窗口内，归入该天。按 commit author 过滤而非 PR author——别人 PR 里可能有自己的 commit，自己 PR 里也可能有别人的。为每个分配任务保留 PR 标题和去重后的命中 `messageHeadline`，供步骤 6 生成内容总结；不能只保留 commit 数。
 
 完成标准：每一天的命中 commit 列表（按 PR 分组）。
 
@@ -81,52 +81,58 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 先调用 `productive_get_current_person_and_organization()`，取得当前 Productive person。GitHub 身份只用于筛 commit，不能作为 Productive person。
 
-读取当前 person 可记工时且已开启 time tracking 的全部 service：先用 `productive_describe_resource` 检查 `services` 与 `time_entries` 的字段，并加载 `time-entry-logging` 的 Productive 指引；再以 `person` 和 `time_tracking_enabled=true` 查询 `services`，请求 service name 与 deal name。每页最多 200 条；有 `next_offset` 时，使用返回的 `query_id` 继续取页，直到没有下一页。不能把第一页当作完整候选集。
+先用 `productive_describe_resource` 检查 `bookings`、`services` 与 `time_entries` 的字段，确认 booking 关联的 service 和 service 记录都可返回稳定的 service ID，并加载 `time-entry-logging` 与 `work-booking` 的 Productive 指引。当前账号不能读取 Deal，因此候选和回执只显示 service 名、关联 task（如有）及排期信息，不显示 Deal 名或内部 ID。
 
-候选来源：
+对每个有分配工时的本地日期 D，独立查询当前 person 的 Scheduled on：`bookings` 使用 `person=current`、`booking_type=service`、`is_canceled=false`、`with_draft=true`、`after=D` 与 `before=D`；首次最多请求 200 条，并请求 `started_on`、`ended_on`、`booking_method`、`time`、`percentage`、`total_time`、`service.id`、`service.name` 与 `task.title`。`service.id` 只在内部保留，用于去重和精确重验。`after`/`before` 要覆盖 D，因而包含跨多日的 booking。返回 `next_offset` 时，使用该首次查询的 `query_id` 继续读取后续页，直到没有 `next_offset`；必须在取完全部页后才按 service ID 去重、判断候选数或向用户展示候选。
 
-```bash
-basename "$(git rev-parse --show-toplevel)"
-gh repo view --json nameWithOwner --jq .nameWithOwner
-```
+首次或后续查询失败、`items` 缺失或不是数组、booking/service 数据结构异常（包括缺少有效 `service.id`）、`next_offset` 存在却没有有效 `query_id`、或 offset 重复/不前进时，将该操作标为 `Blocked: Scheduled on <D>`，阻断整批 Productive 预检、最终确认和所有写入。不要把技术查询失败视为没有排期。
 
-将仓库根目录名、仓库全名和仓库短名与 `deal > service` 名称做大小写无关的规范化比较；把常见分隔符视为等价。按完整匹配优先、部分匹配其次排序，只用于提出建议。
+对有效 booking 按 service ID 在日期 D 内去重；同一 service 的多条 booking 只形成一个候选。显示每个候选的 service 名、关联 task（如有）和排期摘要：按天 booking 显示每天时长及整个 booking 的工作日总时长，百分比 booking 显示百分比，total-hours booking 显示总时长。候选不展示内部 ID。
 
-- 展示候选时始终显示 `deal > service`，不能只显示 service 名，因为同名 service 可能属于不同 deal
-- 提出最匹配候选后，询问用户是否正确；没有候选、候选错误或仍有歧义时，请用户指定 `deal > service`，直到唯一解析
-- 用户确认的 service 只用于本次运行；不创建持久映射，也不把 GitHub ticket 映射到 Productive task
+- 没有有效 Service booking：将日期 D 标为 `Not scheduled: no Scheduled on`，不为 D 生成预检候选或写入项，继续处理其他日期
+- 恰有一个 Service：展示排期并要求用户确认；用户拒绝时将 D 标为 `Not scheduled: selection cancelled`
+- 有多个 Service：展示候选并要求用户显式选择一个；取消或无选择时将 D 标为 `Not scheduled: selection cancelled`
+- 若多个不同 service 的用户可见标签完全相同而无法区分：将 D 标为 `Not scheduled: ambiguous Scheduled on`；不展示内部 ID
 
-完成标准：当前 Productive person 和唯一、经用户确认的 `deal > service` 已确定；否则停止，未写入任何 Productive 记录。
+对确认或选择的 Scheduled on service，以当前 person、`time_tracking_enabled=true` 和精确 service name 查询 `services`，读取每条 service 的 `id`，每页最多 200 条；使用返回的 `query_id` 与 `next_offset` 持续读取该精确名称的后续页，直到找到原 booking 的 service ID 或没有更多结果。`next_offset` 存在却没有有效 `query_id`、offset 重复/不前进、首次或后续查询失败、缺少有效 service ID 或数据结构异常时为 `Blocked`，阻断整批。只有找到原 booking 的相同 ID 才可用于 D；查询成功且完整耗尽结果后仍未找到该 ID、只找到同名不同 ID 或所选 service 不可记工时时，将 D 标为 `Not scheduled: service unavailable`。绝不以同名的其他 service 替代选中项。
+
+为每个未跳过日期保存其经用户确认且当前可记工时的 service；不创建持久映射，也不把 GitHub ticket 映射到 Productive task。绝不读取历史 `time_entries` 来寻找 service，绝不要求或执行关键词或短语搜索。
+
+完成标准：每个有分配工时的日期都已关联唯一、经用户确认且当前可记工时的 Scheduled on service，或已作为 `Not scheduled` 跳过；若有 `Blocked`，未写入任何 Productive 记录。
 
 ### 6. 预检并展示写入计划
 
-每个有 commit 的日期、每个分配出的 ticket（或既有的无 ticket 短语）对应一条候选 time entry。先将标签压缩为单行并替换 `|`，再使用该日期和标签生成稳定 note 首行：
+每个已关联 Scheduled on service 的日期、每个分配出的 ticket（或既有的无 ticket 短语）对应一条候选 time entry。`Not scheduled` 日期不生成候选或写入项，但必须保留在最终回执中。针对该任务的 PR 标题和去重后的命中 commit headlines，生成一条具体、忠实且保留源语言的 LLM 总结：说明主要改动及其对象，不虚构未在来源中出现的信息。note 只使用一行：
 
 ```text
-[daily-timesheet] <YYYY-MM-DD> | <ticket-or-label>
-<summary>
+<ticket-or-label> <content>
 ```
 
-在整个 Evidence Window 查询当前 person、已确认 service 的现有 `time_entries`，读取 `date`、`time` 和 `note`；如有分页，取完所有页。按 note 中稳定首行的文本 marker 比对，而非原始 note 字符串（Productive 会以富文本保存 note）：
+其中 `<content>` 是该总结；必须非空且只有一行，不要加入日期、`[daily-timesheet]` marker、隐藏标记或额外前缀。summary LLM 超时、不可用、返回空值、多行或不符合这些约束时，标为 `Blocked`：展示 ticket/标签与原因，阻止整批写入；这不是可由用户覆盖的 `Review`。
 
-- marker 已存在且分钟数相同：标为 `Skip`，不改动
-- marker 已存在但分钟数不同：标为 `Conflict`，不改动，列出已有值与拟写入值
-- 没有 marker：标为 `Create`
-- 不带该 marker 的人工记录与本流程无关，绝不覆盖或删除
+对每个 `日期 + 已确认 Scheduled on service` 组合，查询当前 person、该 service 与同一日历日期的现有 `time_entries`，读取 `date`、`time` 和 `note`；如有分页，使用首次查询的 `query_id` 与返回的 `next_offset` 取完所有页。首次或后续查询失败、`next_offset` 存在却没有有效 `query_id`、offset 重复/不前进、缺少或非数组 `items`、或无法完整读取既有 entry 数据的响应均为 `Blocked`，不展示最终确认且不创建任何记录；绝不将其视为空结果。每个候选都必须与相同日期、相同 service 的每条既有 note 比较，不得按 ticket/label 预先过滤；先完成整批比较再归类，不得逐候选独立归类。每一对比较必须返回恰好一个 `Same`、`Different` 或 `Uncertain`，以及非空的简短理由。LLM 超时、不可用、空响应、格式错误、多个分类或缺少理由时，标为 `Blocked`。有效的 `Uncertain` 才进入 `Review`。`ticket-or-label` 是弱身份信号：一致支持 `Same`，不一致或缺失仅降低判断可信度，不单独否决语义匹配。
 
-先输出 Productive 预览：已确认的 `deal > service`，以及每条 `Create`、`Skip`、`Conflict` 的日期、ticket/标签、分钟数和摘要。然后明确询问是否创建所有 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
+先处理 `Review`，其优先级高于自动分类：
 
-完成标准：所有候选已分类并展示；未得到本次明确确认前，未调用任何写入操作。
+- 候选有任一 `Uncertain`、有多个 `Same`，或同一既有 note 被多个候选判为 `Same`：所有受影响候选标为 `Review`；预览中展示拟写入 note、所有相关既有 note 和 LLM 理由，逐项询问用户选择 `Create`、`Skip` 或 `Cancel`（终止本次写入）
+- 对不在 `Review` 的候选，恰有一个 `Same`、该既有 note 未被其他候选判为 `Same`，且其余每一对比较均为 `Different`：分钟数相同标为 `Skip`，分钟数不同标为 `Conflict`；都不改动既有记录
+- 对不在 `Review` 的候选，没有既有 entry 或所有比较均为 `Different`：标为 `Create`
+
+人工记录也参与内容判断，但绝不被覆盖或删除。任何 `Blocked` 都要显示预检原因，不展示最终确认，也不得对本次运行的任何候选调用 `productive_create_resource`。只有没有 `Blocked` 且所有 `Review` 均被用户处理后，才生成最终 `Create` 列表。
+
+先输出 Productive 预览：每个未跳过日期的已确认 Scheduled on service、每个 `Not scheduled` 日期及其原因，以及每条 `Create`、`Skip`、`Conflict`、`Review`、`Blocked` 的日期、service、ticket/标签、分钟数、note 和理由。只有没有 `Blocked` 时才明确询问是否创建所有最终 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
+
+完成标准：所有未跳过日期的候选已分类、没有 `Blocked`、所有 `Review` 已由用户处理，且所有 `Not scheduled` 日期已列出原因；未得到本次明确确认前，未调用任何写入操作。
 
 ### 7. 创建 draft time entries
 
-获得明确确认后，使用 `productive_create_resource` 批量创建仅有的 `Create` 项。每项只提供：
+仅在预检没有 `Blocked` 且获得明确确认后，使用 `productive_create_resource` 批量创建仅有的 `Create` 项。每项只提供：
 
 - 当前 Productive person
-- 已确认 service
+- 该项日期的已确认 Scheduled on service
 - 本地日历日期 `YYYY-MM-DD`
 - `time: { value: <minutes>, unit: "minute" }`
-- 步骤 6 的 note
+- 步骤 6 的 `<ticket-or-label> <content>` note
 
 不要提供 Productive task，也不要提供 `billable_time`——这与用户在网页中只填写 `time` 和 `note` 的方式一致，由 Productive 保持默认行为。不要创建 `timesheets`：它是按日提交标记；本流程只创建 draft time entries，绝不提交、审批、更新或删除记录。
 
@@ -160,43 +166,115 @@ Total: <sum>m (<hours>h)
 ```
 ## Productive
 
-Service: <deal> > <service>
-Created: <date> <ticket-or-label> <minutes>m
-Skipped: <date> <ticket-or-label> <minutes>m
-Conflict: <date> <ticket-or-label> existing <minutes>m, proposed <minutes>m
-Failed: <date> <ticket-or-label> — <reason>
+Scheduled: <date> <service> — <booking summary>
+Not scheduled: <date> — <reason>
+Created: <date> <service> <ticket-or-label> <minutes>m
+Skipped: <date> <service> <ticket-or-label> <minutes>m
+Conflict: <date> <service> <ticket-or-label> existing <minutes>m, proposed <minutes>m
+Review: <date> <service> <ticket-or-label> — <reason or user decision>
+Blocked: <date or operation> — <reason>
+Failed: <date> <service> <ticket-or-label> — <reason>
 ```
 
-仅列出实际存在的类别；若用户未确认写入，明确写 `Not written: confirmation not received`。
+仅列出实际存在的类别；若有 `Blocked`，明确写 `Not written: preflight blocked`；若用户在 `Review` 中选择 `Cancel`，明确写 `Not written: review cancelled`；否则若用户未确认写入，明确写 `Not written: confirmation not received`。
 
 ## 盲区提醒（随结果一并告知用户）
 
 - 窗口内 merge/review 的 PR（commits 在窗口之前）不产生当日 commit，不在清单内——这类活动也是工作，提醒用户自行决定是否计入
 - 某天任务数 < 2 时，纯占比分配会把全天工时压到一个任务上，提醒人工核对该天的分配
 - 动态探测达到 100 个 PR 上限仍未覆盖窗口起点时，明确警告哪些日期可能漏报
-- Productive 同步只登记 GitHub commit 推导出的分配；其他工作与任何 `Conflict` 都需要用户决定是否手动登记
+- Productive 同步只登记 GitHub commit 推导出的分配；`Not scheduled` 日期、其他工作以及任何 `Conflict`、`Review` 或 `Blocked` 都需要用户决定是否手动登记
 
 ## 示例推演
 
-假设完整分页后的可记工时候选包含 `Status Board > Developer` 与 `Internal Tools > Developer`。仓库根目录为 `status-board`，GitHub 仓库为 `rb2/status-board`，因此技能先建议 `Status Board > Developer`。用户指出不正确并选择 `Internal Tools > Developer`；没有任何记录在此之前被创建。
+2026-08-24 使用默认每天总工时 8h，Allocation Rule 结果为：
 
-2026-08-24 的 Allocation Rule 结果为：
+| ticket | 分配 | PR 标题 | 去重后的命中 headline | LLM content |
+| --- | ---: | --- | --- | --- |
+| `JOGG-730` | 120m | `support semicolon outfit items` | `accept semicolon delimiters`; `add parser regression coverage` | `Support semicolon-delimited outfit items and add parser regression coverage` |
+| `JOGG-731` | 120m | `retain outfit filters` | `keep filters after refresh` | `Keep outfit filters after refresh` |
+| `JOGG-732` | 120m | `add outfit audit view` | `render outfit change events` | `Add an audit view for outfit changes` |
+| `JOGG-733` | 120m | `clarify outfit import recovery` | `document import recovery` | `Clarify recovery for outfit imports` |
 
-- `OPS-101` 240m，摘要 `Add status filter`
-- `OPS-102` 240m，摘要 `Fix refresh state`
-- `OPS-103` 240m，摘要 `Update documentation`
+四项合计 480m。
 
-预检发现：
+2026-08-25 的 Allocation Rule 结果为 `JOGG-737` 480m，LLM content 为 `Document the outfit import recovery path`。
 
-- `OPS-101` 没有 marker，归类为 `Create`
-- `OPS-102` 的 marker 已存在且为 240m，归类为 `Skip`
-- `OPS-103` 的 marker 已存在但为 180m，归类为 `Conflict`
+### Scheduled on selection
 
-预览展示这三项。用户确认创建后，只有 `OPS-101` 被创建，字段为已确认 person、`Internal Tools > Developer`、`2026-08-24`、240m 和以下 note：
+对 2026-08-24，技能以当前 person、`booking_type=service`、`is_canceled=false`、`with_draft=true`、`after=2026-08-24` 与 `before=2026-08-24` 查询 `bookings`。第一页有一个 `Internal Tools` booking，并返回 `query_id` 与 `next_offset`；技能不会在此时展示或确认候选，而是使用该 `query_id` 取第二页。第二页返回同一 `Internal Tools` service 的另一条 booking（内部 `service.id` 相同）和一个 `Developer` booking，且没有 `next_offset`。取完两页并按 service ID 去重后才展示：
 
 ```text
-[daily-timesheet] 2026-08-24 | OPS-101
-Add status filter
+Developer — client dashboard — 4h/day × 1 working day = 4h total
+Internal Tools — JOGG-730 setup — 8h/day × 1 working day = 8h total
 ```
 
-创建项没有 Productive task、`billable_time` 或 timesheet 操作；`OPS-102` 与 `OPS-103` 保持不变。最终回执报告一个 `Created`、一个 `Skipped` 和一个 `Conflict`。
+用户显式选择 `Internal Tools`。对另一有分配工时的日期 2026-08-25，完整 booking 查询只得到一个不同的 `Developer` service，用户仍须确认。两天的候选和选择都在完整分页后才决定，且 2026-08-25 不会复用 2026-08-24 的 `Internal Tools`。
+
+### Exact-ID revalidation
+
+对 2026-08-24 的选择，技能以精确名称 `Internal Tools` 查询 `services`。第一页只含同名但不是该 booking 的 service，并返回 `next_offset`；技能以原 `query_id` 取第二页，才找到 booking 原本关联的 service。于是保留该选择，但内部 ID 从不展示。若取完所有同名页仍未找到 booking 原本关联的 service，则该日期为 `Not scheduled: service unavailable`，绝不以第一页的同名 service 替代。
+
+### Per-date Not scheduled
+
+| 日期 | 输入或用户动作 | 回执 |
+| --- | --- | --- |
+| 2026-08-26 | 完整 booking 查询没有有效 service | `Not scheduled: no Scheduled on` |
+| 2026-08-27 | 多候选选择被用户取消 | `Not scheduled: selection cancelled` |
+| 2026-08-28 | exact-name 重验的全部页均没有原 booking service | `Not scheduled: service unavailable` |
+| 2026-08-29 | 两个不同 service 的可见标签完全相同 | `Not scheduled: ambiguous Scheduled on` |
+
+这些日期不生成候选或写入项，其他日期继续预检。定位 service 时只调用 `bookings` 和 exact-name `services` 查询，不读取历史 `time_entries`，也不要求或执行关键词或短语搜索。
+
+### Blocked preflight
+
+以下每行都是独立的预检运行；任一行都会输出 `Blocked` 回执、不展示最终确认，且不会调用 `productive_create_resource`：
+
+| 故障输入 | 回执 |
+| --- | --- |
+| 首次或后续 booking 查询失败、页面结构异常、缺少有效 `service.id`、`next_offset` 缺少 `query_id`，或 offset 重复/不前进 | `Blocked: Scheduled on <date>` |
+| 首次或后续 exact-name service 重验查询失败、缺少有效 service ID、`next_offset` 缺少 `query_id`、offset 重复/不前进或数据异常 | `Blocked: service revalidation <date>` |
+| 首次或后续 `time_entries` 查询失败、缺少 continuation 元数据、第二页缺少 `items` 或 entry 数据不完整 | `Blocked: existing entries <date>` |
+| summary LLM 超时、空值、多行或含不支持内容 | `Blocked: summary <ticket-or-label>` |
+| comparison LLM 超时、不可用、空响应、返回多个分类、缺少理由或格式错误 | `Blocked: comparison <ticket-or-label>` |
+
+### LLM duplicate preflight
+
+对 2026-08-24，技能将每个拟写入 note 与同日、同 service 的全部既有 entry 两两比较；不按 ticket 预先过滤。既有 entry 为：
+
+| entry | note | 时间 |
+| --- | --- | --- |
+| E1 | `JOGG-999 Support semicolon-delimited outfit items and add parser regression coverage` | 120m |
+| E2 | `JOGG-731 Keep outfit filters after refresh` | 180m |
+| E3 | `JOGG-732 Remove obsolete outfit exports` | 120m |
+| E4 | `JOGG-733 Document outfit import retry handling` | 120m |
+| E5 | `JOGG-733 Clarify recovery for outfit imports` | 120m |
+
+下表中的 `D` 表示 `Different`（改动对象不同）；每个 `Same` 或 `Uncertain` 都附有 LLM 理由：
+
+| 候选 | E1 | E2 | E3 | E4 | E5 | 分类/决定 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `JOGG-730 Support semicolon-delimited outfit items and add parser regression coverage` | `Same`：内容一致，ticket 不同 | D | D | D | D | `Skip` |
+| `JOGG-731 Keep outfit filters after refresh` | D | `Same`：内容一致 | D | D | D | `Conflict`（既有 180m） |
+| `JOGG-732 Add an audit view for outfit changes` | D | D | D | D | D | `Create` |
+| `JOGG-733 Clarify recovery for outfit imports` | D | D | D | `Uncertain`：内容相近但无法确认 | `Same`：内容一致 | `Review`，用户选 `Create` |
+
+`JOGG-730` 证明不同 ticket 不会排除语义 `Same`；`JOGG-733` 同时有 `Same` 与 `Uncertain`，仍优先进入 `Review`，不能自动 `Skip` 或 `Conflict`。2026-08-24 的原始分类是一个自动 `Create`（`JOGG-732`）、一个 `Skip`、一个 `Conflict` 和一个 `Review`（`JOGG-733`）。用户在 `Review` 中选择 `Create` 后，`JOGG-733` 进入最终 `Create` 列表，但回执保留其 `Review` 决定。
+
+2026-08-25 的 `JOGG-737` 没有同日、同 service 的既有 entry，因此是 `Create`。最终确认后仅创建以下三项，且每项使用其日期的已确认 service：
+
+```text
+2026-08-24 Internal Tools JOGG-732 120m
+2026-08-24 Internal Tools JOGG-733 120m
+2026-08-25 Developer JOGG-737 480m
+```
+
+创建项没有 Productive task、`billable_time` 或 timesheet 操作；既有记录保持不变，回执包含 `Review` 决定。
+
+### Review → Skip
+
+在另一次预检中，`JOGG-734` 与两条既有 entry 都被 LLM 判为 `Same`，因此不能自动复用任一记录而进入 `Review`。预览展示两条既有 note 与理由；用户选择 `Skip` 后，`JOGG-734` 不进入最终 `Create` 列表，既有记录保持不变。
+
+### Review → Cancel
+
+在另一次预检中，同一条既有 entry 被 `JOGG-735` 和 `JOGG-736` 都判为 `Same`，两个候选均进入 `Review`。用户对任一项选择 `Cancel` 后，流程不展示最终确认，也不调用 `productive_create_resource`；回执写 `Not written: review cancelled`。
