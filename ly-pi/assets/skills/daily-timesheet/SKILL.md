@@ -83,18 +83,18 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 先用 `productive_describe_resource` 检查 `bookings`、`services` 与 `time_entries` 的字段，确认 booking 关联的 service 和 service 记录都可返回稳定的 service ID，并加载 `time-entry-logging` 与 `work-booking` 的 Productive 指引。当前账号不能读取 Deal，因此候选和回执只显示 service 名、关联 task（如有）及排期信息，不显示 Deal 名或内部 ID。
 
-对每个有分配工时的本地日期 D，独立查询当前 person 的 Scheduled on：`bookings` 使用 `person=current`、`booking_type=service`、`is_canceled=false`、`with_draft=true`、`after=D` 与 `before=D`；首次最多请求 200 条，并请求 `started_on`、`ended_on`、`booking_method`、`time`、`percentage`、`total_time`、`service.id`、`service.name` 与 `task.title`。`service.id` 只在内部保留，用于去重和精确重验。`after`/`before` 要覆盖 D，因而包含跨多日的 booking。返回 `next_offset` 时，使用该首次查询的 `query_id` 继续读取后续页，直到没有 `next_offset`；必须在取完全部页后才按 service ID 去重、判断候选数或向用户展示候选。
+对每个有分配工时的本地日期 D，独立查询当前 person 的 Scheduled on：`bookings` 使用 `person=current`、`booking_type=service`、`is_canceled=false`、`with_draft=true`、`after=D` 与 `before=D`；首次最多请求 200 条，并请求 `started_on`、`ended_on`、`booking_method`、`time`、`percentage`、`total_time`、`service.id`、`service.name` 与 `task.title`。`service.id` 只在内部保留，用于去重和精确重验。`after`/`before` 要覆盖 D，因而包含跨多日的 booking。每个初始响应（包括终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用初始查询的 `query_id` 读取后续页，直到终页。必须在取完全部页后才按 service ID 去重、判断候选数或向用户展示候选。
 
-首次或后续查询失败、`items` 缺失或不是数组、booking/service 数据结构异常（包括缺少有效 `service.id`）、`next_offset` 存在却没有有效 `query_id`、或 offset 重复/不前进时，将该操作标为 `Blocked: Scheduled on <D>`，阻断整批 Productive 预检、最终确认和所有写入。不要把技术查询失败视为没有排期。
+首次或后续查询失败、初始响应缺少或为空的 `query_id`、`items` 缺失或不是数组、booking/service 数据结构异常（包括缺少有效 `service.id`）、`next_offset` 非法/重复/不前进时，将该操作标为 `Blocked: Scheduled on <D>`，阻断整批 Productive 预检、最终确认和所有写入。不要把技术查询失败视为没有排期。
 
-对有效 booking 按 service ID 在日期 D 内去重；同一 service 的多条 booking 只形成一个候选。显示每个候选的 service 名、关联 task（如有）和排期摘要：按天 booking 显示每天时长及整个 booking 的工作日总时长，百分比 booking 显示百分比，total-hours booking 显示总时长。候选不展示内部 ID。
+对有效 booking 按 service ID 在日期 D 内去重；同一 service 的多条 booking 只形成一个候选，但保留每条 booking。候选显示 service 名，以及按 `started_on` 排序的每条 `<关联 task（如有）> — <排期摘要>`：按天 booking 显示每天时长及整个 booking 的工作日总时长，百分比 booking 显示百分比，total-hours booking 显示总时长。不要任选一条 task，也不要把不同 booking method 的数值汇总成一个总计。候选不展示内部 ID。
 
 - 没有有效 Service booking：将日期 D 标为 `Not scheduled: no Scheduled on`，不为 D 生成预检候选或写入项，继续处理其他日期
 - 恰有一个 Service：展示排期并要求用户确认；用户拒绝时将 D 标为 `Not scheduled: selection cancelled`
 - 有多个 Service：展示候选并要求用户显式选择一个；取消或无选择时将 D 标为 `Not scheduled: selection cancelled`
 - 若多个不同 service 的用户可见标签完全相同而无法区分：将 D 标为 `Not scheduled: ambiguous Scheduled on`；不展示内部 ID
 
-对确认或选择的 Scheduled on service，以当前 person、`time_tracking_enabled=true` 和精确 service name 查询 `services`，读取每条 service 的 `id`，每页最多 200 条；使用返回的 `query_id` 与 `next_offset` 持续读取该精确名称的后续页，直到找到原 booking 的 service ID 或没有更多结果。`next_offset` 存在却没有有效 `query_id`、offset 重复/不前进、首次或后续查询失败、缺少有效 service ID 或数据结构异常时为 `Blocked`，阻断整批。只有找到原 booking 的相同 ID 才可用于 D；查询成功且完整耗尽结果后仍未找到该 ID、只找到同名不同 ID 或所选 service 不可记工时时，将 D 标为 `Not scheduled: service unavailable`。绝不以同名的其他 service 替代选中项。
+对确认或选择的 Scheduled on service，以当前 person、`time_tracking_enabled=true` 和精确 service name 查询 `services`，读取每条 service 的 `id`，每页最多 200 条。每个初始响应（包括终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用原始 `query_id` 读取该精确名称的后续页，直到找到原 booking 的 service ID 或完整耗尽结果。初始响应缺少或为空的 `query_id`、`next_offset` 非法/重复/不前进、首次或后续查询失败、缺少有效 service ID 或数据结构异常时为 `Blocked`，阻断整批。只有找到原 booking 的相同 ID 才可用于 D；查询成功且完整耗尽结果后仍未找到该 ID、只找到同名不同 ID 或所选 service 不可记工时时，将 D 标为 `Not scheduled: service unavailable`。绝不以同名的其他 service 替代选中项。
 
 为每个未跳过日期保存其经用户确认且当前可记工时的 service；不创建持久映射，也不把 GitHub ticket 映射到 Productive task。绝不读取历史 `time_entries` 来寻找 service，绝不要求或执行关键词或短语搜索。
 
@@ -110,7 +110,7 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 其中 `<content>` 是该总结；必须非空且只有一行，不要加入日期、`[daily-timesheet]` marker、隐藏标记或额外前缀。summary LLM 超时、不可用、返回空值、多行或不符合这些约束时，标为 `Blocked`：展示 ticket/标签与原因，阻止整批写入；这不是可由用户覆盖的 `Review`。
 
-对每个 `日期 + 已确认 Scheduled on service` 组合，查询当前 person、该 service 与同一日历日期的现有 `time_entries`，读取 `date`、`time` 和 `note`；如有分页，使用首次查询的 `query_id` 与返回的 `next_offset` 取完所有页。首次或后续查询失败、`next_offset` 存在却没有有效 `query_id`、offset 重复/不前进、缺少或非数组 `items`、或无法完整读取既有 entry 数据的响应均为 `Blocked`，不展示最终确认且不创建任何记录；绝不将其视为空结果。每个候选都必须与相同日期、相同 service 的每条既有 note 比较，不得按 ticket/label 预先过滤；先完成整批比较再归类，不得逐候选独立归类。每一对比较必须返回恰好一个 `Same`、`Different` 或 `Uncertain`，以及非空的简短理由。LLM 超时、不可用、空响应、格式错误、多个分类或缺少理由时，标为 `Blocked`。有效的 `Uncertain` 才进入 `Review`。`ticket-or-label` 是弱身份信号：一致支持 `Same`，不一致或缺失仅降低判断可信度，不单独否决语义匹配。
+对每个 `日期 + 已确认 Scheduled on service` 组合，查询当前 person、该 service 与同一日历日期的现有 `time_entries`，读取 `date`、`time` 和 `note`。每个初始响应（包括终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用首次查询的 `query_id` 取完所有页。首次或后续查询失败、初始响应缺少或为空的 `query_id`、`next_offset` 非法/重复/不前进、缺少或非数组 `items`、或无法完整读取既有 entry 数据的响应均为 `Blocked`，不展示最终确认且不创建任何记录；绝不将其视为空结果。每个候选都必须与相同日期、相同 service 的每条既有 note 比较，不得按 ticket/label 预先过滤；先完成整批比较再归类，不得逐候选独立归类。每一对比较必须返回恰好一个 `Same`、`Different` 或 `Uncertain`，以及非空的简短理由。LLM 超时、不可用、空响应、格式错误、多个分类或缺少理由时，标为 `Blocked`。有效的 `Uncertain` 才进入 `Review`。`ticket-or-label` 是弱身份信号：一致支持 `Same`，不一致或缺失仅降低判断可信度，不单独否决语义匹配。
 
 先处理 `Review`，其优先级高于自动分类：
 
@@ -120,7 +120,7 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 人工记录也参与内容判断，但绝不被覆盖或删除。任何 `Blocked` 都要显示预检原因，不展示最终确认，也不得对本次运行的任何候选调用 `productive_create_resource`。只有没有 `Blocked` 且所有 `Review` 均被用户处理后，才生成最终 `Create` 列表。
 
-先输出 Productive 预览：每个未跳过日期的已确认 Scheduled on service、每个 `Not scheduled` 日期及其原因，以及每条 `Create`、`Skip`、`Conflict`、`Review`、`Blocked` 的日期、service、ticket/标签、分钟数、note 和理由。只有没有 `Blocked` 时才明确询问是否创建所有最终 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
+先输出 Productive 预览：每个未跳过日期的已确认 Scheduled on service、每个 `Not scheduled` 日期及其原因，以及每条 `Create`、`Skip`、`Conflict`、`Review` 的日期、service、ticket/标签、分钟数、note 和理由。每条 `Blocked` 都显示原因及当时已知的日期或操作；仅在已知时显示 service、ticket/标签、分钟数和 note，绝不编造缺失字段。只有没有 `Blocked` 时才明确询问是否创建所有最终 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
 
 完成标准：所有未跳过日期的候选已分类、没有 `Blocked`、所有 `Review` 已由用户处理，且所有 `Not scheduled` 日期已列出原因；未得到本次明确确认前，未调用任何写入操作。
 
@@ -172,7 +172,7 @@ Created: <date> <service> <ticket-or-label> <minutes>m
 Skipped: <date> <service> <ticket-or-label> <minutes>m
 Conflict: <date> <service> <ticket-or-label> existing <minutes>m, proposed <minutes>m
 Review: <date> <service> <ticket-or-label> — <reason or user decision>
-Blocked: <date or operation> — <reason>
+Blocked: <known date/service/ticket/minutes or operation> — <reason> [note: <known note, if available>]
 Failed: <date> <service> <ticket-or-label> — <reason>
 ```
 
@@ -202,14 +202,16 @@ Failed: <date> <service> <ticket-or-label> — <reason>
 
 ### Scheduled on selection
 
-对 2026-08-24，技能以当前 person、`booking_type=service`、`is_canceled=false`、`with_draft=true`、`after=2026-08-24` 与 `before=2026-08-24` 查询 `bookings`。第一页有一个 `Internal Tools` booking，并返回 `query_id` 与 `next_offset`；技能不会在此时展示或确认候选，而是使用该 `query_id` 取第二页。第二页返回同一 `Internal Tools` service 的另一条 booking（内部 `service.id` 相同）和一个 `Developer` booking，且没有 `next_offset`。取完两页并按 service ID 去重后才展示：
+对 2026-08-24，技能以当前 person、`booking_type=service`、`is_canceled=false`、`with_draft=true`、`after=2026-08-24` 与 `before=2026-08-24` 查询 `bookings`。第一页有一个 `Internal Tools` percentage booking（`JOGG-731 support`，`started_on=2026-08-24T09:00`，50%），并返回非空 `query_id` 与有效 `next_offset`；技能不会在此时展示或确认候选，而是使用该 `query_id` 取第二页。第二页返回同一 `Internal Tools` service 的 total-hours booking（`JOGG-730 setup`，`started_on=2026-08-24T13:00`，4h，内部 `service.id` 相同）和一个 `Developer` booking，且没有 `next_offset`。取完两页并按 service ID 去重后才展示每条 retained booking：
 
 ```text
 Developer — client dashboard — 4h/day × 1 working day = 4h total
-Internal Tools — JOGG-730 setup — 8h/day × 1 working day = 8h total
+Internal Tools
+  - JOGG-731 support — 50%
+  - JOGG-730 setup — 4h total
 ```
 
-用户显式选择 `Internal Tools`。对另一有分配工时的日期 2026-08-25，完整 booking 查询只得到一个不同的 `Developer` service，用户仍须确认。两天的候选和选择都在完整分页后才决定，且 2026-08-25 不会复用 2026-08-24 的 `Internal Tools`。
+用户显式选择 `Internal Tools`。同一 service 仍只有一个候选，但它按 `started_on` 展示每条 booking 的 task 与排期；50% 和 4h 不会任选一条或汇总成单一数值。对另一有分配工时的日期 2026-08-25，完整 booking 查询只得到一个不同的 `Developer` service，用户仍须确认。两天的候选和选择都在完整分页后才决定，且 2026-08-25 不会复用 2026-08-24 的 `Internal Tools`。
 
 ### Exact-ID revalidation
 
@@ -232,11 +234,14 @@ Internal Tools — JOGG-730 setup — 8h/day × 1 working day = 8h total
 
 | 故障输入 | 回执 |
 | --- | --- |
-| 首次或后续 booking 查询失败、页面结构异常、缺少有效 `service.id`、`next_offset` 缺少 `query_id`，或 offset 重复/不前进 | `Blocked: Scheduled on <date>` |
-| 首次或后续 exact-name service 重验查询失败、缺少有效 service ID、`next_offset` 缺少 `query_id`、offset 重复/不前进或数据异常 | `Blocked: service revalidation <date>` |
-| 首次或后续 `time_entries` 查询失败、缺少 continuation 元数据、第二页缺少 `items` 或 entry 数据不完整 | `Blocked: existing entries <date>` |
-| summary LLM 超时、空值、多行或含不支持内容 | `Blocked: summary <ticket-or-label>` |
+| 单页 booking 初始响应有 `items` 且没有 `next_offset`，但 `query_id` 缺少或为空 | `Blocked: Scheduled on 2026-08-24 — initial query_id missing` |
+| booking continuation 的 `next_offset` 为 `0`、`"200"`、重复或不前进 | `Blocked: Scheduled on 2026-08-24 — invalid next_offset` |
+| exact-name service 重验的初始响应缺少/为空 `query_id`，或后续 `next_offset` 非法/重复/不前进 | `Blocked: service revalidation 2026-08-24 — pagination metadata invalid` |
+| 已生成 `JOGG-732 Add an audit view for outfit changes` note 后，`time_entries` 后续 `next_offset` 非法/重复/不前进、第二页缺少 `items` 或 entry 数据不完整 | `Blocked: 2026-08-24 Internal Tools JOGG-732 120m — existing entries invalid [note: JOGG-732 Add an audit view for outfit changes]` |
+| 已知 `Internal Tools`、`JOGG-732` 与 120m 时 summary LLM 超时、空值、多行或含不支持内容 | `Blocked: 2026-08-24 Internal Tools JOGG-732 120m — summary invalid` |
 | comparison LLM 超时、不可用、空响应、返回多个分类、缺少理由或格式错误 | `Blocked: comparison <ticket-or-label>` |
+
+第一行只显示已知的日期和操作；第四行保留所有已知字段（包括 note）；最后一行保留已知的 service、ticket 与分钟数，但不编造尚未生成的 note。所有行均不展示最终确认，也不调用 `productive_create_resource`。
 
 ### LLM duplicate preflight
 
