@@ -40,5 +40,6 @@ Added full Scheduled on booking pagination before selection, internal service-ID
 
 ## Current PR boundary
 
-- The user explicitly authorized fixes A1, A2, B1, and B2 only. This is a source-only scope: no `bun run deploy`, Productive write, or PR merge is authorized.
+- The user explicitly authorized fixes A1, A2, B1, and B2 only. This source-only correction scope does not itself authorize `bun run deploy`, Productive write, or PR merge.
 - The user subsequently authorized one local commit and non-force push of these corrections to update PR #18. This does not authorize deployment or merge.
+- The user subsequently authorized `linzhihui2022` to squash-merge PR #18 with administrator authority after its latest GitHub `verify` succeeds. This does not authorize deployment or Productive writes.

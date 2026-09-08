@@ -6,7 +6,9 @@ Risk: High
 
 Approval: 用户在本 Pi 会话确认本规格为后续拆票与实施范围，并明确授权将已验证的资源通过 `bun run deploy` 部署到 Pi；部署后仍须由用户执行 `/reload`。用户随后明确批准将 service 全量分页改为用户关键词的唯一匹配查询，并将 note 改为 `<ticket> <LLM 总结>`；同日同 service 的既有 note 由 LLM 语义识别，不确定项须进入 Review 由用户决定。此次 refinements 不含部署。用户随后明确批准仅修改源技能与规格，使 service 输入可为包含内部空格的非空短语；随后明确授权通过 `bun run deploy` 部署本次已验证的资源。部署后仍须由用户执行 `/reload`；该部署不授权任何 Productive 写入。用户又明确批准仅移除禁止展示候选或手选的规则文字；此变更不要求或定义候选选择行为，随后明确授权通过 `bun run deploy` 部署本次已验证的资源。部署后仍须由用户执行 `/reload`；该部署不授权任何 Productive 写入。用户又明确批准将 service 定位改为历史工时优先：读取当前人最近 50 条条目，按 Service ID 去重展示至多 10 个候选及最近使用日期；用户选择后重新确认该 Service 当前可记工时，历史为空、候选被拒绝或已不可用时回退关键词或短语查询。此次只改源技能与规格，随后明确授权通过 `bun run deploy` 部署本次已验证的资源。部署后仍须由用户执行 `/reload`；该部署不授权任何 Productive 写入。用户又明确批准按日期使用 Scheduled on：每个有分配工时的日期读取当前人的有效 Service booking，多条由用户手选；零条、取消选择或所选 service 不可用时跳过该日期并汇报，不回退到历史工时或关键词搜索；查询或数据异常阻断整批同步。此次只改源技能与规格，不授权部署或任何 Productive 写入。用户随后明确授权将已验证的 Scheduled on 变更创建本地 Git commit（不 push）并通过 `bun run deploy` 部署；该部署仍不授权任何 Productive 写入。Productive 写入仍须在每次运行的预览后获得本次明确确认。
 
-**当前 PR 边界：** 用户已授权处理 A1、A2、B1、B2 审查项，范围仅限源文档；不授权 `bun run deploy`、Productive 写入或 PR 合并。上文的部署授权均对应已完成的历史快照，不能用于当前 HEAD。
+**当前 PR 边界：** 用户已授权处理 A1、A2、B1、B2 审查项，范围仅限源文档；该修复范围本身不授权 `bun run deploy`、Productive 写入或 PR 合并。上文的部署授权均对应已完成的历史快照，不能用于当前 HEAD。
+
+**合并授权：** 用户随后授权 `linzhihui2022` 在最新 GitHub `verify` 通过后，以管理员权限 squash 合并 PR #18；该授权不包含部署或 Productive 写入。
 
 ## Problem Statement
 
