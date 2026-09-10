@@ -28,4 +28,5 @@
 - `gh api` 仅放行显式 GET 且不含请求载荷、自定义主机或自定义头的形式；写入和相邻危险命令继续不自动放行。
 - `git show` 的 `--ext-diff` 与 `--textconv` 形式继续交由 Judge。
 - 已提交为 `3fd8c6f`（`feat(permission): whitelist read-only gh and git commands`）。
-- `bun run verify` 已通过；用户已单独批准标准部署，部署结果待记录。
+- `bun run verify` 已通过；`bun run deploy` 已成功构建、测试（1128 passed）并部署到 `~/.pi`。
+- 已请求并完成 `/reload`；运行时冒烟测试成功执行显式 GET 的 `gh api` 查询与 `git show` 链式命令。
