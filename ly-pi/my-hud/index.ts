@@ -49,8 +49,9 @@ export {
 } from "./working";
 
 const MEMORY_WIDGET_KEY = "my-hud-memory-warning";
-const HIGHLIGHT_WIDTH = 2;
-const WORKING_MESSAGE_INTERVAL_MS = 250;
+const WORKING_INDICATOR_INTERVAL_MS = 450;
+const WORKING_MESSAGE_INTERVAL_MS = 150;
+type WorkingMessageColor = "accent" | "dim" | "success";
 
 // ── Extension ──
 
@@ -124,11 +125,21 @@ export default function myHud(pi: ExtensionAPI): void {
     updateMemoryWarning(ctx);
 
     const message = pickRandomMessage();
-    ctx.ui.setWorkingIndicator({ frames: [] });
     if (ctx.mode !== "tui") {
+      ctx.ui.setWorkingIndicator({ frames: [] });
       ctx.ui.setWorkingMessage(message);
       return;
     }
+
+    ctx.ui.setWorkingIndicator({
+      frames: [
+        ctx.ui.theme.fg("dim", "·"),
+        ctx.ui.theme.fg("muted", "•"),
+        ctx.ui.theme.fg("accent", "●"),
+        ctx.ui.theme.fg("muted", "•"),
+      ],
+      intervalMs: WORKING_INDICATOR_INTERVAL_MS,
+    });
 
     const graphemes = splitGraphemes(message);
     if (graphemes.length === 0) {
@@ -137,25 +148,25 @@ export default function myHud(pi: ExtensionAPI): void {
     }
 
     let index = 0;
+    let prefixColor: WorkingMessageColor = "accent";
+    let suffixColor: WorkingMessageColor = "dim";
     const updateMessage = () => {
       ctx.ui.setWorkingMessage(
         [
-          ctx.ui.theme.fg("dim", graphemes.slice(0, index).join("")),
-          ctx.ui.theme.fg(
-            "success",
-            graphemes.slice(index, index + HIGHLIGHT_WIDTH).join(""),
-          ),
-          ctx.ui.theme.fg(
-            "dim",
-            graphemes.slice(index + HIGHLIGHT_WIDTH).join(""),
-          ),
+          ctx.ui.theme.fg(prefixColor, graphemes.slice(0, index).join("")),
+          ctx.ui.theme.fg(suffixColor, graphemes.slice(index).join("")),
         ].join(""),
       );
     };
 
     updateMessage();
     workingMessageTimer = setInterval(() => {
-      index = (index + 1) % graphemes.length;
+      if (index === graphemes.length) {
+        suffixColor = prefixColor;
+        prefixColor = prefixColor === "accent" ? "success" : "accent";
+        index = 0;
+      }
+      index += 1;
       updateMessage();
     }, WORKING_MESSAGE_INTERVAL_MS);
   });

@@ -1554,9 +1554,10 @@ describe("my-hud extension", () => {
     expect(lines[0]).toContain("boom");
   });
 
-  it("animates a two-grapheme highlight and wraps", async () => {
+  it("cycles working message colors from dim through accent and success", async () => {
     vi.useFakeTimers();
     const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    const intervalMs = 150;
 
     try {
       vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
@@ -1569,8 +1570,8 @@ describe("my-hud extension", () => {
       const setWorkingIndicator = vi.fn();
       const setWorkingMessage = vi.fn();
       const theme = createMockTheme();
-      theme.fg.mockImplementation(
-        (color: string, text: string) => `${color}:${text}`,
+      theme.fg.mockImplementation((color: string, text: string) =>
+        text ? `${color}:${text}` : "",
       );
       const ctx = {
         ...mockCtx,
@@ -1581,25 +1582,66 @@ describe("my-hud extension", () => {
       agentStartHandler({}, ctx);
 
       const graphemes = mod.splitGraphemes(mod.WORKING_MESSAGES[0]);
-      const expectedMessage = (index: number) =>
+      const expectedMessage = (
+        leadingColor: string,
+        trailingColor: string,
+        index: number,
+      ) =>
         [
-          `dim:${graphemes.slice(0, index).join("")}`,
-          `success:${graphemes.slice(index, index + 2).join("")}`,
-          `dim:${graphemes.slice(index + 2).join("")}`,
+          index > 0
+            ? `${leadingColor}:${graphemes.slice(0, index).join("")}`
+            : "",
+          index < graphemes.length
+            ? `${trailingColor}:${graphemes.slice(index).join("")}`
+            : "",
         ].join("");
 
-      expect(setWorkingIndicator).toHaveBeenCalledWith({ frames: [] });
-      expect(setWorkingMessage).toHaveBeenLastCalledWith(expectedMessage(0));
+      expect(setWorkingIndicator).toHaveBeenCalledWith({
+        frames: ["dim:·", "muted:•", "accent:●", "muted:•"],
+        intervalMs: 450,
+      });
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(
+        expectedMessage("accent", "dim", 0),
+      );
 
-      vi.advanceTimersByTime(250);
-      expect(setWorkingMessage).toHaveBeenLastCalledWith(expectedMessage(1));
+      vi.advanceTimersByTime(intervalMs);
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(
+        expectedMessage("accent", "dim", 1),
+      );
 
-      vi.advanceTimersByTime((graphemes.length - 1) * 250);
-      expect(setWorkingMessage).toHaveBeenLastCalledWith(expectedMessage(0));
+      vi.advanceTimersByTime((graphemes.length - 1) * intervalMs);
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(
+        expectedMessage("accent", "dim", graphemes.length),
+      );
+
+      vi.advanceTimersByTime(intervalMs);
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(
+        expectedMessage("success", "accent", 1),
+      );
+
+      vi.advanceTimersByTime((graphemes.length - 1) * intervalMs);
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(
+        expectedMessage("success", "accent", graphemes.length),
+      );
+
+      vi.advanceTimersByTime(intervalMs);
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(
+        expectedMessage("accent", "success", 1),
+      );
+
+      vi.advanceTimersByTime((graphemes.length - 1) * intervalMs);
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(
+        expectedMessage("accent", "success", graphemes.length),
+      );
+
+      vi.advanceTimersByTime(intervalMs);
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(
+        expectedMessage("success", "accent", 1),
+      );
 
       const callsBeforeStop = setWorkingMessage.mock.calls.length;
       agentEndHandler();
-      vi.advanceTimersByTime(250);
+      vi.advanceTimersByTime(intervalMs);
       expect(setWorkingMessage).toHaveBeenCalledTimes(callsBeforeStop);
     } finally {
       random.mockRestore();
@@ -1636,7 +1678,7 @@ describe("my-hud extension", () => {
     }
   });
 
-  it("replaces the running highlight timer when another agent starts", async () => {
+  it("replaces the running working-message timer when another agent starts", async () => {
     vi.useFakeTimers();
 
     try {
@@ -1667,7 +1709,7 @@ describe("my-hud extension", () => {
     }
   });
 
-  it("session_shutdown stops the highlight timer", async () => {
+  it("session_shutdown stops the working-message timer", async () => {
     vi.useFakeTimers();
 
     try {
