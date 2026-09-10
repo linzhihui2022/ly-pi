@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { config } from "./config";
 import {
   decide,
   evaluateExternalDirectoryLayer,
@@ -25,6 +26,14 @@ function cfg(
     childPolicy: "deny-on-unsafe",
     permission,
   };
+}
+
+function decideConfiguredBash(value: string) {
+  return decide(
+    { toolName: "bash", value, paths: [] },
+    "/repo",
+    config,
+  );
 }
 
 describe("matchPattern", () => {
@@ -372,5 +381,90 @@ describe("decide", () => {
       c,
     );
     expect(v.action).toBe("allow");
+  });
+});
+
+describe("configured read-only GitHub CLI policy", () => {
+  it.each([
+    "gh --version",
+    "gh --help",
+    "gh auth status",
+    "gh auth status --hostname github.com",
+    "gh auth login --help",
+    "gh pr list",
+    "gh pr list --state all",
+    "gh pr view 18 --json title",
+    "gh pr diff 18",
+    "gh pr checks 18 --required",
+    "gh pr status",
+    "gh issue list --state all",
+    "gh issue view 18 --json title",
+    "gh issue status",
+    "gh repo view --json nameWithOwner",
+    "gh repo list owner",
+    "gh release list --limit 10",
+    "gh release view v1.0.0",
+    "gh run list",
+    "gh run view 42",
+    "gh run watch 42 --exit-status",
+    "gh workflow list",
+    "gh workflow view build",
+    "gh api --method GET repos/owner/repo --jq .name",
+    "gh api -X GET repos/owner/repo --jq .name",
+  ])("allows %s without Judge", (value) => {
+    expect(decideConfiguredBash(value).action).toBe("allow");
+  });
+
+  it.each([
+    "gh api --method POST repos/owner/repo",
+    "gh api -X PATCH repos/owner/repo",
+    "gh api --method GET repos/owner/repo --input request.json",
+    "gh api --method GET --input request.json repos/owner/repo",
+    "gh api -f title=value --method GET repos/owner/repo",
+    "gh api -X GET repos/owner/repo -f title=value",
+    "gh api --method GET repos/owner/repo --hostname example.test",
+    "gh api --method GET repos/owner/repo -H X-HTTP-Method-Override:POST",
+    "gh pr create --title title",
+    "gh auth switch --user account",
+  ])("keeps %s out of auto allow", (value) => {
+    expect(decideConfiguredBash(value).action).not.toBe("allow");
+  });
+});
+
+describe("configured read-only Git policy", () => {
+  it.each([
+    "git show --stat --oneline HEAD",
+    "git remote -v",
+    "git remote get-url origin",
+    "git ls-files --cached",
+    "git check-ignore -v dist/file.js",
+    "git blame --line-porcelain src/index.ts",
+    "git branch -r",
+    "git branch -r --contains HEAD",
+    "git symbolic-ref --short HEAD",
+    "git config --get user.email",
+    "git config --get-all remote.origin.fetch",
+    "git config user.email",
+    "git config user.name",
+    "git worktree list",
+    "gh pr list --state all && git show --stat HEAD",
+  ])("allows %s without Judge", (value) => {
+    expect(decideConfiguredBash(value).action).toBe("allow");
+  });
+
+  it.each([
+    "git fetch origin",
+    "git push origin HEAD",
+    "git rebase main",
+    "git merge main",
+    "git remote set-url origin https://example.test/repo.git",
+    "git config user.email bot@example.com",
+    "git config --global user.email bot@example.com",
+    "git worktree remove ../repo",
+    "git show --ext-diff HEAD",
+    "git show HEAD --textconv",
+    "gh pr list --state all && git push origin HEAD",
+  ])("keeps %s out of auto allow", (value) => {
+    expect(decideConfiguredBash(value).action).not.toBe("allow");
   });
 });
