@@ -29,11 +29,7 @@ function cfg(
 }
 
 function decideConfiguredBash(value: string) {
-  return decide(
-    { toolName: "bash", value, paths: [] },
-    "/repo",
-    config,
-  );
+  return decide({ toolName: "bash", value, paths: [] }, "/repo", config);
 }
 
 describe("matchPattern", () => {
