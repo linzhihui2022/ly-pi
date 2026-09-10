@@ -2,6 +2,10 @@
  * Working messages — casual/funny messages shown while the AI is processing.
  */
 
+const graphemeSegmenter = new Intl.Segmenter(undefined, {
+  granularity: "grapheme",
+});
+
 export const WORKING_MESSAGES: readonly string[] = [
   "\uef19 闭嘴，我在思考",
   "\ue2a5 CPU烧烤中",
@@ -24,4 +28,8 @@ export const WORKING_MESSAGES: readonly string[] = [
 export function pickRandomMessage(): string {
   const idx = Math.floor(Math.random() * WORKING_MESSAGES.length);
   return WORKING_MESSAGES[idx];
+}
+
+export function splitGraphemes(value: string): string[] {
+  return Array.from(graphemeSegmenter.segment(value), ({ segment }) => segment);
 }

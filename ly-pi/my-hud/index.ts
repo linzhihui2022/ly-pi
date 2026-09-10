@@ -24,7 +24,7 @@ import { buildMemoryWarningLines } from "./memory-widget";
 import { getPullRequestForCurrentBranch, openUrl } from "./pr";
 import { setHiddenFields } from "./render";
 import { getLastUserMessage } from "./session";
-import { pickRandomMessage } from "./working";
+import { pickRandomMessage, splitGraphemes } from "./working";
 
 const EXT_DIR = join(homedir(), ".pi", "agent", "extensions", "ly-pi");
 
@@ -42,9 +42,15 @@ export {
   getLastUserMessage,
 } from "./session";
 export type { StatusLineData, TokenUsage } from "./types";
-export { pickRandomMessage, WORKING_MESSAGES } from "./working";
+export {
+  pickRandomMessage,
+  splitGraphemes,
+  WORKING_MESSAGES,
+} from "./working";
 
 const MEMORY_WIDGET_KEY = "my-hud-memory-warning";
+const HIGHLIGHT_WIDTH = 2;
+const WORKING_MESSAGE_INTERVAL_MS = 250;
 
 // ── Extension ──
 
@@ -105,16 +111,56 @@ export default function myHud(pi: ExtensionAPI): void {
     bar?.setLogEnabled(event.enabled);
     requestRender();
   });
+  let workingMessageTimer: ReturnType<typeof setInterval> | undefined;
+
+  function stopWorkingMessageAnimation(): void {
+    if (workingMessageTimer === undefined) return;
+    clearInterval(workingMessageTimer);
+    workingMessageTimer = undefined;
+  }
 
   pi.on("agent_start", (_event, ctx) => {
+    stopWorkingMessageAnimation();
     updateMemoryWarning(ctx);
-    // Pick the working message once per agent run: pi fires turn_start on
-    // every tool-call iteration, so picking there would reshuffle mid-turn.
-    const theme = ctx.ui.getTheme("catppuccin-mocha");
-    const message =
-      theme?.fg("accent", pickRandomMessage()) ?? pickRandomMessage();
-    ctx.ui.setWorkingMessage(message);
+
+    const message = pickRandomMessage();
+    ctx.ui.setWorkingIndicator({ frames: [] });
+    if (ctx.mode !== "tui") {
+      ctx.ui.setWorkingMessage(message);
+      return;
+    }
+
+    const graphemes = splitGraphemes(message);
+    if (graphemes.length === 0) {
+      ctx.ui.setWorkingMessage(message);
+      return;
+    }
+
+    let index = 0;
+    const updateMessage = () => {
+      ctx.ui.setWorkingMessage(
+        [
+          ctx.ui.theme.fg("dim", graphemes.slice(0, index).join("")),
+          ctx.ui.theme.fg(
+            "success",
+            graphemes.slice(index, index + HIGHLIGHT_WIDTH).join(""),
+          ),
+          ctx.ui.theme.fg(
+            "dim",
+            graphemes.slice(index + HIGHLIGHT_WIDTH).join(""),
+          ),
+        ].join(""),
+      );
+    };
+
+    updateMessage();
+    workingMessageTimer = setInterval(() => {
+      index = (index + 1) % graphemes.length;
+      updateMessage();
+    }, WORKING_MESSAGE_INTERVAL_MS);
   });
+  pi.on("agent_end", stopWorkingMessageAnimation);
+  pi.on("session_shutdown", stopWorkingMessageAnimation);
   // ── /open-pr command ──
   pi.registerCommand("open-pr", {
     description: "Open the current branch's GitHub Pull Request in browser",

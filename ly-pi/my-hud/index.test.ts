@@ -119,6 +119,7 @@ const mockCtx = {
       return factory(mockTui, mockTheme, mockFooterData);
     }),
     setWidget: vi.fn(),
+    setWorkingIndicator: vi.fn(),
     setWorkingMessage: vi.fn(),
     getTheme: vi.fn(() => mockTheme),
     notify: vi.fn(),
@@ -1276,6 +1277,12 @@ describe("working", () => {
     );
     expect(results.size).toBeGreaterThan(1);
   });
+
+  it("splits emoji sequences into graphemes", async () => {
+    const { splitGraphemes } = await loadModule();
+
+    expect(splitGraphemes("🧑‍💻a")).toEqual(["🧑‍💻", "a"]);
+  });
 });
 
 describe("my-hud extension", () => {
@@ -1547,46 +1554,146 @@ describe("my-hud extension", () => {
     expect(lines[0]).toContain("boom");
   });
 
-  it("agent_start handler sets working message with theme", async () => {
-    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
+  it("animates a two-grapheme highlight and wraps", async () => {
+    vi.useFakeTimers();
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
 
-    const mod = await loadModule();
-    mod.default(mockPi as any);
+    try {
+      vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
 
-    const agentStartHandler = registeredEvents.get("agent_start")!;
-    const setWorkingMessage = vi.fn();
-    const theme = createMockTheme();
-    const ctx = {
-      ...mockCtx,
-      ui: { ...mockCtx.ui, setWorkingMessage, getTheme: vi.fn(() => theme) },
-    };
+      const mod = await loadModule();
+      mod.default(mockPi as any);
 
-    agentStartHandler({}, ctx);
+      const agentStartHandler = registeredEvents.get("agent_start")!;
+      const agentEndHandler = registeredEvents.get("agent_end")!;
+      const setWorkingIndicator = vi.fn();
+      const setWorkingMessage = vi.fn();
+      const theme = createMockTheme();
+      theme.fg.mockImplementation(
+        (color: string, text: string) => `${color}:${text}`,
+      );
+      const ctx = {
+        ...mockCtx,
+        mode: "tui",
+        ui: { ...mockCtx.ui, setWorkingIndicator, setWorkingMessage, theme },
+      };
 
-    expect(ctx.ui.getTheme).toHaveBeenCalledWith("catppuccin-mocha");
-    expect(setWorkingMessage).toHaveBeenCalledWith(expect.any(String));
+      agentStartHandler({}, ctx);
+
+      const graphemes = mod.splitGraphemes(mod.WORKING_MESSAGES[0]);
+      const expectedMessage = (index: number) =>
+        [
+          `dim:${graphemes.slice(0, index).join("")}`,
+          `success:${graphemes.slice(index, index + 2).join("")}`,
+          `dim:${graphemes.slice(index + 2).join("")}`,
+        ].join("");
+
+      expect(setWorkingIndicator).toHaveBeenCalledWith({ frames: [] });
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(expectedMessage(0));
+
+      vi.advanceTimersByTime(250);
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(expectedMessage(1));
+
+      vi.advanceTimersByTime((graphemes.length - 1) * 250);
+      expect(setWorkingMessage).toHaveBeenLastCalledWith(expectedMessage(0));
+
+      const callsBeforeStop = setWorkingMessage.mock.calls.length;
+      agentEndHandler();
+      vi.advanceTimersByTime(250);
+      expect(setWorkingMessage).toHaveBeenCalledTimes(callsBeforeStop);
+    } finally {
+      random.mockRestore();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 
-  it("agent_start handler falls back to plain message when theme is undefined", async () => {
-    vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
+  it("agent_start keeps a static plain working message outside TUI", async () => {
+    vi.useFakeTimers();
 
-    const mod = await loadModule();
-    mod.default(mockPi as any);
+    try {
+      vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
 
-    const agentStartHandler = registeredEvents.get("agent_start")!;
-    const setWorkingMessage = vi.fn();
-    const ctx = {
-      ...mockCtx,
-      ui: {
-        ...mockCtx.ui,
-        setWorkingMessage,
-        getTheme: vi.fn(() => undefined),
-      },
-    };
+      const mod = await loadModule();
+      mod.default(mockPi as any);
 
-    agentStartHandler({}, ctx);
+      const agentStartHandler = registeredEvents.get("agent_start")!;
+      const setWorkingMessage = vi.fn();
+      const ctx = {
+        ...mockCtx,
+        mode: "rpc",
+        ui: { ...mockCtx.ui, setWorkingMessage },
+      };
 
-    expect(setWorkingMessage).toHaveBeenCalledWith(expect.any(String));
+      agentStartHandler({}, ctx);
+      vi.advanceTimersByTime(2_000);
+
+      expect(setWorkingMessage).toHaveBeenCalledTimes(1);
+      expect(setWorkingMessage).toHaveBeenCalledWith(expect.any(String));
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it("replaces the running highlight timer when another agent starts", async () => {
+    vi.useFakeTimers();
+
+    try {
+      vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
+
+      const mod = await loadModule();
+      mod.default(mockPi as any);
+
+      const agentStartHandler = registeredEvents.get("agent_start")!;
+      const agentEndHandler = registeredEvents.get("agent_end")!;
+      const setWorkingMessage = vi.fn();
+      const ctx = {
+        ...mockCtx,
+        mode: "tui",
+        ui: { ...mockCtx.ui, setWorkingMessage, theme: createMockTheme() },
+      };
+
+      agentStartHandler({}, ctx);
+      vi.advanceTimersByTime(250);
+      agentStartHandler({}, ctx);
+      vi.advanceTimersByTime(250);
+
+      expect(setWorkingMessage).toHaveBeenCalledTimes(4);
+      agentEndHandler();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it("session_shutdown stops the highlight timer", async () => {
+    vi.useFakeTimers();
+
+    try {
+      vi.mocked(checkMemoryPressure).mockReturnValue({ percent: 42, ok: true });
+
+      const mod = await loadModule();
+      mod.default(mockPi as any);
+
+      const agentStartHandler = registeredEvents.get("agent_start")!;
+      const sessionShutdownHandler = registeredEvents.get("session_shutdown")!;
+      const setWorkingMessage = vi.fn();
+      const ctx = {
+        ...mockCtx,
+        mode: "tui",
+        ui: { ...mockCtx.ui, setWorkingMessage, theme: createMockTheme() },
+      };
+
+      agentStartHandler({}, ctx);
+      sessionShutdownHandler();
+      vi.advanceTimersByTime(250);
+
+      expect(setWorkingMessage).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 
   it("keeps working message stable across turn_start events within an agent run", async () => {
