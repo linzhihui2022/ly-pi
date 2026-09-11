@@ -3,7 +3,7 @@
 [![verify](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml/badge.svg)](https://github.com/linzhihui2022/ly-pi/actions/workflows/verify.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：14 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
+围绕 [Pi Coding Agent](https://pi.dev) 构建的个人开发环境：15 个 Pi 扩展合并为统一入口 `ly-pi`，扩展代码与配置、技能、主题、子代理统一收纳在 `ly-pi/assets/` 随部署分发；含 PR 审查子代理定义、Catppuccin Mocha 主题、Starship / WezTerm 终端配置等。
 
 ## 特性
 
@@ -32,6 +32,7 @@ configure/
 │   ├── my-sound/             # 音效反馈 + 语音包管理
 │   ├── my-session-name/      # 自动生成 Session Display Name
 │   ├── my-hud/               # 自定义 HUD 状态栏
+│   ├── my-image-asset/       # 明确授权的 Codex 图片资产生成、编辑和增强
 │   ├── my-tool-display/      # 原生工具紧凑呈现
 │   ├── my-worktree/          # 只读 worktree 组件 + /close-worktree 安全关闭命令
 │   ├── my-vision/            # 按模型视觉能力注入图片处理规则
@@ -76,9 +77,16 @@ configure/
 | **my-sound** | 音效反馈 + 语音包管理：会话/工具事件触发音频，`/sound` 命令控制，支持多语音包切换 |
 | **my-session-name** | 自动生成 Session Display Name：首条 prompt 后异步摘要，支持旧 session 补命名与 fork 短 hash |
 | **my-hud** | 自定义单行状态栏：项目名、模型（含思考级别）、Git 分支与状态、PR 链接、上下文百分比（颜色阈值）、Token 与成本、权限统计、Hide thinking 状态 |
+| **my-image-asset** | 原生 `image_asset` 工具：仅在用户明确请求下，借助 Codex 内置 `image_gen` 生成、编辑或增强工作区 PNG 资产；支持受限自动输出命名，不会回退到 API，调用可能消耗 Codex 额度 |
 | **my-tool-display** | Pi 原生工具的紧凑呈现；当前覆盖 `read`、`grep`、`find`、`ls`、`bash`、`edit`、`write`：读/搜索成功正文默认隐藏，bash 成功输出默认显示最多 10 行，edit/write 完成后显示主题化统一 diff；write 对二进制、过大、不可读或工作区外路径安全降级，失败始终显示诊断 |
 | **my-worktree** | 只读 Worktree Widget 在多 Git worktree 时显示可访问工作树；`/close-worktree` 经确认后安全关闭 Current Worktree，保留本地分支，并通过用户配置的终端 hook 收尾 |
 | **my-vision** | 按当前模型视觉能力逐轮注入图片处理规则：视觉模型直接 `read` 读图，非视觉模型委托 `image-reader` 子代理 |
+
+### 图片资产
+
+通过自然语言明确说明图片操作和图片要求；编辑或增强还须点名 Image Target，可选一张 Reference Image。工作区相对 PNG 输出路径可自行指定，例如“生成一张夜读狐狸插画，保存到 `assets/fox.png`”。若明确的单图请求未给出输出路径，生成会写入 `.image-gen/<语意名称>.png`，编辑/增强会在目标图同目录生成 `<目标名>-<语意后缀>.png`；名称冲突时保留旧文件并追加数字。工具绝不原地改写源图，也不会根据“最近图片”猜测编辑目标。
+
+缺失编辑目标、视觉要求不明确或无法安全构造自动路径时，代理会先追问；仅在请求仍不明确且需要批准一份完整建议时才使用 `CONFIRM_IMAGE_ASSET`。`image_asset` 仅调用本机 Codex CLI 的内置 `image_gen`，不会静默使用 API fallback；调用可能消耗 Codex 额度。成功结果列出最终提示词和发布路径，需视觉检查时再使用现有 `read` 能力。
 
 ---
 
@@ -116,6 +124,7 @@ configure/
 ### 前置依赖
 
 - [Bun](https://bun.sh) 与 [Pi Coding Agent](https://pi.dev) ≥ 0.84.2
+- 可选：[Codex CLI](https://github.com/openai/codex)（使用 `image_asset` 时需要；首版通过 macOS 内置 `sips` 验证 PNG，调用可能消耗 Codex 额度）
 - 可选：[Starship](https://starship.rs)、[WezTerm](https://wezterm.org)（仅在使用对应终端配置时需要）
 
 ```bash
