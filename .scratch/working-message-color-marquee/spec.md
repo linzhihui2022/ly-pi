@@ -4,7 +4,7 @@ Status: ready-for-agent
 
 Risk: Medium
 
-Approval: 用户已在本 Pi 会话明确批准本规格、源代码与测试实施，随后明确选择 150ms 作为源代码与测试范围调整，并接受 450ms 的低频呼吸 working indicator。此前的 250ms 版本部署授权不覆盖这些后续调整；部署和 `/reload` 不在本次调整范围内。
+Approval: 用户已在本 Pi 会话明确批准本规格、源代码与测试实施，并随后明确选择 150ms 作为源代码与测试范围调整。自定义 working indicator 帧随后在 `5e7a53f` 中移除；此前的 250ms 版本部署授权不覆盖这些后续调整；部署和 `/reload` 不在本次调整范围内。
 
 ## Problem Statement
 
@@ -12,7 +12,7 @@ Approval: 用户已在本 Pi 会话明确批准本规格、源代码与测试实
 
 ## Solution
 
-在 TUI 模式中，以每 150ms 为一步，按字素从左到右替换工作消息的颜色。第一轮从 dim 逐字素切换为 accent，再逐字素切换为 success；之后只在 success 与 accent 之间连续往复。工作消息文本与字素顺序不改变。TUI working indicator 同时以 450ms 的 `· → • → ● → •` 低频呼吸，依次使用 dim、muted、accent、muted 色。
+在 TUI 模式中，以每 150ms 为一步，按字素从左到右替换工作消息的颜色。第一轮从 dim 逐字素切换为 accent，再逐字素切换为 success；之后只在 success 与 accent 之间连续往复。工作消息文本与字素顺序不改变。TUI working indicator 不提供自定义动画帧（`frames: []`），但仍传入 450ms interval。
 
 对长度为 `n` 的消息，颜色状态必须遵循：
 
@@ -29,7 +29,7 @@ Approval: 用户已在本 Pi 会话明确批准本规格、源代码与测试实
 - 第一轮完整呈现 `dim → accent → success`；其后不再回到 `dim`，而是无限呈现 `success → accent → success`。
 - `agent_end`、`session_shutdown` 和后续 `agent_start` 仍会停止或替换旧计时器。
 - 非 TUI 模式仍只设置一次无 ANSI 样式的静态消息。
-- TUI working indicator 使用 `dim ·`、`muted •`、`accent ●`、`muted •` 四帧，间隔 450ms；非 TUI 模式继续隐藏 indicator。
+- TUI 的 `agent_start` 向 `setWorkingIndicator` 传入空 `frames`，并保留 450ms interval；非 TUI 模式也传入 `frames: []`。
 - 本次不改变消息文本或随机选择逻辑，且颜色跑马灯计时周期固定为 150ms。
 - 运行 `bun run verify` 成功。
 
@@ -38,7 +38,7 @@ Approval: 用户已在本 Pi 会话明确批准本规格、源代码与测试实
 - 测试接缝是 `agent_start` 对 `ctx.ui.setWorkingMessage` 的可观察调用；使用固定随机消息、模拟主题与假计时器验证公开 UI 输出，而不检查局部状态变量。
 - 测试以固定文字逐步断言完整首轮、首轮后的 `success → accent` 转场与回到 `success` 的转场。
 - 保留既有的计时器停止、重复 agent run 替换和非 TUI 静态消息回归测试。
-- 测试同一 `agent_start` 公共 UI 接缝对 `setWorkingIndicator` 的调用，验证四帧、颜色顺序与 450ms 间隔。
+- 测试同一 `agent_start` 公共 UI 接缝对 `setWorkingIndicator` 的调用，验证空 `frames` 与 450ms interval。
 
 ## Out of Scope
 
