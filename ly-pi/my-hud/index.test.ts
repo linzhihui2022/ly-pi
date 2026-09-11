@@ -1554,7 +1554,7 @@ describe("my-hud extension", () => {
     expect(lines[0]).toContain("boom");
   });
 
-  it("cycles working message colors from dim through accent and success", async () => {
+  it("cycles working message colors from dim through accent and bashMode", async () => {
     vi.useFakeTimers();
     const random = vi.spyOn(Math, "random").mockReturnValue(0);
     const intervalMs = 150;
@@ -1616,27 +1616,27 @@ describe("my-hud extension", () => {
 
       vi.advanceTimersByTime(intervalMs);
       expect(setWorkingMessage).toHaveBeenLastCalledWith(
-        expectedMessage("success", "accent", 1),
+        expectedMessage("bashMode", "accent", 1),
       );
 
       vi.advanceTimersByTime((graphemes.length - 1) * intervalMs);
       expect(setWorkingMessage).toHaveBeenLastCalledWith(
-        expectedMessage("success", "accent", graphemes.length),
+        expectedMessage("bashMode", "accent", graphemes.length),
       );
 
       vi.advanceTimersByTime(intervalMs);
       expect(setWorkingMessage).toHaveBeenLastCalledWith(
-        expectedMessage("accent", "success", 1),
+        expectedMessage("accent", "bashMode", 1),
       );
 
       vi.advanceTimersByTime((graphemes.length - 1) * intervalMs);
       expect(setWorkingMessage).toHaveBeenLastCalledWith(
-        expectedMessage("accent", "success", graphemes.length),
+        expectedMessage("accent", "bashMode", graphemes.length),
       );
 
       vi.advanceTimersByTime(intervalMs);
       expect(setWorkingMessage).toHaveBeenLastCalledWith(
-        expectedMessage("success", "accent", 1),
+        expectedMessage("bashMode", "accent", 1),
       );
 
       const callsBeforeStop = setWorkingMessage.mock.calls.length;

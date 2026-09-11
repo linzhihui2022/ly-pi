@@ -51,7 +51,7 @@ export {
 const MEMORY_WIDGET_KEY = "my-hud-memory-warning";
 const WORKING_INDICATOR_INTERVAL_MS = 450;
 const WORKING_MESSAGE_INTERVAL_MS = 150;
-type WorkingMessageColor = "accent" | "dim" | "success";
+type WorkingMessageColor = "accent" | "dim" | "bashMode";
 
 // ── Extension ──
 
@@ -158,7 +158,7 @@ export default function myHud(pi: ExtensionAPI): void {
     workingMessageTimer = setInterval(() => {
       if (index === graphemes.length) {
         suffixColor = prefixColor;
-        prefixColor = prefixColor === "accent" ? "success" : "accent";
+        prefixColor = prefixColor === "accent" ? "bashMode" : "accent";
         index = 0;
       }
       index += 1;
