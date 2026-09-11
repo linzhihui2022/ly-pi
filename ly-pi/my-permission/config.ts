@@ -2,9 +2,9 @@ import type { Config } from "./types";
 
 export const config = {
   defaultPolicy: "allow",
-  judgeModel: "openai-codex/gpt-5.6-luna",
-  auditModel: "openai-codex/gpt-5.6-sol",
-  auditThinking: "high",
+  judgeModel: "deepseek/deepseek-flash",
+  auditModel: "openai-codex/gpt-6-astra",
+  auditThinking: "max",
   judgeTimeoutMs: 8000,
   childPolicy: "deny-on-unsafe",
   permission: {
