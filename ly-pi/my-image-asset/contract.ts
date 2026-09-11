@@ -1,4 +1,4 @@
-import { realpath } from "node:fs/promises";
+import { lstat, realpath } from "node:fs/promises";
 import {
   basename,
   dirname,
@@ -275,7 +275,10 @@ export interface ResolvedImageOutput {
   readonly relativePath: string;
 }
 
+declare const resolvedImageAssetRequestBrand: unique symbol;
+
 export interface ResolvedImageAssetRequest {
+  readonly [resolvedImageAssetRequestBrand]: true;
   readonly operation: ImageOperation;
   readonly prompt: string;
   readonly targetPath?: string;
@@ -320,8 +323,17 @@ async function resolveSourcePath(
   sourcePath: string,
 ): Promise<string> {
   try {
-    return await realpath(resolve(cwd, sourcePath));
-  } catch {
+    const resolvedPath = await realpath(resolve(cwd, sourcePath));
+    const stats = await lstat(resolvedPath);
+    if (!stats.isFile()) {
+      throw new ImageAssetError(
+        "invalid_source",
+        "Image source path must be a regular file.",
+      );
+    }
+    return resolvedPath;
+  } catch (error) {
+    if (error instanceof ImageAssetError) throw error;
     throw new ImageAssetError(
       "invalid_source",
       "Image source path cannot be resolved.",
@@ -329,7 +341,7 @@ async function resolveSourcePath(
   }
 }
 
-async function resolveOutputPath(outputPath: string): Promise<string> {
+export async function resolveOutputPath(outputPath: string): Promise<string> {
   const segments: string[] = [];
   let ancestor = outputPath;
 
@@ -441,5 +453,5 @@ export async function resolveImageAssetRequest(
     referencePath,
     outputPaths,
     overwrite: request.overwrite ?? false,
-  };
+  } as unknown as ResolvedImageAssetRequest;
 }

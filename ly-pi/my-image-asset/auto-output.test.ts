@@ -69,6 +69,57 @@ describe("resolveAutomaticImageAssetRequest", () => {
     });
   });
 
+  it("fails after exhausting bounded automatic output candidates", async () => {
+    const cwd = await makeWorkspace();
+    const outputDirectory = join(cwd, ".image-gen");
+    await mkdir(outputDirectory, { recursive: true });
+    await Promise.all(
+      Array.from({ length: 100 }, (_, index) =>
+        writeFile(
+          join(
+            outputDirectory,
+            `wasteland-robot${index === 0 ? "" : `-${index + 1}`}.png`,
+          ),
+          "existing asset",
+        ),
+      ),
+    );
+
+    await expect(
+      resolveAutomaticImageAssetRequest(
+        {
+          operation: "generate",
+          prompt: "A wasteland robot",
+          output_paths: [".image-gen/wasteland-robot.png"],
+        },
+        cwd,
+        "generate",
+      ),
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      message: "An automatic image output path could not be selected.",
+    });
+  });
+
+  it("rejects an automatic request without an output path", async () => {
+    const cwd = await makeWorkspace();
+
+    await expect(
+      resolveAutomaticImageAssetRequest(
+        {
+          operation: "generate",
+          prompt: "A wasteland robot",
+          output_paths: [],
+        } as never,
+        cwd,
+        "generate",
+      ),
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      message: "Automatic image output path is invalid.",
+    });
+  });
+
   it("preserves an explicit output path for the batch overwrite policy", async () => {
     const cwd = await makeWorkspace();
     const existing = join(cwd, "assets/robot.png");

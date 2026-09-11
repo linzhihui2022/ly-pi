@@ -143,6 +143,27 @@ describe("resolveImageAssetRequest", () => {
     ).resolves.toMatchObject({ targetPath: await realpath(actualTarget) });
   });
 
+  it("rejects a source path that is not a regular file", async () => {
+    const cwd = await makeWorkspace();
+    const sourceDirectory = join(cwd, "source-directory");
+    await mkdir(sourceDirectory, { recursive: true });
+
+    await expect(
+      resolveImageAssetRequest(
+        {
+          operation: "edit",
+          prompt: "Add a blue moon brooch",
+          target_path: sourceDirectory,
+          output_paths: ["assets/fox-edited.png"],
+        },
+        cwd,
+      ),
+    ).rejects.toMatchObject({
+      code: "invalid_source",
+      message: "Image source path must be a regular file.",
+    });
+  });
+
   it("rejects source inputs for generation and a missing target for edits", async () => {
     const cwd = await makeWorkspace();
     const source = join(cwd, "source.png");

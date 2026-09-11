@@ -50,13 +50,7 @@ export async function resolveAutomaticImageAssetRequest(
     };
     const resolved = await resolveImageAssetRequest(candidateRequest, cwd);
     const output = resolved.outputPaths[0];
-    if (!output) {
-      throw new ImageAssetError(
-        "invalid_request",
-        "Automatic image output path is invalid.",
-      );
-    }
-    if (!(await pathExists(output.absolutePath))) return resolved;
+    if (output && !(await pathExists(output.absolutePath))) return resolved;
   }
 
   throw new ImageAssetError(

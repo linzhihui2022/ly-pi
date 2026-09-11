@@ -1,3 +1,4 @@
+import { dirname, resolve } from "node:path";
 import {
   type ExtensionAPI,
   type ExtensionContext,
@@ -19,6 +20,7 @@ import {
   type ImageAssetAuthorization,
   ImageAssetError,
   imageAssetSchema,
+  type ResolvedImageAssetRequest,
 } from "./contract";
 import { readImageAssetConversation } from "./session";
 
@@ -45,6 +47,10 @@ interface ImageAssetToolDetails {
     readonly referencePath: string | null;
   };
   readonly outputPaths: readonly string[];
+  readonly outputs: readonly {
+    readonly path: string;
+    readonly status: "published";
+  }[];
 }
 
 class ImageAssetToolError extends Error {
@@ -148,41 +154,68 @@ export function registerImageAssetTool(
           authorization.mode === "direct" && lastUser
             ? automaticOutputKind(params, lastUser.text)
             : undefined;
-        const request = await resolveAutomaticImageAssetRequest(
+        const requestInput =
           authorization.mode === "direct" && lastUser
             ? { ...params, prompt: lastUser.text }
-            : params,
+            : params;
+        const executeResolvedRequest = async (
+          request: ResolvedImageAssetRequest,
+        ) => {
+          const finalPrompt = buildFinalImagePrompt(request);
+          const result = await runImageAssetBatch(request, ctx.cwd, {
+            runner,
+            decoder,
+            fileOperations: dependencies.fileOperations,
+            signal: signal ?? ctx.signal,
+          });
+          const details: ImageAssetToolDetails = {
+            status: "published",
+            authorization: authorization.mode,
+            operation: request.operation,
+            finalPrompt,
+            sources: {
+              targetPath: request.targetPath ?? null,
+              referencePath: request.referencePath ?? null,
+            },
+            outputPaths: result.outputPaths,
+            outputs: result.outputs,
+          };
+          return {
+            content: [
+              { type: "text" as const, text: formatSuccessMessage(details) },
+            ],
+            details,
+          };
+        };
+        if (automaticOutput) {
+          const automaticPath = params.output_paths[0];
+          if (!automaticPath) {
+            throw new ImageAssetError(
+              "invalid_request",
+              "Automatic image output path is invalid.",
+            );
+          }
+          return withOutputMutationQueues(
+            [resolve(ctx.cwd, dirname(automaticPath))],
+            async () =>
+              executeResolvedRequest(
+                await resolveAutomaticImageAssetRequest(
+                  requestInput,
+                  ctx.cwd,
+                  automaticOutput,
+                ),
+              ),
+          );
+        }
+        const request = await resolveAutomaticImageAssetRequest(
+          requestInput,
           ctx.cwd,
           automaticOutput,
         );
-        const finalPrompt = buildFinalImagePrompt(request);
-        const result = await withOutputMutationQueues(
+        return withOutputMutationQueues(
           request.outputPaths.map(({ absolutePath }) => absolutePath),
-          () =>
-            runImageAssetBatch(request, ctx.cwd, {
-              runner,
-              decoder,
-              fileOperations: dependencies.fileOperations,
-              signal: signal ?? ctx.signal,
-            }),
+          () => executeResolvedRequest(request),
         );
-        const details: ImageAssetToolDetails = {
-          status: "published",
-          authorization: authorization.mode,
-          operation: request.operation,
-          finalPrompt,
-          sources: {
-            targetPath: request.targetPath ?? null,
-            referencePath: request.referencePath ?? null,
-          },
-          outputPaths: result.outputPaths,
-        };
-        return {
-          content: [
-            { type: "text" as const, text: formatSuccessMessage(details) },
-          ],
-          details,
-        };
       } catch (error) {
         throw safeToolError(error);
       }

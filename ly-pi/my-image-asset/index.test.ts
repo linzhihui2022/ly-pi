@@ -123,6 +123,7 @@ describe("image_asset tool", () => {
         operation: "generate",
         sources: { targetPath: null, referencePath: null },
         outputPaths: ["assets/fox.png"],
+        outputs: [{ path: "assets/fox.png", status: "published" }],
       },
     });
   });
@@ -158,6 +159,98 @@ describe("image_asset tool", () => {
     expect(jobs[0]!.output.relativePath).toBe(
       ".image-gen/wasteland-robot-2.png",
     );
+  });
+
+  it("serializes automatic naming before selecting a candidate", async () => {
+    const cwd = await makeWorkspace();
+    const jobs: ImageGenerationJob[] = [];
+    const request = {
+      operation: "generate" as const,
+      prompt: "A wasteland robot",
+      output_paths: [".image-gen/wasteland-robot.png"],
+    };
+    const { tool, branch } = setup(
+      [
+        {
+          type: "message",
+          message: { role: "user", content: "生成一张废土时代的机器人。" },
+        },
+      ],
+      fakeRunner(jobs),
+    );
+
+    await Promise.all([
+      tool.execute("call-1", request, undefined, undefined, {
+        cwd,
+        signal: undefined,
+        sessionManager: { getBranch: () => branch },
+      }),
+      tool.execute("call-2", request, undefined, undefined, {
+        cwd,
+        signal: undefined,
+        sessionManager: { getBranch: () => branch },
+      }),
+    ]);
+
+    expect(jobs.map((job) => job.output.relativePath).sort()).toEqual([
+      ".image-gen/wasteland-robot-2.png",
+      ".image-gen/wasteland-robot.png",
+    ]);
+  });
+
+  it("serializes automatic candidates that overlap with another base name", async () => {
+    const cwd = await makeWorkspace();
+    const outputDirectory = join(cwd, ".image-gen");
+    await mkdir(outputDirectory, { recursive: true });
+    await writeFile(join(outputDirectory, "robot.png"), "existing asset");
+    const jobs: ImageGenerationJob[] = [];
+    const { tool, branch } = setup(
+      [
+        {
+          type: "message",
+          message: { role: "user", content: "生成一张废土时代的机器人。" },
+        },
+      ],
+      fakeRunner(jobs),
+    );
+
+    await Promise.all([
+      tool.execute(
+        "call-1",
+        {
+          operation: "generate",
+          prompt: "A robot",
+          output_paths: [".image-gen/robot.png"],
+        },
+        undefined,
+        undefined,
+        {
+          cwd,
+          signal: undefined,
+          sessionManager: { getBranch: () => branch },
+        },
+      ),
+      tool.execute(
+        "call-2",
+        {
+          operation: "generate",
+          prompt: "Another robot",
+          output_paths: [".image-gen/robot-2.png"],
+        },
+        undefined,
+        undefined,
+        {
+          cwd,
+          signal: undefined,
+          sessionManager: { getBranch: () => branch },
+        },
+      ),
+    ]);
+
+    expect(jobs.map((job) => job.output.relativePath).sort()).toEqual([
+      ".image-gen/robot-2-2.png",
+      ".image-gen/robot-2.png",
+    ]);
   });
 
   it("returns the authorized source record for an image edit", async () => {

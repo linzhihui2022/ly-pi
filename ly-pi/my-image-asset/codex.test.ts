@@ -1,7 +1,11 @@
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ImageAssetBatchError, type ImageGenerationJob } from "./batch";
 import {
   buildCodexImageCommand,
+  type CodexImageArtifactReader,
   type CodexProcessExecutor,
   createCodexImageRunner,
   createSipsImageDecoder,
@@ -16,6 +20,12 @@ const completedImageGenerationEvent = JSON.stringify({
     saved_path: "/generated/image.png",
   },
 });
+
+const matchingArtifactReader: CodexImageArtifactReader = {
+  async read() {
+    return Buffer.from("generated artifact");
+  },
+};
 
 const editJob: ImageGenerationJob = {
   cwd: "/workspace",
@@ -113,7 +123,7 @@ describe("createCodexImageRunner", () => {
     };
 
     await expect(
-      createCodexImageRunner(executor).run(editJob),
+      createCodexImageRunner(executor, matchingArtifactReader).run(editJob),
     ).resolves.toBeUndefined();
     expect(calls).toHaveLength(1);
     expect(calls[0]!.command).toBe("codex");
@@ -162,8 +172,203 @@ describe("createCodexImageRunner", () => {
     };
 
     await expect(
-      createCodexImageRunner(executor).run(editJob),
+      createCodexImageRunner(executor, matchingArtifactReader).run(editJob),
     ).resolves.toBeUndefined();
+  });
+
+  it("rejects an artifact path that is not absolute or is the staging path", async () => {
+    const relativeArtifactExecutor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            type: "item.completed",
+            item: {
+              type: "image_generation",
+              status: "completed",
+              saved_path: "generated/image.png",
+            },
+          }),
+          stderr: "",
+        };
+      },
+    };
+    const sameArtifactExecutor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            type: "item.completed",
+            item: {
+              type: "image_generation",
+              status: "completed",
+              saved_path: editJob.stagedPath,
+            },
+          }),
+          stderr: "",
+        };
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(relativeArtifactExecutor).run(editJob),
+    ).rejects.toMatchObject({ code: "generation_failed" });
+    await expect(
+      createCodexImageRunner(sameArtifactExecutor).run(editJob),
+    ).rejects.toEqual(
+      new ImageAssetBatchError(
+        "generation_failed",
+        "Built-in image generation artifact could not be verified.",
+      ),
+    );
+  });
+
+  it("rejects a symlink alias that resolves to the staging file", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "image-asset-codex-"));
+    const stagedPath = join(directory, "staged.png");
+    const artifactPath = join(directory, "artifact.png");
+    await writeFile(stagedPath, "generated artifact");
+    await symlink(stagedPath, artifactPath);
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            type: "item.completed",
+            item: {
+              type: "image_generation",
+              status: "completed",
+              saved_path: artifactPath,
+            },
+          }),
+          stderr: "",
+        };
+      },
+    };
+    let reads = 0;
+    const artifactReader: CodexImageArtifactReader = {
+      async read() {
+        reads += 1;
+        return Buffer.from("generated artifact");
+      },
+    };
+
+    try {
+      await expect(
+        createCodexImageRunner(executor, artifactReader).run({
+          ...editJob,
+          stagedPath,
+        }),
+      ).rejects.toMatchObject({ code: "generation_failed" });
+      expect(reads).toBe(0);
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
+  it("maps artifact read failures to a safe generation error", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: completedImageGenerationEvent,
+          stderr: "",
+        };
+      },
+    };
+    const artifactReader: CodexImageArtifactReader = {
+      async read() {
+        throw new Error("sensitive artifact detail");
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(executor, artifactReader).run(editJob),
+    ).rejects.toEqual(
+      new ImageAssetBatchError(
+        "generation_failed",
+        "Built-in image generation artifact could not be verified.",
+      ),
+    );
+  });
+
+  it("preserves cancellation during artifact verification", async () => {
+    const controller = new AbortController();
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: completedImageGenerationEvent,
+          stderr: "",
+        };
+      },
+    };
+    const artifactReader: CodexImageArtifactReader = {
+      async read() {
+        controller.abort();
+        throw new Error("cancelled read");
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(executor, artifactReader).run({
+        ...editJob,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ code: "cancelled" });
+  });
+
+  it("accepts a completed image_generation_call artifact", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            type: "item.completed",
+            item: {
+              type: "image_generation_call",
+              status: "completed",
+              saved_path: "/generated/image.png",
+            },
+          }),
+          stderr: "",
+        };
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(executor, matchingArtifactReader).run(editJob),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects a staged artifact that differs from the image_gen artifact", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: completedImageGenerationEvent,
+          stderr: "",
+        };
+      },
+    };
+    const artifactReader: CodexImageArtifactReader = {
+      async read(path) {
+        return Buffer.from(
+          path === "/generated/image.png"
+            ? "generated artifact"
+            : "local replacement",
+        );
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(executor, artifactReader).run(editJob),
+    ).rejects.toEqual(
+      new ImageAssetBatchError(
+        "generation_failed",
+        "Generated image does not match the verified image_gen artifact.",
+      ),
+    );
   });
 
   it("rejects malformed JSONL evidence", async () => {
