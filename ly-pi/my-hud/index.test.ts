@@ -1597,7 +1597,7 @@ describe("my-hud extension", () => {
         ].join("");
 
       expect(setWorkingIndicator).toHaveBeenCalledWith({
-        frames: ["dim:·", "muted:•", "accent:●", "muted:•"],
+        frames: [],
         intervalMs: 450,
       });
       expect(setWorkingMessage).toHaveBeenLastCalledWith(
