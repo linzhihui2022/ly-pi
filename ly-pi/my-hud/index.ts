@@ -132,12 +132,7 @@ export default function myHud(pi: ExtensionAPI): void {
     }
 
     ctx.ui.setWorkingIndicator({
-      frames: [
-        ctx.ui.theme.fg("dim", "·"),
-        ctx.ui.theme.fg("muted", "•"),
-        ctx.ui.theme.fg("accent", "●"),
-        ctx.ui.theme.fg("muted", "•"),
-      ],
+      frames: [],
       intervalMs: WORKING_INDICATOR_INTERVAL_MS,
     });
 
