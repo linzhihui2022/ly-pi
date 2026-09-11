@@ -78,13 +78,13 @@
     "syntaxType": "blue",
     "syntaxOperator": "mauve",
     "syntaxPunctuation": "subtext0",
-    "thinkingOff": "sapphire",
-    "thinkingMinimal": "sapphire",
-    "thinkingLow": "sapphire",
-    "thinkingMedium": "sapphire",
-    "thinkingHigh": "sapphire",
-    "thinkingXhigh": "sapphire",
-    "thinkingMax": "sapphire",
+    "thinkingOff": "mauve",
+    "thinkingMinimal": "mauve",
+    "thinkingLow": "mauve",
+    "thinkingMedium": "mauve",
+    "thinkingHigh": "mauve",
+    "thinkingXhigh": "mauve",
+    "thinkingMax": "mauve",
     "bashMode": "peach"
   }
 }
