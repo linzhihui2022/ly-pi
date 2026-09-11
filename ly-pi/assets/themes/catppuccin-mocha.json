@@ -42,6 +42,10 @@
     "text": "text",
     "thinkingText": "subtext0",
     "selectedBg": "surface0",
+    "scrollbarTrack": "overlay2",
+    "scrollbarThumb": "text",
+    "searchMatchBg": "surface0",
+    "searchMatchText": "text",
     "userMessageBg": "surface0",
     "userMessageText": "text",
     "customMessageBg": "surface0",
@@ -75,11 +79,12 @@
     "syntaxOperator": "mauve",
     "syntaxPunctuation": "subtext0",
     "thinkingOff": "overlay0",
-    "thinkingMinimal": "mauve",
-    "thinkingLow": "sapphire",
-    "thinkingMedium": "lavender",
-    "thinkingHigh": "pink",
-    "thinkingXhigh": "red",
+    "thinkingMinimal": "overlay0",
+    "thinkingLow": "overlay0",
+    "thinkingMedium": "overlay0",
+    "thinkingHigh": "overlay0",
+    "thinkingXhigh": "overlay0",
+    "thinkingMax": "overlay0",
     "bashMode": "peach"
   }
 }
