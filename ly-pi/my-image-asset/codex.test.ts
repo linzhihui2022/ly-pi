@@ -8,6 +8,15 @@ import {
   localCodexProcessExecutor,
 } from "./codex";
 
+const completedImageGenerationEvent = JSON.stringify({
+  type: "item.completed",
+  item: {
+    type: "image_generation",
+    status: "completed",
+    saved_path: "/generated/image.png",
+  },
+});
+
 const editJob: ImageGenerationJob = {
   cwd: "/workspace",
   finalPrompt: "Primary request: Add a blue moon brooch",
@@ -90,12 +99,16 @@ describe("buildCodexImageCommand", () => {
 });
 
 describe("createCodexImageRunner", () => {
-  it("passes a successful Codex command to the injected executor", async () => {
+  it("passes a successful Codex command with image generation evidence", async () => {
     const calls: Array<{ command: string; args: readonly string[] }> = [];
     const executor: CodexProcessExecutor = {
       async execute(command, args) {
         calls.push({ command, args });
-        return { exitCode: 0, stdout: "", stderr: "" };
+        return {
+          exitCode: 0,
+          stdout: completedImageGenerationEvent,
+          stderr: "",
+        };
       },
     };
 
@@ -105,6 +118,67 @@ describe("createCodexImageRunner", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]!.command).toBe("codex");
     expect(calls[0]!.args).toContain("--image");
+  });
+
+  it("rejects a successful command without built-in image generation evidence", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            type: "item.completed",
+            item: { type: "command_execution", status: "completed" },
+          }),
+          stderr: "",
+        };
+      },
+    };
+
+    await expect(createCodexImageRunner(executor).run(editJob)).rejects.toEqual(
+      new ImageAssetBatchError(
+        "generation_failed",
+        "Built-in image generation could not be verified.",
+      ),
+    );
+  });
+
+  it("accepts a completed image_gen tool-call event", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            type: "item.completed",
+            item: {
+              type: "tool_call",
+              name: "image_gen",
+              status: "completed",
+              saved_path: "/generated/image.png",
+            },
+          }),
+          stderr: "",
+        };
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(executor).run(editJob),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects malformed JSONL evidence", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return { exitCode: 0, stdout: "not json", stderr: "" };
+      },
+    };
+
+    await expect(createCodexImageRunner(executor).run(editJob)).rejects.toEqual(
+      new ImageAssetBatchError(
+        "generation_failed",
+        "Built-in image generation could not be verified.",
+      ),
+    );
   });
 
   it("classifies a transient Codex failure without exposing stderr", async () => {

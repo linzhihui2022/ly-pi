@@ -113,7 +113,10 @@ describe("image_asset tool", () => {
     );
 
     expect(jobs).toHaveLength(1);
-    expect(jobs[0]!.finalPrompt).toContain("Primary request: A fox reading");
+    expect(jobs[0]!.finalPrompt).toContain(
+      "Primary request: 请生成一张狐狸图片，并保存到 assets/fox.png。",
+    );
+    expect(jobs[0]!.finalPrompt).not.toContain("A fox reading under a lantern");
     expect(result).toMatchObject({
       details: {
         status: "published",

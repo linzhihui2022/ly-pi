@@ -448,6 +448,56 @@ describe("authorizeImageAssetCall", () => {
     ).toEqual({ authorized: true, mode: "direct" });
   });
 
+  it.each([
+    {
+      name: "a negated image request",
+      request: generateRequest,
+      text: "不要生成图片并写到 assets/fox.png。",
+    },
+    {
+      name: "a lookalike output path",
+      request: generateRequest,
+      text: "请生成一张读书狐狸插画，并写到 assets/fox.png.bak。",
+    },
+    {
+      name: "an implicit overwrite",
+      request: { ...generateRequest, overwrite: true },
+      text: "请生成一张读书狐狸插画，并写到 assets/fox.png。",
+    },
+    {
+      name: "a negated overwrite",
+      request: { ...generateRequest, overwrite: true },
+      text: "请生成一张读书狐狸插画，但不要覆盖 assets/fox.png。",
+    },
+  ])("rejects $name", ({ request, text }) => {
+    expect(authorizeImageAssetCall(request, [{ role: "user", text }])).toEqual({
+      authorized: false,
+      reason: "missing_explicit_request",
+    });
+  });
+
+  it("authorizes a path followed by English terminal punctuation", () => {
+    expect(
+      authorizeImageAssetCall(generateRequest, [
+        {
+          role: "user",
+          text: "Generate an image of a fox reading and save it to assets/fox.png.",
+        },
+      ]),
+    ).toEqual({ authorized: true, mode: "direct" });
+  });
+
+  it("authorizes an explicit overwrite request", () => {
+    expect(
+      authorizeImageAssetCall({ ...generateRequest, overwrite: true }, [
+        {
+          role: "user",
+          text: "请生成一张读书狐狸插画，并覆盖 assets/fox.png。",
+        },
+      ]),
+    ).toEqual({ authorized: true, mode: "direct" });
+  });
+
   it("recognizes a Chinese one-picture request without another image noun", () => {
     expect(
       authorizeImageAssetCall(generateRequest, [

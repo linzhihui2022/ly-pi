@@ -149,7 +149,9 @@ export function registerImageAssetTool(
             ? automaticOutputKind(params, lastUser.text)
             : undefined;
         const request = await resolveAutomaticImageAssetRequest(
-          params,
+          authorization.mode === "direct" && lastUser
+            ? { ...params, prompt: lastUser.text }
+            : params,
           ctx.cwd,
           automaticOutput,
         );

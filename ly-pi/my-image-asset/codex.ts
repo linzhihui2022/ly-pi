@@ -181,6 +181,45 @@ function isTransientCodexFailure(stderr: string): boolean {
   );
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isCompletedImageGenerationItem(
+  item: Record<string, unknown>,
+): boolean {
+  if (item.status !== "completed" || typeof item.saved_path !== "string") {
+    return false;
+  }
+  if (
+    item.type === "image_generation" ||
+    item.type === "image_generation_call"
+  ) {
+    return true;
+  }
+  const toolName = item.name ?? item.tool_name ?? item.toolName ?? item.tool;
+  return (
+    typeof toolName === "string" &&
+    /^(?:image_gen|imagegen|image_gen__imagegen)$/i.test(toolName)
+  );
+}
+
+function hasBuiltInImageGenerationEvidence(stdout: string): boolean {
+  return stdout.split(/\r?\n/).some((line) => {
+    if (!line.trim()) return false;
+    try {
+      const event: unknown = JSON.parse(line);
+      return (
+        isRecord(event) &&
+        isRecord(event.item) &&
+        isCompletedImageGenerationItem(event.item)
+      );
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function createCodexImageRunner(
   executor: CodexProcessExecutor = localCodexProcessExecutor,
 ): ImageAssetRunner {
@@ -222,6 +261,12 @@ export function createCodexImageRunner(
           isTransientCodexFailure(result.stderr)
             ? "Image generation was temporarily unavailable."
             : "Image generation failed.",
+        );
+      }
+      if (!hasBuiltInImageGenerationEvidence(result.stdout)) {
+        throw new ImageAssetBatchError(
+          "generation_failed",
+          "Built-in image generation could not be verified.",
         );
       }
     },

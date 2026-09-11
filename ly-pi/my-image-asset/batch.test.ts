@@ -6,6 +6,7 @@ import {
   readFile,
   rename,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -135,6 +136,105 @@ describe("runImageAssetBatch", () => {
     expect(await readFile(join(cwd, "assets/fox.png"), "utf8")).toBe(
       "recovered",
     );
+  });
+
+  it("does not publish an artifact left by a failed transient attempt", async () => {
+    const cwd = await makeWorkspace();
+    const request = await resolveImageAssetRequest(
+      {
+        operation: "generate",
+        prompt: "A fox reading under a lantern",
+        output_paths: ["assets/fox.png"],
+      },
+      cwd,
+    );
+    let attempts = 0;
+    const runner: ImageAssetRunner = {
+      async run(job) {
+        attempts += 1;
+        if (attempts === 1) {
+          await writeFile(job.stagedPath, "stale image");
+          throw new ImageAssetBatchError("transient", "Temporary failure.");
+        }
+      },
+    };
+    const decoder: ImageDecoder = {
+      async decode(path) {
+        try {
+          await access(path);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    };
+
+    await expect(
+      runImageAssetBatch(request, cwd, { runner, decoder }),
+    ).rejects.toMatchObject({ code: "invalid_output" });
+    await expect(access(join(cwd, "assets/fox.png"))).rejects.toThrow();
+  });
+
+  it("rejects a staged symlink even when the decoder accepts it", async () => {
+    const cwd = await makeWorkspace();
+    const outside = await makeWorkspace();
+    const outsideImage = join(outside, "outside.png");
+    await writeFile(outsideImage, "outside image");
+    const request = await resolveImageAssetRequest(
+      {
+        operation: "generate",
+        prompt: "A fox reading under a lantern",
+        output_paths: ["assets/fox.png"],
+      },
+      cwd,
+    );
+    const runner: ImageAssetRunner = {
+      async run(job) {
+        await symlink(outsideImage, job.stagedPath);
+      },
+    };
+    const decoder: ImageDecoder = {
+      async decode() {
+        return true;
+      },
+    };
+
+    await expect(
+      runImageAssetBatch(request, cwd, { runner, decoder }),
+    ).rejects.toMatchObject({ code: "invalid_output" });
+    await expect(access(join(cwd, "assets/fox.png"))).rejects.toThrow();
+  });
+
+  it("refuses publication when Codex replaces an output parent with a symlink", async () => {
+    const cwd = await makeWorkspace();
+    const outside = await makeWorkspace();
+    const outputDirectory = join(cwd, "assets");
+    await mkdir(outputDirectory, { recursive: true });
+    const request = await resolveImageAssetRequest(
+      {
+        operation: "generate",
+        prompt: "A fox reading under a lantern",
+        output_paths: ["assets/nested/fox.png"],
+      },
+      cwd,
+    );
+    const runner: ImageAssetRunner = {
+      async run(job) {
+        await writeFile(job.stagedPath, "generated image");
+        await rm(outputDirectory, { force: true, recursive: true });
+        await symlink(outside, outputDirectory);
+      },
+    };
+    const decoder: ImageDecoder = {
+      async decode() {
+        return true;
+      },
+    };
+
+    await expect(
+      runImageAssetBatch(request, cwd, { runner, decoder }),
+    ).rejects.toMatchObject({ code: "publish_failed" });
+    await expect(access(join(outside, "nested"))).rejects.toThrow();
   });
 
   it("fails after a second transient error without publishing earlier outputs", async () => {
@@ -286,6 +386,166 @@ describe("runImageAssetBatch", () => {
 
     expect(await readFile(first, "utf8")).toBe("old first");
     expect(await readFile(second, "utf8")).toBe("old second");
+  });
+
+  it("preserves backups when rollback cannot restore them", async () => {
+    const cwd = await makeWorkspace();
+    const first = join(cwd, "assets/first.png");
+    const second = join(cwd, "assets/second.png");
+    await mkdir(dirname(first), { recursive: true });
+    await Promise.all([
+      writeFile(first, "old first"),
+      writeFile(second, "old second"),
+    ]);
+    const request = await resolveImageAssetRequest(
+      {
+        operation: "generate",
+        prompt: "A fox reading under a lantern",
+        output_paths: ["assets/first.png", "assets/second.png"],
+        overwrite: true,
+      },
+      cwd,
+    );
+    const runner: ImageAssetRunner = {
+      async run(job) {
+        await writeFile(job.stagedPath, `new ${job.output.relativePath}`);
+      },
+    };
+    const decoder: ImageDecoder = {
+      async decode() {
+        return true;
+      },
+    };
+    let stagingDirectory = "";
+    const fileOperations: ImageAssetFileOperations = {
+      lstat,
+      mkdir,
+      mkdtemp: async (prefix) => {
+        stagingDirectory = await mkdtemp(prefix);
+        return stagingDirectory;
+      },
+      rename: async (from, to) => {
+        if (
+          to === request.outputPaths[1]!.absolutePath &&
+          basename(from) === "1.png"
+        ) {
+          throw new Error("publish failed");
+        }
+        if (
+          to === request.outputPaths[0]!.absolutePath &&
+          basename(from) === "backup-0.png"
+        ) {
+          throw new Error("restore failed");
+        }
+        await rename(from, to);
+      },
+      rm,
+    };
+
+    await expect(
+      runImageAssetBatch(request, cwd, { runner, decoder, fileOperations }),
+    ).rejects.toMatchObject({ code: "publish_failed" });
+    await expect(
+      readFile(join(stagingDirectory, "backup-0.png"), "utf8"),
+    ).resolves.toBe("old first");
+  });
+
+  it("recovers an interrupted publication before starting a new batch", async () => {
+    const cwd = await makeWorkspace();
+    const output = join(cwd, "assets/fox.png");
+    const stagingDirectory = await mkdtemp(join(cwd, ".image-asset-stage-"));
+    await mkdir(dirname(output), { recursive: true });
+    await Promise.all([
+      writeFile(output, "partially published asset"),
+      writeFile(join(stagingDirectory, "backup-0.png"), "old asset"),
+      writeFile(
+        join(stagingDirectory, ".image-asset-publish.json"),
+        JSON.stringify({
+          version: 1,
+          state: "publishing",
+          publications: [
+            {
+              relativePath: "assets/fox.png",
+              stagedFileName: "0.png",
+              backupFileName: "backup-0.png",
+              hadExistingOutput: true,
+            },
+          ],
+        }),
+      ),
+    ]);
+    const request = await resolveImageAssetRequest(
+      {
+        operation: "generate",
+        prompt: "A fox reading under a lantern",
+        output_paths: ["assets/new.png"],
+      },
+      cwd,
+    );
+    const runner: ImageAssetRunner = {
+      async run(job) {
+        await writeFile(job.stagedPath, "new asset");
+      },
+    };
+    const decoder: ImageDecoder = {
+      async decode() {
+        return true;
+      },
+    };
+
+    await runImageAssetBatch(request, cwd, { runner, decoder });
+
+    expect(await readFile(output, "utf8")).toBe("old asset");
+    await expect(access(stagingDirectory)).rejects.toThrow();
+  });
+
+  it("keeps committed outputs while removing a completed recovery journal", async () => {
+    const cwd = await makeWorkspace();
+    const output = join(cwd, "assets/fox.png");
+    const stagingDirectory = await mkdtemp(join(cwd, ".image-asset-stage-"));
+    await mkdir(dirname(output), { recursive: true });
+    await Promise.all([
+      writeFile(output, "published asset"),
+      writeFile(join(stagingDirectory, "backup-0.png"), "old asset"),
+      writeFile(
+        join(stagingDirectory, ".image-asset-publish.json"),
+        JSON.stringify({
+          version: 1,
+          state: "committed",
+          publications: [
+            {
+              relativePath: "assets/fox.png",
+              stagedFileName: "0.png",
+              backupFileName: "backup-0.png",
+              hadExistingOutput: true,
+            },
+          ],
+        }),
+      ),
+    ]);
+    const request = await resolveImageAssetRequest(
+      {
+        operation: "generate",
+        prompt: "A fox reading under a lantern",
+        output_paths: ["assets/new.png"],
+      },
+      cwd,
+    );
+    const runner: ImageAssetRunner = {
+      async run(job) {
+        await writeFile(job.stagedPath, "new asset");
+      },
+    };
+    const decoder: ImageDecoder = {
+      async decode() {
+        return true;
+      },
+    };
+
+    await runImageAssetBatch(request, cwd, { runner, decoder });
+
+    expect(await readFile(output, "utf8")).toBe("published asset");
+    await expect(access(stagingDirectory)).rejects.toThrow();
   });
 
   it("does not start a batch after cancellation", async () => {

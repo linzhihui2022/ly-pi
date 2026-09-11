@@ -100,13 +100,38 @@ function hasExplicitImageIntent(
     enhance:
       /(?:\benhance\b|\bimprove\b|\brestore\b|\brepair\b|增强|优化|修复|提升)/i,
   };
-  return hasImageSubject && operationPattern[operation].test(text);
+  const negatedOperationPattern: Record<ImageOperation, RegExp> = {
+    generate:
+      /(?:\b(?:do\s+not|don't|never)\s+(?:generate|create|make|draw)\b|(?:不要|别|不必|无需)\s*(?:生成|创建|制作|绘制|画))/i,
+    edit: /(?:\b(?:do\s+not|don't|never)\s+(?:edit|modify|change)\b|(?:不要|别|不必|无需)\s*(?:编辑|修改|改图))/i,
+    enhance:
+      /(?:\b(?:do\s+not|don't|never)\s+(?:enhance|improve|restore|repair)\b|(?:不要|别|不必|无需)\s*(?:增强|优化|修复|提升))/i,
+  };
+  return (
+    hasImageSubject &&
+    operationPattern[operation].test(text) &&
+    !negatedOperationPattern[operation].test(text)
+  );
 }
 
 function hasSpecificEnhancementGoal(text: string): boolean {
   return /(?:清晰|锐化|噪点|降噪|纹理|曝光|色彩|颜色|对比|饱和|亮度|破损|划痕|背景|裁剪|透明|分辨率|restore|repair|denoise|texture|exposure|contrast|saturation|brightness|background|crop|resolution)/i.test(
     text,
   );
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const PATH_BOUNDARY =
+  "(?:[\\s`\"'“”‘’()（）\\[\\]{}<>，,。；;：:]|\\.(?=\\s|$))";
+
+function mentionsExactPath(text: string, path: string): boolean {
+  return new RegExp(
+    `(?:^|${PATH_BOUNDARY})${escapeRegExp(path)}(?=$|${PATH_BOUNDARY})`,
+    "u",
+  ).test(text);
 }
 
 function mentionsPaths(
@@ -119,7 +144,16 @@ function mentionsPaths(
     request.reference_path,
     ...(includeOutputs ? request.output_paths : []),
   ].filter((path): path is string => Boolean(path));
-  return paths.every((path) => text.includes(path));
+  return paths.every((path) => mentionsExactPath(text, path));
+}
+
+function hasExplicitOverwriteIntent(text: string): boolean {
+  const hasOverwriteIntent = /(?:\boverwrite\b|覆盖)/i.test(text);
+  const hasNegatedOverwriteIntent =
+    /(?:\b(?:do\s+not|don't|never)\s+overwrite\b|\bwithout\s+overwrit(?:e|ing)\b|(?:不要|别|不必|无需|不)\s*覆盖)/i.test(
+      text,
+    );
+  return hasOverwriteIntent && !hasNegatedOverwriteIntent;
 }
 
 export type AutomaticOutputKind = "generate" | "derived";
@@ -204,6 +238,7 @@ export function authorizeImageAssetCall(
     mentionsPaths(lastUser.text, request, false) &&
     (mentionsPaths(lastUser.text, request, true) ||
       automaticOutputKind(request, lastUser.text) !== undefined) &&
+    (!request.overwrite || hasExplicitOverwriteIntent(lastUser.text)) &&
     (request.operation !== "enhance" ||
       hasSpecificEnhancementGoal(lastUser.text))
   ) {
