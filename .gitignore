@@ -9,6 +9,7 @@ node_modules/
 .pi/
 .rpiv/
 .pi-subagents/
+.image-gen/
 
 # Test coverage
 coverage/
