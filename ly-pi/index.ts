@@ -4,6 +4,7 @@ import { cdGuard } from "./my-cd-guard/index";
 import myDiff from "./my-diff/index";
 import myHtml from "./my-html/index";
 import myHud from "./my-hud/index";
+import myImageAsset from "./my-image-asset/index";
 import myLog from "./my-log/index";
 import myPermission from "./my-permission/index";
 import myReload from "./my-reload/index";
@@ -29,4 +30,5 @@ export default async function (pi: ExtensionAPI): Promise<void> {
   myHud(pi);
   myWorktree(pi);
   myVision(pi);
+  myImageAsset(pi);
 }
