@@ -1,17 +1,17 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./config", () => ({
-  config: {
-    defaultPolicy: "ask",
-    judgeModel: "openai-codex/gpt-5.6-luna",
-    auditModel: "openai-codex/gpt-5.6-sol",
-    auditThinking: "high",
-    judgeTimeoutMs: 5000,
-    childPolicy: "deny-on-unsafe",
-    permission: {},
-  },
-}));
+vi.mock("./config", async (importOriginal) => {
+  const { config } = await importOriginal<typeof import("./config")>();
+  return {
+    config: {
+      ...config,
+      defaultPolicy: "ask",
+      judgeTimeoutMs: 5000,
+      permission: {},
+    },
+  };
+});
 vi.mock("./rules", () => ({ decide: vi.fn(() => ({ action: "ask" })) }));
 vi.mock("./judge", () => ({ createJudge: vi.fn(() => vi.fn()) }));
 vi.mock("./professor", () => ({
@@ -66,8 +66,8 @@ import { createProsecutor } from "./prosecutor";
 import { runPermissionSelfTest } from "./self-test";
 
 const auditBinding = {
-  model: "openai-codex/gpt-5.6-sol",
-  thinking: "high",
+  model: "openai-codex/gpt-6-astra",
+  thinking: "max",
 };
 
 function createMockApi() {
@@ -126,19 +126,19 @@ afterEach(() => {
 });
 
 describe("my-permission direct bindings", () => {
-  it("passes the Sol Direct Model Binding to Advocate and its merger", async () => {
+  it("passes the configured Audit Direct Model Binding to Advocate and its merger", async () => {
     const advocate = vi.fn().mockResolvedValue({
       suggestion: {
         add: [{ rule: "允许 git status", reason: "误判" }],
         remove: [],
       },
       cost: 0.001,
-      modelUsed: "openai-codex/gpt-5.6-sol",
+      modelUsed: "openai-codex/gpt-6-astra",
     });
     const merger = vi.fn().mockResolvedValue({
       mergedText: "允许 git status",
       cost: 0.002,
-      modelUsed: "openai-codex/gpt-5.6-sol",
+      modelUsed: "openai-codex/gpt-6-astra",
     });
     vi.mocked(createAdvocate).mockReturnValue(advocate);
     vi.mocked(createPipelineMerger).mockReturnValue(merger);
@@ -215,7 +215,7 @@ describe("my-permission direct bindings", () => {
     expect(writeFileSync).not.toHaveBeenCalled();
   });
 
-  it("passes the Sol Direct Model Binding to Prosecutor", async () => {
+  it("passes the configured Audit Direct Model Binding to Prosecutor", async () => {
     const prosecutor = vi.fn().mockResolvedValue({ error: "audit failed" });
     vi.mocked(createProsecutor).mockReturnValue(prosecutor);
     const api = createMockApi();
@@ -235,7 +235,7 @@ describe("my-permission direct bindings", () => {
     expect(writeFileSync).not.toHaveBeenCalled();
   });
 
-  it("passes the Sol Direct Model Binding to Chief Judge", async () => {
+  it("passes the configured Audit Direct Model Binding to Chief Judge", async () => {
     const chief = vi.fn().mockResolvedValue({ error: "audit failed" });
     vi.mocked(createChief).mockReturnValue(chief);
     const api = createMockApi();
@@ -308,7 +308,7 @@ describe("my-permission direct bindings", () => {
     );
 
     expect(createJudge).toHaveBeenCalledWith(
-      expect.objectContaining({ judgeModel: "openai-codex/gpt-5.6-luna" }),
+      expect.objectContaining({ judgeModel: "deepseek/deepseek-flash" }),
       expect.not.objectContaining({ modelRunner: expect.anything() }),
     );
     expect(result).toBeUndefined();

@@ -4,9 +4,9 @@ import { config } from "./config";
 describe("config", () => {
   it("has sensible defaults", () => {
     expect(config.defaultPolicy).toBe("allow");
-    expect(config.judgeModel).toBe("openai-codex/gpt-5.6-luna");
-    expect(config.auditModel).toBe("openai-codex/gpt-5.6-sol");
-    expect(config.auditThinking).toBe("high");
+    expect(config.judgeModel).toBe("deepseek/deepseek-flash");
+    expect(config.auditModel).toBe("openai-codex/gpt-6-astra");
+    expect(config.auditThinking).toBe("max");
     expect(config).not.toHaveProperty("professorModel");
     expect(config).not.toHaveProperty("professorThinking");
     expect(config.judgeTimeoutMs).toBe(8000);
