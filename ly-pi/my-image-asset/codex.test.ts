@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { ImageAssetBatchError, type ImageGenerationJob } from "./batch";
 import {
   buildCodexImageCommand,
+  type CodexImageArtifactDirectoryLister,
   type CodexImageArtifactReader,
   type CodexProcessExecutor,
   createCodexImageRunner,
@@ -38,6 +39,61 @@ const editJob: ImageGenerationJob = {
   targetPath: "/outside/target.png",
   referencePath: "/outside/reference.png",
 };
+
+const GENERATED_IMAGES_DIRECTORY = "/codex-home/generated_images";
+const REAL_THREAD_ID = "01a093db-6e05-7c31-97ff-eaa1ed0431cc";
+const REAL_THREAD_DIRECTORY = join(GENERATED_IMAGES_DIRECTORY, REAL_THREAD_ID);
+const REAL_GENERATED_ARTIFACT = join(
+  REAL_THREAD_DIRECTORY,
+  "exec-8020e4d9-a712-4eff-a9a6-4616d14406e2.png",
+);
+
+function realCodexEventStream(threadId: string): string {
+  return [
+    JSON.stringify({ type: "thread.started", thread_id: threadId }),
+    JSON.stringify({ type: "turn.started" }),
+    JSON.stringify({
+      type: "item.completed",
+      item: { type: "agent_message", id: "msg-1", text: "Copied the PNG." },
+    }),
+    JSON.stringify({
+      type: "item.completed",
+      item: {
+        type: "command_execution",
+        id: "cmd-1",
+        command: "/bin/zsh -lc 'cp artifact.png staged.png'",
+        aggregated_output: "",
+        exit_code: 0,
+        status: "completed",
+      },
+    }),
+    JSON.stringify({ type: "turn.completed" }),
+  ].join("\n");
+}
+
+function filesArtifactReader(
+  files: Readonly<Record<string, string>>,
+): CodexImageArtifactReader {
+  return {
+    async read(path) {
+      const content = files[path];
+      if (content === undefined) throw new Error("artifact unavailable");
+      return Buffer.from(content);
+    },
+  };
+}
+
+function fakeDirectoryLister(
+  entries: Readonly<Record<string, readonly string[]>>,
+): CodexImageArtifactDirectoryLister {
+  return {
+    async list(path) {
+      const names = entries[path];
+      if (!names) throw new Error("directory unavailable");
+      return names;
+    },
+  };
+}
 
 describe("buildCodexImageCommand", () => {
   it("uses Codex built-in image generation with target then reference attachments", () => {
@@ -315,6 +371,249 @@ describe("createCodexImageRunner", () => {
         ...editJob,
         signal: controller.signal,
       }),
+    ).rejects.toMatchObject({ code: "cancelled" });
+  });
+
+  it("accepts the artifact Codex copied from its generated_images directory", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: realCodexEventStream(REAL_THREAD_ID),
+          stderr: "",
+        };
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(
+        executor,
+        filesArtifactReader({
+          [REAL_GENERATED_ARTIFACT]: "generated artifact",
+          [editJob.stagedPath]: "generated artifact",
+        }),
+        {
+          artifactDirectoryLister: fakeDirectoryLister({
+            [REAL_THREAD_DIRECTORY]: [
+              "exec-8020e4d9-a712-4eff-a9a6-4616d14406e2.png",
+            ],
+          }),
+          generatedImagesDirectory: GENERATED_IMAGES_DIRECTORY,
+        },
+      ).run(editJob),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects a staged file that matches no artifact in the generated_images directory", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: realCodexEventStream(REAL_THREAD_ID),
+          stderr: "",
+        };
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(
+        executor,
+        filesArtifactReader({
+          [REAL_GENERATED_ARTIFACT]: "generated artifact",
+          [editJob.stagedPath]: "local replacement",
+        }),
+        {
+          artifactDirectoryLister: fakeDirectoryLister({
+            [REAL_THREAD_DIRECTORY]: [
+              "exec-8020e4d9-a712-4eff-a9a6-4616d14406e2.png",
+            ],
+          }),
+          generatedImagesDirectory: GENERATED_IMAGES_DIRECTORY,
+        },
+      ).run(editJob),
+    ).rejects.toEqual(
+      new ImageAssetBatchError(
+        "generation_failed",
+        "Generated image does not match the verified image_gen artifact.",
+      ),
+    );
+  });
+
+  it("accepts the directory artifact when the reported saved_path is unusable", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: [
+            JSON.stringify({
+              type: "thread.started",
+              thread_id: REAL_THREAD_ID,
+            }),
+            JSON.stringify({
+              type: "item.completed",
+              item: {
+                type: "image_generation",
+                status: "completed",
+                saved_path: join(REAL_THREAD_DIRECTORY, "missing.png"),
+              },
+            }),
+            JSON.stringify({ type: "turn.completed" }),
+          ].join("\n"),
+          stderr: "",
+        };
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(
+        executor,
+        filesArtifactReader({
+          [REAL_GENERATED_ARTIFACT]: "generated artifact",
+          [editJob.stagedPath]: "generated artifact",
+        }),
+        {
+          artifactDirectoryLister: fakeDirectoryLister({
+            [REAL_THREAD_DIRECTORY]: [
+              "exec-8020e4d9-a712-4eff-a9a6-4616d14406e2.png",
+            ],
+          }),
+          generatedImagesDirectory: GENERATED_IMAGES_DIRECTORY,
+        },
+      ).run(editJob),
+    ).resolves.toBeUndefined();
+  });
+
+  it("fails closed when the generated_images directory cannot be inspected", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: realCodexEventStream(REAL_THREAD_ID),
+          stderr: "",
+        };
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(
+        executor,
+        filesArtifactReader({ [editJob.stagedPath]: "generated artifact" }),
+        {
+          artifactDirectoryLister: fakeDirectoryLister({}),
+          generatedImagesDirectory: GENERATED_IMAGES_DIRECTORY,
+        },
+      ).run(editJob),
+    ).rejects.toMatchObject({ code: "generation_failed" });
+  });
+
+  it("ignores unsafe thread identifiers and non-PNG artifacts", async () => {
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: realCodexEventStream("../../outside"),
+          stderr: "",
+        };
+      },
+    };
+    let listings = 0;
+
+    await expect(
+      createCodexImageRunner(
+        executor,
+        filesArtifactReader({ [editJob.stagedPath]: "generated artifact" }),
+        {
+          artifactDirectoryLister: {
+            async list() {
+              listings += 1;
+              return ["notes.txt", "image.jpeg"];
+            },
+          },
+          generatedImagesDirectory: GENERATED_IMAGES_DIRECTORY,
+        },
+      ).run(editJob),
+    ).rejects.toMatchObject({ code: "generation_failed" });
+    expect(listings).toBe(0);
+  });
+
+  it("resolves the generated_images directory from CODEX_HOME", async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), "image-asset-home-"));
+    const previousCodexHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = codexHome;
+    const requested: string[] = [];
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: realCodexEventStream(REAL_THREAD_ID),
+          stderr: "",
+        };
+      },
+    };
+    const artifactPath = join(
+      codexHome,
+      "generated_images",
+      REAL_THREAD_ID,
+      "exec-abc.png",
+    );
+
+    try {
+      await expect(
+        createCodexImageRunner(
+          executor,
+          filesArtifactReader({
+            [artifactPath]: "generated artifact",
+            [editJob.stagedPath]: "generated artifact",
+          }),
+          {
+            artifactDirectoryLister: {
+              async list(path) {
+                requested.push(path);
+                return ["exec-abc.png"];
+              },
+            },
+          },
+        ).run(editJob),
+      ).resolves.toBeUndefined();
+      expect(requested).toEqual([
+        join(codexHome, "generated_images", REAL_THREAD_ID),
+      ]);
+    } finally {
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      await rm(codexHome, { force: true, recursive: true });
+    }
+  });
+
+  it("preserves cancellation while inspecting generated artifacts", async () => {
+    const controller = new AbortController();
+    const executor: CodexProcessExecutor = {
+      async execute() {
+        return {
+          exitCode: 0,
+          stdout: realCodexEventStream(REAL_THREAD_ID),
+          stderr: "",
+        };
+      },
+    };
+
+    await expect(
+      createCodexImageRunner(
+        executor,
+        filesArtifactReader({
+          [REAL_GENERATED_ARTIFACT]: "generated artifact",
+          [editJob.stagedPath]: "generated artifact",
+        }),
+        {
+          artifactDirectoryLister: {
+            async list() {
+              controller.abort();
+              throw new Error("cancelled listing");
+            },
+          },
+          generatedImagesDirectory: GENERATED_IMAGES_DIRECTORY,
+        },
+      ).run({ ...editJob, signal: controller.signal }),
     ).rejects.toMatchObject({ code: "cancelled" });
   });
 

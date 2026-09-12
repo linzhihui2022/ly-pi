@@ -966,7 +966,9 @@ export async function runImageAssetBatch(
   const stagingDirectory = await fileOperations.mkdtemp(
     join(workspace, STAGING_DIRECTORY_PREFIX),
   );
-  const finalPrompt = buildFinalImagePrompt(request);
+  const generationPrompt = buildFinalImagePrompt(request, {
+    includeOutputPaths: false,
+  });
   let preserveStaging = false;
   let primaryError: unknown;
   let failed = false;
@@ -987,7 +989,7 @@ export async function runImageAssetBatch(
         dependencies.runner,
         {
           cwd: workspace,
-          finalPrompt,
+          finalPrompt: generationPrompt,
           output,
           stagedPath: initialStagedPath,
           targetPath: request.targetPath,

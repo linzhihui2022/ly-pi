@@ -85,6 +85,39 @@ describe("runImageAssetBatch", () => {
     ]);
   });
 
+  it("does not expose final output paths to the image generator", async () => {
+    const cwd = await makeWorkspace();
+    const request = await resolveImageAssetRequest(
+      {
+        operation: "generate",
+        prompt: "A fox reading under a lantern",
+        output_paths: ["assets/first.png"],
+      },
+      cwd,
+    );
+    const prompts: string[] = [];
+    const runner: ImageAssetRunner = {
+      async run(job) {
+        prompts.push(job.finalPrompt);
+        await writeFile(job.stagedPath, "image bytes");
+      },
+    };
+    const decoder: ImageDecoder = {
+      async decode() {
+        return true;
+      },
+    };
+
+    await runImageAssetBatch(request, cwd, { runner, decoder });
+
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain(
+      "Primary request: A fox reading under a lantern",
+    );
+    expect(prompts[0]).not.toContain("Output paths:");
+    expect(prompts[0]).not.toContain("assets/first.png");
+  });
+
   it("passes the canonical workspace to the runner", async () => {
     const realCwd = await makeWorkspace();
     const linkParent = await makeWorkspace();

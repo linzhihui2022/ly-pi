@@ -1,11 +1,13 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile, realpath } from "node:fs/promises";
+import { readdir, readFile, realpath } from "node:fs/promises";
+import { homedir } from "node:os";
 import {
   basename,
   dirname,
   extname,
   isAbsolute,
+  join,
   relative,
   resolve,
   sep,
@@ -37,9 +39,29 @@ export interface CodexImageArtifactReader {
   read(path: string, signal?: AbortSignal): Promise<Uint8Array>;
 }
 
+export interface CodexImageArtifactDirectoryLister {
+  list(path: string, signal?: AbortSignal): Promise<readonly string[]>;
+}
+
 const localCodexImageArtifactReader: CodexImageArtifactReader = {
   read: (path, signal) => readFile(path, { signal }),
 };
+
+const localCodexImageArtifactDirectoryLister: CodexImageArtifactDirectoryLister =
+  {
+    list: (path) => readdir(path),
+  };
+
+const GENERATED_IMAGES_DIRECTORY_NAME = "generated_images";
+
+function defaultGeneratedImagesDirectory(): string {
+  const configuredHome = process.env.CODEX_HOME?.trim();
+  const codexHome =
+    configuredHome && configuredHome.length > 0
+      ? configuredHome
+      : join(homedir(), ".codex");
+  return join(codexHome, GENERATED_IMAGES_DIRECTORY_NAME);
+}
 
 export interface CodexImageCommand {
   readonly command: "codex";
@@ -85,7 +107,8 @@ function buildCodexInstruction(job: ImageGenerationJob): string {
     "Do not use Python, SVG, HTML/CSS, canvas, or local drawing substitutes.",
     ...inputRoles,
     job.finalPrompt,
-    `After a successful image_gen call, copy only the generated PNG artifact to ${JSON.stringify(stagedPath)} in the current workspace.`,
+    `After a successful image_gen call, copy only the generated PNG artifact to ${JSON.stringify(stagedPath)} in the current workspace, then stop.`,
+    "Run no other commands: do not build, test, lint, or touch any other file.",
     "If image_gen is unavailable or no image is generated, stop without creating a substitute.",
   ].join("\n");
 }
@@ -215,20 +238,48 @@ function completedImageGenerationArtifactPath(
     : undefined;
 }
 
-function builtInImageGenerationArtifactPath(
-  stdout: string,
-): string | undefined {
+function builtInImageGenerationArtifactPaths(stdout: string): string[] {
+  const savedPaths: string[] = [];
   for (const line of stdout.split(/\r?\n/)) {
     if (!line.trim()) continue;
     try {
       const event: unknown = JSON.parse(line);
       if (isRecord(event) && isRecord(event.item)) {
         const savedPath = completedImageGenerationArtifactPath(event.item);
-        if (savedPath) return savedPath;
+        if (savedPath) savedPaths.push(savedPath);
+      }
+    } catch {}
+  }
+  return savedPaths;
+}
+
+function codexThreadId(stdout: string): string | undefined {
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const event: unknown = JSON.parse(line);
+      if (
+        isRecord(event) &&
+        event.type === "thread.started" &&
+        typeof event.thread_id === "string" &&
+        isSafeArtifactSegment(event.thread_id)
+      ) {
+        return event.thread_id;
       }
     } catch {}
   }
   return undefined;
+}
+
+function isSafeArtifactSegment(segment: string): boolean {
+  return (
+    segment.length > 0 &&
+    segment !== "." &&
+    segment !== ".." &&
+    !segment.includes("/") &&
+    !segment.includes("\\") &&
+    !segment.includes("\0")
+  );
 }
 
 function digestArtifact(bytes: Uint8Array): string {
@@ -256,35 +307,54 @@ async function pathsResolveToSameFile(
   }
 }
 
-async function verifyImageGenArtifact(
-  savedPath: string,
-  stagedPath: string,
-  artifactReader: CodexImageArtifactReader,
+interface CodexImageArtifactContext {
+  readonly artifactReader: CodexImageArtifactReader;
+  readonly directoryLister: CodexImageArtifactDirectoryLister;
+  readonly generatedImagesDirectory: string;
+}
+
+interface CodexImageGenerationEvidence {
+  readonly savedPaths: readonly string[];
+  readonly threadId: string | undefined;
+}
+
+async function generatedImagesArtifactPaths(
+  threadId: string | undefined,
+  context: CodexImageArtifactContext,
   signal: AbortSignal | undefined,
-): Promise<void> {
-  if (
-    !isAbsolute(savedPath) ||
-    savedPath.includes("\0") ||
-    (await pathsResolveToSameFile(savedPath, stagedPath))
-  ) {
-    throw new ImageAssetBatchError(
-      "generation_failed",
-      "Built-in image generation artifact could not be verified.",
-    );
+): Promise<string[]> {
+  if (!threadId || !isSafeArtifactSegment(threadId)) return [];
+  const directory = join(context.generatedImagesDirectory, threadId);
+  let names: readonly string[];
+  try {
+    names = await context.directoryLister.list(directory, signal);
+  } catch {
+    throwIfCodexAborted(signal);
+    return [];
   }
   throwIfCodexAborted(signal);
-  let savedArtifact: Uint8Array;
-  let stagedArtifact: Uint8Array;
+  return names
+    .filter(
+      (name) =>
+        isSafeArtifactSegment(name) && extname(name).toLowerCase() === ".png",
+    )
+    .map((name) => join(directory, name));
+}
+
+async function verifyImageGenArtifact(
+  evidence: CodexImageGenerationEvidence,
+  stagedPath: string,
+  context: CodexImageArtifactContext,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  throwIfCodexAborted(signal);
+  let stagedDigest: string;
   try {
-    [savedArtifact, stagedArtifact] = await Promise.all([
-      artifactReader.read(savedPath, signal),
-      artifactReader.read(stagedPath, signal),
-    ]);
-  } catch (error) {
-    if (
-      (error instanceof ImageAssetBatchError && error.code === "cancelled") ||
-      signal?.aborted
-    ) {
+    stagedDigest = digestArtifact(
+      await context.artifactReader.read(stagedPath, signal),
+    );
+  } catch {
+    if (signal?.aborted) {
       throw new ImageAssetBatchError(
         "cancelled",
         "Image operation was cancelled.",
@@ -296,18 +366,58 @@ async function verifyImageGenArtifact(
     );
   }
   throwIfCodexAborted(signal);
-  if (digestArtifact(savedArtifact) !== digestArtifact(stagedArtifact)) {
-    throw new ImageAssetBatchError(
-      "generation_failed",
-      "Generated image does not match the verified image_gen artifact.",
-    );
+
+  const candidates = [
+    ...evidence.savedPaths.filter(
+      (savedPath) => isAbsolute(savedPath) && !savedPath.includes("\0"),
+    ),
+    ...(await generatedImagesArtifactPaths(evidence.threadId, context, signal)),
+  ];
+
+  for (const candidate of candidates) {
+    throwIfCodexAborted(signal);
+    if (await pathsResolveToSameFile(candidate, stagedPath)) continue;
+    try {
+      if (
+        digestArtifact(await context.artifactReader.read(candidate, signal)) ===
+        stagedDigest
+      ) {
+        return;
+      }
+    } catch {
+      if (signal?.aborted) {
+        throw new ImageAssetBatchError(
+          "cancelled",
+          "Image operation was cancelled.",
+        );
+      }
+    }
   }
+
+  throw new ImageAssetBatchError(
+    "generation_failed",
+    "Generated image does not match the verified image_gen artifact.",
+  );
+}
+
+export interface CodexImageRunnerOptions {
+  readonly artifactDirectoryLister?: CodexImageArtifactDirectoryLister;
+  readonly generatedImagesDirectory?: string;
 }
 
 export function createCodexImageRunner(
   executor: CodexProcessExecutor = localCodexProcessExecutor,
   artifactReader: CodexImageArtifactReader = localCodexImageArtifactReader,
+  options: CodexImageRunnerOptions = {},
 ): ImageAssetRunner {
+  const artifactContext: CodexImageArtifactContext = {
+    artifactReader,
+    directoryLister:
+      options.artifactDirectoryLister ?? localCodexImageArtifactDirectoryLister,
+    generatedImagesDirectory:
+      options.generatedImagesDirectory ?? defaultGeneratedImagesDirectory(),
+  };
+
   return {
     async run(job) {
       if (job.signal?.aborted) {
@@ -348,17 +458,18 @@ export function createCodexImageRunner(
             : "Image generation failed.",
         );
       }
-      const savedPath = builtInImageGenerationArtifactPath(result.stdout);
-      if (!savedPath) {
+      const savedPaths = builtInImageGenerationArtifactPaths(result.stdout);
+      const threadId = codexThreadId(result.stdout);
+      if (savedPaths.length === 0 && !threadId) {
         throw new ImageAssetBatchError(
           "generation_failed",
           "Built-in image generation could not be verified.",
         );
       }
       await verifyImageGenArtifact(
-        savedPath,
+        { savedPaths, threadId },
         job.stagedPath,
-        artifactReader,
+        artifactContext,
         job.signal,
       );
       throwIfCodexAborted(job.signal);

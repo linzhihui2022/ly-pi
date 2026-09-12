@@ -297,8 +297,13 @@ function isInsideWorkspace(workspace: string, target: string): boolean {
   );
 }
 
+export interface FinalImagePromptOptions {
+  readonly includeOutputPaths?: boolean;
+}
+
 export function buildFinalImagePrompt(
   request: ResolvedImageAssetRequest,
+  options: FinalImagePromptOptions = {},
 ): string {
   const lines = [
     `Primary request: ${request.prompt}`,
@@ -310,11 +315,13 @@ export function buildFinalImagePrompt(
   if (request.referencePath) {
     lines.push(`Reference image: ${basename(request.referencePath)}`);
   }
-  lines.push(
-    `Output paths: ${request.outputPaths
-      .map(({ relativePath }) => relativePath)
-      .join(", ")}`,
-  );
+  if (options.includeOutputPaths ?? true) {
+    lines.push(
+      `Output paths: ${request.outputPaths
+        .map(({ relativePath }) => relativePath)
+        .join(", ")}`,
+    );
+  }
   return lines.join("\n");
 }
 

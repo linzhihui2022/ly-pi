@@ -22,8 +22,9 @@ Repair the `image_asset` authorization, privacy, Codex provenance, staging, roll
 
 - Hardened direct authorization and bound direct prompts to the final user request.
 - Required completed built-in `image_gen` JSONL evidence and byte-level artifact matching before accepting Codex success.
+- Aligned artifact verification with real Codex builds: staging bytes are matched against `$CODEX_HOME/generated_images/<thread_id>/` when no `image_generation` event is reported, and final output paths are no longer disclosed to Codex.
 - Added runtime validation for resolved requests, regular-file source checks, canonical workspace paths, isolated retry staging, no-clobber publication, versioned recovery journals, and recoverable rollback handling.
 - Serialized automatic candidate selection, preserved cleanup failures, and exposed one-to-one per-output publication statuses.
 - Corrected the README module count and synchronized the image operation result documentation.
 
-Verification: `bun run verify` passed (74 test files, 1,253 tests; coverage thresholds met; check-docs passed).
+Verification: `bun run verify` passed (74 test files, 1,261 tests; coverage thresholds met; check-docs passed).
