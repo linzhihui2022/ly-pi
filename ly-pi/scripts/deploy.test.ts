@@ -211,6 +211,83 @@ describe("deploy", () => {
     );
   });
 
+  it("removes deprecated fallbackModels from locally owned agent overrides", () => {
+    const stagingDir = createStagingDir();
+    const agentDir = join(stagingDir, "agent");
+    const extensionDir = join(agentDir, "extensions", "ly-pi");
+    const settingsPath = join(agentDir, "settings.json");
+    mkdirSync(extensionDir, { recursive: true });
+    writeFileSync(
+      settingsPath,
+      `${JSON.stringify({
+        customSetting: true,
+        subagents: {
+          agentOverrides: {
+            "image-reader": {
+              model: "openai-codex/gpt-5.6-terra",
+              thinking: "max",
+              fallbackModels: ["old/image-model"],
+            },
+          },
+          agentOverridesByProvider: {
+            "openai-codex": {
+              scout: {
+                model: "openai-codex/gpt-5.6-luna",
+                fast: true,
+                fallbackModels: [],
+              },
+            },
+          },
+        },
+      })}\n`,
+    );
+
+    const bun = spawnSync("which", ["bun"], { encoding: "utf8" }).stdout.trim();
+    if (!bun) {
+      throw new Error("Bun executable is required to test deployment.");
+    }
+
+    const cleanupBundle = ensureExtensionBundle();
+    try {
+      const result = spawnSync(bun, ["run", "scripts/deploy.ts"], {
+        cwd: projectDir,
+        encoding: "utf8",
+        env: { PATH: "", PI_STAGING_DIR: stagingDir },
+      });
+
+      expect(result.status, result.stderr).toBe(0);
+    } finally {
+      cleanupBundle();
+    }
+
+    const deployed = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(deployed).toMatchObject({
+      customSetting: true,
+      subagents: {
+        agentOverrides: {
+          "image-reader": {
+            model: "openai-codex/gpt-5.6-terra",
+            thinking: "max",
+          },
+        },
+        agentOverridesByProvider: {
+          "openai-codex": {
+            scout: {
+              model: "openai-codex/gpt-5.6-luna",
+              fast: true,
+            },
+          },
+        },
+      },
+    });
+    expect(
+      deployed.subagents.agentOverrides["image-reader"],
+    ).not.toHaveProperty("fallbackModels");
+    expect(
+      deployed.subagents.agentOverridesByProvider["openai-codex"].scout,
+    ).not.toHaveProperty("fallbackModels");
+  });
+
   it("does not define repository-owned model settings", () => {
     const source = JSON.parse(
       readFileSync(

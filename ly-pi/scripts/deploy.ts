@@ -113,6 +113,26 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+function removeDeprecatedFallbackModels(
+  settings: Record<string, unknown>,
+): void {
+  const subagents = settings.subagents;
+  if (!isObject(subagents)) return;
+
+  const overrideGroups: unknown[] = [subagents.agentOverrides];
+  const overridesByProvider = subagents.agentOverridesByProvider;
+  if (isObject(overridesByProvider)) {
+    overrideGroups.push(...Object.values(overridesByProvider));
+  }
+
+  for (const overrides of overrideGroups) {
+    if (!isObject(overrides)) continue;
+    for (const override of Object.values(overrides)) {
+      if (isObject(override)) delete override.fallbackModels;
+    }
+  }
+}
+
 async function write(path: string, data: string | Uint8Array | BunFile) {
   await mkdir(join(path, ".."), { recursive: true });
   await Bun.write(path, data);
@@ -265,6 +285,7 @@ const configDir = "assets/config";
     (target.subagents as Record<string, unknown>) ?? {},
     managedSubagents,
   );
+  removeDeprecatedFallbackModels(target);
   await write(settingsPath, `${JSON.stringify(target, null, 2)}\n`);
   console.log("Settings: deployed");
 
