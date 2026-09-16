@@ -110,7 +110,7 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 其中 `<content>` 是该总结；必须非空且只有一行，不要加入日期、`[daily-timesheet]` marker、隐藏标记或额外前缀。summary LLM 超时、不可用、返回空值、多行或不符合这些约束时，标为 `Blocked`：展示 ticket/标签与原因，阻止整批写入；这不是可由用户覆盖的 `Review`。
 
-对每个 `日期 + 已确认 Scheduled on service` 组合，查询当前 person、该 service 与同一日历日期的现有 `time_entries`，读取 `date`、`time` 和 `note`。每个初始响应（包括终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用首次查询的 `query_id` 取完所有页。首次或后续查询失败、初始响应缺少或为空的 `query_id`、`next_offset` 非法/重复/不前进、缺少或非数组 `items`、或无法完整读取既有 entry 数据的响应均为 `Blocked`，不展示最终确认且不创建任何记录；绝不将其视为空结果。每个候选都必须与相同日期、相同 service 的每条既有 note 比较，不得按 ticket/label 预先过滤；先完成整批比较再归类，不得逐候选独立归类。每一对比较必须返回恰好一个 `Same`、`Different` 或 `Uncertain`，以及非空的简短理由。LLM 超时、不可用、空响应、格式错误、多个分类或缺少理由时，标为 `Blocked`。有效的 `Uncertain` 才进入 `Review`。`ticket-or-label` 是弱身份信号：一致支持 `Same`，不一致或缺失仅降低判断可信度，不单独否决语义匹配。
+对每个 `日期 + 已确认 Scheduled on service` 组合，查询当前 person、该 service 与同一日历日期的现有 `time_entries`，读取 `date`、`time` 和 `note`。每个响应都必须包含 `items` 数组。若初始响应成功返回 `items: []` 且没有 `next_offset`，表示既有记录的完整结果集为空；此时即使 `query_id` 缺失或为空，也继续将该日期 + service 的候选按“没有既有 entry”归类为 `Create`。除这个空终页特例外，每个初始响应（包括有内容的终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用首次查询的 `query_id` 取完所有页。首次或后续查询失败、缺少或非数组 `items`、非空初始响应或带 `next_offset` 的初始响应缺少/为空的 `query_id`、`next_offset` 非法/重复/不前进、或无法完整读取既有 entry 数据的响应均为 `Blocked`，不展示最终确认且不创建任何记录；仅允许上述明确的空终页作为完整空结果。每个候选都必须与相同日期、相同 service 的每条既有 note 比较，不得按 ticket/label 预先过滤；先完成整批比较再归类，不得逐候选独立归类。每一对比较必须返回恰好一个 `Same`、`Different` 或 `Uncertain`，以及非空的简短理由。LLM 超时、不可用、空响应、格式错误、多个分类或缺少理由时，标为 `Blocked`。有效的 `Uncertain` 才进入 `Review`。`ticket-or-label` 是弱身份信号：一致支持 `Same`，不一致或缺失仅降低判断可信度，不单独否决语义匹配。
 
 先处理 `Review`，其优先级高于自动分类：
 
@@ -232,8 +232,9 @@ Internal Tools
 
 以下每行都是独立的预检运行；任一行都会输出 `Blocked` 回执、不展示最终确认，且不会调用 `productive_create_resource`：
 
-| 故障输入 | 回执 |
+| 输入 | 处理 / 回执 |
 | --- | --- |
+| `time_entries` 初始响应成功返回 `items: []`，没有 `next_offset`，且 `query_id` 缺失或为空 | 完整空结果；候选标为 `Create`，不阻断最终确认 |
 | 单页 booking 初始响应有 `items` 且没有 `next_offset`，但 `query_id` 缺少或为空 | `Blocked: Scheduled on 2026-08-24 — initial query_id missing` |
 | booking continuation 的 `next_offset` 为 `0`、`"200"`、重复或不前进 | `Blocked: Scheduled on 2026-08-24 — invalid next_offset` |
 | exact-name service 重验的初始响应缺少/为空 `query_id`，或后续 `next_offset` 非法/重复/不前进 | `Blocked: service revalidation 2026-08-24 — pagination metadata invalid` |
@@ -266,7 +267,7 @@ Internal Tools
 
 `JOGG-730` 证明不同 ticket 不会排除语义 `Same`；`JOGG-733` 同时有 `Same` 与 `Uncertain`，仍优先进入 `Review`，不能自动 `Skip` 或 `Conflict`。2026-08-24 的原始分类是一个自动 `Create`（`JOGG-732`）、一个 `Skip`、一个 `Conflict` 和一个 `Review`（`JOGG-733`）。用户在 `Review` 中选择 `Create` 后，`JOGG-733` 进入最终 `Create` 列表，但回执保留其 `Review` 决定。
 
-2026-08-25 的 `JOGG-737` 没有同日、同 service 的既有 entry，因此是 `Create`。最终确认后仅创建以下三项，且每项使用其日期的已确认 service：
+2026-08-25 的 `JOGG-737` 没有同日、同 service 的既有 entry，因此是 `Create`。如果这个结果来自 `time_entries` 初始响应的 `items: []`、缺少 `next_offset` 且缺少 `query_id`，仍按完整空结果处理。最终确认后仅创建以下三项，且每项使用其日期的已确认 service：
 
 ```text
 2026-08-24 Internal Tools JOGG-732 120m
