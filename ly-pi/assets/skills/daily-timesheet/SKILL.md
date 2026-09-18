@@ -32,7 +32,7 @@ gh api user --jq .login
 git config user.email
 ```
 
-commit author 的 login 或 email 任一匹配即算"自己的"。
+这两个只读命令互不依赖，可并行执行；必须同时取得结果。commit author 的 login 或 email 任一匹配即算"自己的"。
 
 `committedDate` 是 UTC，按本地时区换算每天的窗口。例如本地 UTC+8，日期 D 的窗口是 `[D-1T16:00:00Z, DT16:00:00Z)`。窗口整体范围 = 最早一天的起点到今天的零点。
 
@@ -55,6 +55,8 @@ gh pr list --state all --limit <30|60|100> --search "sort:updated-desc" \
 完成标准：PR 列表的 `updatedAt` 范围覆盖整个窗口。
 
 ### 3. 逐 PR 筛出自己的 commit
+
+各 PR 的只读 `gh pr view` 可在有限并发下并行执行；保持每个 PR 的结果完整，失败仍报告，不因并行改变筛选逻辑。
 
 对每个 PR 执行：
 
@@ -79,11 +81,13 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 ### 5. 确定 Productive service
 
-先调用 `productive_get_current_person_and_organization()`，取得当前 Productive person。GitHub 身份只用于筛 commit，不能作为 Productive person。
+若步骤 4 没有任何有分配工时的日期，保留普通 Daily Timesheet 输出，跳过本步骤以及步骤 6、7 的 Productive 读取、预检、确认和写入（步骤 0 的连接检查仍保留）。若步骤 4 有分配日期，只处理这些日期；若之后所有日期都成为 `Not scheduled`，同样跳过步骤 6、7，不生成 summary、不查询既有 entries、不展示写入确认。
 
-先用 `productive_describe_resource` 检查 `bookings`、`services` 与 `time_entries` 的字段，确认 booking 关联的 service 和 service 记录都可返回稳定的 service ID，并加载 `time-entry-logging` 与 `work-booking` 的 Productive 指引。当前账号不能读取 Deal，因此候选和回执只显示 service 名、关联 task（如有）及排期信息，不显示 Deal 名或内部 ID。
+步骤 5 的独立只读准备调用——当前 person、三个 resource 描述和两份 Productive 指引——可并行执行；任何必要准备读取失败仍按原规则阻断。取得当前 Productive person 后，GitHub 身份只用于筛 commit，不能作为 Productive person。
 
-对每个有分配工时的本地日期 D，独立查询当前 person 的 Scheduled on：`bookings` 使用 `person=current`、`booking_type=service`、`is_canceled=false`、`with_draft=true`、`after=D` 与 `before=D`；首次最多请求 200 条，并请求 `started_on`、`ended_on`、`booking_method`、`time`、`percentage`、`total_time`、`service.id`、`service.name` 与 `task.title`。`service.id` 只在内部保留，用于去重和精确重验。`after`/`before` 要覆盖 D，因而包含跨多日的 booking。每个初始响应（包括终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用初始查询的 `query_id` 读取后续页，直到终页。必须在取完全部页后才按 service ID 去重、判断候选数或向用户展示候选。
+用 `productive_describe_resource` 检查 `bookings`、`services` 与 `time_entries` 的字段，确认 booking 关联的 service 和 service 记录都可返回稳定的 service ID，并加载 `time-entry-logging` 与 `work-booking` 的 Productive 指引。当前账号不能读取 Deal，因此候选和回执只显示 service 名、关联 task（如有）及排期信息，不显示 Deal 名或内部 ID。
+
+对每个有分配工时的本地日期 D，并行查询当前 person 的 Scheduled on；每个日期仍使用独立 query：`bookings` 使用 `person=current`、`booking_type=service`、`is_canceled=false`、`with_draft=true`、`after=D` 与 `before=D`；首次最多请求 200 条，并请求 `started_on`、`ended_on`、`booking_method`、`time`、`percentage`、`total_time`、`service.id`、`service.name` 与 `task.title`。`service.id` 只在内部保留，用于去重和精确重验。`after`/`before` 要覆盖 D，因而包含跨多日的 booking。每个初始响应（包括终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用初始查询的 `query_id` 读取后续页，直到终页。必须在取完全部页后才按 service ID 去重、判断候选数或向用户展示候选。所有日期的完整候选就绪后，在一次用户交互中按日期列出确认/选择项；每个日期仍独立要求确认或显式选择，不能因相邻日期或相同名称自动接受。取消一个日期只跳过该日期。
 
 首次或后续查询失败、初始响应缺少或为空的 `query_id`、`items` 缺失或不是数组、booking/service 数据结构异常（包括缺少有效 `service.id`）、`next_offset` 非法/重复/不前进时，将该操作标为 `Blocked: Scheduled on <D>`，阻断整批 Productive 预检、最终确认和所有写入。不要把技术查询失败视为没有排期。
 
@@ -94,15 +98,15 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 - 有多个 Service：展示候选并要求用户显式选择一个；取消或无选择时将 D 标为 `Not scheduled: selection cancelled`
 - 若多个不同 service 的用户可见标签完全相同而无法区分：将 D 标为 `Not scheduled: ambiguous Scheduled on`；不展示内部 ID
 
-对确认或选择的 Scheduled on service，以当前 person、`time_tracking_enabled=true` 和精确 service name 查询 `services`，读取每条 service 的 `id`，每页最多 200 条。每个初始响应（包括终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用原始 `query_id` 读取该精确名称的后续页，直到找到原 booking 的 service ID 或完整耗尽结果。初始响应缺少或为空的 `query_id`、`next_offset` 非法/重复/不前进、首次或后续查询失败、缺少有效 service ID 或数据结构异常时为 `Blocked`，阻断整批。只有找到原 booking 的相同 ID 才可用于 D；查询成功且完整耗尽结果后仍未找到该 ID、只找到同名不同 ID 或所选 service 不可记工时时，将 D 标为 `Not scheduled: service unavailable`。绝不以同名的其他 service 替代选中项。
+对用户确认或选择的 service，先按稳定 `service.id` 去重；在当前运行内每个 distinct service ID 只做一次精确重验：以当前 person、`time_tracking_enabled=true` 和精确 service name 查询 `services`，读取每条 service 的 `id`，每页最多 200 条。每个初始响应（包括终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用原始 `query_id` 读取该精确名称的后续页，直到找到原 booking 的 service ID 或完整耗尽结果。不同 service ID 的重验可并行执行。初始响应缺少或为空的 `query_id`、`next_offset` 非法/重复/不前进、首次或后续查询失败、缺少有效 service ID 或数据结构异常时为 `Blocked`，阻断整批。只有找到原 booking 的相同 ID 才可用于所有选择该 ID 的日期；查询成功且完整耗尽结果后仍未找到该 ID、只找到同名不同 ID 或所选 service 不可记工时时，将这些日期标为 `Not scheduled: service unavailable`。这只是本次运行内的去重，不建立持久映射；绝不以同名的其他 service 替代选中项。
 
 为每个未跳过日期保存其经用户确认且当前可记工时的 service；不创建持久映射，也不把 GitHub ticket 映射到 Productive task。绝不读取历史 `time_entries` 来寻找 service，绝不要求或执行关键词或短语搜索。
 
-完成标准：每个有分配工时的日期都已关联唯一、经用户确认且当前可记工时的 Scheduled on service，或已作为 `Not scheduled` 跳过；若有 `Blocked`，未写入任何 Productive 记录。
+完成标准：无分配日期时已明确跳过 Productive 同步；否则每个有分配工时的日期都已关联唯一、经用户确认且当前可记工时的 Scheduled on service，或已作为 `Not scheduled` 跳过。若所有日期都已跳过，则步骤 6、7 已跳过；若有 `Blocked`，未写入任何 Productive 记录。
 
 ### 6. 预检并展示写入计划
 
-每个已关联 Scheduled on service 的日期、每个分配出的 ticket（或既有的无 ticket 短语）对应一条候选 time entry。`Not scheduled` 日期不生成候选或写入项，但必须保留在最终回执中。针对该任务的 PR 标题和去重后的命中 commit headlines，生成一条具体、忠实且保留源语言的 LLM 总结：说明主要改动及其对象，不虚构未在来源中出现的信息。note 只使用一行：
+若步骤 5 没有任何已关联 service 的日期，跳过本步骤和步骤 7，直接输出 `Not scheduled` 回执。否则，每个已关联 Scheduled on service 的日期、每个分配出的 ticket（或既有的无 ticket 短语）对应一条候选 time entry。`Not scheduled` 日期不生成候选或写入项，但必须保留在最终回执中。针对该任务的 PR 标题和去重后的命中 commit headlines，生成一条具体、忠实且保留源语言的 LLM 总结：说明主要改动及其对象，不虚构未在来源中出现的信息。note 只使用一行：
 
 ```text
 <ticket-or-label> <content>
@@ -110,17 +114,19 @@ commit 时间戳是推送时刻（批量推送会挤在同一分钟），不反�
 
 其中 `<content>` 是该总结；必须非空且只有一行，不要加入日期、`[daily-timesheet]` marker、隐藏标记或额外前缀。summary LLM 超时、不可用、返回空值、多行或不符合这些约束时，标为 `Blocked`：展示 ticket/标签与原因，阻止整批写入；这不是可由用户覆盖的 `Review`。
 
-对每个 `日期 + 已确认 Scheduled on service` 组合，查询当前 person、该 service 与同一日历日期的现有 `time_entries`，读取 `date`、`time` 和 `note`。每个响应都必须包含 `items` 数组。若初始响应成功返回 `items: []` 且没有 `next_offset`，表示既有记录的完整结果集为空；此时即使 `query_id` 缺失或为空，也继续将该日期 + service 的候选按“没有既有 entry”归类为 `Create`。除这个空终页特例外，每个初始响应（包括有内容的终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用首次查询的 `query_id` 取完所有页。首次或后续查询失败、缺少或非数组 `items`、非空初始响应或带 `next_offset` 的初始响应缺少/为空的 `query_id`、`next_offset` 非法/重复/不前进、或无法完整读取既有 entry 数据的响应均为 `Blocked`，不展示最终确认且不创建任何记录；仅允许上述明确的空终页作为完整空结果。每个候选都必须与相同日期、相同 service 的每条既有 note 比较，不得按 ticket/label 预先过滤；先完成整批比较再归类，不得逐候选独立归类。每一对比较必须返回恰好一个 `Same`、`Different` 或 `Uncertain`，以及非空的简短理由。LLM 超时、不可用、空响应、格式错误、多个分类或缺少理由时，标为 `Blocked`。有效的 `Uncertain` 才进入 `Review`。`ticket-or-label` 是弱身份信号：一致支持 `Same`，不一致或缺失仅降低判断可信度，不单独否决语义匹配。
+summary 生成与既有 `time_entries` 的日期窗口读取互不依赖，可并行执行；两者都成功后才开始整批比较。任一失败仍按 `Blocked` 处理，不因另一条并行分支成功而放宽规则。
+
+按本次运行的 distinct `service.id` 分组查询既有 `time_entries`：对每个 service，取本次使用它的已分配日期的最小与最大日期，以当前 person、该 service、`date gt_eq <min-date>` 和 `date lt_eq <max-date>` 查询一个日期窗口，并读取 `date`、`time` 和 `note`。不同 service 的窗口查询可并行；窗口内没有分配的日期可以随查询返回，但必须在客户端丢弃。将完整结果按精确的日历 `date + service` 分组，只把同日同 service 的记录用于比较。每个响应都必须包含 `items` 数组。若初始响应成功返回 `items: []` 且没有 `next_offset`，表示该 service 窗口的完整结果集为空；此时即使 `query_id` 缺失或为空，也继续将窗口内所有候选按“没有既有 entry”归类为 `Create`。除这个空终页特例外，每个初始响应（包括有内容的终页）都必须带非空 `query_id`；只有缺少 `next_offset` 才表示终页。若存在 `next_offset`，它必须是相对上一次请求严格前进的有效正整数；使用首次查询的 `query_id` 取完所有页。首次或后续查询失败、缺少或非数组 `items`、非空初始响应或带 `next_offset` 的初始响应缺少/为空的 `query_id`、`next_offset` 非法/重复/不前进、结果缺少有效日期、或无法完整读取既有 entry 数据的响应均为 `Blocked`，不展示最终确认且不创建任何记录；仅允许上述明确的空终页作为完整空结果。每个候选都必须与相同日期、相同 service 的每条既有 note 比较，不得按 ticket/label 预先过滤；先完成整批比较再归类，不得逐候选独立归类。每一对比较必须返回恰好一个 `Same`、`Different` 或 `Uncertain`，以及非空的简短理由。LLM 超时、不可用、空响应、格式错误、多个分类或缺少理由时，标为 `Blocked`。有效的 `Uncertain` 才进入 `Review`。`ticket-or-label` 是弱身份信号：一致支持 `Same`，不一致或缺失仅降低判断可信度，不单独否决语义匹配。
 
 先处理 `Review`，其优先级高于自动分类：
 
-- 候选有任一 `Uncertain`、有多个 `Same`，或同一既有 note 被多个候选判为 `Same`：所有受影响候选标为 `Review`；预览中展示拟写入 note、所有相关既有 note 和 LLM 理由，逐项询问用户选择 `Create`、`Skip` 或 `Cancel`（终止本次写入）
+- 候选有任一 `Uncertain`、有多个 `Same`，或同一既有 note 被多个候选判为 `Same`：所有受影响候选标为 `Review`；预览中展示拟写入 note、所有相关既有 note 和 LLM 理由，在一次 Review 交互中逐项询问用户选择 `Create`、`Skip` 或 `Cancel`（终止本次写入）
 - 对不在 `Review` 的候选，恰有一个 `Same`、该既有 note 未被其他候选判为 `Same`，且其余每一对比较均为 `Different`：分钟数相同标为 `Skip`，分钟数不同标为 `Conflict`；都不改动既有记录
 - 对不在 `Review` 的候选，没有既有 entry 或所有比较均为 `Different`：标为 `Create`
 
 人工记录也参与内容判断，但绝不被覆盖或删除。任何 `Blocked` 都要显示预检原因，不展示最终确认，也不得对本次运行的任何候选调用 `productive_create_resource`。只有没有 `Blocked` 且所有 `Review` 均被用户处理后，才生成最终 `Create` 列表。
 
-先输出 Productive 预览：每个未跳过日期的已确认 Scheduled on service、每个 `Not scheduled` 日期及其原因，以及每条 `Create`、`Skip`、`Conflict`、`Review` 的日期、service、ticket/标签、分钟数、note 和理由。每条 `Blocked` 都显示原因及当时已知的日期或操作；仅在已知时显示 service、ticket/标签、分钟数和 note，绝不编造缺失字段。只有没有 `Blocked` 时才明确询问是否创建所有最终 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
+先输出 Productive 预览：每个未跳过日期的已确认 Scheduled on service、每个 `Not scheduled` 日期及其原因，以及每条 `Create`、`Skip`、`Conflict`、`Review` 的日期、service、ticket/标签、分钟数、note 和理由。每条 `Blocked` 都显示原因及当时已知的日期或操作；仅在已知时显示 service、ticket/标签、分钟数和 note，绝不编造缺失字段。只有没有 `Blocked` 且最终 `Create` 列表非空时才明确询问是否创建所有最终 `Create` 项；只有本次得到肯定答复才继续步骤 7。取消、拒绝或无答复时停止写入，并保留预览。
 
 完成标准：所有未跳过日期的候选已分类、没有 `Blocked`、所有 `Review` 已由用户处理，且所有 `Not scheduled` 日期已列出原因；未得到本次明确确认前，未调用任何写入操作。
 
@@ -213,9 +219,13 @@ Internal Tools
 
 用户显式选择 `Internal Tools`。同一 service 仍只有一个候选，但它按 `started_on` 展示每条 booking 的 task 与排期；50% 和 4h 不会任选一条或汇总成单一数值。对另一有分配工时的日期 2026-08-25，完整 booking 查询只得到一个不同的 `Developer` service，用户仍须确认。两天的候选和选择都在完整分页后才决定，且 2026-08-25 不会复用 2026-08-24 的 `Internal Tools`。
 
+### Safe acceleration
+
+若 2026-08-24 和 2026-08-25 最终都选择同一个 `Internal Tools` service，两个日期的 booking 查询可以并行，候选在一次交互中分别确认；两次日期选择仍不会互相自动继承。service 重验只按 `service.id` 执行一次，成功结果绑定到这两个日期。既有工时也只需为 `Internal Tools` 发起一个窗口查询，例如 `date >= 2026-08-24` 且 `date <= 2026-08-25`，再按精确日期分组；2026-08-24 的记录绝不会拿去比较 2026-08-25 的候选。service 已确定后，summary 生成和该窗口读取可以并行启动，但必须等待两者完成后才比较。若 2026-08-26 是唯一一个有分配的日期、却没有有效 Scheduled on，流程只输出 `Not scheduled: no Scheduled on` 并进入最终回执，不触发 summary、既有工时查询或写入确认；若步骤 4 没有任何有分配日期，也同样跳过全部后续 Productive 阶段。
+
 ### Exact-ID revalidation
 
-对 2026-08-24 的选择，技能以精确名称 `Internal Tools` 查询 `services`。第一页只含同名但不是该 booking 的 service，并返回 `next_offset`；技能以原 `query_id` 取第二页，才找到 booking 原本关联的 service。于是保留该选择，但内部 ID 从不展示。若取完所有同名页仍未找到 booking 原本关联的 service，则该日期为 `Not scheduled: service unavailable`，绝不以第一页的同名 service 替代。
+对 2026-08-24 的选择，技能以精确名称 `Internal Tools` 查询 `services`。第一页只含同名但不是该 booking 的 service，并返回 `next_offset`；技能以原 `query_id` 取第二页，才找到 booking 原本关联的 service。于是保留该选择，但内部 ID 从不展示。若取完所有同名页仍未找到原 booking service，则该日期为 `Not scheduled: service unavailable`，绝不以第一页的同名 service 替代。若另一个日期也选择同一 service ID，不重复发起这次重验。
 
 ### Per-date Not scheduled
 
