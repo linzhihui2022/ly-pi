@@ -51,7 +51,7 @@
     "customMessageBg": "surface0",
     "customMessageText": "text",
     "customMessageLabel": "blue",
-    "toolPendingBg": "overlay1",
+    "toolPendingBg": "surface1",
     "toolSuccessBg": "surface0",
     "toolErrorBg": "surface0",
     "toolTitle": "mauve",
