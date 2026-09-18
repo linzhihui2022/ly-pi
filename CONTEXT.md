@@ -115,8 +115,8 @@ _Avoid_: tool call 条目、工具块、消息
 _Avoid_: turn、技术上的工具调用过程、agent loop、工具链
 
 **Run Summary Row（运行摘要行）**:
-被折叠的 Tool Run 留在会话里的唯一可见行，由该 Tool Run 的第一条 Tool Row 承载，显示调用计数、耗时与失败计数，可展开回全部 Tool Row。
-_Avoid_: 折叠头、分组标题、自定义 entry、统计卡片
+被折叠的 Tool Run 留在会话里的唯一可见行，由该 Tool Run 的第一条 Tool Row 承载，显示调用计数、耗时与失败计数。展开只由 Pi 的全局工具展开键（`ctrl+o`）触发，因此展开是全会话的，不存在“只展开某次 run”的状态。
+_Avoid_: 折叠头、分组标题、自定义 entry、统计卡片、可点击展开的摘要行
 
 **Live Tool Row（在跑工具行）**:
 正在执行、因而在 Tool Run 折叠期间仍保持可见的那条 Tool Row；它在自己的执行结束时消失，只留下 Run Summary Row。
