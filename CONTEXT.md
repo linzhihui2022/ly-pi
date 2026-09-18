@@ -104,6 +104,28 @@ _Avoid_: 通用 Git 客户端、Worktree Widget 本身
 `my-worktree` 模块中的只读 Pi widget，仅在拥有至少两个 Visible Worktree 的 Multi-worktree Repository 中能唯一确认 Current Worktree 时，于编辑器上方以两行树呈现其分支与 worktree 根路径，而不枚举其他 Visible Worktree。accent 的 `● Worktrees (N)` 标题只给出可见成员的聚合数量，唯一条目以中性的 `•` 呈现；主仓库内路径缩写为 `<REPO>`，窄屏从路径开头截断以保留末尾，若路径完全无可用宽度则隐藏整个组件。发现失败时安静隐藏。它是当前会话位置的补充定位信息，不是 worktree 清单。
 _Avoid_: worktree 列表、my-hud worktree 字段、Git 状态栏
 
+## Tool Display
+
+**Tool Row（工具行）**:
+Pi 交互式 TUI 中承载一次工具调用的独立渲染单元，由 `my-tool-display` 的 renderer 决定其可见形态。它是会话中工具呈现的最小单位，不在其中再拆分调用槽与结果槽。
+_Avoid_: tool call 条目、工具块、消息
+
+**Tool Run（工具运行）**:
+从一条用户消息到该次回答结束之间连续的工具执行过程；中间经过多少次 LLM 调用或工具调用都算同一个 Tool Run。它是折叠的最小单元，其边界不由 Pi 的 turn 决定。
+_Avoid_: turn、技术上的工具调用过程、agent loop、工具链
+
+**Run Summary Row（运行摘要行）**:
+被折叠的 Tool Run 留在会话里的唯一可见行，由该 Tool Run 的第一条 Tool Row 承载，显示调用计数、耗时与失败计数，可展开回全部 Tool Row。
+_Avoid_: 折叠头、分组标题、自定义 entry、统计卡片
+
+**Live Tool Row（在跑工具行）**:
+正在执行、因而在 Tool Run 折叠期间仍保持可见的那条 Tool Row；它在自己的执行结束时消失，只留下 Run Summary Row。
+_Avoid_: 进度条、当前步骤高亮
+
+**Run Failure Notice（运行失败提示）**:
+Tool Run 结束时，若期间发生过工具失败，在该 Run 最后一条 Tool Row 位置额外显示的一行提示。工具失败不会阻止收起，也不会让失败行本身常驻。
+_Avoid_: 错误行常驻、失败弹窗、失败日志
+
 ## Model Configuration
 
 **Direct Model Binding（直接模型绑定）**:
