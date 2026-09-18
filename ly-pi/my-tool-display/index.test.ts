@@ -21,6 +21,7 @@ import {
   getAgentDir,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
@@ -114,24 +115,44 @@ const nativeSearchResult = {
   content: [{ type: "text", text: "native search result" }],
   details: { truncation: { truncated: true } },
 };
-const nativeRenderResult = vi.fn(() => ({
-  render: () => ["native image"],
-  invalidate: () => {},
-}));
+const nativeRenderResult = vi.fn(
+  (
+    _result: unknown,
+    _options: unknown,
+    _theme: unknown,
+    context?: { lastComponent?: Text },
+  ) => {
+    const text = context?.lastComponent ?? new Text("", 0, 0);
+    text.setText("native image");
+    return text;
+  },
+);
 
 const theme = {
   fg: (_color: string, text: string) => text,
   bold: (text: string) => text,
+  bg: (_color: string, text: string) => text,
 };
+
+/**
+ * Unwraps the row frame the tool renderers hand back, so assertions read the content Pi shows inside a
+ * row. The frame's own geometry — one padding line above and below, one cell of inset, the state
+ * background — is covered by row-frame.test.ts.
+ */
+function unwrapRowFrame(lines: string[]): string[] {
+  if (lines.length < 2 || lines[0] !== "" || lines.at(-1) !== "") {
+    return lines;
+  }
+  return lines.slice(1, -1).map((line) => line.slice(1));
+}
 
 function render(
   component: { render(width: number): string[] },
   width = 120,
 ): string {
-  return component
-    .render(width)
-    .map((line) => line.trimEnd())
-    .join("\n");
+  return unwrapRowFrame(
+    component.render(width).map((line) => line.trimEnd()),
+  ).join("\n");
 }
 
 function createNativeBashDefinition(cwd: string) {
@@ -146,10 +167,19 @@ function createNativeBashDefinition(cwd: string) {
     parameters: { type: "object" },
     constrainedSampling: false,
     execute,
-    renderCall: (args: { command?: string }) => ({
-      render: () => [`$ ${args.command ?? "..."}`],
-      invalidate: () => {},
-    }),
+    /**
+     * Mirrors Pi's shell renderers: they reuse and mutate the component they returned last time, so
+     * whatever the caller passes as `lastComponent` has to support `setText`.
+     */
+    renderCall: (
+      args: { command?: string },
+      _theme?: unknown,
+      context?: { lastComponent?: Text },
+    ) => {
+      const text = context?.lastComponent ?? new Text("", 0, 0);
+      text.setText(`$ ${args.command ?? "..."}`);
+      return text;
+    },
   };
 }
 
@@ -270,8 +300,13 @@ function createNativeSearchDefinition(name: string, cwd: string) {
     promptSnippet: `${name} snippet`,
     parameters: { type: "object" },
     execute,
-    renderCall: (args: { pattern?: unknown; path?: unknown } = {}) => ({
-      render: () => [
+    renderCall: (
+      args: { pattern?: unknown; path?: unknown } = {},
+      _theme?: unknown,
+      context?: { lastComponent?: Text },
+    ) => {
+      const text = context?.lastComponent ?? new Text("", 0, 0);
+      text.setText(
         `native ${name}${
           typeof args.pattern === "string"
             ? ` ${args.pattern}`
@@ -279,9 +314,9 @@ function createNativeSearchDefinition(name: string, cwd: string) {
               ? ` ${args.path}`
               : ""
         }`,
-      ],
-      invalidate: () => {},
-    }),
+      );
+      return text;
+    },
   };
 }
 
@@ -442,7 +477,7 @@ describe("my-tool-display", () => {
       parameters: { type: "object" },
       constrainedSampling: false,
     });
-    expect(write.renderShell).toBe("default");
+    expect(write.renderShell).toBe("self");
     expect(
       render(
         write.renderCall({ path: "file.ts", content: "new" }, theme, {
@@ -1289,7 +1324,7 @@ describe("my-tool-display", () => {
       },
     };
 
-    expect(edit.renderShell).toBe("default");
+    expect(edit.renderShell).toBe("self");
     expect(
       render(
         edit.renderCall({ path: "file.ts", edits: [] }, diffTheme, {
@@ -2734,5 +2769,163 @@ describe("my-tool-display", () => {
     const { registered } = setup();
 
     expect(registered).toHaveLength(1);
+  });
+});
+
+describe("self render shell", () => {
+  it.each([
+    ["bash", { command: "bun test" }],
+    ["read", { path: "file.txt" }],
+    ["grep", { pattern: "needle" }],
+    ["find", { pattern: "*.ts" }],
+    ["ls", { path: "src" }],
+    ["edit", { path: "file.txt", edits: [] }],
+    ["write", { path: "file.txt", content: "x" }],
+  ])("draws the %s call in the row frame Pi's default shell drew", (name, args) => {
+    const { registered } = setup("builtin", [name]);
+    const tool = registered[0]!;
+
+    const lines = tool
+      .renderCall(args, theme, { state: {}, isError: false, isPartial: false })
+      .render(40)
+      .map((line: string) => line.trimEnd());
+
+    expect(tool.renderShell).toBe("self");
+    expect(lines.length).toBeGreaterThan(2);
+    expect(lines[0]).toBe("");
+    expect(lines.at(-1)).toBe("");
+    for (const line of lines.slice(1, -1)) {
+      expect(line.startsWith(" ")).toBe(true);
+    }
+  });
+
+  it.each([
+    ["bash", { command: "bun test" }],
+    ["grep", { pattern: "needle" }],
+    ["find", { pattern: "*.ts" }],
+    ["ls", { path: "src" }],
+  ])("keeps the native %s call header when Pi re-renders the slot", (name, args) => {
+    const { registered } = setup("builtin", [name]);
+    const tool = registered[0]!;
+    const context = { state: {}, isError: false, isPartial: false };
+    const first = tool.renderCall(args, theme, context);
+
+    const second = tool.renderCall(args, theme, {
+      ...context,
+      lastComponent: first,
+    });
+
+    expect(render(second)).toBe(render(first));
+  });
+
+  it("delegates expanded image results without handing Pi's renderer the row frame", () => {
+    const { registered } = setup("builtin", ["read"]);
+    const read = registered[0]!;
+    const context = { isError: false, isPartial: false, showImages: true };
+    const result = {
+      content: [{ type: "image", data: "aW1hZ2U=", mimeType: "image/png" }],
+      details: undefined,
+    };
+    const row = read.renderCall({ path: "shot.png" }, theme, context);
+
+    const rendered = render(
+      read.renderResult(result, { expanded: true, isPartial: false }, theme, {
+        ...context,
+        lastComponent: row,
+      }),
+    );
+
+    expect(rendered).toContain("native image");
+  });
+
+  it("keeps the result inside the frame the call slot handed to Pi", () => {
+    const { registered } = setup("builtin", ["bash"]);
+    const bash = registered[0]!;
+    const context = { state: {}, isError: false, isPartial: false };
+    const row = bash.renderCall({ command: "bun test" }, theme, context);
+
+    const result = bash.renderResult(
+      { content: [{ type: "text", text: "12 passed" }], details: undefined },
+      { expanded: true, isPartial: false },
+      theme,
+      context,
+    );
+
+    expect(result.render(40)).toEqual([]);
+    expect(render(row)).toBe("$ bun test\n12 passed");
+  });
+
+  it("keeps a collapsed read row to its framed call header", () => {
+    const { registered } = setup("builtin", ["read"]);
+    const read = registered[0]!;
+    const context = { state: {}, isError: false, isPartial: false };
+    const row = read.renderCall({ path: "file.txt" }, theme, context);
+
+    const result = read.renderResult(
+      { content: [{ type: "text", text: "1|line" }], details: undefined },
+      { expanded: false, isPartial: false },
+      theme,
+      context,
+    );
+
+    expect(result.render(40)).toEqual([]);
+    expect(render(row)).toBe("read file.txt");
+  });
+
+  it("lets the result own the frame when the native call renderer is missing", () => {
+    vi.mocked(createLsToolDefinition).mockImplementation(
+      (cwd) =>
+        ({
+          ...createNativeSearchDefinition("ls", cwd),
+          renderCall: undefined,
+        }) as never,
+    );
+    const { registered } = setup("builtin", ["ls"]);
+    const ls = registered[0]!;
+    const context = { state: {}, isError: false, isPartial: false };
+
+    expect(ls.renderCall({ path: "src" }, theme, context).render(40)).toEqual(
+      [],
+    );
+    expect(
+      render(
+        ls.renderResult(
+          {
+            content: [{ type: "text", text: "src/\nREADME.md" }],
+            details: undefined,
+          },
+          { expanded: true, isPartial: false },
+          theme,
+          context,
+        ),
+      ),
+    ).toBe("src/\nREADME.md");
+  });
+
+  it("colors the row from the state Pi reports", () => {
+    const { registered } = setup("builtin", ["read"]);
+    const read = registered[0]!;
+    const colors: string[] = [];
+    const colorTheme = {
+      ...theme,
+      bg: (color: string, text: string) => {
+        colors.push(color);
+        return text;
+      },
+    };
+    const call = (state: { isPartial: boolean; isError: boolean }): string[] =>
+      read
+        .renderCall({ path: "file.txt" }, colorTheme, { state: {}, ...state })
+        .render(40);
+
+    call({ isPartial: true, isError: false });
+    call({ isPartial: false, isError: true });
+    call({ isPartial: false, isError: false });
+
+    expect([...new Set(colors)]).toEqual([
+      "toolPendingBg",
+      "toolErrorBg",
+      "toolSuccessBg",
+    ]);
   });
 });

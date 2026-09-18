@@ -26,10 +26,16 @@ import {
   getAgentDir,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { type Component, Text } from "@earendil-works/pi-tui";
 import { createDevLogger } from "../my-log/index";
 import { loadToolDisplayConfig } from "./config";
 import { resolveToolPath } from "./path-utils";
+import {
+  emptyRowContent,
+  rowContentContext,
+  rowFrameCall,
+  rowFrameResult,
+} from "./row-frame";
 
 const initializedApis = new WeakSet<ExtensionAPI>();
 const registeredToolNames = new WeakMap<ExtensionAPI, Set<string>>();
@@ -873,7 +879,7 @@ function registerToolRenderers(
     const nativeWrite = createWriteToolDefinition(process.cwd());
     const writeOverride: WriteToolOverride = {
       ...nativeWrite,
-      renderShell: "default",
+      renderShell: "self",
       async execute(toolCallId, params, signal, onUpdate, ctx) {
         let preview: WritePreview | undefined;
         const result = await createWriteToolDefinition(ctx.cwd, {
@@ -955,18 +961,26 @@ function registerToolRenderers(
         writeDiffByContent.set(resultWithDetails.content, details);
         return resultWithDetails;
       },
-      renderCall(args, theme) {
-        return new Text(formatWriteCall(args, theme), 0, 0);
+      renderCall(args, theme, context) {
+        return rowFrameCall(
+          context,
+          theme,
+          new Text(formatWriteCall(args, theme), 0, 0),
+        );
       },
       renderResult(result, options, theme, context) {
-        return renderWriteResult(
-          result,
-          writeDiffByContent.get(result.content) ??
-            getWriteDiffDetails(result.details),
-          options,
-          theme,
+        return rowFrameResult(
           context,
-          config.diffCollapsedLines,
+          theme,
+          renderWriteResult(
+            result,
+            writeDiffByContent.get(result.content) ??
+              getWriteDiffDetails(result.details),
+            options,
+            theme,
+            context,
+            config.diffCollapsedLines,
+          ),
         );
       },
     };
@@ -982,7 +996,7 @@ function registerToolRenderers(
     const nativeEdit = createEditToolDefinition(process.cwd());
     const editOverride: typeof nativeEdit = {
       ...nativeEdit,
-      renderShell: "default",
+      renderShell: "self",
       async execute(toolCallId, params, signal, onUpdate, ctx) {
         return createEditToolDefinition(ctx.cwd).execute(
           toolCallId,
@@ -992,16 +1006,24 @@ function registerToolRenderers(
           ctx,
         );
       },
-      renderCall(args, theme) {
-        return new Text(formatEditCall(args, theme), 0, 0);
+      renderCall(args, theme, context) {
+        return rowFrameCall(
+          context,
+          theme,
+          new Text(formatEditCall(args, theme), 0, 0),
+        );
       },
       renderResult(result, options, theme, context) {
-        return renderEditResult(
-          result,
-          options,
-          theme,
+        return rowFrameResult(
           context,
-          config.diffCollapsedLines,
+          theme,
+          renderEditResult(
+            result,
+            options,
+            theme,
+            context,
+            config.diffCollapsedLines,
+          ),
         );
       },
     };
@@ -1017,14 +1039,19 @@ function registerToolRenderers(
     const nativeBash = createBashToolDefinition(process.cwd());
     const bashOverride: typeof nativeBash = {
       ...nativeBash,
+      renderShell: "self",
       renderCall(args, theme, context) {
         if (!nativeBash.renderCall) {
-          return new Text("", 0, 0);
+          return emptyRowContent();
         }
-        return nativeBash.renderCall(
-          sanitizeToolCallArgs(args),
-          theme,
+        return rowFrameCall(
           context,
+          theme,
+          nativeBash.renderCall(
+            sanitizeToolCallArgs(args),
+            theme,
+            rowContentContext(context),
+          ),
         );
       },
       async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -1037,12 +1064,16 @@ function registerToolRenderers(
         }).execute(toolCallId, params, signal, onUpdate, ctx);
       },
       renderResult(result, options, theme, context) {
-        return renderBashResult(
-          result,
-          options,
-          theme,
+        return rowFrameResult(
           context,
-          config.bashCollapsedLines,
+          theme,
+          renderBashResult(
+            result,
+            options,
+            theme,
+            context,
+            config.bashCollapsedLines,
+          ),
         );
       },
     };
@@ -1058,6 +1089,7 @@ function registerToolRenderers(
     const nativeRead = createReadToolDefinition(process.cwd());
     const readOverride: typeof nativeRead = {
       ...nativeRead,
+      renderShell: "self",
       async execute(toolCallId, params, signal, onUpdate, ctx) {
         const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
           projectTrusted: ctx.isProjectTrusted(),
@@ -1066,13 +1098,18 @@ function registerToolRenderers(
           autoResizeImages: settings.getImageAutoResize(),
         }).execute(toolCallId, params, signal, onUpdate, ctx);
       },
-      renderCall(args, theme) {
-        return new Text(formatReadCall(args, theme), 0, 0);
+      renderCall(args, theme, context) {
+        return rowFrameCall(
+          context,
+          theme,
+          new Text(formatReadCall(args, theme), 0, 0),
+        );
       },
       renderResult(result, options, theme, context) {
         const output = textOutput(result);
+        let content: Component;
         if (context.isError) {
-          return new Text(
+          content = new Text(
             theme.fg(
               "error",
               hasVisibleOutput(output) ? output : "Read failed.",
@@ -1080,20 +1117,24 @@ function registerToolRenderers(
             0,
             0,
           );
-        }
-        if (options.isPartial) {
-          return new Text(theme.fg("warning", "Reading..."), 0, 0);
-        }
-        if (!options.expanded) {
-          return new Text("", 0, 0);
-        }
-        if (
-          result.content.some((content) => content.type === "image") &&
+        } else if (options.isPartial) {
+          content = new Text(theme.fg("warning", "Reading..."), 0, 0);
+        } else if (!options.expanded) {
+          content = emptyRowContent();
+        } else if (
+          result.content.some((item) => item.type === "image") &&
           nativeRead.renderResult
         ) {
-          return nativeRead.renderResult(result, options, theme, context);
+          content = nativeRead.renderResult(
+            result,
+            options,
+            theme,
+            rowContentContext(context),
+          );
+        } else {
+          content = new Text(theme.fg("toolOutput", output), 0, 0);
         }
-        return new Text(theme.fg("toolOutput", output), 0, 0);
+        return rowFrameResult(context, theme, content);
       },
     };
 
@@ -1108,14 +1149,19 @@ function registerToolRenderers(
     const nativeGrep = createGrepToolDefinition(process.cwd());
     const grepOverride: typeof nativeGrep = {
       ...nativeGrep,
+      renderShell: "self",
       renderCall(args, theme, context) {
         if (!nativeGrep.renderCall) {
-          return new Text("", 0, 0);
+          return emptyRowContent();
         }
-        return nativeGrep.renderCall(
-          sanitizeToolCallArgs(args),
-          theme,
+        return rowFrameCall(
           context,
+          theme,
+          nativeGrep.renderCall(
+            sanitizeToolCallArgs(args),
+            theme,
+            rowContentContext(context),
+          ),
         );
       },
       async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -1128,13 +1174,17 @@ function registerToolRenderers(
         );
       },
       renderResult(result, options, theme, context) {
-        return renderCompactTextResult(
-          result,
-          options,
-          theme,
+        return rowFrameResult(
           context,
-          "Searching...",
-          "Search failed.",
+          theme,
+          renderCompactTextResult(
+            result,
+            options,
+            theme,
+            context,
+            "Searching...",
+            "Search failed.",
+          ),
         );
       },
     };
@@ -1150,14 +1200,19 @@ function registerToolRenderers(
     const nativeFind = createFindToolDefinition(process.cwd());
     const findOverride: typeof nativeFind = {
       ...nativeFind,
+      renderShell: "self",
       renderCall(args, theme, context) {
         if (!nativeFind.renderCall) {
-          return new Text("", 0, 0);
+          return emptyRowContent();
         }
-        return nativeFind.renderCall(
-          sanitizeToolCallArgs(args),
-          theme,
+        return rowFrameCall(
           context,
+          theme,
+          nativeFind.renderCall(
+            sanitizeToolCallArgs(args),
+            theme,
+            rowContentContext(context),
+          ),
         );
       },
       async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -1170,13 +1225,17 @@ function registerToolRenderers(
         );
       },
       renderResult(result, options, theme, context) {
-        return renderCompactTextResult(
-          result,
-          options,
-          theme,
+        return rowFrameResult(
           context,
-          "Finding files...",
-          "Find failed.",
+          theme,
+          renderCompactTextResult(
+            result,
+            options,
+            theme,
+            context,
+            "Finding files...",
+            "Find failed.",
+          ),
         );
       },
     };
@@ -1192,11 +1251,20 @@ function registerToolRenderers(
     const nativeLs = createLsToolDefinition(process.cwd());
     const lsOverride: typeof nativeLs = {
       ...nativeLs,
+      renderShell: "self",
       renderCall(args, theme, context) {
         if (!nativeLs.renderCall) {
-          return new Text("", 0, 0);
+          return emptyRowContent();
         }
-        return nativeLs.renderCall(sanitizeToolCallArgs(args), theme, context);
+        return rowFrameCall(
+          context,
+          theme,
+          nativeLs.renderCall(
+            sanitizeToolCallArgs(args),
+            theme,
+            rowContentContext(context),
+          ),
+        );
       },
       async execute(toolCallId, params, signal, onUpdate, ctx) {
         return createLsToolDefinition(ctx.cwd).execute(
@@ -1208,13 +1276,17 @@ function registerToolRenderers(
         );
       },
       renderResult(result, options, theme, context) {
-        return renderCompactTextResult(
-          result,
-          options,
-          theme,
+        return rowFrameResult(
           context,
-          "Listing files...",
-          "List failed.",
+          theme,
+          renderCompactTextResult(
+            result,
+            options,
+            theme,
+            context,
+            "Listing files...",
+            "List failed.",
+          ),
         );
       },
     };
