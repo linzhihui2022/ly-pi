@@ -152,4 +152,4 @@
 
 ## GitHub PR 访问
 
-所有 GitHub Pull Request 的读取和分析，默认使用 `gh` CLI（`gh pr view`、`gh pr diff`、`gh pr review`、`gh api`）直接获取内容。**不使用 `fetch_content` 或 `web_search` 获取 PR 页面。** 不判断仓库是否为私有，一律走 `gh` CLI。
+所有 GitHub Pull Request 的读取和分析，默认使用 `gh` CLI（`gh pr view`、`gh pr diff`、`gh pr review`、`gh api`）直接获取内容。**不使用 `fetch_content` 或 `web_search` 获取 PR 页面。** 不判断仓库是否为私有，一律走 `gh` CLI。如果有沙箱隔离导致权限问题，可以在沙箱外进行安全操作。
