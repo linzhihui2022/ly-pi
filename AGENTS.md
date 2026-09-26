@@ -72,10 +72,9 @@ bun run --cwd ly-pi test -- my-hud
 
 本仓库的需求与规格由 Matt Pocock skills 工作流管理，**不再维护 `REQUIREMENTS.md` / `SPEC.md`**（2026-07 废除，历史内容见 git）。
 
-- 新需求：先跑 `/to-spec` 产出规格到 `.scratch/<feature-slug>/spec.md`，经用户确认后 `/to-tickets` 拆票到 `.scratch/<feature-slug>/issues/`
-- 票据约定（`NN-slug` 编号、`Status:` 行、认领/解决流程）见 `docs/agents/issue-tracker.md`
-- 特性完成后（spec 与全部票据均为 `resolved`）整目录 `git mv` 到 `.scratch/archive/`，顶层只留进行中的工作
-- `.scratch/` 纳入 git，即本仓库的本地 issue tracker
+- 新需求：先跑 `/to-spec` 产出规格，经用户确认后 `/to-tickets` 拆票；两者都发布为 GitHub issue 并带 `ready-for-agent`，阻塞关系用 GitHub 原生 issue 依赖
+- 票据约定（`gh` CLI 用法、分诊标签、认领/解决流程）见 `docs/agents/issue-tracker.md`
+- 已归档的本地票据带 `historical` 标签保留在 GitHub 作为决策记录；`.scratch/` 已退役为 agent 的临时工作区，不再承载票据（不纳入 git）
 - 文档修正类变更（README、AGENTS.md 等耐久文档的内容更新）直接修改，不需要走 spec
 - 一致性防线：`bun run verify` 硬性验收（biome lint + tsgo typecheck + vitest 测试 + check-docs 文档一致性）
 
@@ -89,14 +88,13 @@ bun run --cwd ly-pi test -- my-hud
 
 - 修改了 README、AGENTS.md、或任何 `docs/` 下的耐久文档 → 跑 verify
 - 新增/删除/重命名文件或目录 → 跑 verify
-- 修改了 `.scratch/` 下的票据或规格 → 跑 verify
 - 即使以上都不适用，在工作结束前也应跑一次作为兜底验证
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues and specs live as local markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+Issues and specs live as GitHub issues in `linzhihui2022/ly-pi`, driven by the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

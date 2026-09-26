@@ -1,6 +1,9 @@
 .worktrees/
 .worktree/
 
+# Agent scratch work area — issues and specs live on GitHub
+.scratch/
+
 # Dependencies
 node_modules/
 

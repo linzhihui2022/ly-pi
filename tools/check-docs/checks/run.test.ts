@@ -13,11 +13,10 @@ const HEALTHY = {
   "docs/agents/triage-labels.md":
     "| a | b | c |\n| --- | --- | --- |\n| `needs-triage` | `needs-triage` | x |",
   "ly-pi/my-hud/index.ts": "",
-  ".scratch/feat/issues/01-first.md": "**Status:** needs-triage",
 };
 
 describe("runAllChecks", () => {
-  it("runs all five checks and returns one result per check", () => {
+  it("runs all four checks and returns one result per check", () => {
     const results = runAllChecks({
       tree: tree(HEALTHY),
       triageSkillInstalled: true,
@@ -27,7 +26,6 @@ describe("runAllChecks", () => {
       "extension-table",
       "relative-links",
       "agent-docs",
-      "scratch-conventions",
       "no-legacy-docs",
     ]);
     expect(results.every((r) => r.failures.length === 0)).toBe(true);
@@ -45,7 +43,6 @@ describe("runAllChecks", () => {
       "docs/agents/issue-tracker.md not found",
       "docs/agents/domain.md not found",
     ]);
-    expect(byName.get("scratch-conventions")).toEqual([]);
     expect(byName.get("no-legacy-docs")).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 # Agentic Delivery Guardrails（Agent 交付护栏）
 
-Agent 只能依据 `.scratch/` 下的票据（ticket），或由人工明确提出、范围（scope）清晰且
+Agent 只能依据 GitHub 上的票据（ticket），或由人工明确提出、范围（scope）清晰且
 具有明确验收标准（acceptance criteria）的请求进行实施。
 
 ## 开始检查清单（Start Checklist）
@@ -27,7 +27,7 @@ Agent 只能依据 `.scratch/` 下的票据（ticket），或由人工明确提�
 生产环境（production environments）、破坏性迁移和发布机制（release
 mechanisms）视为 `High risk`。
 
-已记录的批准（recorded approval）指记录在 `.scratch/` 票据、GitHub、Notion 或其他
+已记录的批准（recorded approval）指记录在 GitHub issue、PR、Notion 或其他
 约定系统中的批准。对于 `Medium` 或 `High risk`，口头批准不足。
 
 ## 停止条件（Stop Conditions）

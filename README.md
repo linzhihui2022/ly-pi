@@ -48,7 +48,7 @@ configure/
 │   └── deploy-all.ts         # 统一部署流水线（build → test → deploy all）
 ├── tools/check-docs/         # 文档一致性校验
 ├── docs/agents/              # Matt skills 配置（issue tracker、标签、domain docs）
-├── .scratch/                 # 本地 issue tracker：活跃规格与票据（archive/ 为已完成）
+├── .scratch/                 # agent 临时工作区（票据已迁至 GitHub Issues，不入 git）
 │
 ├── starship.toml             # Starship 终端提示符
 ├── wezterm.lua               # WezTerm 终端配置
@@ -186,8 +186,8 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 - **`ly-pi/assets/config/mcp.json`** 中的 `productive` 是可选的 Productive MCP；它需要 Ultimate 套餐和已启用的 Productive AI，每位用户都需自行通过 OAuth 授权，不使用时可删除该条目
 - **`ly-pi/assets/config/append-system.md`** 中的语言偏好（中文回复等）为作者个人设定
 - **`JUDGE.md`、`CONTEXT.md`** 是作者个人项目的权限法官规则与领域术语表
-- **`docs/agents/`** 是作者按 Matt Pocock skills 工作流配置的本地 issue tracker 约定
-- **`.scratch/`** 是作者本仓库的本地票据，可作为该工作流的实例参考
+- **`docs/agents/`** 是作者按 Matt Pocock skills 工作流配置的 issue tracker 约定（GitHub Issues）
+- **GitHub Issues**（`linzhihui2022/ly-pi`）是作者存放规格与票据的地方，带 `historical` 标签的归档记录保留为决策史
 
 ---
 
@@ -212,7 +212,7 @@ pi -e ly-pi/index.ts
 
 ### 文档系统
 
-需求与规格由 [mattpocock/skills](https://github.com/mattpocock/skills) 工作流管理，不维护传统的 REQUIREMENTS/SPEC 文档：`/to-spec` 产出到 `.scratch/<feature-slug>/spec.md`，`/to-tickets` 拆票到 `.scratch/<feature-slug>/issues/`。特性完成后（spec 与全部票据均为 `resolved`），整个目录 `git mv` 到 `.scratch/archive/`，顶层只留进行中的工作。
+需求与规格由 [mattpocock/skills](https://github.com/mattpocock/skills) 工作流管理，不维护传统的 REQUIREMENTS/SPEC 文档：`/to-spec` 产出规格、`/to-tickets` 拆票，两者都发布为 GitHub issue（带 `ready-for-agent`），阻塞关系用 GitHub 原生 issue 依赖。归档的历史决策记录带 `historical` 标签保留在 GitHub。
 
 ---
 
