@@ -1,6 +1,6 @@
 # working-message-color-marquee — 工作消息颜色跑马灯
 
-Status: ready-for-agent
+Status: resolved
 
 Risk: Medium
 

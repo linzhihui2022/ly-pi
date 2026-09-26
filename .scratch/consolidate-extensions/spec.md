@@ -1,6 +1,6 @@
 # Consolidate Pi Extensions to Single Entry Point
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Problem Statement
 

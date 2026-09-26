@@ -1,6 +1,6 @@
 # My Worktree Widget
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Problem Statement
 

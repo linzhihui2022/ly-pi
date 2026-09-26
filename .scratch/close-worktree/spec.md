@@ -1,6 +1,6 @@
 # Close Current Worktree
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Risk:** High
 **Approval:** The user approved the scope, design, specification, and ticket breakdown on 2026-08-21; implementation remains limited to the published tickets and their acceptance criteria.
 

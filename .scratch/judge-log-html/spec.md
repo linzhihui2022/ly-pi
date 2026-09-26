@@ -1,6 +1,6 @@
 # Judge Log HTML 化
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 

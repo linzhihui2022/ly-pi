@@ -1,6 +1,6 @@
 # retire-pi-tool-display-compatibility — 退役旧工具显示兼容层
 
-Status: ready-for-agent
+Status: resolved
 
 Risk: High
 

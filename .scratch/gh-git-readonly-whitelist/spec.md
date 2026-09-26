@@ -1,6 +1,6 @@
 # gh-git-readonly-whitelist — 确定性放行常用只读 GitHub 与 Git 命令
 
-Status: ready-for-agent
+Status: resolved
 
 Risk: High
 

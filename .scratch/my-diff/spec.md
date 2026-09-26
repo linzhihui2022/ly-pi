@@ -1,6 +1,6 @@
 # my-diff — /diff TUI diff 查看器
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 

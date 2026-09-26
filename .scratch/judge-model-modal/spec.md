@@ -1,6 +1,6 @@
 # 法官确认弹窗显示模型
 
-Status: approved
+Status: resolved
 Risk: High — 权限执行机制 UI
 
 ## Problem Statement

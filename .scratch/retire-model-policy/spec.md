@@ -1,6 +1,6 @@
 # 退役 Model Policy 子系统
 
-Status: approved for ticketing
+Status: resolved
 Risk: High — 权限法官模型路径与 Pi 本机配置所有权变更
 Approval Record: 用户已在本会话确认规格与两票拆分；该记录仅授权创建规格和票据。运行时代码实施、部署和 reload 仍须在实施票据中取得明确的 High-risk 批准。
 

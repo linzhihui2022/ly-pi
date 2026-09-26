@@ -1,6 +1,6 @@
 # 自动生成 Session Display Name
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 

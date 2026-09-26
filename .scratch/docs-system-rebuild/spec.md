@@ -1,6 +1,6 @@
 # 文档系统重建：全面转向 .scratch 工作流
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 

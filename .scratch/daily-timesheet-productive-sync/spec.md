@@ -1,6 +1,6 @@
 # daily-timesheet-productive-sync — 将 Daily Timesheet 写入 Productive
 
-Status: ready-for-agent
+Status: resolved
 
 Risk: High
 

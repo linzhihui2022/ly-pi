@@ -1,6 +1,6 @@
 # my-tool-display — 自有原生工具紧凑呈现
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
