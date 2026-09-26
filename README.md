@@ -175,7 +175,6 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 | `ly-pi/assets/config/settings.json` | Pi 非模型设置与 subagent runtime 配置（部署时按 `settings-schema.json` 校验） |
 | `ly-pi/assets/config/mcp.json` | MCP 服务器配置 |
 | `ly-pi/assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
-| `ly-pi/assets/config/my-back.json` | `/back` 命令配置 |
 | `ly-pi/assets/config/append-system.md` | 追加到系统提示的全局指令 |
 | `ly-pi/assets/config/web-search.json` / `rpiv-todo.json` | 第三方扩展配置 |
 

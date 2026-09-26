@@ -331,12 +331,6 @@ const configDir = "assets/config";
       base: extDir,
       label: "my-sound.json",
     },
-    {
-      src: "my-back.json",
-      dest: "my-back.json",
-      base: extDir,
-      label: "my-back.json",
-    },
   ];
 
   for (const { src, dest, base, label } of configManifest) {
