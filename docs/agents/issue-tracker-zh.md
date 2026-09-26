@@ -7,8 +7,16 @@
 - 每个特性一个目录：`.scratch/<feature-slug>/`
 - spec 为 `.scratch/<feature-slug>/spec.md`
 - 实现 issue 一个工单一个文件，位于 `.scratch/<feature-slug>/issues/<NN>-<slug>.md`，从 `01` 开始编号 —— 绝不使用单个合并的工单文件
-- 分诊状态记录在每个 issue 文件顶部附近的 `Status:` 行（角色字符串见 `triage-labels.md`）
+- 分诊状态记录在每个 issue 文件顶部附近的 `Status:` 行（角色字符串见 `triage-labels.md`）；spec 同样带 `Status:` 行
 - 评论和对话历史追加到文件底部的 `## Comments` 标题下
+
+## 完成与归档
+
+当 spec 与它下面的全部票据都为 `resolved` 时，该特性即告完成。此时用 `git mv` 把整个目录移到 `.scratch/archive/<feature-slug>/`，让 `.scratch/` 顶层只保留进行中的工作。
+
+- 用 `git mv` 归档 —— 历史随文件一起保留。
+- 归档时不做删减：归档的 spec 与票据就是历史记录，其 `Status:` 行保持原样。
+- 归档后的票据仍在 `bun run check-docs`（命名与状态词表）的检查范围内。
 
 ## 当 skill 说"发布到 issue 跟踪器"时
 

@@ -2,11 +2,7 @@
 
 Status: resolved
 
-## 概述
-
-将权限系统从"Judge + Professor"二元模型扩展为法庭隐喻的三角色模型，引入 JUDGE.md 作为项目级安全规则的单一事实源，并对抗假阴性风险。
-
-## 背景
+## Problem Statement
 
 当前系统：
 - **Judge（法官）**：实时 LLM，对工具调用判 safe/unsafe，综合基准规则 + 项目 JUDGE.md
@@ -18,7 +14,9 @@ Status: resolved
 - judge-prompt.md 按工具名分类安全（只读=安全、破坏性=不安全），对管道注入、heredoc 写入、外部依赖等攻击模式无效
 - 教授输出写入 JUDGE.md，但没有对等角色处理假阴性
 
-## 目标
+## Solution
+
+将权限系统从"Judge + Professor"二元模型扩展为法庭隐喻的三角色模型，引入 JUDGE.md 作为项目级安全规则的单一事实源，并对抗假阴性风险。
 
 ### 三个角色分工
 
@@ -51,7 +49,7 @@ Status: resolved
 - 攻击模型生成变种攻击命令，法官去拦截
 - 评估指标：精确优先（Precision > Recall），宁可漏，不误拦
 
-## 实现决策
+## Implementation Decisions
 
 ### 实现位置
 
@@ -99,7 +97,7 @@ Status: resolved
 - 评估：精确率、召回率、F1
 - 用 `bun run self-test` 执行
 
-## 测试决策
+## Testing Decisions
 
 ### 测试原则
 
@@ -123,7 +121,7 @@ Status: resolved
 - `professor.ts` 已有测试，更新后保持覆盖率
 - `prosecutor.ts` 新建，从零 TDD
 
-## 非目标
+## Out of Scope
 
 - 不修改 pi-permission-system 外部包
 - 不改变法官实时判定流程（JUDGE.md 注入机制已存在）
@@ -131,7 +129,7 @@ Status: resolved
 - 不实现 JUDGE.md 自动过期淘汰机制
 - 不修改 config.json 的 schema
 
-## 补充说明
+## Further Notes
 
 - `index.ts` 中 `judge_professor` 工具的 execute 回调超过 50 行 → 配合 prosecutor 新增，将工具 execute 逻辑抽到独立文件
 - 对抗性自测脚本的目标：Precision >= 90%，成功拦截已知攻击模式及其变种

@@ -7,8 +7,16 @@ Issues and specs (you may know a spec as a PRD) for this repo live as markdown f
 - One feature per directory: `.scratch/<feature-slug>/`
 - The spec is `.scratch/<feature-slug>/spec.md`
 - Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` — never a single combined tickets file
-- Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
+- Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings); the spec carries a `Status:` line too
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
+
+## Completion and archiving
+
+A feature is complete when its spec and every issue under it are `resolved`. At that point, move the whole directory with `git mv` to `.scratch/archive/<feature-slug>/`, so the top level of `.scratch/` holds only work in flight.
+
+- Archive with `git mv` — the history stays attached to the moved files.
+- Trim nothing on the way in: archived specs and issues are the historical record, and their `Status:` lines stay as written.
+- Archived tickets stay under `bun run check-docs` (naming and status vocabulary).
 
 ## When a skill says "publish to the issue tracker"
 

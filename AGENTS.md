@@ -74,6 +74,7 @@ bun run --cwd ly-pi test -- my-hud
 
 - 新需求：先跑 `/to-spec` 产出规格到 `.scratch/<feature-slug>/spec.md`，经用户确认后 `/to-tickets` 拆票到 `.scratch/<feature-slug>/issues/`
 - 票据约定（`NN-slug` 编号、`Status:` 行、认领/解决流程）见 `docs/agents/issue-tracker.md`
+- 特性完成后（spec 与全部票据均为 `resolved`）整目录 `git mv` 到 `.scratch/archive/`，顶层只留进行中的工作
 - `.scratch/` 纳入 git，即本仓库的本地 issue tracker
 - 文档修正类变更（README、AGENTS.md 等耐久文档的内容更新）直接修改，不需要走 spec
 - 一致性防线：`bun run verify` 硬性验收（biome lint + tsgo typecheck + vitest 测试 + check-docs 文档一致性）

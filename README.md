@@ -48,7 +48,7 @@ configure/
 │   └── deploy-all.ts         # 统一部署流水线（build → test → deploy all）
 ├── tools/check-docs/         # 文档一致性校验
 ├── docs/agents/              # Matt skills 配置（issue tracker、标签、domain docs）
-├── .scratch/                 # 本地 issue tracker：需求规格与票据
+├── .scratch/                 # 本地 issue tracker：活跃规格与票据（archive/ 为已完成）
 │
 ├── starship.toml             # Starship 终端提示符
 ├── wezterm.lua               # WezTerm 终端配置
@@ -212,7 +212,7 @@ pi -e ly-pi/index.ts
 
 ### 文档系统
 
-需求与规格由 [mattpocock/skills](https://github.com/mattpocock/skills) 工作流管理，不维护传统的 REQUIREMENTS/SPEC 文档：`/to-spec` 产出到 `.scratch/<feature-slug>/spec.md`，`/to-tickets` 拆票到 `.scratch/<feature-slug>/issues/`。
+需求与规格由 [mattpocock/skills](https://github.com/mattpocock/skills) 工作流管理，不维护传统的 REQUIREMENTS/SPEC 文档：`/to-spec` 产出到 `.scratch/<feature-slug>/spec.md`，`/to-tickets` 拆票到 `.scratch/<feature-slug>/issues/`。特性完成后（spec 与全部票据均为 `resolved`），整个目录 `git mv` 到 `.scratch/archive/`，顶层只留进行中的工作。
 
 ---
 
