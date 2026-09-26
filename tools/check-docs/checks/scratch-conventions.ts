@@ -1,6 +1,6 @@
 import type { FileTree } from "../types";
 
-const ISSUE_FILE = /^\.scratch\/[^/]+\/issues\/([^/]+\.md)$/;
+const ISSUE_FILE = /^\.scratch\/(?:archive\/)?[^/]+\/issues\/([^/]+\.md)$/;
 const ISSUE_NAME = /^\d{2}-[a-z0-9-]+\.md$/;
 const STATUS_LINE = /^\**Status:\**\s*(\S+)\s*$/m;
 const BUILTIN_STATUSES = ["claimed", "resolved"];

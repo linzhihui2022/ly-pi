@@ -94,6 +94,28 @@ describe("checkScratchConventions", () => {
     ]);
   });
 
+  it("checks issue files under .scratch/archive/", () => {
+    const t = tree({
+      "docs/agents/triage-labels.md": LABELS,
+      ".scratch/archive/feat/issues/01-first.md": "**Status:** bogus",
+    });
+
+    expect(checkScratchConventions(t)).toEqual([
+      ".scratch/archive/feat/issues/01-first.md has unknown status: bogus",
+    ]);
+  });
+
+  it("enforces NN-slug naming under .scratch/archive/", () => {
+    const t = tree({
+      "docs/agents/triage-labels.md": LABELS,
+      ".scratch/archive/feat/issues/first.md": "**Status:** resolved",
+    });
+
+    expect(checkScratchConventions(t)).toEqual([
+      ".scratch/archive/feat/issues/first.md does not match the NN-slug.md naming convention",
+    ]);
+  });
+
   it("ignores files outside .scratch/*/issues/", () => {
     const t = tree({
       ".scratch/feat/spec.md": "Status: whatever",
