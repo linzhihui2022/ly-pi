@@ -12,11 +12,12 @@ import { createChief } from "./chief";
 import { config } from "./config";
 import { renderCostPage } from "./cost-page";
 import { aggregateCosts, appendCost } from "./cost-tracker";
-import type { DirectModelBinding } from "./direct-model";
+import { formatDiff } from "./diff";
 import { loadFile } from "./file";
 import { createJudge } from "./judge";
 import { JUDGE_PROMPT } from "./judge-prompt";
 import { renderJudgeLogPage } from "./log-page";
+import { auditBinding, createModelClient } from "./model-client";
 import { createMerger as createPipelineMerger } from "./pipeline";
 import { createAdvocate } from "./professor";
 import { createProsecutor } from "./prosecutor";
@@ -29,148 +30,13 @@ import {
   recordJudgeStats,
   recordUserOverride,
 } from "./stats";
-import type { ModelClient } from "./types";
+import { suggestionTypeDetail, suggestionTypeLabel } from "./suggestion";
 import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
 import {
   collectPaths,
   resolveSymlinkedPaths,
   stringifyToolInput,
 } from "./utils";
-
-// ---- diff helpers ----
-
-const GREY = "\x1b[90m";
-const auditBinding: DirectModelBinding = {
-  model: config.auditModel,
-  thinking: config.auditThinking,
-};
-
-interface DiffLine {
-  type: "keep" | "add" | "remove";
-  text: string;
-}
-
-/** Compute line-level diff between old and new text using LCS. */
-function computeDiff(oldText: string, newText: string): DiffLine[] {
-  const oldLines = oldText.split("\n");
-  const newLines = newText.split("\n");
-  const m = oldLines.length;
-  const n = newLines.length;
-
-  const dp: number[][] = Array.from({ length: m + 1 }, () =>
-    new Array(n + 1).fill(0),
-  );
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (oldLines[i - 1] === newLines[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
-  }
-
-  const result: DiffLine[] = [];
-  let i = m;
-  let j = n;
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-      result.unshift({ type: "keep", text: oldLines[i - 1] });
-      i--;
-      j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      result.unshift({ type: "add", text: newLines[j - 1] });
-      j--;
-    } else {
-      result.unshift({ type: "remove", text: oldLines[i - 1] });
-      i--;
-    }
-  }
-  return result;
-}
-
-/** Format diff as color-coded text for confirm dialog body. */
-function formatDiff(oldText: string, newText: string): string {
-  const diff = computeDiff(oldText, newText);
-  const adds = diff.filter((d) => d.type === "add").length;
-  const removes = diff.filter((d) => d.type === "remove").length;
-
-  const lines: string[] = [];
-  lines.push(
-    `${C.bold}变更预览 (${adds + removes} 处: ${C.green}+${adds}${C.reset}${C.bold} ${C.red}−${removes}${C.reset}${C.bold})${C.reset}`,
-  );
-  lines.push("");
-
-  for (const d of diff) {
-    if (d.type === "keep") {
-      lines.push(`${GREY}  ${d.text}${C.reset}`);
-    } else if (d.type === "add") {
-      lines.push(`${C.green}+ ${d.text}${C.reset}`);
-    } else {
-      lines.push(`${C.red}− ${d.text}${C.reset}`);
-    }
-  }
-
-  return lines.join("\n");
-}
-
-/** Format chief suggestion type for confirm dialog label. */
-function suggestionTypeLabel(type: string): string {
-  switch (type) {
-    case "add":
-      return "新增规则";
-    case "remove":
-      return "删除规则";
-    case "modify":
-      return "改写规则";
-    case "merge":
-      return "合并规则";
-    default:
-      return type;
-  }
-}
-
-/** Format chief suggestion detail for confirm dialog body. */
-function suggestionTypeDetail(item: {
-  type: string;
-  rule?: string;
-  oldRule?: string;
-  newRule?: string;
-  oldRules?: string[];
-  reason: string;
-}): string {
-  const parts: string[] = [];
-  switch (item.type) {
-    case "add":
-      parts.push(`${C.bold}新增: ${item.rule}${C.reset}`);
-      break;
-    case "remove":
-      parts.push(`${C.bold}删除: ${item.rule}${C.reset}`);
-      break;
-    case "modify":
-      parts.push(`${C.bold}改写${C.reset}`);
-      parts.push(`${C.red}− ${item.oldRule}${C.reset}`);
-      parts.push(`${C.green}+ ${item.newRule}${C.reset}`);
-      break;
-    case "merge":
-      parts.push(`${C.bold}合并${C.reset}`);
-      for (const r of item.oldRules ?? []) {
-        parts.push(`${C.red}− ${r}${C.reset}`);
-      }
-      parts.push(`${C.green}+ ${item.newRule}${C.reset}`);
-      break;
-  }
-  parts.push(`${C.yellow}原因: ${item.reason}${C.reset}`);
-  return parts.join("\n");
-}
-
-function createModelClient(ctx: ExtensionContext): ModelClient {
-  return {
-    find: (provider, id) => ctx.modelRegistry.find(provider, id),
-    complete: (model, context, options) =>
-      ctx.modelRegistry.complete(model, context, options),
-  };
-}
 
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const judgePrompt = JUDGE_PROMPT;
