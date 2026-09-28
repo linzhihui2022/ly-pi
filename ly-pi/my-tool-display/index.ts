@@ -10,7 +10,6 @@ import {
 } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, sep } from "node:path";
-import { stripVTControlCharacters } from "node:util";
 import {
   type AgentToolResult,
   type AgentToolUpdateCallback,
@@ -27,137 +26,46 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { createDevLogger } from "../my-log/index";
 import { loadToolDisplayConfig } from "./config";
+import {
+  describeError,
+  getErrorCode,
+  logUnexpectedPreviewError,
+  withErrorDetails,
+} from "./errors";
+import { log } from "./logger";
 import { resolveToolPath } from "./path-utils";
+import {
+  formatEditCall,
+  formatReadCall,
+  formatWriteCall,
+  renderBashResult,
+  renderCompactTextResult,
+  renderEditResult,
+  renderWriteResult,
+} from "./render";
+import {
+  canRoundTripUtf8,
+  getWriteDiffDetails,
+  hasVisibleOutput,
+  isRecord,
+  sanitizeToolCallArgs,
+  textOutput,
+} from "./sanitize";
+import type {
+  RealpathResult,
+  ResolvedWritePath,
+  SafeWritePath,
+  WriteDiffDetails,
+  WritePreview,
+  WriteToolOverride,
+  WriteToolResult,
+} from "./types";
 
 const initializedApis = new WeakSet<ExtensionAPI>();
 const registeredToolNames = new WeakMap<ExtensionAPI, Set<string>>();
 const writeDiffByContent = new WeakMap<object, WriteDiffDetails>();
 const MAX_WRITE_DIFF_BYTES = 1_000_000;
-const EXPECTED_PREVIEW_ERROR_CODES = new Set([
-  "EACCES",
-  "EAGAIN",
-  "EINTR",
-  "EISDIR",
-  "ELOOP",
-  "ENAMETOOLONG",
-  "ENODEV",
-  "ENOENT",
-  "ENOTDIR",
-  "ENXIO",
-  "EOVERFLOW",
-  "EPERM",
-]);
-const log = createDevLogger("my-tool-display");
-
-type WritePreview =
-  | { safe: true; previousContent: string; snapshot: WritePreviewSnapshot }
-  | { safe: false; reason: string };
-
-type WriteDiffDetails =
-  | { kind: "diff"; diff: string }
-  | { kind: "summary"; summary: string };
-
-type WritePreviewSnapshot =
-  | {
-      path: string;
-      existed: true;
-      device: number;
-      inode: number;
-      size: number;
-      mtimeMs: number;
-    }
-  | { path: string; existed: false };
-
-type WriteToolDetails = Record<string, unknown> & {
-  writeDiff: WriteDiffDetails;
-};
-
-type NativeWriteDefinition = ReturnType<typeof createWriteToolDefinition>;
-type NativeWriteParameters = Parameters<NativeWriteDefinition["execute"]>;
-type WriteToolResult = AgentToolResult<WriteToolDetails>;
-type ReplaceFirst<
-  Arguments extends readonly unknown[],
-  First,
-> = Arguments extends readonly [unknown, ...infer Rest]
-  ? [First, ...Rest]
-  : never;
-type WriteToolOverride = Omit<
-  NativeWriteDefinition,
-  "execute" | "renderResult"
-> & {
-  execute: (
-    toolCallId: NativeWriteParameters[0],
-    params: NativeWriteParameters[1],
-    signal: NativeWriteParameters[2],
-    onUpdate: AgentToolUpdateCallback<WriteToolDetails> | undefined,
-    ctx: NativeWriteParameters[4],
-  ) => Promise<WriteToolResult>;
-  renderResult: (
-    ...args: ReplaceFirst<
-      Parameters<NonNullable<NativeWriteDefinition["renderResult"]>>,
-      WriteToolResult
-    >
-  ) => ReturnType<NonNullable<NativeWriteDefinition["renderResult"]>>;
-};
-
-type SafeWritePath =
-  | { safe: true; path: string; existed: true; device: number; inode: number }
-  | { safe: true; path: string; existed: false }
-  | { safe: false; reason: string };
-
-type ResolvedWritePath =
-  | { resolved: true; path: string }
-  | { resolved: false; reason: string };
-
-type RealpathResult =
-  | { resolved: true; path: string }
-  | { resolved: false; error: unknown };
-
-function getErrorCode(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null) {
-    return undefined;
-  }
-  const code = (error as NodeJS.ErrnoException).code;
-  return typeof code === "string" ? code : undefined;
-}
-
-function serializeError(error: unknown): unknown {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    };
-  }
-  return error;
-}
-
-function logUnexpectedPreviewError(message: string, error: unknown): void {
-  const code = getErrorCode(error);
-  if (code && EXPECTED_PREVIEW_ERROR_CODES.has(code)) {
-    return;
-  }
-  log.error(message, { error: serializeError(error) });
-}
-
-function describeError(error: unknown): string | undefined {
-  const code = getErrorCode(error);
-  if (error instanceof Error) {
-    const message = error.message || error.name;
-    return code ? `${code}: ${message}` : message;
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  return code;
-}
-
-function withErrorDetails(reason: string, error: unknown): string {
-  const details = describeError(error);
-  return details ? `${reason} (${sanitizeToolOutput(details)})` : reason;
-}
 
 function getBuiltinToolNames(pi: ExtensionAPI): Set<string> {
   try {
@@ -174,82 +82,6 @@ function getBuiltinToolNames(pi: ExtensionAPI): Set<string> {
     );
     return new Set();
   }
-}
-
-function canRoundTripUtf8(content: string): boolean {
-  return Buffer.from(content, "utf8").toString("utf8") === content;
-}
-
-function sanitizeToolOutput(output: string): string {
-  return Array.from(stripVTControlCharacters(output))
-    .filter((character) => {
-      const code = character.codePointAt(0);
-      if (code === undefined) {
-        return false;
-      }
-      if (code === 0x09 || code === 0x0a || code === 0x0d) {
-        return true;
-      }
-      if ((code >= 0x7f && code <= 0x9f) || /\p{Cf}/u.test(character)) {
-        return false;
-      }
-      return code > 0x1f && (code < 0xfff9 || code > 0xfffb);
-    })
-    .join("")
-    .replace(/\r/g, "");
-}
-
-function sanitizeToolLabel(label: unknown): string {
-  const text =
-    typeof label === "string"
-      ? label
-      : label === null || label === undefined
-        ? "..."
-        : String(label);
-  return sanitizeToolOutput(text).replace(/[\t\r\n\u2028\u2029]/g, " ");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function sanitizeToolCallArgs<Arguments>(args: Arguments): Arguments {
-  if (!isRecord(args)) {
-    return args;
-  }
-  return Object.fromEntries(
-    Object.entries(args).map(([key, value]) => [
-      key,
-      typeof value === "string" ? sanitizeToolLabel(value) : value,
-    ]),
-  ) as Arguments;
-}
-
-function getWriteDiffDetails(details: unknown): WriteDiffDetails | undefined {
-  if (!isRecord(details)) {
-    return undefined;
-  }
-  const writeDiff = (details as Record<string, unknown>).writeDiff;
-  if (typeof writeDiff !== "object" || writeDiff === null) {
-    return undefined;
-  }
-  const record = writeDiff as Record<string, unknown>;
-  if (record.kind === "diff" && typeof record.diff === "string") {
-    return { kind: "diff", diff: record.diff };
-  }
-  if (record.kind === "summary" && typeof record.summary === "string") {
-    return { kind: "summary", summary: record.summary };
-  }
-  return undefined;
-}
-
-function textOutput(result: {
-  content: Array<{ type: string; text?: string }>;
-}): string {
-  return result.content
-    .filter((content) => content.type === "text")
-    .map((content) => sanitizeToolOutput(content.text ?? ""))
-    .join("\n");
 }
 
 function isWithinWorkspace(workspacePath: string, targetPath: string): boolean {
@@ -566,192 +398,6 @@ function isWritePreviewCurrent(
   }
 }
 
-function hasVisibleOutput(output: string): boolean {
-  return output.trim().length > 0;
-}
-
-function renderCompactTextResult(
-  result: { content: Array<{ type: string; text?: string }> },
-  options: { expanded: boolean; isPartial: boolean },
-  theme: { fg(color: string, text: string): string },
-  context: { isError: boolean },
-  pendingLabel: string,
-  failureLabel: string,
-): Text {
-  const output = textOutput(result);
-  if (context.isError) {
-    return new Text(
-      theme.fg("error", hasVisibleOutput(output) ? output : failureLabel),
-      0,
-      0,
-    );
-  }
-  if (options.isPartial) {
-    return new Text(theme.fg("warning", pendingLabel), 0, 0);
-  }
-  if (!options.expanded) {
-    return new Text("", 0, 0);
-  }
-  return new Text(theme.fg("toolOutput", output), 0, 0);
-}
-
-function renderBashResult(
-  result: { content: Array<{ type: string; text?: string }> },
-  options: { expanded: boolean; isPartial: boolean },
-  theme: { fg(color: string, text: string): string },
-  context: { isError: boolean },
-  collapsedLines: number,
-): Text {
-  const output = textOutput(result);
-  if (context.isError) {
-    if (!hasVisibleOutput(output)) {
-      return new Text(theme.fg("error", "Bash command failed."), 0, 0);
-    }
-    if (options.expanded) {
-      return new Text(
-        theme.fg("error", `Bash command failed.\n${output}`),
-        0,
-        0,
-      );
-    }
-
-    const lines = output.split(/\r?\n/);
-    while (lines.at(-1) === "") {
-      lines.pop();
-    }
-    if (collapsedLines === 0) {
-      return new Text(
-        theme.fg(
-          "error",
-          `Bash command failed.\nOutput hidden (${lines.length} lines; expand to view)`,
-        ),
-        0,
-        0,
-      );
-    }
-
-    const visible = lines.slice(-collapsedLines);
-    const hidden = lines.length - visible.length;
-    let text = visible.join("\n");
-    if (hidden > 0) {
-      text = `${theme.fg("muted", `... (${hidden} earlier lines hidden, expand to view)`)}\n${text}`;
-    }
-    return new Text(theme.fg("error", `Bash command failed.\n${text}`), 0, 0);
-  }
-  if (!hasVisibleOutput(output)) {
-    return new Text(
-      theme.fg("muted", options.isPartial ? "Running..." : "(no output)"),
-      0,
-      0,
-    );
-  }
-  if (options.expanded) {
-    return new Text(theme.fg("toolOutput", output), 0, 0);
-  }
-
-  const lines = output.split(/\r?\n/);
-  while (lines.at(-1) === "") {
-    lines.pop();
-  }
-  if (lines.length === 0) {
-    return new Text(
-      theme.fg("muted", options.isPartial ? "Running..." : "(no output)"),
-      0,
-      0,
-    );
-  }
-  if (collapsedLines === 0) {
-    return new Text(
-      theme.fg(
-        "muted",
-        `Output hidden (${lines.length} lines; expand to view)`,
-      ),
-      0,
-      0,
-    );
-  }
-
-  const visible = lines.slice(0, collapsedLines);
-  const remaining = lines.length - visible.length;
-  let text = visible.join("\n");
-  if (remaining > 0) {
-    text += `\n${theme.fg("muted", `... (${remaining} more lines, expand to view)`)}`;
-  }
-  return new Text(theme.fg("toolOutput", text), 0, 0);
-}
-
-function formatEditCall(
-  args: { path?: string; file_path?: string },
-  theme: {
-    fg(color: string, text: string): string;
-    bold(text: string): string;
-  },
-): string {
-  const path = sanitizeToolLabel(args.file_path ?? args.path ?? "...");
-  return `${theme.fg("toolTitle", theme.bold("edit"))} ${theme.fg("accent", path)}`;
-}
-
-function renderEditDiff(
-  diff: string,
-  options: { expanded: boolean },
-  theme: { fg(color: string, text: string): string },
-  collapsedLines: number,
-): Text {
-  const lines = sanitizeToolOutput(diff).split(/\r?\n/);
-  if (lines.at(-1) === "") {
-    lines.pop();
-  }
-
-  const visible = options.expanded ? lines : lines.slice(0, collapsedLines);
-  const remaining = lines.length - visible.length;
-  const rendered: string[] = visible.map((line) => {
-    const color = line.startsWith("+")
-      ? "toolDiffAdded"
-      : line.startsWith("-")
-        ? "toolDiffRemoved"
-        : "toolDiffContext";
-    return theme.fg(color, line);
-  });
-  if (remaining > 0) {
-    rendered.push(
-      theme.fg("muted", `... (${remaining} more lines, expand to view)`),
-    );
-  }
-
-  return new Text(rendered.join("\n"), 0, 0);
-}
-
-function renderEditResult(
-  result: {
-    content: Array<{ type: string; text?: string }>;
-    details?: { diff?: unknown };
-  },
-  options: { expanded: boolean; isPartial: boolean },
-  theme: { fg(color: string, text: string): string },
-  context: { isError: boolean },
-  collapsedLines: number,
-): Text {
-  const output = textOutput(result);
-  if (context.isError) {
-    return new Text(
-      theme.fg("error", hasVisibleOutput(output) ? output : "Edit failed."),
-      0,
-      0,
-    );
-  }
-  if (options.isPartial) {
-    return new Text(theme.fg("warning", "Editing..."), 0, 0);
-  }
-  if (typeof result.details?.diff === "string" && result.details.diff) {
-    return renderEditDiff(result.details.diff, options, theme, collapsedLines);
-  }
-  return new Text(
-    theme.fg("muted", "Edit completed (diff unavailable)."),
-    0,
-    0,
-  );
-}
-
 function addWriteDiffDetails(
   result: AgentToolResult<unknown>,
   writeDiff: WriteDiffDetails,
@@ -761,82 +407,6 @@ function addWriteDiffDetails(
     ...result,
     details: { ...nativeDetails, writeDiff },
   };
-}
-
-function renderWriteResult(
-  result: {
-    content: Array<{ type: string; text?: string }>;
-    details?: unknown;
-  },
-  writeDiff: WriteDiffDetails | undefined,
-  options: { expanded: boolean; isPartial: boolean },
-  theme: { fg(color: string, text: string): string },
-  context: { isError: boolean },
-  collapsedLines: number,
-): Text {
-  const output = textOutput(result);
-  if (context.isError) {
-    return new Text(
-      theme.fg("error", hasVisibleOutput(output) ? output : "Write failed."),
-      0,
-      0,
-    );
-  }
-  if (options.isPartial) {
-    return new Text(theme.fg("warning", "Writing..."), 0, 0);
-  }
-  const displayWriteDiff = writeDiff ?? getWriteDiffDetails(result.details);
-  if (displayWriteDiff?.kind === "diff") {
-    return renderEditDiff(
-      displayWriteDiff.diff,
-      options,
-      theme,
-      collapsedLines,
-    );
-  }
-  return new Text(
-    theme.fg(
-      "warning",
-      (displayWriteDiff?.kind === "summary" && displayWriteDiff.summary) ||
-        "Write completed (diff unavailable).",
-    ),
-    0,
-    0,
-  );
-}
-
-function formatWriteCall(
-  args: { path?: string; file_path?: string },
-  theme: {
-    fg(color: string, text: string): string;
-    bold(text: string): string;
-  },
-): string {
-  const path = sanitizeToolLabel(args.file_path ?? args.path ?? "...");
-  return `${theme.fg("toolTitle", theme.bold("write"))} ${theme.fg("accent", path)}`;
-}
-
-function formatReadCall(
-  args: {
-    path?: string;
-    file_path?: string;
-    offset?: number;
-    limit?: number;
-  },
-  theme: {
-    fg(color: string, text: string): string;
-    bold(text: string): string;
-  },
-): string {
-  const path = sanitizeToolLabel(args.file_path ?? args.path ?? "...");
-  const start = args.offset ?? 1;
-  const range =
-    args.offset === undefined && args.limit === undefined
-      ? ""
-      : args.limit === undefined
-        ? `:${start}`
-        : `:${start}-${start + args.limit - 1}`;
-  return `${theme.fg("toolTitle", theme.bold("read"))} ${theme.fg("accent", path)}${theme.fg("warning", range)}`;
 }
 
 function registerToolOverride(
