@@ -16,7 +16,7 @@ import { startCloseWorktreeWorker } from "./close-worker-launcher";
 import { inspectCurrentWorktreeClosure } from "./close-worker-runtime";
 import type { WorktreeClosureFacts } from "./closure";
 import myWorktree from "./index";
-import { getVisibleWorktrees } from "./worktrees";
+import { getVisibleWorktrees, type WorktreeSnapshot } from "./worktrees";
 
 type Handler = (event: unknown, ctx: any) => unknown;
 
@@ -375,5 +375,143 @@ describe("my-worktree extension", () => {
       }),
     );
     expect(calls).toEqual(["worker", "shutdown"]);
+  });
+
+  it("notes a detached HEAD when the worktree has no branch", async () => {
+    const facts = readyFacts();
+    vi.mocked(inspectCurrentWorktreeClosure).mockResolvedValue({
+      ...facts,
+      worktree: { ...facts.worktree, branch: null },
+    });
+    const { commands } = setup();
+    const ctx = createContext();
+
+    await commands.get("close-worktree")!.handler("", ctx);
+
+    expect(ctx.ui.confirm).toHaveBeenCalledWith(
+      "关闭当前工作树？",
+      expect.stringContaining("保留的本地分支：(none; detached HEAD)"),
+    );
+  });
+
+  it("reports inspection failures that are not Error instances", async () => {
+    vi.mocked(inspectCurrentWorktreeClosure).mockRejectedValue("plain failure");
+    const { commands } = setup();
+    const ctx = createContext();
+
+    await commands.get("close-worktree")!.handler("", ctx);
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "Could not inspect the current worktree: plain failure. Pi remains running.",
+      "error",
+    );
+  });
+
+  it("re-checks idleness after the user confirmed", async () => {
+    vi.mocked(inspectCurrentWorktreeClosure).mockResolvedValue(readyFacts());
+    const { commands } = setup();
+    const ctx = createContext();
+    ctx.ui.confirm.mockResolvedValue(true);
+    ctx.isIdle.mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+    await commands.get("close-worktree")!.handler("", ctx);
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "/close-worktree is available only while Pi is idle.",
+      "error",
+    );
+    expect(startCloseWorktreeWorker).not.toHaveBeenCalled();
+  });
+
+  it("clears the widget when the session shuts down", async () => {
+    vi.mocked(getVisibleWorktrees).mockResolvedValue({
+      repositoryRoot: "/repo",
+      worktrees: [],
+    });
+    const { handlers } = setup();
+    const ctx = createContext();
+
+    handlers.get("session_start")!({}, ctx);
+    await flush();
+    ctx.ui.setWidget.mockClear();
+
+    handlers.get("session_shutdown")!({}, ctx);
+
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith("my-worktree", undefined);
+  });
+
+  it("does nothing on shutdown without an active widget", () => {
+    const { handlers } = setup();
+    const ctx = createContext();
+    ctx.hasUI = false;
+
+    handlers.get("session_shutdown")!({}, ctx);
+
+    expect(ctx.ui.setWidget).not.toHaveBeenCalled();
+  });
+
+  it("accepts widget invalidation after the TUI is created", async () => {
+    vi.mocked(getVisibleWorktrees).mockResolvedValue({
+      repositoryRoot: "/repo",
+      worktrees: [],
+    });
+    const { handlers } = setup();
+    const ctx = createContext();
+
+    handlers.get("session_start")!({}, ctx);
+    await flush();
+    const component = ctx.ui.setWidget.mock.calls[0][1](
+      { requestRender: vi.fn() },
+      createTheme(),
+    );
+
+    expect(() => component.invalidate()).not.toThrow();
+  });
+
+  it("drops a refresh that resolved after the session ended", async () => {
+    let resolveWorktrees: (value: WorktreeSnapshot | null) => void = () => {};
+    vi.mocked(getVisibleWorktrees).mockImplementation(
+      () =>
+        new Promise<WorktreeSnapshot | null>((resolve) => {
+          resolveWorktrees = resolve;
+        }),
+    );
+    const { handlers } = setup();
+    const ctx = createContext();
+
+    handlers.get("session_start")!({}, ctx);
+    handlers.get("session_shutdown")!({}, ctx);
+    const widgetCalls = ctx.ui.setWidget.mock.calls.length;
+    resolveWorktrees({ repositoryRoot: "/repo", worktrees: [] });
+    await flush();
+
+    expect(ctx.ui.setWidget).toHaveBeenCalledTimes(widgetCalls);
+  });
+
+  it("drops a refresh failure that arrived after the session ended", async () => {
+    vi.mocked(getVisibleWorktrees).mockRejectedValue(new Error("boom"));
+    const { handlers } = setup();
+    const ctx = createContext();
+
+    handlers.get("session_start")!({}, ctx);
+    handlers.get("session_shutdown")!({}, ctx);
+    await flush();
+
+    expect(ctx.ui.setWidget).toHaveBeenLastCalledWith("my-worktree", undefined);
+  });
+
+  it("clears the snapshot when a refresh fails while the session is active", async () => {
+    vi.mocked(getVisibleWorktrees).mockRejectedValue(new Error("boom"));
+    const { handlers } = setup();
+    const ctx = createContext();
+
+    handlers.get("session_start")!({}, ctx);
+    await flush();
+    const component = ctx.ui.setWidget.mock.calls[0][1](
+      { requestRender: vi.fn() },
+      createTheme(),
+    );
+
+    expect(component.render(120)).toEqual([]);
   });
 });
