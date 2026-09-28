@@ -16,6 +16,8 @@ export function suggestionTypeLabel(type: string): string {
   }
 }
 
+const MISSING = "(未提供)";
+
 /** Format chief suggestion detail for confirm dialog body. */
 export function suggestionTypeDetail(item: {
   type: string;
@@ -28,22 +30,22 @@ export function suggestionTypeDetail(item: {
   const parts: string[] = [];
   switch (item.type) {
     case "add":
-      parts.push(`${C.bold}新增: ${item.rule}${C.reset}`);
+      parts.push(`${C.bold}新增: ${item.rule ?? MISSING}${C.reset}`);
       break;
     case "remove":
-      parts.push(`${C.bold}删除: ${item.rule}${C.reset}`);
+      parts.push(`${C.bold}删除: ${item.rule ?? MISSING}${C.reset}`);
       break;
     case "modify":
       parts.push(`${C.bold}改写${C.reset}`);
-      parts.push(`${C.red}− ${item.oldRule}${C.reset}`);
-      parts.push(`${C.green}+ ${item.newRule}${C.reset}`);
+      parts.push(`${C.red}− ${item.oldRule ?? MISSING}${C.reset}`);
+      parts.push(`${C.green}+ ${item.newRule ?? MISSING}${C.reset}`);
       break;
     case "merge":
       parts.push(`${C.bold}合并${C.reset}`);
       for (const r of item.oldRules ?? []) {
         parts.push(`${C.red}− ${r}${C.reset}`);
       }
-      parts.push(`${C.green}+ ${item.newRule}${C.reset}`);
+      parts.push(`${C.green}+ ${item.newRule ?? MISSING}${C.reset}`);
       break;
   }
   parts.push(`${C.yellow}原因: ${item.reason}${C.reset}`);

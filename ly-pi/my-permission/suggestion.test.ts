@@ -73,4 +73,29 @@ describe("suggestionTypeDetail", () => {
 
     expect(text).toBe(`\u001b[33m原因: because\u001b[0m`);
   });
+
+  it("substitutes a placeholder for missing rules", () => {
+    expect(suggestionTypeDetail({ type: "add", reason: "why" })).toContain(
+      "新增: (未提供)",
+    );
+    expect(suggestionTypeDetail({ type: "remove", reason: "why" })).toContain(
+      "删除: (未提供)",
+    );
+
+    const modify = suggestionTypeDetail({ type: "modify", reason: "why" });
+    expect(modify).toContain("− (未提供)");
+    expect(modify).toContain("+ (未提供)");
+
+    expect(suggestionTypeDetail({ type: "merge", reason: "why" })).toContain(
+      "+ (未提供)",
+    );
+  });
+
+  it("never renders undefined for incomplete model output", () => {
+    for (const type of ["add", "remove", "modify", "merge", "other"]) {
+      expect(suggestionTypeDetail({ type, reason: "why" })).not.toContain(
+        "undefined",
+      );
+    }
+  });
 });
