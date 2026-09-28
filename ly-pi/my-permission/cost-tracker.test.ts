@@ -27,6 +27,25 @@ function opts() {
   return { costsDir: TEST_DIR };
 }
 
+// Node's os.homedir() honours $HOME on POSIX, so pointing HOME at a throwaway
+// directory keeps default-path tests out of the real ~/.pi/costs.
+const REAL_HOME = process.env.HOME;
+let fakeHome = "";
+
+beforeEach(() => {
+  fakeHome = mkdtempSync(join(tmpdir(), "pi-home-test-"));
+  process.env.HOME = fakeHome;
+});
+
+afterEach(() => {
+  if (REAL_HOME === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = REAL_HOME;
+  }
+  rmSync(fakeHome, { recursive: true, force: true });
+});
+
 describe("encodeProjectDir", () => {
   it("encodes absolute path to project directory name", () => {
     expect(encodeProjectDir("/Users/alice/Documents/configure")).toBe(
@@ -46,8 +65,8 @@ describe("encodeProjectDir", () => {
 });
 
 describe("getCostsDir", () => {
-  it("returns ~/.pi/costs", () => {
-    expect(getCostsDir()).toContain(".pi/costs");
+  it("resolves to $HOME/.pi/costs", () => {
+    expect(getCostsDir()).toBe(join(fakeHome, ".pi", "costs"));
   });
 });
 
@@ -59,9 +78,16 @@ describe("getCostsFilePath", () => {
     expect(filePath.endsWith(".jsonl")).toBe(true);
   });
 
-  it("defaults to ~/.pi/costs when no costsDir provided", () => {
-    const filePath = getCostsFilePath(TEST_SESSION, TEST_CWD);
-    expect(filePath).toContain(".pi/costs/");
+  it("defaults to $HOME/.pi/costs when no costsDir provided", () => {
+    expect(getCostsFilePath(TEST_SESSION, TEST_CWD)).toBe(
+      join(
+        fakeHome,
+        ".pi",
+        "costs",
+        encodeProjectDir(TEST_CWD),
+        `${TEST_SESSION}.jsonl`,
+      ),
+    );
   });
 });
 
@@ -137,20 +163,15 @@ describe("appendCost", () => {
     }
   });
 
-  it("defaults costsDir to ~/.pi/costs", () => {
-    // Use the default path (writes to real ~/.pi/costs)
-    // Test that no error is thrown
-    expect(() => {
-      appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o");
-    }).not.toThrow();
-    // Clean up
+  it("defaults costsDir to $HOME/.pi/costs", () => {
+    appendCost(TEST_SESSION, TEST_CWD, "judge", 0.001, "openai/gpt-4o");
+
     const defaultFile = getCostsFilePath(TEST_SESSION, TEST_CWD);
-    if (existsSync(defaultFile)) {
-      rmSync(join(getCostsDir(), encodeProjectDir(TEST_CWD)), {
-        recursive: true,
-        force: true,
-      });
-    }
+    expect(defaultFile.startsWith(join(fakeHome, ".pi", "costs"))).toBe(true);
+
+    const parsed = JSON.parse(readFileSync(defaultFile, "utf-8").trim());
+    expect(parsed.type).toBe("judge");
+    expect(parsed.cost).toBe(0.001);
   });
 });
 
