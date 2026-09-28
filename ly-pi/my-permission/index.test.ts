@@ -386,6 +386,10 @@ describe("my-permission direct bindings", () => {
       "👨‍⚖️ 审判长审计: 1 条建议",
       "info",
     );
+    expect(merger).toHaveBeenCalledWith({
+      current: "existing rule",
+      operations: [{ type: "add", rule: "新规则", reason: "矛盾" }],
+    });
     expect(writeFileSync).toHaveBeenCalled();
     expect(result).toMatchObject({
       content: [{ type: "text", text: "✅ JUDGE.md 已更新，共 1 条操作" }],
