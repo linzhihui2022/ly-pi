@@ -49,7 +49,7 @@ bun run --cwd ly-pi test -- my-hud
 ```
 
 覆盖率阈值以 `vitest.config.ts` 为准（当前 branches 90 / functions 91 / lines 94 / statements 93）。
-排除项：types.ts、index.ts（集成测试）。
+排除项：`**/types.ts`、`**/index.ts`（集成测试）、`scripts/**`。
 
 - 先写测试，确认失败
 - 再写实现
@@ -103,3 +103,5 @@ Default five-role vocabulary (needs-triage / needs-info / ready-for-agent / read
 ### Domain docs
 
 Single-context layout — one `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
+
+ADR conventions — unique numbering, and every ADR stating the decision in force today rather than the shape it used to have — live in `docs/adr/README.md`.

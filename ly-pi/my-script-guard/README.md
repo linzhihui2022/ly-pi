@@ -32,7 +32,7 @@ preview) so the user can allow or deny on the spot. Both rule categories
 share one counter — escalation measures persistent tool-bypass attempts, not
 any single rule. Sessions without a UI (subagents) keep hard-blocking. See
 `docs/adr/0001-my-script-guard-escalation.md` and
-`docs/adr/0002-block-file-write-bypass.md`.
+`docs/adr/0012-block-file-write-bypass.md`.
 
 ## Development
 

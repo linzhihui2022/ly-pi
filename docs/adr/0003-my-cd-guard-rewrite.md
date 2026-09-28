@@ -10,4 +10,4 @@ pi agent 有防御性习惯：即使 bash 工具已在会话工作目录执行�
 
 ## Consequences
 
-- my-cd-guard 必须在 settings.json 的 `extensions` 数组中排在 my-script-guard 与 my-permission 之前，使后续扩展与模型法官看到纠正后的命令（与 ADR-0002 同一机制）。
+- my-cd-guard 必须先于 my-script-guard 与 my-permission 生效，使后续扩展与模型法官看到纠正后的命令。统一入口下这一顺序由 `ly-pi/index.ts` 的注册顺序固定：`createGuardHarness(pi, [cdGuard, scriptGuard])` 先于 `myPermission(pi)`。

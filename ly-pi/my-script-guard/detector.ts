@@ -76,7 +76,7 @@ export function detectInlineScript(
   return undefined;
 }
 
-// --- File Write Bypass (see CONTEXT.md / ADR-0002) ---
+// --- File Write Bypass (see CONTEXT.md / ADR-0012) ---
 
 const MAX_INLINE_CONTENT_LENGTH = 80;
 
