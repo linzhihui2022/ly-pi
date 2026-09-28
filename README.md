@@ -47,6 +47,7 @@ configure/
 ├── scripts/
 │   └── deploy-all.ts         # 统一部署流水线（build → test → deploy all）
 ├── tools/check-docs/         # 文档一致性校验
+├── tools/pi-w/               # pi-w 命令的 TypeScript 实现（worktree 创建，含测试）
 ├── docs/agents/              # Matt skills 配置（issue tracker、标签、domain docs）
 ├── .scratch/                 # agent 临时工作区（票据已迁至 GitHub Issues，不入 git）
 │
@@ -57,7 +58,8 @@ configure/
 ├── JUDGE.md                  # my-permission 模型法官的项目级规则
 ├── biome.json                # Biome 格式/lint 配置
 ├── install.sh                # 一键部署入口
-└── package.json              # Monorepo 根配置
+├── package.json              # Monorepo 根配置
+└── pi-w.zsh                  # `pi-w <branch>` worktree 函数（从 ~/.zshrc source）
 ```
 
 ---
