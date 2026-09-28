@@ -59,11 +59,13 @@ vi.mock("node:fs", async (importOriginal) => ({
 import { writeFileSync } from "node:fs";
 import { createChief } from "./chief";
 import { appendCost } from "./cost-tracker";
+import { loadFile } from "./file";
 import { createJudge } from "./judge";
 import { createMerger as createPipelineMerger } from "./pipeline";
 import { createAdvocate } from "./professor";
 import { createProsecutor } from "./prosecutor";
 import { runPermissionSelfTest } from "./self-test";
+import { collectDeniedThenApproved } from "./stats";
 
 const auditBinding = {
   model: "openai-codex/gpt-6-astra",
@@ -312,5 +314,270 @@ describe("my-permission direct bindings", () => {
       expect.not.objectContaining({ modelRunner: expect.anything() }),
     );
     expect(result).toBeUndefined();
+  });
+
+  it("merges and writes JUDGE.md when Prosecutor suggestions are accepted", async () => {
+    const prosecutor = vi.fn().mockResolvedValue({
+      suggestion: {
+        add: [{ rule: "拦截 rm -rf", reason: "漏审" }],
+        summary: "发现 1 条",
+      },
+      cost: 0.001,
+      modelUsed: "model",
+    });
+    const merger = vi.fn().mockResolvedValue({
+      mergedText: "拦截 rm -rf",
+      cost: 0.002,
+      modelUsed: "model",
+    });
+    vi.mocked(createProsecutor).mockReturnValue(prosecutor);
+    vi.mocked(createPipelineMerger).mockReturnValue(merger);
+    const api = createMockApi();
+    await loadExtension(api);
+    const ctx = createContext();
+
+    const result = await api
+      .getTool("permission_prosecutor")
+      .execute("call", {}, undefined, undefined, ctx);
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "⚖️ 检察官审计: 发现 1 条",
+      "info",
+    );
+    expect(merger).toHaveBeenCalledWith({
+      current: "existing rule",
+      operations: ["拦截 rm -rf"],
+    });
+    expect(writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("JUDGE.md"),
+      "拦截 rm -rf",
+      "utf-8",
+    );
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "✅ JUDGE.md 已更新，共 1 条规则" }],
+    });
+  });
+
+  it("merges and writes JUDGE.md when Chief suggestions are accepted", async () => {
+    const chief = vi.fn().mockResolvedValue({
+      suggestion: {
+        suggestions: [{ type: "add", rule: "新规则", reason: "矛盾" }],
+        summary: "1 条建议",
+      },
+      cost: 0.001,
+      modelUsed: "model",
+    });
+    const merger = vi.fn().mockResolvedValue({
+      mergedText: "新规则",
+      cost: 0.002,
+      modelUsed: "model",
+    });
+    vi.mocked(createChief).mockReturnValue(chief);
+    vi.mocked(createPipelineMerger).mockReturnValue(merger);
+    const api = createMockApi();
+    await loadExtension(api);
+    const ctx = createContext();
+
+    const result = await api
+      .getTool("permission_chief")
+      .execute("call", {}, undefined, undefined, ctx);
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "👨‍⚖️ 审判长审计: 1 条建议",
+      "info",
+    );
+    expect(merger).toHaveBeenCalledWith({
+      current: "existing rule",
+      operations: [{ type: "add", rule: "新规则", reason: "矛盾" }],
+    });
+    expect(writeFileSync).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "✅ JUDGE.md 已更新，共 1 条操作" }],
+    });
+  });
+
+  it("skips the Chief audit when JUDGE.md is missing", async () => {
+    // First call is the entry point's localJudge, second is the Chief tool.
+    vi.mocked(loadFile)
+      .mockReturnValueOnce("existing rule")
+      .mockReturnValueOnce("");
+    const api = createMockApi();
+    await loadExtension(api);
+
+    const result = await api
+      .getTool("permission_chief")
+      .execute("call", {}, undefined, undefined, createContext());
+
+    expect(createChief).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "项目尚未创建 JUDGE.md，无需审计。" }],
+    });
+  });
+
+  it("leaves JUDGE.md untouched when the user declines the merged diff", async () => {
+    const prosecutor = vi.fn().mockResolvedValue({
+      suggestion: {
+        add: [{ rule: "拦截 rm -rf", reason: "漏审" }],
+        summary: "发现 1 条",
+      },
+      cost: 0.001,
+      modelUsed: "model",
+    });
+    const merger = vi.fn().mockResolvedValue({
+      mergedText: "拦截 rm -rf",
+      cost: 0.002,
+      modelUsed: "model",
+    });
+    vi.mocked(createProsecutor).mockReturnValue(prosecutor);
+    vi.mocked(createPipelineMerger).mockReturnValue(merger);
+    const api = createMockApi();
+    await loadExtension(api);
+    const confirm = vi
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    const ctx = createContext({ ui: { confirm, notify: vi.fn() } });
+
+    const result = await api
+      .getTool("permission_prosecutor")
+      .execute("call", {}, undefined, undefined, ctx);
+
+    expect(writeFileSync).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "已放弃，JUDGE.md 未修改" }],
+    });
+  });
+
+  it("leaves JUDGE.md untouched when every Chief suggestion is declined", async () => {
+    const chief = vi.fn().mockResolvedValue({
+      suggestion: {
+        suggestions: [{ type: "add", rule: "新规则", reason: "矛盾" }],
+        summary: "1 条建议",
+      },
+      cost: 0.001,
+      modelUsed: "model",
+    });
+    vi.mocked(createChief).mockReturnValue(chief);
+    const api = createMockApi();
+    await loadExtension(api);
+    const ctx = createContext({
+      ui: { confirm: vi.fn().mockResolvedValue(false), notify: vi.fn() },
+    });
+
+    const result = await api
+      .getTool("permission_chief")
+      .execute("call", {}, undefined, undefined, ctx);
+
+    expect(createPipelineMerger).not.toHaveBeenCalled();
+    expect(writeFileSync).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "未采纳任何建议，JUDGE.md 未修改" }],
+    });
+  });
+
+  it("reports when the session has no misjudged cases", async () => {
+    vi.mocked(collectDeniedThenApproved).mockReturnValueOnce([]);
+    const api = createMockApi();
+    await loadExtension(api);
+
+    const result = await api
+      .getTool("permission_advocate")
+      .execute("call", {}, undefined, undefined, createContext());
+
+    expect(createAdvocate).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: "text",
+          text: "当前会话没有法官误判案例，法官表现完美！",
+        },
+      ],
+    });
+  });
+
+  it("reports when the Advocate finds nothing to change", async () => {
+    vi.mocked(createAdvocate).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        suggestion: { add: [], remove: [] },
+        cost: 0.001,
+        modelUsed: "model",
+      }),
+    );
+    const api = createMockApi();
+    await loadExtension(api);
+
+    const result = await api
+      .getTool("permission_advocate")
+      .execute("call", {}, undefined, undefined, createContext());
+
+    expect(createPipelineMerger).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: "text",
+          text: "辩护人认为当前 JUDGE.md 已覆盖所有误判模式，无需修改",
+        },
+      ],
+    });
+  });
+
+  it("notifies about the stale rules the Advocate wants removed", async () => {
+    vi.mocked(createAdvocate).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        suggestion: {
+          add: [{ rule: "R1", reason: "误判" }],
+          remove: ["旧规则 A", "旧规则 B"],
+        },
+        cost: 0.001,
+        modelUsed: "model",
+      }),
+    );
+    const merger = vi.fn().mockResolvedValue({
+      mergedText: "R1",
+      cost: 0.002,
+      modelUsed: "model",
+    });
+    vi.mocked(createPipelineMerger).mockReturnValue(merger);
+    const api = createMockApi();
+    await loadExtension(api);
+    const ctx = createContext();
+
+    await api
+      .getTool("permission_advocate")
+      .execute("call", {}, undefined, undefined, ctx);
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "💡 辩护人建议手动删除 2 条过时规则（需手动处理）",
+      "info",
+    );
+    expect(merger).toHaveBeenCalledWith({
+      current: "existing rule",
+      operations: ["R1"],
+    });
+  });
+
+  it("leaves JUDGE.md untouched when every Advocate rule is declined", async () => {
+    vi.mocked(createAdvocate).mockReturnValue(
+      vi.fn().mockResolvedValue({
+        suggestion: { add: [{ rule: "R1", reason: "误判" }], remove: [] },
+        cost: 0.001,
+        modelUsed: "model",
+      }),
+    );
+    const api = createMockApi();
+    await loadExtension(api);
+    const ctx = createContext({
+      ui: { confirm: vi.fn().mockResolvedValue(false), notify: vi.fn() },
+    });
+
+    const result = await api
+      .getTool("permission_advocate")
+      .execute("call", {}, undefined, undefined, ctx);
+
+    expect(createPipelineMerger).not.toHaveBeenCalled();
+    expect(writeFileSync).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: [{ type: "text", text: "未采纳任何规则，JUDGE.md 未修改" }],
+    });
   });
 });
