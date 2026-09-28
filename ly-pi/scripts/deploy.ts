@@ -1,7 +1,7 @@
-import { cpSync, existsSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, rmSync } from "node:fs";
 import { mkdir, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import type { BunFile } from "bun";
 
 // ── Staging ────────────────────────────────────────────────────────────────
@@ -343,9 +343,98 @@ const configDir = "assets/config";
 
 // Sounds are user-provided under ~/.ly-pi/sound — never deployed or tracked.
 
+// Snapshot sync for skills and agents. The manifest written by the previous
+// deploy is the ownership record: only the entry names it lists are eligible
+// for removal. Anything else in the target directory (external installs,
+// hand-made files, symlinks) is never touched.
+const MANIFEST_FILE_NAME = ".ly-pi-deploy-manifest.json";
+const MANIFEST_PATH = join(agentDir, MANIFEST_FILE_NAME);
+const MANIFEST_VERSION = 1;
+
+interface AssetManifest {
+  version: number;
+  generatedAt: string;
+  assets: { skills: string[]; agents: string[] };
+}
+
+/** Top-level entry names of a source asset directory, sorted. */
+function listSourceEntries(sourceDir: string): string[] {
+  if (!existsSync(sourceDir)) return [];
+  return readdirSync(sourceDir).sort();
+}
+
+async function readPreviousManifest(): Promise<AssetManifest | undefined> {
+  try {
+    const raw = (await Bun.file(
+      MANIFEST_PATH,
+    ).json()) as Partial<AssetManifest>;
+    if (
+      raw?.version !== MANIFEST_VERSION ||
+      !Array.isArray(raw.assets?.skills) ||
+      !Array.isArray(raw.assets?.agents)
+    ) {
+      return undefined;
+    }
+    return raw as AssetManifest;
+  } catch {
+    // Missing or unparsable manifest: nothing is known to be owned.
+    return undefined;
+  }
+}
+
+/** Entry names must be plain basenames so a tampered manifest cannot escape. */
+function isSafeEntryName(name: unknown): name is string {
+  return (
+    typeof name === "string" &&
+    name.length > 0 &&
+    name !== "." &&
+    name !== ".." &&
+    !name.includes("/") &&
+    !name.includes("\\")
+  );
+}
+
+function removeStaleAssets(
+  targetDir: string,
+  previousEntries: string[],
+  currentEntries: string[],
+): void {
+  const current = new Set(currentEntries);
+  const base = resolve(targetDir);
+
+  for (const name of previousEntries) {
+    if (current.has(name)) continue;
+    if (!isSafeEntryName(name)) {
+      console.warn(
+        `Stale asset skipped (unsafe entry): ${JSON.stringify(name)}`,
+      );
+      continue;
+    }
+    const path = resolve(join(base, name));
+    if (!path.startsWith(base + sep)) {
+      console.warn(`Stale asset skipped (outside target): ${name}`);
+      continue;
+    }
+    try {
+      rmSync(path, { recursive: true, force: true });
+      console.log(`Stale asset removed: ${name}`);
+    } catch (error) {
+      console.error(`Stale asset removal failed: ${name}`, error);
+    }
+  }
+}
+
+const skillsSource = "assets/skills";
+const agentsSource = "assets/agents";
+const skillsTarget = join(agentDir, "skills");
+const agentsTarget = join(agentDir, "agents");
+const skillsCurrent = listSourceEntries(skillsSource);
+const agentsCurrent = listSourceEntries(agentsSource);
+const previousManifest = await readPreviousManifest();
+
 // Skills
-if (existsSync("assets/skills")) {
-  cpSync("assets/skills", join(agentDir, "skills"), { recursive: true });
+if (existsSync(skillsSource)) {
+  cpSync(skillsSource, skillsTarget, { recursive: true });
   console.log("Skills: deployed");
 }
 
@@ -361,10 +450,44 @@ if (existsSync("assets/themes")) {
 }
 
 // Agents
-if (existsSync("assets/agents")) {
-  cpSync("assets/agents", join(agentDir, "agents"), { recursive: true });
+if (existsSync(agentsSource)) {
+  cpSync(agentsSource, agentsTarget, { recursive: true });
   console.log("Agents: deployed");
 }
+
+// Cleanup runs after deployment, so a failed deploy can only leave extra
+// entries behind, never missing ones. A missing source directory is treated as
+// "ownership unknown" rather than "removed": nothing is deleted then.
+if (previousManifest) {
+  if (existsSync(skillsSource)) {
+    removeStaleAssets(
+      skillsTarget,
+      previousManifest.assets.skills,
+      skillsCurrent,
+    );
+  }
+  if (existsSync(agentsSource)) {
+    removeStaleAssets(
+      agentsTarget,
+      previousManifest.assets.agents,
+      agentsCurrent,
+    );
+  }
+}
+
+await writeAtomically(
+  MANIFEST_PATH,
+  `${JSON.stringify(
+    {
+      version: MANIFEST_VERSION,
+      generatedAt: new Date().toISOString(),
+      assets: { skills: skillsCurrent, agents: agentsCurrent },
+    },
+    null,
+    2,
+  )}\n`,
+);
+console.log("Asset manifest: written");
 
 // ── rtk init ────────────────────────────────────────────────────────────────
 if (Bun.which("rtk")) {

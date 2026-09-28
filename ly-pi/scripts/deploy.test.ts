@@ -7,6 +7,7 @@ import {
   realpathSync,
   rmdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -300,5 +301,158 @@ describe("deploy", () => {
     expect(source.settings).not.toHaveProperty("defaultModel");
     expect(source.settings).not.toHaveProperty("defaultThinkingLevel");
     expect(source.subagents).not.toHaveProperty("agentOverrides");
+  });
+
+  describe("asset snapshot sync", () => {
+    const MANIFEST_NAME = ".ly-pi-deploy-manifest.json";
+    const REPO_SKILLS = ["daily-timesheet", "review-pr"];
+
+    function runDeploy(stagingDir: string): void {
+      const bun = spawnSync("which", ["bun"], {
+        encoding: "utf8",
+      }).stdout.trim();
+      if (!bun) {
+        throw new Error("Bun executable is required to test deployment.");
+      }
+
+      const cleanupBundle = ensureExtensionBundle();
+      try {
+        const result = spawnSync(bun, ["run", "scripts/deploy.ts"], {
+          cwd: projectDir,
+          encoding: "utf8",
+          env: { PATH: "", PI_STAGING_DIR: stagingDir },
+        });
+
+        expect(result.status, result.stderr).toBe(0);
+      } finally {
+        cleanupBundle();
+      }
+    }
+
+    function manifestPath(stagingDir: string): string {
+      return join(stagingDir, "agent", MANIFEST_NAME);
+    }
+
+    function writeManifest(
+      stagingDir: string,
+      skills: string[],
+      agents: string[],
+    ): void {
+      mkdirSync(join(stagingDir, "agent"), { recursive: true });
+      writeFileSync(
+        manifestPath(stagingDir),
+        `${JSON.stringify({
+          version: 1,
+          generatedAt: "2026-09-27T00:00:00.000Z",
+          assets: { skills, agents },
+        })}\n`,
+      );
+    }
+
+    it("records a manifest on first deployment without deleting anything", () => {
+      const stagingDir = createStagingDir();
+      const externalSkill = join(
+        stagingDir,
+        "agent",
+        "skills",
+        "external-skill",
+      );
+      mkdirSync(externalSkill, { recursive: true });
+      writeFileSync(join(externalSkill, "SKILL.md"), "# external\n");
+
+      runDeploy(stagingDir);
+
+      const manifest = JSON.parse(
+        readFileSync(manifestPath(stagingDir), "utf8"),
+      );
+      expect(manifest.version).toBe(1);
+      expect(manifest.assets.skills).toEqual(REPO_SKILLS);
+      expect(manifest.assets.agents.length).toBeGreaterThan(0);
+      expect(existsSync(join(externalSkill, "SKILL.md"))).toBe(true);
+    });
+
+    it("keeps repository and external assets on repeat deployment", () => {
+      const stagingDir = createStagingDir();
+      const agentDir = join(stagingDir, "agent");
+      runDeploy(stagingDir);
+      const externalSkill = join(agentDir, "skills", "external-skill");
+      mkdirSync(externalSkill, { recursive: true });
+      writeFileSync(join(externalSkill, "SKILL.md"), "# external\n");
+
+      runDeploy(stagingDir);
+
+      for (const skill of REPO_SKILLS) {
+        expect(existsSync(join(agentDir, "skills", skill))).toBe(true);
+      }
+      expect(existsSync(join(externalSkill, "SKILL.md"))).toBe(true);
+    });
+
+    it("removes assets the previous manifest owned but the source no longer ships", () => {
+      const stagingDir = createStagingDir();
+      const agentDir = join(stagingDir, "agent");
+      const ghostSkill = join(agentDir, "skills", "ghost-skill");
+      mkdirSync(ghostSkill, { recursive: true });
+      writeFileSync(join(ghostSkill, "SKILL.md"), "# ghost\n");
+      writeManifest(stagingDir, [...REPO_SKILLS, "ghost-skill"], []);
+
+      runDeploy(stagingDir);
+
+      expect(existsSync(ghostSkill)).toBe(false);
+      for (const skill of REPO_SKILLS) {
+        expect(existsSync(join(agentDir, "skills", skill))).toBe(true);
+      }
+      const manifest = JSON.parse(
+        readFileSync(manifestPath(stagingDir), "utf8"),
+      );
+      expect(manifest.assets.skills).toEqual(REPO_SKILLS);
+    });
+
+    it("never deletes external skills, local agents or symlinks", () => {
+      const stagingDir = createStagingDir();
+      const agentDir = join(stagingDir, "agent");
+      const externalRoot = join(stagingDir, "external-skills");
+      const externalSkill = join(agentDir, "skills", "external-skill");
+      const externalLink = join(agentDir, "skills", "external-link");
+      const localAgent = join(agentDir, "agents", "local-agent.md");
+      mkdirSync(join(externalRoot, "linked-skill"), { recursive: true });
+      mkdirSync(externalSkill, { recursive: true });
+      writeFileSync(join(externalSkill, "SKILL.md"), "# external\n");
+      symlinkSync(join(externalRoot, "linked-skill"), externalLink);
+      mkdirSync(join(agentDir, "agents"), { recursive: true });
+      writeFileSync(localAgent, "# local agent\n");
+
+      runDeploy(stagingDir);
+
+      expect(existsSync(join(externalSkill, "SKILL.md"))).toBe(true);
+      expect(existsSync(externalLink)).toBe(true);
+      expect(existsSync(localAgent)).toBe(true);
+    });
+
+    it("ignores a corrupt manifest instead of deleting owned assets", () => {
+      const stagingDir = createStagingDir();
+      const agentDir = join(stagingDir, "agent");
+      runDeploy(stagingDir);
+      writeFileSync(manifestPath(stagingDir), "{ not json\n");
+
+      runDeploy(stagingDir);
+
+      for (const skill of REPO_SKILLS) {
+        expect(existsSync(join(agentDir, "skills", skill))).toBe(true);
+      }
+      expect(() =>
+        JSON.parse(readFileSync(manifestPath(stagingDir), "utf8")),
+      ).not.toThrow();
+    });
+
+    it("rejects manifest entries that escape the target directory", () => {
+      const stagingDir = createStagingDir();
+      const escapeTarget = join(stagingDir, "escape-target");
+      writeFileSync(escapeTarget, "keep me\n");
+      writeManifest(stagingDir, ["../../escape-target"], []);
+
+      runDeploy(stagingDir);
+
+      expect(existsSync(escapeTarget)).toBe(true);
+    });
   });
 });
