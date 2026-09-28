@@ -64,7 +64,8 @@ bun run --cwd ly-pi test -- my-hud
 - 纯配置统一放在 `ly-pi/assets/config/`
 - 扩展运行时使用 TypeBox 做类型校验
 - 格式与 lint 使用 Biome：`bun run format` / `bun run check`
-- `ly-pi/assets/skills/` 仅维护仓库自有技能，不镜像或迁移外部技能副本；部署为快照式，会清除本机已删除的旧副本
+- `ly-pi/assets/skills/`、`ly-pi/assets/agents/` 仅维护仓库自有资产，不镜像或迁移外部技能与代理副本
+- 上述两个目录部署为快照式：`~/.pi/agent/.ly-pi-deploy-manifest.json` 记录上次部署的顶层条目，仅删除「上次有、本次源已移除」的条目；不在清单中的条目（外部安装、手工添加、symlink）永不删除
 - 子代理运行时为 `npm:pi-subagents`，不得与 `npm:@gotgenes/pi-subagents` 并装；`ly-pi/assets/agents/` 仅保留 5 个 PR 审查角色（另有 image-reader 供 my-vision 委托），通用角色由官方包提供
 - 主题部署（`ly-pi/scripts/deploy.ts`）只拷贝 `assets/themes/` 下的 `*.json` 主题文件，排除其他文件（Pi 会把目录下所有 `.json` 当主题加载，非主题文件会导致校验错误）
 
