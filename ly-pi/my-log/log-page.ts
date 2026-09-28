@@ -1,4 +1,4 @@
-import { buildHtmlDocument } from "../../web-preview/index";
+import { buildHtmlDocument } from "../web-preview/index";
 import type { LogEntry } from "./logger";
 
 export interface LogEntryWithTimestamp extends LogEntry {
