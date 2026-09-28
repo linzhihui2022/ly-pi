@@ -34,7 +34,7 @@ The context icon and color adapt based on window size:
 
 ## Configuration
 
-Optional `my-hud.json` inside the extension directory (reloaded via `/reload`):
+Optional `my-hud.json` in `~/.pi/agent/extensions/ly-pi/` (reloaded via `/reload`):
 
 ```json
 {
@@ -48,6 +48,8 @@ Missing or invalid config falls back to defaults silently.
 
 ## Install
 
+`my-hud` is not installed on its own — it ships inside the unified `ly-pi` extension. From the repository root:
+
 ```bash
 bun install
 ```
@@ -60,7 +62,13 @@ npx vitest run
 
 ## Deploy
 
-Copy `index.ts` into your pi extensions directory (usually `~/.pi/agent/extensions/my-hud/`) and reload pi with `/reload`.
+From the repository root:
+
+```bash
+bun run deploy
+```
+
+`bun run deploy` builds `ly-pi` and deploys it to `~/.pi/agent/extensions/ly-pi/`, where the entry point registers `my-hud`. Reload pi with `/reload`.
 
 ## Requirements
 
