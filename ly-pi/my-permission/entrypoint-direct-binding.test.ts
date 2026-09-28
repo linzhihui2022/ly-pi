@@ -27,10 +27,10 @@ vi.mock("./ui", () => ({
   })),
   isChildSession: vi.fn(() => false),
 }));
-vi.mock("../src/shared/file", () => ({
+vi.mock("./file", () => ({
   loadFile: vi.fn(() => "existing rule"),
 }));
-vi.mock("../src/shared/preview", () => ({
+vi.mock("../web-preview/preview", () => ({
   servePreviewFile: vi.fn(),
   stopPreviewServer: vi.fn(),
 }));

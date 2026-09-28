@@ -12,12 +12,9 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import {
-  type LogEntryWithTimestamp,
-  renderLogPage,
-} from "../src/shared/log-page";
-import { createLogger, type Logger, type WriteFn } from "../src/shared/logger";
-import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
+import { servePreviewFile, stopPreviewServer } from "../web-preview/preview";
+import { type LogEntryWithTimestamp, renderLogPage } from "./log-page";
+import { createLogger, type Logger, type WriteFn } from "./logger";
 
 const LOG_CUSTOM_TYPE = "ly-log";
 const LOG_CONFIG_CUSTOM_TYPE = "ly-log-config";

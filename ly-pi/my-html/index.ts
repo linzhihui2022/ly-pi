@@ -3,7 +3,7 @@ import type {
   ExtensionCommandContext,
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
+import { servePreviewFile, stopPreviewServer } from "../web-preview/preview";
 import {
   buildHtmlDocument,
   extractAssistantText,

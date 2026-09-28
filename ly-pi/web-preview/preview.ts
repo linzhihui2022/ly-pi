@@ -1,11 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import open from "open";
-import {
-  ensurePreviewServer,
-  PREVIEW_DIR,
-  stopPreviewServer,
-} from "../../web-preview/index";
+import { ensurePreviewServer, PREVIEW_DIR, stopPreviewServer } from "./index";
 
 export interface ServePreviewOptions {
   host?: string;

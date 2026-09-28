@@ -5,15 +5,15 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { ANSI as C } from "../src/shared/ansi";
-import { loadFile } from "../src/shared/file";
-import { servePreviewFile, stopPreviewServer } from "../src/shared/preview";
+import { servePreviewFile, stopPreviewServer } from "../web-preview/preview";
+import { ANSI as C } from "./ansi";
 import type { ChiefSuggestionItem } from "./chief";
 import { createChief } from "./chief";
 import { config } from "./config";
 import { renderCostPage } from "./cost-page";
 import { aggregateCosts, appendCost } from "./cost-tracker";
 import type { DirectModelBinding } from "./direct-model";
+import { loadFile } from "./file";
 import { createJudge } from "./judge";
 import { JUDGE_PROMPT } from "./judge-prompt";
 import { renderJudgeLogPage } from "./log-page";

@@ -12,7 +12,7 @@ const { mockEnsurePreviewServer, mockStopPreviewServer, mockOpen } = vi.hoisted(
 );
 
 vi.mock("open", () => ({ default: mockOpen }));
-vi.mock("../../web-preview/index", () => ({
+vi.mock("./index", () => ({
   ensurePreviewServer: mockEnsurePreviewServer,
   PREVIEW_DIR: join(tmpdir(), "pi-html-preview-test"),
   stopPreviewServer: mockStopPreviewServer,

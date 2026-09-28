@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { ANSI, style as styled } from "../src/shared/ansi";
+import { ANSI, style as styled } from "./ansi";
 
 function label(text: string): string {
   return styled(text, ANSI.bold);
