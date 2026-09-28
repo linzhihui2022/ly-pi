@@ -8,7 +8,7 @@ import type {
   ImageGenerationJob,
 } from "./batch";
 import { formatImageAssetProposal } from "./contract";
-import { registerImageAssetTool } from "./index";
+import myImageAsset, { registerImageAssetTool } from "./index";
 
 interface ToolDefinition {
   name: string;
@@ -366,5 +366,131 @@ describe("image_asset tool", () => {
     ).rejects.toThrow("explicit user image request");
 
     expect(jobs).toHaveLength(0);
+  });
+
+  it("falls back to the built-in runner and decoder", () => {
+    const tools: ToolDefinition[] = [];
+    const pi = {
+      registerTool: vi.fn((tool: ToolDefinition) => tools.push(tool)),
+    };
+
+    registerImageAssetTool(pi as never);
+
+    expect(tools).toHaveLength(1);
+  });
+
+  it("registers the tool through the default export", () => {
+    const tools: ToolDefinition[] = [];
+    const pi = {
+      registerTool: vi.fn((tool: ToolDefinition) => tools.push(tool)),
+    };
+
+    myImageAsset(pi as never);
+
+    expect(tools).toHaveLength(1);
+  });
+
+  it("rejects a confirmation that does not match the pending proposal", async () => {
+    const cwd = await makeWorkspace();
+    const jobs: ImageGenerationJob[] = [];
+    const request = {
+      operation: "generate" as const,
+      prompt: "A fox reading under a lantern",
+      output_paths: ["assets/fox.png"],
+    };
+    const { tool, branch } = setup(
+      [
+        {
+          type: "message",
+          message: { role: "user", content: "请生成一张狐狸图片。" },
+        },
+        {
+          type: "message",
+          message: {
+            role: "assistant",
+            content: formatImageAssetProposal({
+              ...request,
+              output_paths: ["assets/other.png"],
+            }),
+          },
+        },
+        {
+          type: "message",
+          message: { role: "user", content: "CONFIRM_IMAGE_ASSET" },
+        },
+      ],
+      fakeRunner(jobs),
+    );
+
+    await expect(
+      tool.execute("call-1", request, undefined, undefined, {
+        cwd,
+        signal: undefined,
+        sessionManager: { getBranch: () => branch },
+      }),
+    ).rejects.toThrow(
+      "Image asset confirmation does not match the pending proposal.",
+    );
+
+    expect(jobs).toHaveLength(0);
+  });
+
+  it("surfaces an unexpected runner failure through the safe error path", async () => {
+    const cwd = await makeWorkspace();
+    const failingRunner: ImageAssetRunner = {
+      async run() {
+        throw new Error("runner exploded");
+      },
+    };
+    const { tool, branch } = setup(
+      [
+        {
+          type: "message",
+          message: { role: "user", content: "请生成一张狐狸图片。" },
+        },
+      ],
+      failingRunner,
+    );
+
+    await expect(
+      tool.execute(
+        "call-1",
+        {
+          operation: "generate",
+          prompt: "A fox reading under a lantern",
+          output_paths: ["assets/fox.png"],
+        },
+        undefined,
+        undefined,
+        { cwd, signal: undefined, sessionManager: { getBranch: () => branch } },
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("normalizes non-ImageAsset failures into a generic tool error", async () => {
+    const cwd = await makeWorkspace();
+    const { tool } = setup([], fakeRunner([]));
+
+    await expect(
+      tool.execute(
+        "call-1",
+        {
+          operation: "generate",
+          prompt: "A fox reading under a lantern",
+          output_paths: ["assets/fox.png"],
+        },
+        undefined,
+        undefined,
+        {
+          cwd,
+          signal: undefined,
+          sessionManager: {
+            getBranch: () => {
+              throw "raw session failure";
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow("Image asset operation failed.");
   });
 });

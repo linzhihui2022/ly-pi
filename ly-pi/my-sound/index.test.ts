@@ -629,3 +629,163 @@ describe("resolveSoundDir", () => {
     expect(dir).toBe(join(homedir(), ".ly-pi", "sound"));
   });
 });
+
+describe("sound command coverage", () => {
+  beforeEach(() => {
+    registeredCommands.clear();
+    registeredEvents.clear();
+    registeredPermissionEvents.clear();
+    mockNotify.mockClear();
+    vi.mocked(mockPi.on).mockClear();
+    vi.mocked(mockPi.registerCommand).mockClear();
+    vi.mocked(mockEvents.on).mockClear();
+    vi.mocked(writeFileSync).mockClear();
+    vi.mocked(playCategory).mockClear();
+    vi.mocked(readFileSync).mockClear();
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
+    vi.resetModules();
+  });
+
+  it("marks the disabled state in the /sound help text", async () => {
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify({ ...DEFAULT_CONFIG, enabled: false }),
+    );
+    const mod = await loadModule();
+    mod.default(mockPi);
+
+    await mustGet(registeredCommands, "sound").handler(undefined, mockCtx);
+
+    const msg = mockNotify.mock.calls[0][0] as string;
+    expect(msg).toContain("/sound on  —  开启 ()");
+    expect(msg).toContain("/sound off  —  关闭 (当前)");
+  });
+
+  it("lists voice packs and marks the active one", async () => {
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify({
+        ...DEFAULT_CONFIG,
+        packs: {
+          ...DEFAULT_CONFIG.packs,
+          extra: { soundDir: "sounds", categories: {} },
+        },
+      }),
+    );
+    const mod = await loadModule();
+    mod.default(mockPi);
+
+    await mustGet(registeredCommands, "sound").handler("packs", mockCtx);
+
+    const msg = mockNotify.mock.calls[0][0] as string;
+    expect(msg).toContain("/sound pack test-pack  ◀ 当前");
+    expect(msg).toContain("/sound pack extra");
+  });
+
+  it("warns when /sound pack has no name", async () => {
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
+    const mod = await loadModule();
+    mod.default(mockPi);
+
+    await mustGet(registeredCommands, "sound").handler("pack ", mockCtx);
+
+    expect(mockNotify).toHaveBeenCalledWith(
+      "Sound: 用法 — /sound pack <name>",
+      "warning",
+    );
+  });
+
+  it("warns for an unknown voice pack", async () => {
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
+    const mod = await loadModule();
+    mod.default(mockPi);
+
+    await mustGet(registeredCommands, "sound").handler("pack ghost", mockCtx);
+
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.stringContaining("未知语音包"),
+      "warning",
+    );
+  });
+
+  it("switches the active voice pack and persists it", async () => {
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify({
+        ...DEFAULT_CONFIG,
+        packs: {
+          ...DEFAULT_CONFIG.packs,
+          extra: { soundDir: "sounds", categories: {} },
+        },
+      }),
+    );
+    const mod = await loadModule();
+    mod.default(mockPi);
+
+    await mustGet(registeredCommands, "sound").handler("pack extra", mockCtx);
+
+    expect(writeFileSync).toHaveBeenCalled();
+    expect(mockNotify).toHaveBeenCalledWith("🎙️  Sound: 已切换到 extra", "info");
+  });
+
+  it("reports config failures that are not Error instances", async () => {
+    vi.mocked(readFileSync).mockImplementation(() => {
+      throw "boom";
+    });
+    const mod = await loadModule();
+    mod.default(mockPi);
+
+    await mustGet(registeredCommands, "sound").handler("startup", mockCtx);
+
+    expect(mockNotify).toHaveBeenCalledWith(
+      "Sound: Config error — boom",
+      "error",
+    );
+  });
+
+  it("stops the /sound all chain after the last category", async () => {
+    vi.useFakeTimers();
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(DEFAULT_CONFIG));
+    const mod = await loadModule();
+    mod.default(mockPi);
+
+    await mustGet(registeredCommands, "sound").handler("all", mockCtx);
+    vi.advanceTimersByTime(1500 * 5);
+
+    expect(playCategory).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+
+  it("subscribes to the remaining lifecycle events from the event map", async () => {
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify({
+        ...DEFAULT_CONFIG,
+        eventMap: {
+          session_shutdown: "startup",
+          turn_start: "engaging",
+          turn_end: "completed",
+          tool_result: "completed",
+        },
+      }),
+    );
+    const mod = await loadModule();
+    mod.default(mockPi);
+
+    expect(registeredEvents.has("session_shutdown")).toBe(true);
+    expect(registeredEvents.has("turn_start")).toBe(true);
+    expect(registeredEvents.has("turn_end")).toBe(true);
+    expect(registeredEvents.has("tool_result")).toBe(true);
+  });
+
+  it("ignores permission prompts without a mapped category", async () => {
+    vi.mocked(readFileSync).mockReturnValue(
+      JSON.stringify({
+        ...DEFAULT_CONFIG,
+        permissionEventMap: { "other:event": "startup" },
+      }),
+    );
+    const mod = await loadModule();
+    mod.default(mockPi);
+
+    mustGet(registeredPermissionEvents, "permissions:ui_prompt")();
+
+    expect(playCategory).not.toHaveBeenCalled();
+  });
+});
