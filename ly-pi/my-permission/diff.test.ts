@@ -24,9 +24,10 @@ describe("computeDiff", () => {
   });
 
   it("handles a full replacement", () => {
-    const diff = computeDiff("old", "new");
-    expect(diff).toContainEqual({ type: "remove", text: "old" });
-    expect(diff).toContainEqual({ type: "add", text: "new" });
+    expect(computeDiff("old", "new")).toEqual([
+      { type: "remove", text: "old" },
+      { type: "add", text: "new" },
+    ]);
   });
 
   it("keeps the shared lines around a change", () => {
@@ -44,6 +45,39 @@ describe("computeDiff", () => {
     expect(computeDiff("", "x")).toEqual([
       { type: "remove", text: "" },
       { type: "add", text: "x" },
+    ]);
+  });
+
+  it("reports a removal and an empty addition when the new text is empty", () => {
+    expect(computeDiff("x", "")).toEqual([
+      { type: "remove", text: "x" },
+      { type: "add", text: "" },
+    ]);
+  });
+
+  it("treats a trailing newline as its own line", () => {
+    expect(computeDiff("a\n", "a")).toEqual([
+      { type: "keep", text: "a" },
+      { type: "remove", text: "" },
+    ]);
+    expect(computeDiff("a", "a\n")).toEqual([
+      { type: "keep", text: "a" },
+      { type: "add", text: "" },
+    ]);
+  });
+
+  it("keeps every line of a large input", () => {
+    const before = Array.from(
+      { length: 800 },
+      (_, index) => `line ${index}`,
+    ).join("\n");
+    const after = `${before}\nappended`;
+
+    const diff = computeDiff(before, after);
+
+    expect(diff.filter((line) => line.type === "keep")).toHaveLength(800);
+    expect(diff.filter((line) => line.type === "add")).toEqual([
+      { type: "add", text: "appended" },
     ]);
   });
 });
@@ -66,5 +100,29 @@ describe("formatDiff", () => {
 
   it("marks removed lines in red", () => {
     expect(formatDiff("a\nb", "a")).toContain("− b");
+  });
+
+  it("summarizes a pure removal without additions", () => {
+    const text = formatDiff("a\nb", "a");
+
+    expect(text).toContain("(1 处: ");
+    expect(text).toContain("+0");
+    expect(text).toContain("−1");
+  });
+
+  it("summarizes emptying a document as one removal and one addition", () => {
+    const text = formatDiff("x", "");
+
+    expect(text).toContain("(2 处: ");
+    expect(text).toContain("+1");
+    expect(text).toContain("−1");
+  });
+
+  it("summarizes filling an empty document as one removal and one addition", () => {
+    const text = formatDiff("", "x");
+
+    expect(text).toContain("(2 处: ");
+    expect(text).toContain("+1");
+    expect(text).toContain("−1");
   });
 });
