@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { ANSI as C } from "../ansi";
 import { appendCost } from "../cost-tracker";
@@ -10,10 +10,8 @@ import { auditBinding, createModelClient } from "../model-client";
 import { createProsecutor } from "../prosecutor";
 import { collectAllowed } from "../stats";
 
-type ToolDefinition = Parameters<ExtensionAPI["registerTool"]>[0];
-
-export function createProsecutorTool(): ToolDefinition {
-  return {
+export function createProsecutorTool() {
+  return defineTool({
     name: "permission_prosecutor",
     label: "检察官",
     description:
@@ -116,5 +114,5 @@ export function createProsecutorTool(): ToolDefinition {
         countLabel: "条规则",
       });
     },
-  };
+  });
 }

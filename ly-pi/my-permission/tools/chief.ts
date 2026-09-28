@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { ANSI as C } from "../ansi";
 import { type ChiefSuggestionItem, createChief } from "../chief";
@@ -10,10 +10,8 @@ import { mergeAndWrite } from "../merge";
 import { auditBinding, createModelClient } from "../model-client";
 import { suggestionTypeDetail, suggestionTypeLabel } from "../suggestion";
 
-type ToolDefinition = Parameters<ExtensionAPI["registerTool"]>[0];
-
-export function createChiefTool(): ToolDefinition {
-  return {
+export function createChiefTool() {
+  return defineTool({
     name: "permission_chief",
     label: "审判长",
     description:
@@ -22,8 +20,8 @@ export function createChiefTool(): ToolDefinition {
     parameters: Type.Object({
       instruction: Type.Optional(Type.String()),
     }),
-    execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
-      const instruction = (_params as { instruction?: string }).instruction;
+    execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => {
+      const instruction = params.instruction;
       const currentJudgeMd = loadFile(join(process.cwd(), "JUDGE.md"));
 
       if (!currentJudgeMd?.trim()) {
@@ -118,5 +116,5 @@ export function createChiefTool(): ToolDefinition {
         countLabel: "条操作",
       });
     },
-  };
+  });
 }

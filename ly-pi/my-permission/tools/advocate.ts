@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { ANSI as C } from "../ansi";
 import { appendCost } from "../cost-tracker";
@@ -10,10 +10,8 @@ import { auditBinding, createModelClient } from "../model-client";
 import { createAdvocate } from "../professor";
 import { collectDeniedThenApproved } from "../stats";
 
-type ToolDefinition = Parameters<ExtensionAPI["registerTool"]>[0];
-
-export function createAdvocateTool(): ToolDefinition {
-  return {
+export function createAdvocateTool() {
+  return defineTool({
     name: "permission_advocate",
     label: "辩护人",
     description:
@@ -121,5 +119,5 @@ export function createAdvocateTool(): ToolDefinition {
         countLabel: "条规则",
       });
     },
-  };
+  });
 }
