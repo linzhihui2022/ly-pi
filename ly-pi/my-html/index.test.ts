@@ -210,4 +210,52 @@ describe("myHtml extension", () => {
       "error",
     );
   });
+
+  it("keeps scanning past entries that follow the assistant reply", async () => {
+    myHtml(mockApi);
+    const cmd = mustGet(registeredCommands, "html");
+
+    // The scan walks backwards, so the trailing user message hits the
+    // non-assistant branch before the assistant reply is reached.
+    mockCtx.sessionManager.getEntries = vi.fn(
+      () =>
+        [
+          {
+            id: "entry-1",
+            parentId: null,
+            timestamp: new Date().toISOString(),
+            type: "message",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "# Hello" }],
+            },
+          },
+          {
+            id: "entry-2",
+            parentId: "entry-1",
+            timestamp: new Date().toISOString(),
+            type: "message",
+            message: {
+              role: "user",
+              content: [{ type: "text", text: "later" }],
+            },
+          },
+        ] as unknown as SessionEntry[],
+    );
+    mockCtx.sessionManager.getSessionId = vi.fn(() => "session-xyz");
+
+    await cmd.handler("", mockCtx as ExtensionCommandContext);
+
+    expect(mockCtx.ui?.notify).toHaveBeenCalledWith(
+      expect.stringContaining("Preview:"),
+      "info",
+    );
+  });
+
+  it("stops the preview server on session shutdown", async () => {
+    myHtml(mockApi);
+    const shutdown = mustGet(registeredEvents, "session_shutdown");
+
+    await expect(shutdown()).resolves.toBeUndefined();
+  });
 });
