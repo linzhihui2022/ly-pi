@@ -307,7 +307,11 @@ const configDir = "assets/config";
     base?: string;
     label: string;
   }> = [
-    { src: "mcp.json", dest: "mcp.json", label: "mcp.json" },
+    {
+      src: "mcp-adapter.json",
+      dest: "mcp-adapter.json",
+      label: "mcp-adapter.json",
+    },
     {
       src: "append-system.md",
       dest: "APPEND_SYSTEM.md",

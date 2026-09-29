@@ -175,7 +175,7 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 | `ly-pi/my-permission/` | 权限规则：确定性规则（`config.ts`）+ 项目级 `JUDGE.md` 模型法官规则 |
 | `ly-pi/assets/config/my-tool-display.json` | `my-tool-display` 启用开关、Bash 折叠行数（`bashCollapsedLines`，默认 10）与 diff 折叠行数（`diffCollapsedLines`，默认 24） |
 | `ly-pi/assets/config/settings.json` | Pi 非模型设置与 subagent runtime 配置（部署时按 `settings-schema.json` 校验） |
-| `ly-pi/assets/config/mcp.json` | MCP 服务器配置 |
+| `ly-pi/assets/config/mcp-adapter.json` | MCP 服务器配置（pi-mcp-adapter 读取，部署至 `~/.pi/agent/mcp-adapter.json`） |
 | `ly-pi/assets/config/my-sound.json` | 音效开关、语音包与分类配置 |
 | `ly-pi/assets/config/append-system.md` | 追加到系统提示的全局指令 |
 | `ly-pi/assets/config/web-search.json` / `rpiv-todo.json` | 第三方扩展配置 |
@@ -184,7 +184,7 @@ ln -sf "$REPO/MY-AGENTS.md" ~/.dsh/AGENTS.md
 
 本仓库是作者的个人配置开源，以下内容带有强烈的个人偏好，**作示例用途，按需修改**：
 
-- **`ly-pi/assets/config/mcp.json`** 中的 `productive` 是可选的 Productive MCP；它需要 Ultimate 套餐和已启用的 Productive AI，每位用户都需自行通过 OAuth 授权，不使用时可删除该条目
+- **`ly-pi/assets/config/mcp-adapter.json`** 中的 `productive` 是可选的 Productive MCP；它需要 Ultimate 套餐和已启用的 Productive AI，每位用户都需自行通过 OAuth 授权，不使用时可删除该条目
 - **`ly-pi/assets/config/append-system.md`** 中的语言偏好（中文回复等）为作者个人设定
 - **`JUDGE.md`、`CONTEXT.md`** 是作者个人项目的权限法官规则与领域术语表
 - **`docs/agents/`** 是作者按 Matt Pocock skills 工作流配置的 issue tracker 约定（GitHub Issues）
@@ -223,7 +223,7 @@ pi -e ly-pi/index.ts
 音效不随仓库分发。确认 `~/.ly-pi/sound/<pack>/` 下有音频文件，且 `my-sound.json` 中 `soundDir` 指向该目录。
 
 **Q: Context7 / Tavily 不工作？**
-确认对应环境变量已设置（见「API key」一节），或直接在部署后的 `~/.pi/agent/mcp.json` / `web-search.json` 中填入 key。
+确认对应环境变量已设置（见「API key」一节），或直接在部署后的 `~/.pi/agent/mcp-adapter.json` / `web-search.json` 中填入 key。
 
 **Q: 不想用某个子模块？**
 在 `ly-pi/index.ts` 中注释掉对应注册行即可，各子模块相互独立（web-preview / shared 为内部依赖除外）。
