@@ -300,4 +300,46 @@ describe("session naming lifecycle", () => {
 
     expect(mockPi.setSessionName).not.toHaveBeenCalled();
   });
+
+  it("skips blank lines and nameless session info entries when reading a parent name", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "my-session-name-"));
+    const parentSessionFile = join(directory, "parent.jsonl");
+    await writeFile(
+      parentSessionFile,
+      [
+        JSON.stringify({ type: "session_info", name: "被覆盖的旧名称" }),
+        "",
+        "   ",
+        JSON.stringify({ type: "session_info" }),
+        JSON.stringify({ type: "session_info", name: "   " }),
+        JSON.stringify({ type: "session_info", name: "最终名称" }),
+      ].join("\n"),
+    );
+    const ctx = createContext([], "child-session-1");
+
+    await handlers.get("session_start")!(
+      { reason: "fork", previousSessionFile: parentSessionFile },
+      ctx,
+    );
+
+    expect(mockPi.setSessionName).toHaveBeenCalledWith("最终名称-79a3a1");
+  });
+
+  it("reports a non-Error title failure", async () => {
+    requestSessionTitleMock.mockRejectedValue("plain failure");
+    const notify = vi.fn();
+    const ctx = {
+      ...createContext(),
+      ui: { notify },
+    } as unknown as ExtensionContext;
+
+    await handlers.get("input")!(inputEvent("interactive"), ctx);
+    await handlers.get("before_agent_start")!(beforeEvent("任务"), ctx);
+    await flushPromises();
+
+    expect(notify).toHaveBeenCalledWith(
+      "会话标题生成失败: plain failure",
+      "error",
+    );
+  });
 });

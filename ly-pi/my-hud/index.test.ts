@@ -1966,4 +1966,52 @@ describe("my-hud extension", () => {
       undefined,
     );
   });
+
+  it("refreshes the footer on tool_call", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+    registeredEvents.get("session_start")!({}, mockCtx);
+
+    expect(() => registeredEvents.get("tool_call")!()).not.toThrow();
+  });
+
+  it("reacts to the log toggle event from my-log", async () => {
+    const handlers: Array<(data: unknown) => void> = [];
+    const pi = {
+      ...mockPi,
+      events: {
+        on: vi.fn((_name: string, handler: (data: unknown) => void) => {
+          handlers.push(handler);
+          return vi.fn();
+        }),
+      },
+    };
+    const mod = await loadModule();
+    mod.default(pi as any);
+    registeredEvents.get("session_start")!({}, mockCtx);
+
+    expect(handlers).toHaveLength(1);
+    expect(() => handlers[0]({ enabled: true })).not.toThrow();
+    expect(() => handlers[0]({ enabled: false })).not.toThrow();
+  });
+
+  it("tolerates footer data without a git branch", async () => {
+    const mod = await loadModule();
+    mod.default(mockPi as any);
+    const ctx = {
+      ...mockCtx,
+      ui: {
+        ...mockCtx.ui,
+        setFooter: vi.fn((factory: any) =>
+          factory(mockTui, mockTheme, {
+            ...mockFooterData,
+            getGitBranch: vi.fn(() => null),
+          }),
+        ),
+      },
+    };
+
+    expect(() => registeredEvents.get("session_start")!({}, ctx)).not.toThrow();
+    expect(ctx.ui.setFooter).toHaveBeenCalled();
+  });
 });
