@@ -8,7 +8,7 @@ export default defineConfig({
     execArgv: ["--max-old-space-size=4096"],
     silent: "passed-only",
     coverage: {
-      exclude: ["**/types.ts", "**/index.ts", "scripts/**"],
+      exclude: ["**/types.ts", "scripts/**"],
       thresholds: {
         branches: 90,
         functions: 91,
