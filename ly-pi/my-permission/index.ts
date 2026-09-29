@@ -6,28 +6,18 @@ import type {
 import { servePreviewFile, stopPreviewServer } from "../web-preview/preview";
 import { config } from "./config";
 import { renderCostPage } from "./cost-page";
-import { aggregateCosts, appendCost } from "./cost-tracker";
+import { aggregateCosts } from "./cost-tracker";
 import { loadFile } from "./file";
-import { createJudge } from "./judge";
+import { createToolCallInterceptor } from "./interceptor";
 import { JUDGE_PROMPT } from "./judge-prompt";
 import { renderJudgeLogPage } from "./log-page";
 import { createModelClient } from "./model-client";
-import { decide } from "./rules";
 import { runPermissionSelfTest } from "./self-test";
-import {
-  collectJudgeLogs,
-  recordJudgeStats,
-  recordUserOverride,
-} from "./stats";
+import { collectJudgeLogs } from "./stats";
 import { createAdvocateTool } from "./tools/advocate";
 import { createChiefTool } from "./tools/chief";
 import { createProsecutorTool } from "./tools/prosecutor";
-import { confirmToolCall, createSessionCache, isChildSession } from "./ui";
-import {
-  collectPaths,
-  resolveSymlinkedPaths,
-  stringifyToolInput,
-} from "./utils";
+import { createSessionCache, isChildSession } from "./ui";
 
 export default async function myPermission(pi: ExtensionAPI): Promise<void> {
   const judgePrompt = JUDGE_PROMPT;
@@ -110,65 +100,8 @@ export default async function myPermission(pi: ExtensionAPI): Promise<void> {
     await stopPreviewServer();
   });
 
-  pi.on("tool_call", async (event, ctx) => {
-    const judge = createJudge(config, {
-      judgePrompt,
-      localJudge,
-      modelClient: createModelClient(ctx),
-    });
-    const toolName = event.toolName;
-    const value = stringifyToolInput(event);
-    const rawPaths = collectPaths(toolName, value, event, ctx.cwd);
-    const paths = resolveSymlinkedPaths(rawPaths, ctx.cwd);
-    const verdict = decide({ toolName, value, paths }, ctx.cwd, config);
-
-    if (verdict.action === "allow") return undefined;
-    if (verdict.action === "deny") {
-      return {
-        block: true,
-        reason: verdict.reason ?? `Blocked by ${verdict.source}`,
-      };
-    }
-
-    const cacheKey = `${toolName}:${value}`;
-    if (cache.isApproved(cacheKey)) return undefined;
-
-    const judgeResult = await judge({ toolName, value, paths }, ctx.cwd);
-    recordJudgeStats(pi, { toolName, value }, judgeResult);
-    if (judgeResult.cost !== undefined && judgeResult.modelUsed) {
-      appendCost(
-        ctx.sessionManager.getSessionId(),
-        ctx.cwd,
-        "judge",
-        judgeResult.cost,
-        judgeResult.modelUsed,
-      );
-    }
-    if (judgeResult.safe === true) return undefined;
-
-    if (child || !ctx.hasUI) {
-      return {
-        block: true,
-        reason: judgeResult.reason,
-      };
-    }
-
-    const approved = await confirmToolCall(ctx, {
-      toolName,
-      modelUsed: judgeResult.modelUsed,
-      toolFor: judgeResult.toolFor,
-      reason: judgeResult.reason,
-      score: judgeResult.score,
-      value,
-      cwd: ctx.cwd,
-      paths,
-    });
-
-    if (approved) {
-      cache.approve(cacheKey);
-      recordUserOverride(pi, { toolName, value, paths });
-      return undefined;
-    }
-    return { block: true, reason: `User denied: ${judgeResult.reason}` };
-  });
+  pi.on(
+    "tool_call",
+    createToolCallInterceptor({ pi, judgePrompt, localJudge, cache, child }),
+  );
 }
